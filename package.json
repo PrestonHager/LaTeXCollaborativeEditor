@@ -1,0 +1,14 @@
+{
+  "name": "latex-collaborative-editor",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "test": "npm --prefix frontend run test:run && cargo test --manifest-path rust-core/Cargo.toml && cargo test --manifest-path rust-tex/Cargo.toml",
+    "test:rust": "cargo test --manifest-path rust-core/Cargo.toml && cargo test --manifest-path rust-tex/Cargo.toml",
+    "signal": "node signal-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
+}
