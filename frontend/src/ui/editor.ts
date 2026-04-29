@@ -17,6 +17,11 @@ export function createEditorPane(container: HTMLElement) {
   return {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
     getText() { return textarea.value; },
+    focus() { textarea.focus(); },
+    selectAll() {
+      textarea.focus();
+      textarea.setSelectionRange(0, textarea.value.length);
+    },
     setText(value: string, shouldSync = false) {
       suppress = true;
       textarea.value = value;
