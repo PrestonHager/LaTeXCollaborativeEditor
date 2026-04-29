@@ -38,8 +38,12 @@ describe('App integration behavior', () => {
     const host = document.createElement('div');
     createFileMenu(host, {
       onOpenLocal: () => undefined,
+      onOpenDrive: async () => undefined,
       onDownload: () => local.download('doc.tex', 'x'),
       onConnectDrive: async () => undefined,
+      onSaveToDrive: async () => undefined,
+      onMoveDrive: async () => undefined,
+      onRenameDrive: async () => undefined,
       onSaveNow: async () => undefined,
     });
 

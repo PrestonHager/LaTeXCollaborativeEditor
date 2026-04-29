@@ -6,9 +6,21 @@ describe('createFileMenu', () => {
     const calls: string[] = [];
     const menu = createFileMenu(container, {
       onOpenLocal: () => calls.push('open'),
+      onOpenDrive: async () => {
+        calls.push('open-drive');
+      },
       onDownload: () => calls.push('download'),
       onConnectDrive: async () => {
         calls.push('connect');
+      },
+      onSaveToDrive: async () => {
+        calls.push('save-drive');
+      },
+      onMoveDrive: async () => {
+        calls.push('move');
+      },
+      onRenameDrive: async () => {
+        calls.push('rename');
       },
       onSaveNow: async () => {
         calls.push('save');
@@ -19,17 +31,21 @@ describe('createFileMenu', () => {
     const buttons = Array.from(container.querySelectorAll('button'));
     expect(buttons.map((b) => b.textContent)).toEqual([
       'Open Local Doc',
+      'Open from Google Drive',
       'Download .tex',
       'Connect Google Drive',
+      'Save to Google Drive',
+      'Move to Drive Folder',
+      'Rename in Drive',
       'Save Now',
     ]);
 
     buttons.forEach((b) => b.click());
     await Promise.resolve();
-    expect(calls).toEqual(['open', 'download', 'connect', 'save']);
+    expect(calls).toEqual(['open', 'open-drive', 'download', 'connect', 'save-drive', 'move', 'rename', 'save']);
 
     menu.setSaveNowEnabled(false);
-    expect(buttons[3].hasAttribute('disabled')).toBe(true);
+    expect(buttons[7].hasAttribute('disabled')).toBe(true);
   });
 
   it('renders download only in client mode', () => {
@@ -37,9 +53,21 @@ describe('createFileMenu', () => {
     const calls: string[] = [];
     createFileMenu(container, {
       onOpenLocal: () => calls.push('open'),
+      onOpenDrive: async () => {
+        calls.push('open-drive');
+      },
       onDownload: () => calls.push('download'),
       onConnectDrive: async () => {
         calls.push('connect');
+      },
+      onSaveToDrive: async () => {
+        calls.push('save-drive');
+      },
+      onMoveDrive: async () => {
+        calls.push('move');
+      },
+      onRenameDrive: async () => {
+        calls.push('rename');
       },
       onSaveNow: async () => {
         calls.push('save');
