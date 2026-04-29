@@ -10,12 +10,12 @@
     <p>Last updated: April 28, 2026</p>
     <p>
       Collaborative LaTeX Editor is designed to keep document content peer-to-peer between collaborators.
-      Signaling infrastructure is used only to exchange connection metadata needed to establish WebRTC sessions.
+      Public rendezvous/bootstrap infrastructure is used only for peer discovery metadata.
     </p>
     <h2>What We Process</h2>
     <ul>
       <li>Document text is exchanged directly between peers when collaboration is active.</li>
-      <li>Connection metadata (room IDs, SDP, ICE) is relayed by signaling services.</li>
+      <li>Connection metadata (room IDs and transport handshake metadata) is processed by rendezvous services.</li>
       <li>If you connect Google Drive, file contents are sent to Google APIs for autosave.</li>
     </ul>
     <h2>What We Do Not Store Centrally</h2>

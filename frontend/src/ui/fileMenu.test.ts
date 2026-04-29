@@ -4,7 +4,8 @@ describe('createFileMenu', () => {
   it('renders all expected actions and wires click handlers', async () => {
     const container = document.createElement('div');
     const calls: string[] = [];
-    createFileMenu(container, {
+    const menu = createFileMenu(container, {
+      onOpenLocal: () => calls.push('open'),
       onDownload: () => calls.push('download'),
       onConnectDrive: async () => {
         calls.push('connect');
@@ -16,6 +17,7 @@ describe('createFileMenu', () => {
 
     const buttons = Array.from(container.querySelectorAll('button'));
     expect(buttons.map((b) => b.textContent)).toEqual([
+      'Open Local Doc',
       'Download .tex',
       'Connect Google Drive',
       'Save Now',
@@ -23,6 +25,9 @@ describe('createFileMenu', () => {
 
     buttons.forEach((b) => b.click());
     await Promise.resolve();
-    expect(calls).toEqual(['download', 'connect', 'save']);
+    expect(calls).toEqual(['open', 'download', 'connect', 'save']);
+
+    menu.setSaveNowEnabled(false);
+    expect(buttons[3].hasAttribute('disabled')).toBe(true);
   });
 });

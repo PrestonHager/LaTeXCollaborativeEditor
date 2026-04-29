@@ -1,74 +1,111 @@
-import { SignalingClient, type SignalMessage } from '../net/signaling';
-import { WebRtcPeer } from '../net/webrtc';
+import { getBootstrapConfig } from '../net/bootstrapConfig';
+import { PeerSession } from '../net/peerSession';
+import type { TransportState } from '../net/p2pTransport';
+import { applyDelta, computeSingleDelta, type TextDelta } from './textDelta';
 
 type SessionConfig = {
-  signalingUrl: string;
-  onConnectionState: (state: string) => void;
+  onConnectionState: (state: TransportState) => void;
   onRemoteText: (text: string) => void;
+  getLocalText: () => string;
 };
+
+type SyncMessage =
+  | { kind: 'snapshot'; seq: number; text: string }
+  | { kind: 'delta'; seq: number; delta: TextDelta };
 
 export class SessionController {
   private roomId: string | null = null;
-  private signaling: SignalingClient;
-  private peer: WebRtcPeer;
-  private config: SessionConfig;
+  private session: PeerSession;
+  private readonly config: SessionConfig;
+  private reconnectAttempts = 0;
+  private reconnectTimer: number | undefined;
+  private shadowText: string;
+  private localSeq = 0;
+  private lastAppliedSeq = 0;
 
   constructor(config: SessionConfig) {
     this.config = config;
-    this.peer = new WebRtcPeer(
-      (text) => this.config.onRemoteText(text),
-      (candidate) => {
-        if (this.roomId) this.signaling.send({ type: 'ice', roomId: this.roomId, candidate });
+    this.shadowText = config.getLocalText();
+    this.lastAppliedSeq = this.shadowText.length > 0 ? 0 : -1;
+    this.session = new PeerSession(getBootstrapConfig(), {
+      onMessage: (payload, _peerId) => this.onMessage(payload),
+      onState: (state) => {
+        this.config.onConnectionState(state);
+        if (state === 'Connected') {
+          this.reconnectAttempts = 0;
+          return;
+        }
+        if ((state === 'Failed' || state === 'Reconnecting') && this.roomId) {
+          this.scheduleReconnect();
+        }
       },
-    );
-
-    this.signaling = new SignalingClient(config.signalingUrl, (msg) => {
-      void this.onSignal(msg);
+      onPeerCount: () => undefined,
+      onPeerJoin: (peerId) => {
+        const snapshot: SyncMessage = {
+          kind: 'snapshot',
+          seq: this.localSeq,
+          text: this.shadowText,
+        };
+        this.session.sendMessage(snapshot, peerId);
+      },
     });
-    this.signaling.connect();
-    this.config.onConnectionState('Signaling');
+    this.config.onConnectionState('Discovering');
   }
 
   ensureRoom() {
     if (!this.roomId) this.roomId = crypto.randomUUID();
-    this.signaling.send({ type: 'join', roomId: this.roomId });
-    void this.createAndSendOffer();
+    this.session.joinRoom(this.roomId);
     return this.roomId;
   }
 
   join(roomId: string) {
     this.roomId = roomId;
-    this.signaling.send({ type: 'join', roomId });
+    this.session.joinRoom(roomId);
   }
 
   broadcastText(text: string) {
-    this.peer.send(text);
+    const delta = computeSingleDelta(this.shadowText, text);
+    if (!delta) return;
+    this.localSeq += 1;
+    this.lastAppliedSeq = this.localSeq;
+    this.shadowText = applyDelta(this.shadowText, delta);
+    const message: SyncMessage = { kind: 'delta', seq: this.localSeq, delta };
+    this.session.sendMessage(message);
   }
 
-  private async createAndSendOffer() {
-    if (!this.roomId) return;
-    const offer = await this.peer.createOffer();
-    this.signaling.send({ type: 'offer', roomId: this.roomId, sdp: offer });
+  updateLocalText(text: string) {
+    this.shadowText = text;
   }
 
-  private async onSignal(msg: SignalMessage) {
-    if (!this.roomId || msg.roomId !== this.roomId) return;
+  private scheduleReconnect() {
+    if (this.reconnectTimer || !this.roomId) return;
+    const delay = Math.min(20_000, 1_000 * 2 ** this.reconnectAttempts);
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = undefined;
+      if (!this.roomId) return;
+      this.session.joinRoom(this.roomId);
+    }, delay);
+  }
 
-    if (msg.type === 'offer') {
-      const answer = await this.peer.acceptOffer(msg.sdp);
-      this.signaling.send({ type: 'answer', roomId: this.roomId, sdp: answer });
-      this.config.onConnectionState('Connected');
+  private onMessage(payload: unknown) {
+    const message = payload as SyncMessage;
+    if (!message || typeof message !== 'object' || !('kind' in message)) return;
+
+    if (message.kind === 'snapshot') {
+      if (message.seq < this.lastAppliedSeq) return;
+      if (message.seq === this.lastAppliedSeq && this.shadowText.length > 0) return;
+      this.lastAppliedSeq = message.seq;
+      this.shadowText = message.text;
+      this.config.onRemoteText(message.text);
       return;
     }
 
-    if (msg.type === 'answer') {
-      await this.peer.acceptAnswer(msg.sdp);
-      this.config.onConnectionState('Connected');
-      return;
-    }
-
-    if (msg.type === 'ice') {
-      await this.peer.addIce(msg.candidate);
+    if (message.kind === 'delta') {
+      if (message.seq <= this.lastAppliedSeq) return;
+      this.lastAppliedSeq = message.seq;
+      this.shadowText = applyDelta(this.shadowText, message.delta);
+      this.config.onRemoteText(this.shadowText);
     }
   }
 }

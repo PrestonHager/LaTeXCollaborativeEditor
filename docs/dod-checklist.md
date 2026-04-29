@@ -5,5 +5,7 @@
 - [ ] Preview updates after edits and shows compile state.
 - [ ] Local `Download .tex` exports current text content.
 - [ ] Google Drive `Connect` + autosave + `Save Now` work.
-- [ ] Signaling channel carries only SDP/ICE metadata.
+- [ ] No repository-owned signal server is required for connection setup.
+- [ ] Rendezvous metadata does not carry document payload content.
+- [ ] Connection works on `localhost` and `https://latex.prestonhager.com`.
 - [ ] App deploys successfully to GitHub Pages.

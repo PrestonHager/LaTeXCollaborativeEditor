@@ -10,9 +10,10 @@ describe('App integration behavior', () => {
     const editor = createEditorPane(editorHost);
     const statuses: string[] = [];
     const save = vi.fn(async () => {});
+    const provider = { connect: async () => true, save, status: () => 'x' };
 
     const autosave = new AutosaveController({
-      provider: { connect: async () => true, save, status: () => 'x' },
+      provider: () => provider,
       getContent: () => editor.getText(),
       getFileName: () => 'document.tex',
       onStatus: (s) => statuses.push(s),
@@ -36,13 +37,16 @@ describe('App integration behavior', () => {
 
     const host = document.createElement('div');
     createFileMenu(host, {
+      onOpenLocal: () => undefined,
       onDownload: () => local.download('doc.tex', 'x'),
       onConnectDrive: async () => undefined,
       onSaveNow: async () => undefined,
     });
 
-    const downloadBtn = host.querySelector('button')!;
-    downloadBtn.click();
+    const buttons = Array.from(host.querySelectorAll('button'));
+    const downloadBtn = buttons.find((b) => b.textContent === 'Download .tex');
+    expect(downloadBtn).toBeTruthy();
+    downloadBtn!.click();
     expect(downloadSpy).toHaveBeenCalledWith('doc.tex', 'x');
   });
 });

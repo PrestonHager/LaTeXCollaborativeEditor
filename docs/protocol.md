@@ -1,13 +1,15 @@
-# Signaling and P2P Protocol
+# Serverless P2P Protocol
 
-## Signaling messages (WebSocket)
-- `join`: join a room by ID
-- `offer`: forward SDP offer to room peers
-- `answer`: forward SDP answer to room peers
-- `ice`: forward ICE candidates
+## Rendezvous and session bootstrap
+- Session links include `?room=<id>`.
+- Browser peers join the same P2P topic/room using public rendezvous bootstrap endpoints.
+- No repository-owned signaling server is required.
 
-Signaling servers are metadata relays only. Document text is not sent via signaling.
+## Transport behavior
+- The application uses a transport adapter over third-party rendezvous infrastructure.
+- ICE configuration uses STUN first with optional TURN fallback for restrictive NATs.
+- Connection states surfaced to UI: `Discovering`, `Dialing`, `Connected`, `Relayed`, `Reconnecting`, `Failed`.
 
-## Data channel payload
-- Current MVP sends whole-document snapshots as UTF-8 strings for interoperability.
-- Planned optimization: send compact CRDT ops encoded from `rust-core`.
+## Document payload channel
+- Document updates are exchanged peer-to-peer as action payloads.
+- Rendezvous metadata does not carry document bodies.

@@ -2,6 +2,8 @@
 body { margin: 0; font-family: Arial, sans-serif; background: #111; color: #f5f5f5; }
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 .topbar { display: flex; gap: 0.75rem; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid #333; flex-wrap: wrap; }
+.doc-title { margin: 0; cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 6px; border: 1px dashed #444; font-size: 1.25rem; }
+.doc-title:hover { background: #1a1a1a; }
 .split { flex: 1; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; }
 .pane { border-right: 1px solid #2a2a2a; min-height: 0; }
 .pane:last-child { border-right: 0; }
@@ -9,9 +11,13 @@ textarea.editor { width: 100%; height: calc(100vh - 145px); background: #171717;
 iframe.preview { width: 100%; height: calc(100vh - 145px); border: 0; background: #fff; }
 .pill { border: 1px solid #444; padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 12px; }
 .muted { color: #b0b0b0; max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .muted { text-decoration: underline; }
 .footer { border-top: 1px solid #333; padding: 0.5rem 1rem; font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .diagnostics { color: #f6c177; }
 .file-menu { display: inline-flex; gap: 0.5rem; }
+.settings-menu { display: inline-flex; gap: 0.5rem; align-items: center; border: 1px solid #2f2f2f; border-radius: 6px; padding: 0.25rem 0.5rem; }
+.settings-title { font-size: 12px; color: #bbb; }
+.settings-option { font-size: 12px; color: #ddd; }
 .legal-nav { display: inline-flex; gap: 0.5rem; }
 .legal-nav a { color: #d6e1ff; text-decoration: none; border: 1px solid #445; border-radius: 6px; padding: 0.25rem 0.45rem; font-size: 12px; }
 .legal-nav a:hover { background: #20263d; }

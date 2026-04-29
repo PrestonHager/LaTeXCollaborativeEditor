@@ -1,7 +1,7 @@
-import type { StorageProvider } from './providers/googleDrive';
+import type { StorageProvider } from './providers/types';
 
 type AutosaveConfig = {
-  provider: StorageProvider;
+  provider: () => StorageProvider;
   getContent: () => string;
   getFileName: () => string;
   onStatus: (status: string) => void;
@@ -36,18 +36,24 @@ export class AutosaveController {
   }
 
   async saveNow() {
-    if (!this.enabled) {
-      this.config.onStatus('Autosave Off');
-      return;
-    }
     await this.trySave(true);
   }
 
+  async renameDocument(oldFileName: string, newFileName: string) {
+    const provider = this.config.provider();
+    if (provider.saveAs) {
+      await provider.saveAs(this.config.getContent(), oldFileName, newFileName);
+    } else {
+      await provider.save(this.config.getContent(), newFileName);
+    }
+    this.config.onStatus('Saved');
+  }
+
   private async trySave(force = false) {
-    if (!this.enabled || (!this.dirty && !force)) return;
+    if ((!this.enabled && !force) || (!this.dirty && !force)) return;
     this.config.onStatus('Saving');
     try {
-      await this.withBackoff(() => this.config.provider.save(this.config.getContent(), this.config.getFileName()));
+      await this.withBackoff(() => this.config.provider().save(this.config.getContent(), this.config.getFileName()));
       this.dirty = false;
       this.config.onStatus('Saved');
     } catch {

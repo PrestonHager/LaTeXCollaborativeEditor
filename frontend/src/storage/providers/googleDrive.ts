@@ -1,10 +1,6 @@
-type GoogleTokenResponse = { access_token: string };
+import type { StorageProvider } from './types';
 
-export interface StorageProvider {
-  connect(): Promise<boolean>;
-  save(content: string, fileName: string): Promise<void>;
-  status(): string;
-}
+type GoogleTokenResponse = { access_token: string };
 
 declare global {
   interface Window {
@@ -44,6 +40,12 @@ export class GoogleDriveProvider implements StorageProvider {
     if (!this.accessToken) throw new Error('Google Drive not connected');
     if (!this.fileId) this.fileId = await this.createFile(fileName, content);
     await this.updateFile(this.fileId, content);
+  }
+
+  async saveAs(content: string, _oldFileName: string, newFileName: string): Promise<void> {
+    // Google Drive "move by name" is provider-specific. MVP behavior is to create/update under new name.
+    this.fileId = null;
+    await this.save(content, newFileName);
   }
 
   private async createFile(fileName: string, content: string): Promise<string> {

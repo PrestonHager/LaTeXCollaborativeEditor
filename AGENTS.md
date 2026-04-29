@@ -8,7 +8,8 @@
 
 ## Guardrails
 - Keep document content peer-to-peer over WebRTC only.
-- Signaling server must only relay SDP/ICE metadata.
+- Do not introduce a repository-owned signaling server.
+- Keep rendezvous/bootstrap metadata separate from document payload content.
 - Preserve static-hosting compatibility for the web app.
 
 ## Validation commands
@@ -17,7 +18,7 @@
 - In `rust-tex/`: `cargo test`
 
 ## Required docs updates
-If signaling protocol, build steps, or storage provider behavior changes, update:
+If P2P protocol, bootstrap/build steps, or storage provider behavior changes, update:
 - `docs/protocol.md`
 - `docs/deployment.md`
 - `docs/dod-checklist.md`
