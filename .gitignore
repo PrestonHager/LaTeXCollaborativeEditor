@@ -1,6 +1,7 @@
 node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
 frontend/.env
 rust-core/target/
 rust-tex/target/
