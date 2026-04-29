@@ -46,6 +46,10 @@ const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
 const titleEl = document.getElementById('doc-title')!;
+const roomId = new URLSearchParams(location.search).get('room');
+const isClient = Boolean(roomId);
+const COMPILE_DEBOUNCE_MS = 500;
+const COMPILE_MIN_INTERVAL_MS = 900;
 
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
@@ -53,6 +57,7 @@ const driveProvider = new GoogleDriveProvider();
 let activeProvider: StorageProvider = localAppProvider;
 let documentName = 'Untitled';
 let saveNowEnabled = true;
+const hostStorageLabel = 'Saved on host local storage';
 
 const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
 
@@ -73,40 +78,96 @@ const autosave = new AutosaveController({
     autosaveStatusEl.textContent = status;
   },
 });
-void localAppProvider.connect().then(() => autosave.enable());
+if (!isClient) {
+  void localAppProvider.connect().then(() => autosave.enable());
+} else {
+  autosaveStatusEl.textContent = hostStorageLabel;
+}
 
 const session = new SessionController({
+  isHost: !isClient,
   onConnectionState: (status) => {
     document.getElementById('connection-status')!.textContent = status;
   },
   onRemoteText: (text) => editor.setText(text, false),
+  onRemoteMetadata: ({ title, storage }) => {
+    documentName = title;
+    titleEl.textContent = title;
+    autosaveStatusEl.textContent = storage;
+  },
   getLocalText: () => editor.getText(),
+  getLocalMetadata: () => ({
+    title: documentName,
+    storage: hostStorageLabel,
+  }),
 });
 
-const worker = new Worker(new URL('./workers/compileWorker.ts', import.meta.url), { type: 'module' });
-worker.onmessage = (event: MessageEvent<{ ok: boolean; pdfDataUrl?: string; error?: string }>) => {
-  if (event.data.ok && event.data.pdfDataUrl) {
-    preview.setPdf(event.data.pdfDataUrl);
+let compileTimer: ReturnType<typeof setTimeout> | null = null;
+let throttleTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSource = '';
+let lastCompiledSource: string | null = null;
+let lastCompileStartedAt = 0;
+let compileSequence = 0;
+
+const runCompile = async (source: string) => {
+  if (source === lastCompiledSource) return;
+  const seq = ++compileSequence;
+  lastCompileStartedAt = Date.now();
+  compileStatusEl.textContent = 'Compiling';
+  preview.setLoading(true);
+  try {
+    await preview.renderLatex(source);
+    if (seq !== compileSequence) return;
+    lastCompiledSource = source;
     compileStatusEl.textContent = 'Compiled';
     diagnosticsEl.textContent = 'No diagnostics.';
-  } else {
+  } catch (error) {
+    if (seq !== compileSequence) return;
     compileStatusEl.textContent = 'Compile Error';
-    diagnosticsEl.textContent = event.data.error ?? 'Unknown compile error';
+    diagnosticsEl.textContent = String(error);
+  } finally {
+    if (seq === compileSequence) {
+      preview.setLoading(false);
+    }
   }
 };
 
+const requestCompile = (source: string) => {
+  const elapsed = Date.now() - lastCompileStartedAt;
+  if (elapsed >= COMPILE_MIN_INTERVAL_MS) {
+    void runCompile(source);
+    return;
+  }
+  if (throttleTimer) clearTimeout(throttleTimer);
+  const waitMs = COMPILE_MIN_INTERVAL_MS - elapsed;
+  throttleTimer = setTimeout(() => {
+    throttleTimer = null;
+    void runCompile(source);
+  }, waitMs);
+};
+
+const scheduleCompile = (source: string) => {
+  pendingSource = source;
+  if (compileTimer) {
+    clearTimeout(compileTimer);
+  }
+  compileStatusEl.textContent = 'Waiting';
+  compileTimer = setTimeout(() => {
+    requestCompile(pendingSource);
+    compileTimer = null;
+  }, COMPILE_DEBOUNCE_MS);
+};
+
 editor.onTextChanged((text, sync = true) => {
-  compileStatusEl.textContent = 'Compiling';
-  worker.postMessage({ source: text });
-  session.updateLocalText(text);
-  if (documentName !== 'Untitled') {
+  scheduleCompile(text);
+  if (!isClient && documentName !== 'Untitled') {
     autosave.markDirty();
   }
-  if (sync) session.broadcastText(text);
+  if (sync) session.applyLocalText(text);
 });
 
-const roomId = new URLSearchParams(location.search).get('room');
 if (roomId) session.join(roomId);
+scheduleCompile(editor.getText());
 
 setupShareButton({
   button: document.getElementById('share-btn') as HTMLButtonElement,
@@ -115,7 +176,8 @@ setupShareButton({
   getCurrentUrl: () => location.href,
 });
 
-titleEl.addEventListener('click', async () => {
+if (!isClient) {
+  titleEl.addEventListener('click', async () => {
   const next = window.prompt('Rename document:', documentName);
   if (!next || !next.trim() || next.trim() === documentName) return;
 
@@ -123,7 +185,9 @@ titleEl.addEventListener('click', async () => {
   documentName = next.trim();
   titleEl.textContent = documentName;
   await autosave.renameDocument(oldFileName, toTexName(documentName));
-});
+  session.broadcastMetadata({ title: documentName, storage: hostStorageLabel });
+  });
+}
 
 const fileMenu = createFileMenu(document.getElementById('file-menu')!, {
   onOpenLocal: () => {
@@ -171,15 +235,18 @@ const fileMenu = createFileMenu(document.getElementById('file-menu')!, {
     if (!promptForDocumentName()) return;
     await autosave.saveNow();
   },
+  mode: isClient ? 'client' : 'host',
 });
 
-createSettingsMenu(document.getElementById('settings-menu')!, {
-  onToggleSaveNow: (enabled) => {
-    saveNowEnabled = enabled;
-    fileMenu.setSaveNowEnabled(enabled);
-  },
-  onClearSavedDocuments: async () => {
-    await localAppProvider.clear?.();
-    autosaveStatusEl.textContent = 'Local saved docs cleared';
-  },
-});
+if (!isClient) {
+  createSettingsMenu(document.getElementById('settings-menu')!, {
+    onToggleSaveNow: (enabled) => {
+      saveNowEnabled = enabled;
+      fileMenu.setSaveNowEnabled(enabled);
+    },
+    onClearSavedDocuments: async () => {
+      await localAppProvider.clear?.();
+      autosaveStatusEl.textContent = 'Local saved docs cleared';
+    },
+  });
+}

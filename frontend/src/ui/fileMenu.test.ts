@@ -13,6 +13,7 @@ describe('createFileMenu', () => {
       onSaveNow: async () => {
         calls.push('save');
       },
+      mode: 'host',
     });
 
     const buttons = Array.from(container.querySelectorAll('button'));
@@ -29,5 +30,26 @@ describe('createFileMenu', () => {
 
     menu.setSaveNowEnabled(false);
     expect(buttons[3].hasAttribute('disabled')).toBe(true);
+  });
+
+  it('renders download only in client mode', () => {
+    const container = document.createElement('div');
+    const calls: string[] = [];
+    createFileMenu(container, {
+      onOpenLocal: () => calls.push('open'),
+      onDownload: () => calls.push('download'),
+      onConnectDrive: async () => {
+        calls.push('connect');
+      },
+      onSaveNow: async () => {
+        calls.push('save');
+      },
+      mode: 'client',
+    });
+
+    const buttons = Array.from(container.querySelectorAll('button'));
+    expect(buttons.map((b) => b.textContent)).toEqual(['Download .tex']);
+    buttons[0].click();
+    expect(calls).toEqual(['download']);
   });
 });

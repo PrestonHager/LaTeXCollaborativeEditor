@@ -3,11 +3,13 @@ type FileMenuActions = {
   onDownload: () => void;
   onConnectDrive: () => Promise<void> | void;
   onSaveNow: () => Promise<void> | void;
+  mode?: 'host' | 'client';
 };
 
 export function createFileMenu(container: HTMLElement, actions: FileMenuActions) {
   const menu = document.createElement('div');
   menu.className = 'file-menu';
+  const mode = actions.mode ?? 'host';
 
   const openLocal = document.createElement('button');
   openLocal.textContent = 'Open Local Doc';
@@ -25,7 +27,11 @@ export function createFileMenu(container: HTMLElement, actions: FileMenuActions)
   saveNow.textContent = 'Save Now';
   saveNow.onclick = () => void actions.onSaveNow();
 
-  menu.append(openLocal, download, connectDrive, saveNow);
+  if (mode === 'client') {
+    menu.append(download);
+  } else {
+    menu.append(openLocal, download, connectDrive, saveNow);
+  }
   container.appendChild(menu);
 
   return {

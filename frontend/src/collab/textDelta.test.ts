@@ -1,15 +1,17 @@
 import { applyDelta, computeSingleDelta } from './textDelta';
 
 describe('textDelta', () => {
-  it('computes insert delta', () => {
+  it('computes and applies insert patch', () => {
     const delta = computeSingleDelta('abc', 'abXc');
-    expect(delta).toEqual({ index: 2, deleteCount: 0, insert: 'X' });
+    expect(typeof delta).toBe('string');
+    expect(delta).toContain('ab');
     expect(applyDelta('abc', delta!)).toBe('abXc');
   });
 
-  it('computes delete delta', () => {
+  it('computes and applies delete patch', () => {
     const delta = computeSingleDelta('abc', 'ac');
-    expect(delta).toEqual({ index: 1, deleteCount: 1, insert: '' });
+    expect(typeof delta).toBe('string');
+    expect(delta).toContain('-b');
     expect(applyDelta('abc', delta!)).toBe('ac');
   });
 

@@ -1,17 +1,22 @@
 import { getBootstrapConfig } from '../net/bootstrapConfig';
 import { PeerSession } from '../net/peerSession';
 import type { TransportState } from '../net/p2pTransport';
-import { applyDelta, computeSingleDelta, type TextDelta } from './textDelta';
+import { YjsTextSync } from './yjsSync';
 
 type SessionConfig = {
+  isHost: boolean;
   onConnectionState: (state: TransportState) => void;
   onRemoteText: (text: string) => void;
+  onRemoteMetadata?: (metadata: { title: string; storage: string }) => void;
   getLocalText: () => string;
+  getLocalMetadata?: () => { title: string; storage: string };
 };
 
 type SyncMessage =
-  | { kind: 'snapshot'; seq: number; text: string }
-  | { kind: 'delta'; seq: number; delta: TextDelta };
+  | { kind: 'snapshot'; state: number[]; metadata?: { title: string; storage: string } }
+  | { kind: 'y-update'; update: number[] }
+  | { kind: 'metadata'; metadata: { title: string; storage: string } }
+  | { kind: 'sync-request' };
 
 export class SessionController {
   private roomId: string | null = null;
@@ -19,20 +24,31 @@ export class SessionController {
   private readonly config: SessionConfig;
   private reconnectAttempts = 0;
   private reconnectTimer: number | undefined;
-  private shadowText: string;
-  private localSeq = 0;
-  private lastAppliedSeq = 0;
+  private syncRequestTimer: number | undefined;
+  private syncRequestDebounceTimer: number | undefined;
+  private readonly sync: YjsTextSync;
+  private hasInitialSync: boolean;
+  private readonly initialSyncDebounceMs = 300;
 
   constructor(config: SessionConfig) {
     this.config = config;
-    this.shadowText = config.getLocalText();
-    this.lastAppliedSeq = this.shadowText.length > 0 ? 0 : -1;
+    this.hasInitialSync = config.isHost;
+    this.sync = new YjsTextSync({
+      initialText: config.isHost ? config.getLocalText() : '',
+      onRemoteText: (text) => this.config.onRemoteText(text),
+      onLocalUpdate: (update) => {
+        if (!this.config.isHost && !this.hasInitialSync) return;
+        const message: SyncMessage = { kind: 'y-update', update: Array.from(update) };
+        this.session.sendMessage(message);
+      },
+    });
     this.session = new PeerSession(getBootstrapConfig(), {
-      onMessage: (payload, _peerId) => this.onMessage(payload),
+      onMessage: (payload, peerId) => this.onMessage(payload, peerId),
       onState: (state) => {
         this.config.onConnectionState(state);
         if (state === 'Connected') {
           this.reconnectAttempts = 0;
+          this.ensureInitialSyncRequestLoop();
           return;
         }
         if ((state === 'Failed' || state === 'Reconnecting') && this.roomId) {
@@ -41,10 +57,11 @@ export class SessionController {
       },
       onPeerCount: () => undefined,
       onPeerJoin: (peerId) => {
+        if (!this.config.isHost) return;
         const snapshot: SyncMessage = {
           kind: 'snapshot',
-          seq: this.localSeq,
-          text: this.shadowText,
+          state: Array.from(this.sync.getSnapshot()),
+          metadata: this.config.getLocalMetadata?.(),
         };
         this.session.sendMessage(snapshot, peerId);
       },
@@ -61,20 +78,21 @@ export class SessionController {
   join(roomId: string) {
     this.roomId = roomId;
     this.session.joinRoom(roomId);
+    this.ensureInitialSyncRequestLoop();
   }
 
-  broadcastText(text: string) {
-    const delta = computeSingleDelta(this.shadowText, text);
-    if (!delta) return;
-    this.localSeq += 1;
-    this.lastAppliedSeq = this.localSeq;
-    this.shadowText = applyDelta(this.shadowText, delta);
-    const message: SyncMessage = { kind: 'delta', seq: this.localSeq, delta };
+  applyLocalText(text: string) {
+    this.sync.applyLocalText(text);
+  }
+
+  updateLocalText(_text: string) {
+    // Kept for compatibility with older call sites.
+  }
+
+  broadcastMetadata(metadata: { title: string; storage: string }) {
+    if (!this.config.isHost) return;
+    const message: SyncMessage = { kind: 'metadata', metadata };
     this.session.sendMessage(message);
-  }
-
-  updateLocalText(text: string) {
-    this.shadowText = text;
   }
 
   private scheduleReconnect() {
@@ -85,27 +103,83 @@ export class SessionController {
       this.reconnectTimer = undefined;
       if (!this.roomId) return;
       this.session.joinRoom(this.roomId);
+      this.ensureInitialSyncRequestLoop();
     }, delay);
   }
 
-  private onMessage(payload: unknown) {
+  private ensureInitialSyncRequestLoop() {
+    if (this.config.isHost || this.hasInitialSync) return;
+    if (!this.syncRequestDebounceTimer) {
+      this.syncRequestDebounceTimer = window.setTimeout(() => {
+        this.syncRequestDebounceTimer = undefined;
+        if (!this.config.isHost && !this.hasInitialSync) {
+          this.session.sendMessage({ kind: 'sync-request' });
+        }
+      }, this.initialSyncDebounceMs);
+    }
+    if (!this.syncRequestTimer) {
+      this.syncRequestTimer = window.setInterval(() => {
+        if (this.config.isHost || this.hasInitialSync) {
+          if (this.syncRequestTimer) {
+            window.clearInterval(this.syncRequestTimer);
+            this.syncRequestTimer = undefined;
+          }
+          return;
+        }
+        this.session.sendMessage({ kind: 'sync-request' });
+      }, 1000);
+    }
+  }
+
+  private onMessage(payload: unknown, peerId?: string) {
     const message = payload as SyncMessage;
     if (!message || typeof message !== 'object' || !('kind' in message)) return;
 
     if (message.kind === 'snapshot') {
-      if (message.seq < this.lastAppliedSeq) return;
-      if (message.seq === this.lastAppliedSeq && this.shadowText.length > 0) return;
-      this.lastAppliedSeq = message.seq;
-      this.shadowText = message.text;
-      this.config.onRemoteText(message.text);
+      if (this.config.isHost) return;
+      this.sync.applySnapshot(new Uint8Array(message.state));
+      this.hasInitialSync = true;
+      if (this.syncRequestDebounceTimer) {
+        window.clearTimeout(this.syncRequestDebounceTimer);
+        this.syncRequestDebounceTimer = undefined;
+      }
+      if (this.syncRequestTimer) {
+        window.clearInterval(this.syncRequestTimer);
+        this.syncRequestTimer = undefined;
+      }
+      if (message.metadata && this.config.onRemoteMetadata) {
+        this.config.onRemoteMetadata(message.metadata);
+      }
       return;
     }
 
-    if (message.kind === 'delta') {
-      if (message.seq <= this.lastAppliedSeq) return;
-      this.lastAppliedSeq = message.seq;
-      this.shadowText = applyDelta(this.shadowText, message.delta);
-      this.config.onRemoteText(this.shadowText);
+    if (message.kind === 'y-update') {
+      this.sync.applyRemoteUpdate(new Uint8Array(message.update));
+      return;
+    }
+
+    if (message.kind === 'metadata' && !this.config.isHost && this.config.onRemoteMetadata) {
+      this.config.onRemoteMetadata(message.metadata);
+      return;
+    }
+
+    if (message.kind === 'sync-request' && this.config.isHost && peerId) {
+      const snapshot: SyncMessage = {
+        kind: 'snapshot',
+        state: Array.from(this.sync.getSnapshot()),
+        metadata: this.config.getLocalMetadata?.(),
+      };
+      this.session.sendMessage(snapshot, peerId);
+      return;
+    }
+
+    if (message.kind === 'sync-request' && this.config.isHost && !peerId) {
+      const snapshot: SyncMessage = {
+        kind: 'snapshot',
+        state: Array.from(this.sync.getSnapshot()),
+        metadata: this.config.getLocalMetadata?.(),
+      };
+      this.session.sendMessage(snapshot);
     }
   }
 }

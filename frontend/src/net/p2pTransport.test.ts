@@ -55,6 +55,28 @@ describe('P2pTransport', () => {
     expect(onPeerJoinEvent).toHaveBeenCalledWith('peer-2');
     expect(send).toHaveBeenCalledWith('outbound');
     expect(onState).toHaveBeenCalledWith('Dialing');
+    expect(onState).toHaveBeenCalledWith('Connected');
+  });
+
+  it('transitions host from dialing to connected when first peer joins', () => {
+    let peerJoinHandler: ((peerId: string) => void) | undefined;
+    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
+      peerJoinHandler = cb;
+    });
+    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
+    const onState = vi.fn();
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState,
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+
+    transport.join('room-host');
+    expect(onState).toHaveBeenCalledWith('Dialing');
+    peerJoinHandler?.('peer-new-client');
+
+    expect(onState).toHaveBeenCalledWith('Connected');
   });
 
   it('emits fallback states when peers do not join', () => {
