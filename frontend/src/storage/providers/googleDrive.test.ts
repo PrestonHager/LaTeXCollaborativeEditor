@@ -8,18 +8,18 @@ describe('GoogleDriveProvider', () => {
   });
 
   it('connects and exposes access token', async () => {
-    const callbackRef: { cb?: (resp: { access_token: string }) => void } = {};
+    const callbackRef: { cb?: (resp: { access_token?: string; error?: string; expires_in?: number }) => void } = {};
     vi.stubGlobal('fetch', vi.fn());
     vi.stubGlobal('window', window);
     window.google = {
       accounts: {
         oauth2: {
-          initTokenClient: vi.fn(({ callback }) => {
-            callbackRef.cb = callback;
-            return {
-              requestAccessToken: vi.fn(() => callbackRef.cb?.({ access_token: 'token-123' })),
-            };
-          }),
+          initTokenClient: vi.fn(() => ({
+            set callback(fn: typeof callbackRef.cb) {
+              callbackRef.cb = fn;
+            },
+            requestAccessToken: vi.fn(() => callbackRef.cb?.({ access_token: 'token-123', expires_in: 3600 })),
+          })),
         },
       },
     };
@@ -32,6 +32,28 @@ describe('GoogleDriveProvider', () => {
     expect(ok).toBe(true);
     expect(provider.getAccessToken()).toBe('token-123');
     expect(provider.status()).toBe('Drive: Connected');
+    expect(localStorage.getItem('drive_access_token')).toContain('token-123');
+  });
+
+  it('reuses cached access token without prompting oauth again', async () => {
+    const expiresAt = Date.now() + 60 * 60 * 1000;
+    localStorage.setItem('drive_access_token', JSON.stringify({ accessToken: 'cached-token', expiresAt }));
+
+    vi.stubGlobal('window', window);
+    window.google = {
+      accounts: {
+        oauth2: {
+          initTokenClient: vi.fn(),
+        },
+      },
+    };
+
+    const provider = new GoogleDriveProvider();
+    const ok = await provider.connect();
+
+    expect(ok).toBe(true);
+    expect(provider.getAccessToken()).toBe('cached-token');
+    expect(window.google.accounts.oauth2.initTokenClient).not.toHaveBeenCalled();
   });
 
   it('opens document and persists selected file', async () => {

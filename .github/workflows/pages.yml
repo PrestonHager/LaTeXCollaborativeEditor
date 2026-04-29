@@ -17,13 +17,23 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: Production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Install and build frontend
         working-directory: frontend
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ secrets.VITE_GOOGLE_API_KEY }}
+          VITE_P2P_APP_ID: ${{ vars.VITE_P2P_APP_ID }}
+          VITE_STUN_URL: ${{ vars.VITE_STUN_URL }}
         run: |
           npm ci
           npm run build

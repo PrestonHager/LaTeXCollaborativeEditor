@@ -16,8 +16,13 @@ export type CommandId =
   | 'edit.copy'
   | 'edit.paste'
   | 'edit.selectAll'
+  | 'view.toggleEditorTheme'
+  | 'view.togglePreviewTheme'
   | 'view.toggleSaveNow'
   | 'view.compileNow'
+  | 'view.layoutSplit'
+  | 'view.layoutEditorOnly'
+  | 'view.layoutPreviewOnly'
   | 'help.shortcuts'
   | 'help.about';
 

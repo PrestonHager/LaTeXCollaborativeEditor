@@ -85,6 +85,14 @@ export class SessionController {
     this.sync.applyLocalText(text);
   }
 
+  getYText() {
+    return this.sync.getYText();
+  }
+
+  getDoc() {
+    return this.sync.getDoc();
+  }
+
   updateLocalText(_text: string) {
     // Kept for compatibility with older call sites.
   }

@@ -1,7 +1,12 @@
 import type { StorageProvider } from './types';
 
-type GoogleTokenResponse = { access_token: string };
+type GoogleTokenResponse = {
+  access_token?: string;
+  expires_in?: number;
+  error?: string;
+};
 type DriveFileRef = { id: string; name: string };
+type StoredToken = { accessToken: string; expiresAt: number };
 
 declare global {
   interface Window {
@@ -10,16 +15,21 @@ declare global {
 }
 
 export class GoogleDriveProvider implements StorageProvider {
-  private accessToken = '';
+  private accessToken = this.readStoredAccessToken();
   private fileRef: DriveFileRef | null = this.readStoredFileRef();
   private currentStatus = 'Autosave Off';
   private static readonly storageKey = 'drive_active_file_ref';
+  private static readonly tokenStorageKey = 'drive_access_token';
 
   status() { return this.currentStatus; }
   getAccessToken() { return this.accessToken; }
   getCurrentFileRef() { return this.fileRef; }
 
   async connect(): Promise<boolean> {
+    if (this.hasUsableToken()) {
+      this.currentStatus = 'Drive: Connected';
+      return true;
+    }
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
       this.currentStatus = 'Drive config missing';
@@ -28,23 +38,21 @@ export class GoogleDriveProvider implements StorageProvider {
     this.currentStatus = 'Drive: Connecting...';
     try {
       await this.ensureScript('https://accounts.google.com/gsi/client');
-      return new Promise((resolve) => {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'https://www.googleapis.com/auth/drive.file',
-          callback: (resp: GoogleTokenResponse) => {
-            if (!resp?.access_token) {
-              this.currentStatus = 'Drive: Authorization failed';
-              resolve(false);
-              return;
-            }
-            this.accessToken = resp.access_token;
-            this.currentStatus = 'Drive: Connected';
-            resolve(true);
-          },
-        });
-        tokenClient.requestAccessToken({ prompt: 'consent' });
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: () => {
+          // Callback is supplied per-request below.
+        },
       });
+      const silent = await this.requestAccessToken(tokenClient, '');
+      if (silent) {
+        this.currentStatus = 'Drive: Connected';
+        return true;
+      }
+      const consent = await this.requestAccessToken(tokenClient, 'consent');
+      this.currentStatus = consent ? 'Drive: Connected' : 'Drive: Authorization failed';
+      return consent;
     } catch {
       this.currentStatus = 'Drive: Connection failed';
       return false;
@@ -180,5 +188,46 @@ export class GoogleDriveProvider implements StorageProvider {
       return;
     }
     localStorage.setItem(GoogleDriveProvider.storageKey, JSON.stringify(fileRef));
+  }
+
+  private hasUsableToken(): boolean {
+    return this.accessToken.length > 0;
+  }
+
+  private requestAccessToken(tokenClient: any, prompt: '' | 'consent'): Promise<boolean> {
+    return new Promise((resolve) => {
+      tokenClient.callback = (resp: GoogleTokenResponse) => {
+        if (!resp?.access_token || resp.error) {
+          resolve(false);
+          return;
+        }
+        this.accessToken = resp.access_token;
+        const expiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000;
+        this.persistAccessToken({ accessToken: this.accessToken, expiresAt });
+        resolve(true);
+      };
+      tokenClient.requestAccessToken({ prompt });
+    });
+  }
+
+  private readStoredAccessToken(): string {
+    try {
+      const raw = localStorage.getItem(GoogleDriveProvider.tokenStorageKey);
+      if (!raw) return '';
+      const parsed = JSON.parse(raw) as StoredToken;
+      if (!parsed?.accessToken || !parsed?.expiresAt) return '';
+      const isExpired = parsed.expiresAt <= Date.now() + 60_000;
+      if (isExpired) {
+        localStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+        return '';
+      }
+      return parsed.accessToken;
+    } catch {
+      return '';
+    }
+  }
+
+  private persistAccessToken(token: StoredToken) {
+    localStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(token));
   }
 }

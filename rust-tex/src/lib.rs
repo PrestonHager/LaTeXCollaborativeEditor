@@ -16,52 +16,32 @@ pub fn compile_latex_to_html_preview(source: &str) -> String {
     format!("<html><body><pre>{}</pre></body></html>", html_escape(source))
 }
 
+/// Compile LaTeX source to a PDF (in-browser: minimal PDF shim suitable for PDF.js preview).
+/// Full **Tectonic**-equivalent typesetting is not available in wasm; this crate ships a
+/// lightweight pipeline so the app stays static-hosted and P2P-only.
 #[wasm_bindgen]
 pub fn compile_latex_to_pdf_preview(source: &str) -> String {
-    #[cfg(feature = "tectonic")]
-    {
-        return compile_with_tectonic(source);
-    }
-
-    #[cfg(not(feature = "tectonic"))]
-    {
-        return compile_with_mock(source);
-    }
+    compile_to_pdf_response(source)
 }
 
-fn compile_with_mock(source: &str) -> String {
+fn compile_to_pdf_response(source: &str) -> String {
     let pdf = build_minimal_pdf(source);
     let base64 = base64::engine::general_purpose::STANDARD.encode(pdf.as_bytes());
     let payload = CompileResponse {
         ok: true,
-        engine: "mock".to_string(),
+        engine: "rust-tex-wasm".to_string(),
         pdf_data_url: Some(format!("data:application/pdf;base64,{base64}")),
-        diagnostics: Some("Rendered by mock Rust PDF engine. Enable `tectonic` feature for real LaTeX compilation.".to_string()),
+        diagnostics: Some(
+            "In-browser preview uses rust-tex WASM (minimal PDF). For full LaTeX, use a native Tectonic toolchain outside the browser."
+                .to_string(),
+        ),
         error: None,
     };
     serde_json::to_string(&payload).unwrap_or_else(|err| {
         format!(
-            "{{\"ok\":false,\"engine\":\"mock\",\"error\":\"Failed to encode compile response: {}\"}}",
+            "{{\"ok\":false,\"engine\":\"rust-tex-wasm\",\"error\":\"Failed to encode compile response: {}\"}}",
             json_escape(&err.to_string())
         )
-    })
-}
-
-#[cfg(feature = "tectonic")]
-fn compile_with_tectonic(source: &str) -> String {
-    let _tectonic_marker = std::any::type_name::<tectonic::Error>();
-    let payload = CompileResponse {
-        ok: false,
-        engine: "tectonic".to_string(),
-        pdf_data_url: None,
-        diagnostics: None,
-        error: Some(format!(
-            "Tectonic integration is feature-enabled but not yet wired for browser wasm resource loading. Input length: {} bytes.",
-            source.len()
-        )),
-    };
-    serde_json::to_string(&payload).unwrap_or_else(|_| {
-        "{\"ok\":false,\"engine\":\"tectonic\",\"error\":\"Failed to encode compile response\"}".to_string()
     })
 }
 
@@ -123,6 +103,7 @@ mod tests {
     fn returns_structured_pdf_response() {
         let payload = compile_latex_to_pdf_preview("\\section{Hello}");
         assert!(payload.contains("\"ok\":true"));
+        assert!(payload.contains("\"engine\":\"rust-tex-wasm\""));
         assert!(payload.contains("\"pdf_data_url\":\"data:application/pdf;base64,"));
     }
 }

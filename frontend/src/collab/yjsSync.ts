@@ -56,4 +56,12 @@ export class YjsTextSync {
   getSnapshot() {
     return Y.encodeStateAsUpdate(this.doc);
   }
+
+  getYText() {
+    return this.yText;
+  }
+
+  getDoc() {
+    return this.doc;
+  }
 }

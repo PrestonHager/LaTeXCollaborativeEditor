@@ -12,6 +12,10 @@ import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
+import { yCollab } from 'y-codemirror.next';
+import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
+import type { EditorDiagnostic } from './ui/diagnostics';
+import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
@@ -26,12 +30,17 @@ app.innerHTML = `
     <span id="compile-status" class="pill">Idle</span>
     <span id="autosave-status" class="pill">Autosave Off</span>
   </header>
-  <main class="split">
+  <div id="app-loading" class="app-loading is-active" role="status" aria-live="polite">
+    <div class="app-loading-bar"></div>
+    <span id="app-loading-label" class="app-loading-label">Loading compiler assets...</span>
+  </div>
+  <main class="split" id="split-root">
     <section id="editor-pane" class="pane"></section>
+    <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes"></div>
     <section id="preview-pane" class="pane"></section>
   </main>
   <footer class="footer">
-    <span id="diagnostics" class="diagnostics">No diagnostics.</span>
+    <span id="diagnostics" class="diagnostics" aria-live="polite"></span>
     <nav class="legal-nav">
       <a href="./privacy.html" target="_blank" rel="noreferrer">Privacy</a>
       <a href="./tos.html" target="_blank" rel="noreferrer">ToS</a>
@@ -47,6 +56,12 @@ const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
 const titleEl = document.getElementById('doc-title')!;
+const splitRoot = document.getElementById('split-root') as HTMLElement;
+const splitter = document.getElementById('splitter') as HTMLElement;
+const editorPane = document.getElementById('editor-pane') as HTMLElement;
+const previewPane = document.getElementById('preview-pane') as HTMLElement;
+const appLoadingEl = document.getElementById('app-loading') as HTMLElement;
+const appLoadingLabelEl = document.getElementById('app-loading-label') as HTMLElement;
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 const COMPILE_DEBOUNCE_MS = 500;
@@ -58,11 +73,96 @@ const driveProvider = new GoogleDriveProvider();
 let activeProvider: StorageProvider = localAppProvider;
 let documentName = 'Untitled';
 let saveNowEnabled = true;
+let editorTheme: ThemeMode = 'system';
+let previewTheme: ThemeMode = 'system';
+let layoutMode: 'split' | 'editor-only' | 'preview-only' = 'split';
+let splitRatio = 0.5;
 const hostStorageLabel = 'Saved on host local storage';
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
 
 const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
 const stripTexName = (name: string) => (name.endsWith('.tex') ? name.slice(0, -4) : name);
+const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 'drive' : 'local');
+
+function resolveDisplayTheme(mode: ThemeMode): 'dark' | 'light' {
+  if (mode === 'dark') return 'dark';
+  if (mode === 'light') return 'light';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyEditorTheme(theme: ThemeMode) {
+  editorTheme = theme;
+  const display = resolveDisplayTheme(theme);
+  document.documentElement.setAttribute('data-app-chrome', display);
+  if (theme === 'system') {
+    document.documentElement.removeAttribute('data-editor-theme');
+  } else {
+    document.documentElement.setAttribute('data-editor-theme', theme);
+  }
+  document.documentElement.style.colorScheme = display === 'dark' ? 'dark' : 'light';
+  window.dispatchEvent(new CustomEvent('editorthemechange'));
+}
+
+function applyPreviewTheme(theme: ThemeMode) {
+  previewTheme = theme;
+  if (theme === 'system') {
+    document.documentElement.removeAttribute('data-preview-theme');
+  } else {
+    document.documentElement.setAttribute('data-preview-theme', theme);
+  }
+  window.dispatchEvent(new CustomEvent('previewthemechange'));
+}
+
+const persistAppSession = () => {
+  if (isClient) return;
+  writeAppSessionState({
+    documentName,
+    content: editor.getText(),
+    providerMode: getProviderMode(),
+    saveNowEnabled,
+    editorTheme,
+    previewTheme,
+  });
+};
+
+const applyLayoutMode = () => {
+  splitRoot.classList.toggle('is-editor-only', layoutMode === 'editor-only');
+  splitRoot.classList.toggle('is-preview-only', layoutMode === 'preview-only');
+  splitter.style.display = layoutMode === 'split' ? '' : 'none';
+  editorPane.style.display = layoutMode === 'preview-only' ? 'none' : '';
+  previewPane.style.display = layoutMode === 'editor-only' ? 'none' : '';
+  if (layoutMode === 'split') {
+    const left = Math.max(20, Math.min(80, Math.round(splitRatio * 100)));
+    splitRoot.style.gridTemplateColumns = `${left}% 8px ${100 - left}%`;
+  } else if (layoutMode === 'editor-only') {
+    splitRoot.style.gridTemplateColumns = '1fr';
+  } else {
+    splitRoot.style.gridTemplateColumns = '1fr';
+  }
+};
+
+const installSplitter = () => {
+  let dragging = false;
+  const onMove = (event: PointerEvent) => {
+    if (!dragging || layoutMode !== 'split') return;
+    const bounds = splitRoot.getBoundingClientRect();
+    const ratio = (event.clientX - bounds.left) / bounds.width;
+    splitRatio = Math.max(0.2, Math.min(0.8, ratio));
+    applyLayoutMode();
+  };
+  const onUp = () => {
+    dragging = false;
+    document.body.classList.remove('is-resizing');
+  };
+  splitter.addEventListener('pointerdown', (event) => {
+    if (layoutMode !== 'split') return;
+    dragging = true;
+    document.body.classList.add('is-resizing');
+    splitter.setPointerCapture(event.pointerId);
+  });
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+};
 
 const promptForDocumentName = (): boolean => {
   if (documentName !== 'Untitled') return true;
@@ -87,12 +187,45 @@ if (!isClient) {
   autosaveStatusEl.textContent = hostStorageLabel;
 }
 
+if (!isClient) {
+  const restored = readAppSessionState();
+  if (restored) {
+    documentName = restored.documentName || 'Untitled';
+    saveNowEnabled = restored.saveNowEnabled;
+    editorTheme = restored.editorTheme;
+    previewTheme = restored.previewTheme;
+    titleEl.textContent = documentName;
+    if (restored.content) {
+      editor.setText(restored.content, false);
+    }
+    if (restored.providerMode === 'drive') {
+      activeProvider = driveProvider;
+      void driveProvider.connect().then((ok) => {
+        if (ok) {
+          autosaveStatusEl.textContent = 'Drive: Session restored';
+        } else {
+          activeProvider = localAppProvider;
+          autosaveStatusEl.textContent = 'Drive restore failed; using local';
+          persistAppSession();
+        }
+      });
+    }
+  }
+}
+
+applyEditorTheme(editorTheme);
+applyPreviewTheme(previewTheme);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if (editorTheme === 'system') applyEditorTheme('system');
+  if (previewTheme === 'system') applyPreviewTheme('system');
+});
+
 const session = new SessionController({
   isHost: !isClient,
   onConnectionState: (status) => {
     document.getElementById('connection-status')!.textContent = status;
   },
-  onRemoteText: (text) => editor.setText(text, false),
+  onRemoteText: () => undefined,
   onRemoteMetadata: ({ title, storage }) => {
     documentName = title;
     titleEl.textContent = title;
@@ -104,6 +237,7 @@ const session = new SessionController({
     storage: hostStorageLabel,
   }),
 });
+editor.setCollabExtensions([yCollab(session.getYText(), null)]);
 
 let compileTimer: ReturnType<typeof setTimeout> | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -119,13 +253,22 @@ const runCompile = async (source: string) => {
   compileStatusEl.textContent = 'Compiling';
   preview.setLoading(true);
   try {
-    await preview.renderLatex(source);
+    const { html, errors } = latexSourceToPreviewHtml(source);
     if (seq !== compileSequence) return;
+    if (html) {
+      await preview.renderHtml(html);
+    }
+    editor.setDiagnostics(errors);
     lastCompiledSource = source;
     compileStatusEl.textContent = 'Compiled';
-    diagnosticsEl.textContent = 'No diagnostics.';
+    diagnosticsEl.textContent =
+      errors.length === 0
+        ? ''
+        : `${errors.length} diagnostic(s). ${errors[0].message} (line ${errors[0].line})`;
   } catch (error) {
     if (seq !== compileSequence) return;
+    const fallbackDiagnostics: EditorDiagnostic[] = [{ line: 1, severity: 'error', message: String(error) }];
+    editor.setDiagnostics(fallbackDiagnostics);
     compileStatusEl.textContent = 'Compile Error';
     diagnosticsEl.textContent = String(error);
   } finally {
@@ -133,6 +276,15 @@ const runCompile = async (source: string) => {
       preview.setLoading(false);
     }
   }
+};
+
+const showLoading = (label: string) => {
+  appLoadingLabelEl.textContent = label;
+  appLoadingEl.classList.add('is-active');
+};
+
+const hideLoading = () => {
+  appLoadingEl.classList.remove('is-active');
 };
 
 const requestCompile = (source: string) => {
@@ -200,6 +352,7 @@ const openLocalDocument = () => {
   autosave.enable();
   editor.setText(content);
   autosaveStatusEl.textContent = `Opened local doc: ${selectedName}`;
+  persistAppSession();
 };
 
 const ensureDriveConnected = async () => {
@@ -230,6 +383,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     titleEl.textContent = documentName;
     editor.setText('\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n');
     autosaveStatusEl.textContent = isClient ? hostStorageLabel : 'Autosave On';
+    persistAppSession();
   },
   'file.openLocal': () => {
     if (isClient) return;
@@ -258,6 +412,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       autosave.enable();
       editor.setText(opened.content);
       autosaveStatusEl.textContent = `Drive: Opened ${opened.name}`;
+      persistAppSession();
     } catch (error) {
       autosaveStatusEl.textContent = String(error);
     }
@@ -273,6 +428,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     autosave.enable();
     autosaveStatusEl.textContent =
       documentName === 'Untitled' ? 'Drive: Connected (name doc to save)' : 'Drive: Connected';
+    persistAppSession();
   },
   'file.saveToDrive': async () => {
     if (isClient) return;
@@ -284,6 +440,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     try {
       await autosave.saveNow();
       autosaveStatusEl.textContent = `Drive: Saved ${toTexName(documentName)}`;
+      persistAppSession();
     } catch (error) {
       autosaveStatusEl.textContent = String(error);
     }
@@ -329,6 +486,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       documentName = stripTexName(nextName.trim());
       titleEl.textContent = documentName;
       autosaveStatusEl.textContent = 'Drive: Rename successful';
+      persistAppSession();
     } catch (error) {
       autosaveStatusEl.textContent = String(error);
     }
@@ -368,11 +526,22 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'edit.selectAll': () => {
     editor.selectAll();
   },
+  'view.toggleEditorTheme': () => {
+    const nextTheme: Record<ThemeMode, ThemeMode> = { dark: 'light', light: 'system', system: 'dark' };
+    applyEditorTheme(nextTheme[editorTheme]);
+    persistAppSession();
+  },
+  'view.togglePreviewTheme': () => {
+    const nextTheme: Record<ThemeMode, ThemeMode> = { dark: 'light', light: 'system', system: 'dark' };
+    applyPreviewTheme(nextTheme[previewTheme]);
+    persistAppSession();
+  },
   'view.toggleSaveNow': () => {
     if (isClient) return;
     saveNowEnabled = !saveNowEnabled;
     autosaveStatusEl.textContent = saveNowEnabled ? 'Autosave On' : 'Save Now Disabled';
     menuBar.refresh();
+    persistAppSession();
   },
   'view.compileNow': () => {
     if (compileTimer) {
@@ -380,6 +549,21 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       compileTimer = null;
     }
     requestCompile(editor.getText());
+  },
+  'view.layoutSplit': () => {
+    layoutMode = 'split';
+    applyLayoutMode();
+    menuBar.refresh();
+  },
+  'view.layoutEditorOnly': () => {
+    layoutMode = 'editor-only';
+    applyLayoutMode();
+    menuBar.refresh();
+  },
+  'view.layoutPreviewOnly': () => {
+    layoutMode = 'preview-only';
+    applyLayoutMode();
+    menuBar.refresh();
   },
   'help.shortcuts': () => {
     window.alert('Shortcuts:\nCtrl/Cmd+P Command Palette\nCtrl/Cmd+N New\nCtrl/Cmd+Z Undo\nCtrl/Cmd+Shift+Z or Ctrl/Cmd+Y Redo\nCtrl/Cmd+S Save\nCtrl/Cmd+Shift+S Download\nCtrl/Cmd+O Open Local\nCtrl/Cmd+Shift+O Open Drive\nCtrl/Cmd+Shift+C Compile');
@@ -405,8 +589,17 @@ const getCommandState = (commandId: CommandId): CommandState => {
       return { enabled: history.canUndo() };
     case 'edit.redo':
       return { enabled: history.canRedo() };
+    case 'view.toggleEditorTheme':
+    case 'view.togglePreviewTheme':
+      return { enabled: true };
     case 'view.toggleSaveNow':
       return { enabled: !isClient, checked: !saveNowEnabled };
+    case 'view.layoutSplit':
+      return { enabled: true, checked: layoutMode === 'split' };
+    case 'view.layoutEditorOnly':
+      return { enabled: true, checked: layoutMode === 'editor-only' };
+    case 'view.layoutPreviewOnly':
+      return { enabled: true, checked: layoutMode === 'preview-only' };
     default:
       return { enabled: true };
   }
@@ -443,8 +636,13 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
     {
       label: 'View',
       items: [
+        { commandId: 'view.toggleEditorTheme', label: 'Toggle Editor Theme' },
+        { commandId: 'view.togglePreviewTheme', label: 'Toggle Preview Theme' },
         { commandId: 'view.toggleSaveNow', label: 'Disable Save Now' },
         { commandId: 'view.compileNow', label: 'Compile Now', shortcut: 'Ctrl/Cmd+Shift+C' },
+        { commandId: 'view.layoutSplit', label: 'Split View' },
+        { commandId: 'view.layoutEditorOnly', label: 'Editor Only' },
+        { commandId: 'view.layoutPreviewOnly', label: 'Preview Only' },
       ],
     },
     {
@@ -490,8 +688,13 @@ const buildPaletteCommands = (): PaletteCommand[] => [
   { id: 'edit.copy', section: 'Edit', label: 'Copy', shortcut: 'Ctrl/Cmd+C', enabled: getCommandState('edit.copy').enabled },
   { id: 'edit.paste', section: 'Edit', label: 'Paste', shortcut: 'Ctrl/Cmd+V', enabled: getCommandState('edit.paste').enabled },
   { id: 'edit.selectAll', section: 'Edit', label: 'Select All', shortcut: 'Ctrl/Cmd+A', enabled: getCommandState('edit.selectAll').enabled },
+  { id: 'view.toggleEditorTheme', section: 'View', label: 'Toggle Editor Theme', enabled: getCommandState('view.toggleEditorTheme').enabled },
+  { id: 'view.togglePreviewTheme', section: 'View', label: 'Toggle Preview Theme', enabled: getCommandState('view.togglePreviewTheme').enabled },
   { id: 'view.toggleSaveNow', section: 'View', label: 'Disable Save Now', enabled: getCommandState('view.toggleSaveNow').enabled },
   { id: 'view.compileNow', section: 'View', label: 'Compile Now', shortcut: 'Ctrl/Cmd+Shift+C', enabled: getCommandState('view.compileNow').enabled },
+  { id: 'view.layoutSplit', section: 'View', label: 'Split View', enabled: getCommandState('view.layoutSplit').enabled },
+  { id: 'view.layoutEditorOnly', section: 'View', label: 'Editor Only', enabled: getCommandState('view.layoutEditorOnly').enabled },
+  { id: 'view.layoutPreviewOnly', section: 'View', label: 'Preview Only', enabled: getCommandState('view.layoutPreviewOnly').enabled },
   { id: 'help.shortcuts', section: 'Help', label: 'Keyboard Shortcuts', enabled: getCommandState('help.shortcuts').enabled },
   { id: 'help.about', section: 'Help', label: 'About / Repository', enabled: getCommandState('help.about').enabled },
 ];
@@ -533,7 +736,6 @@ editor.onTextChanged((text, sync = true) => {
     if (!applyingHistoryChange) {
       history.record(text);
     }
-    session.applyLocalText(text);
   } else {
     history.rebase(text);
   }
@@ -542,9 +744,16 @@ editor.onTextChanged((text, sync = true) => {
   }
   menuBar.refresh();
   commandPalette.setCommands(buildPaletteCommands());
+  persistAppSession();
 });
 
 if (roomId) session.join(roomId);
+installSplitter();
+applyLayoutMode();
+editor.setEditable(false);
+showLoading('Loading…');
+hideLoading();
+editor.setEditable(true);
 scheduleCompile(editor.getText());
 
 setupShareButton({
@@ -564,5 +773,10 @@ if (!isClient) {
   titleEl.textContent = documentName;
   await autosave.renameDocument(oldFileName, toTexName(documentName));
   session.broadcastMetadata({ title: documentName, storage: hostStorageLabel });
+  persistAppSession();
   });
 }
+
+window.addEventListener('beforeunload', () => {
+  persistAppSession();
+});

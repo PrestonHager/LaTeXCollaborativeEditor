@@ -1,30 +1,31 @@
+
 # Deployment
 
-## Frontend (GitHub Pages)
-1. Configure repository Pages source to GitHub Actions.
-2. Set Actions secrets/variables:
-   - `VITE_P2P_APP_ID`
-   - `VITE_P2P_RENDEZVOUS`
-   - `VITE_STUN_URL`
-   - `VITE_TURN_URL` (optional)
-   - `VITE_TURN_USERNAME` (optional)
-   - `VITE_TURN_CREDENTIAL` (optional)
-   - `VITE_GOOGLE_CLIENT_ID`
-3. Ensure `wasm-pack` is available in the build environment.
-4. Build Rust wasm artifact before frontend bundle:
-   - `npm run build:wasm`
-5. Push to `main`; workflow builds and deploys static `frontend/dist`.
+Frontend deployment (GitHub Pages)
+- Configure the repository Pages source to trigger via GitHub Actions.
+- Set Actions secrets/variables as needed for runtime configuration, for example:
+  - `VITE_P2P_APP_ID`
+  - `VITE_P2P_RENDEZVOUS`
+  - `VITE_STUN_URL`
+  - `VITE_TURN_URL` (optional)
+  - `VITE_TURN_USERNAME` (optional)
+  - `VITE_TURN_CREDENTIAL` (optional)
+  - `VITE_GOOGLE_CLIENT_ID`
+  - `VITE_GOOGLE_API_KEY`
+- Ensure wasm tooling (e.g., wasm-pack) is available in the build environment.
+- Build the Rust wasm artifact before the frontend bundle, e.g. `npm run build:wasm`.
+- Push to main; the CI workflow builds and deploys the static frontend output (e.g., frontend/dist).
 
-## Runtime architecture
-- No custom signaling server is deployed by this repository.
-- Peers discover each other through configured public rendezvous endpoints.
-- Document content remains peer-to-peer after room join.
-- LaTeX preview compilation runs in-browser through `rust-tex` WebAssembly loaded by the frontend compile worker.
+Runtime architecture (summary)
+- There is no custom signaling server in this repository.
+- Peers discover each other via configured public rendezvous endpoints.
+- Document content remains peer-to-peer after joining a room.
+- LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 
-## STUN/TURN
-- Start with `stun:stun.l.google.com:19302`.
-- Add TURN for restrictive NAT environments.
+Networking (STUN/TURN)
+- Start with a public STUN server such as `stun:stun.l.google.com:19302`.
+- Add TURN as needed for restrictive NAT environments.
 
-## Domain requirements
-- `latex.prestonhager.com` must be served via HTTPS to keep browser P2P APIs available.
-- Keep CORS and CSP policies permissive enough for configured rendezvous and TURN endpoints.
+Domain and security
+- The domain (e.g., latex.prestonhager.com) must be served over HTTPS to enable P2P APIs.
+- Keep CORS and CSP policies permissive enough for rendezvous and TURN endpoints while minimizing exposure.

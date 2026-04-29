@@ -54,4 +54,23 @@ describe('createCommandPalette', () => {
     const sections = Array.from(document.querySelectorAll('.command-palette-section')).map((el) => el.textContent);
     expect(sections.length).toBeGreaterThan(0);
   });
+
+  it('supports fuzzy query matching for abbreviated input', () => {
+    const calls: string[] = [];
+    const palette = createCommandPalette({
+      onSelect: (id) => calls.push(id),
+    });
+    palette.setCommands([
+      { id: 'file.openDrive', label: 'Open from Google Drive', section: 'File', enabled: true, shortcut: 'Ctrl+Shift+O' },
+      { id: 'file.new', label: 'New', section: 'File', enabled: true },
+    ]);
+
+    palette.open();
+    const input = Array.from(document.querySelectorAll('.command-palette-input')).at(-1) as HTMLInputElement;
+    input.value = 'ogd';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(calls).toEqual(['file.openDrive']);
+  });
 });

@@ -12,6 +12,30 @@ type PaletteOptions = {
   onSelect: (commandId: CommandId) => void;
 };
 
+function fuzzyScore(query: string, text: string): number | null {
+  if (!query) return 0;
+  let queryIndex = 0;
+  let start = -1;
+  let end = -1;
+  let contiguousBonus = 0;
+  let previousMatchIndex = -2;
+
+  for (let i = 0; i < text.length && queryIndex < query.length; i += 1) {
+    if (text[i] !== query[queryIndex]) continue;
+    if (start === -1) start = i;
+    end = i;
+    if (i === previousMatchIndex + 1) contiguousBonus += 3;
+    previousMatchIndex = i;
+    queryIndex += 1;
+  }
+
+  if (queryIndex !== query.length || start === -1 || end === -1) return null;
+  const span = end - start + 1;
+  const compactness = Math.max(0, 100 - span);
+  const startBonus = Math.max(0, 40 - start);
+  return contiguousBonus + compactness + startBonus;
+}
+
 export function createCommandPalette(options: PaletteOptions) {
   const overlay = document.createElement('div');
   overlay.className = 'command-palette-overlay';
@@ -94,20 +118,25 @@ export function createCommandPalette(options: PaletteOptions) {
 
   const applyFilter = () => {
     const query = input.value.trim().toLowerCase();
-    const base = commands.filter((command) => {
+    const base = commands
+      .map((command) => {
       const haystack = `${command.section} ${command.label} ${command.shortcut ?? ''}`.toLowerCase();
-      return haystack.includes(query);
-    });
+      const score = fuzzyScore(query, haystack);
+      if (score === null) return null;
+      return { command, score };
+      })
+      .filter((entry): entry is { command: PaletteCommand; score: number } => entry !== null);
     filtered = base.sort((a, b) => {
-      const aRecent = recentOrder.indexOf(a.id);
-      const bRecent = recentOrder.indexOf(b.id);
+      const aRecent = recentOrder.indexOf(a.command.id);
+      const bRecent = recentOrder.indexOf(b.command.id);
       const aWeight = aRecent === -1 ? Number.MAX_SAFE_INTEGER : aRecent;
       const bWeight = bRecent === -1 ? Number.MAX_SAFE_INTEGER : bRecent;
       if (aWeight !== bWeight) return aWeight - bWeight;
-      const sectionCmp = a.section.localeCompare(b.section);
+      if (a.score !== b.score) return b.score - a.score;
+      const sectionCmp = a.command.section.localeCompare(b.command.section);
       if (sectionCmp !== 0) return sectionCmp;
-      return a.label.localeCompare(b.label);
-    });
+      return a.command.label.localeCompare(b.command.label);
+    }).map((entry) => entry.command);
     activeIndex = 0;
     render();
   };

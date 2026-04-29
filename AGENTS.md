@@ -13,9 +13,10 @@
 - Preserve static-hosting compatibility for the web app.
 
 ## Validation commands
-- In `frontend/`: `npm run build`
-- In `rust-core/`: `cargo test`
-- In `rust-tex/`: `cargo test`
+- Root: `npm test` (runs all test suites), `npm run test:coverage` (all coverage)
+- In `frontend/`: `npm run build`, `npm run test:run` (vitest), `npm run test:coverage` (79% line threshold)
+- In `rust-core/`: `cargo test`, `cargo llvm-cov --fail-under-lines 97`
+- In `rust-tex/`: `cargo test`, `cargo llvm-cov --fail-under-lines 87`
 
 ## Required docs updates
 If P2P protocol, bootstrap/build steps, or storage provider behavior changes, update:
