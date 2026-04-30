@@ -1,3 +1,4 @@
+import * as Y from 'yjs';
 import { YjsTextSync } from './yjsSync';
 
 describe('YjsTextSync', () => {
@@ -41,5 +42,36 @@ describe('YjsTextSync', () => {
     remote.applyRemoteUpdate(outbound[0]);
 
     expect(remoteTexts.at(-1)).toBe('abc');
+  });
+
+  it('forwards onLocalUpdate for non-string origins (y-codemirror uses YSyncConfig)', () => {
+    const onLocalUpdate = vi.fn();
+    const sync = new YjsTextSync({
+      initialText: 'a',
+      onRemoteText: vi.fn(),
+      onLocalUpdate,
+    });
+    const ytext = sync.getYText();
+    const cmLikeOrigin = { tag: 'YSyncConfig' };
+    ytext.doc.transact(() => {
+      ytext.insert(1, 'b');
+    }, cmLikeOrigin);
+    expect(onLocalUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not forward onLocalUpdate when merging remote updates', () => {
+    const onLocalUpdate = vi.fn();
+    const sync = new YjsTextSync({
+      initialText: 'hello',
+      onRemoteText: vi.fn(),
+      onLocalUpdate,
+    });
+    const foreign = new Y.Doc();
+    const ft = foreign.getText('doc');
+    foreign.transact(() => ft.insert(0, 'hello world'));
+    const update = Y.encodeStateAsUpdate(foreign);
+    onLocalUpdate.mockClear();
+    sync.applyRemoteUpdate(update);
+    expect(onLocalUpdate).not.toHaveBeenCalled();
   });
 });
