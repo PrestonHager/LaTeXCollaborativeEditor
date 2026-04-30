@@ -12,7 +12,7 @@
 
 ## Validation commands
 - Root: `npm test`, `npm run test:coverage` (frontend coverage)
-- In `frontend/`: `npm run build`, `npm run test:run` (vitest), `npm run test:coverage` (79% line threshold)
+- In `frontend/`: `npm run build`, `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines/statements/functions, 65% branches)
 
 ## Required docs updates
 If P2P protocol, bootstrap/build steps, or storage provider behavior changes, update:

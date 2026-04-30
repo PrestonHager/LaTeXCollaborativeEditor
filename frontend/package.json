@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage --coverage.thresholds.lines=79"
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
