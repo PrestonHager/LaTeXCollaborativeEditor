@@ -53,7 +53,7 @@ describe('appSession state', () => {
   });
 
   it('defaults updatedAt when missing from stored payload', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(9001);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(9001);
     localStorage.setItem(
       'latex_editor_app_session_v1',
       JSON.stringify({
@@ -66,7 +66,7 @@ describe('appSession state', () => {
       }),
     );
     expect(readAppSessionState()?.updatedAt).toBe(9001);
-    vi.mocked(Date.now).mockRestore();
+    nowSpy.mockRestore();
   });
 
   it('writeAppSessionState fills default themes when omitted', () => {
