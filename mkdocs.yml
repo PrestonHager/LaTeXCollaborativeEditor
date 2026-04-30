@@ -1,9 +1,12 @@
 site_name: LaTeX Collaborative Editor
-# Production URL set in CI (DOCS_SITE_URL). Local default for `mkdocs serve`.
-site_url: !ENV [DOCS_SITE_URL, "http://127.0.0.1:8000/"]
+# Local `mkdocs serve` default. GitHub Pages sets canonical URL via scripts/set_mkdocs_site_url.py + DOCS_SITE_URL in CI.
+site_url: http://127.0.0.1:8000/
 docs_dir: docs
 site_dir: site
 use_directory_urls: true
+
+hooks:
+  - mkdocs_fuse_search_index.py
 
 # Contributor / repo-only Markdown stays in git but is not published on the user docs site.
 exclude_docs: |

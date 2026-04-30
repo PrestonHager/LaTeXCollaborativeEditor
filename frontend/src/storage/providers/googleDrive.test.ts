@@ -25,7 +25,7 @@ describe('GoogleDriveProvider', () => {
       },
     };
     vi.spyOn(document, 'querySelector').mockReturnValue({} as Element);
-    (import.meta as any).env = { ...(import.meta as any).env, VITE_GOOGLE_CLIENT_ID: 'client-id' };
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'client-id');
 
     const provider = new GoogleDriveProvider();
     const ok = await provider.connect();
@@ -106,11 +106,10 @@ describe('GoogleDriveProvider', () => {
     const ok = await provider.connect();
     expect(ok).toBe(false);
     expect(provider.status()).toBe('Drive config missing');
-    vi.unstubAllEnvs();
   });
 
   it('connect catches script/bootstrap failures', async () => {
-    (import.meta as any).env = { ...(import.meta as any).env, VITE_GOOGLE_CLIENT_ID: 'id' };
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'id');
     vi.stubGlobal('fetch', vi.fn());
     vi.spyOn(document, 'querySelector').mockImplementation(() => {
       throw new Error('dom');

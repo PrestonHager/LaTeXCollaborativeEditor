@@ -5,10 +5,10 @@
   <ul id="search-results" style="list-style:none; padding:0; margin:8px 0;"></ul>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js" integrity="sha384-WB4U6Dee1vM5RAwOB1p5MNDoAuCEi0aKBslZx2drXrDoIjuo1leChX2NDVYqoQZn" crossorigin="anonymous"></script>
 <script>
   (function(){
-    // Page is …/docs/search/; index lives at …/docs/search_index.json
+    // Fuse corpus is generated at build time from MkDocs' search index (sibling of this page).
     const indexUrl = new URL('../search_index.json', window.location.href).href;
     fetch(indexUrl).then(r => r.json()).then(items => {
       const fuse = new Fuse(items, {

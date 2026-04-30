@@ -52,6 +52,7 @@ jobs:
             *) resolved="${resolved}/" ;;
           esac
           export DOCS_SITE_URL="$resolved"
+          python3 scripts/set_mkdocs_site_url.py
           pip install -r requirements-docs.txt
           mkdocs build --site-dir frontend/dist/docs
       - uses: actions/upload-pages-artifact@v3

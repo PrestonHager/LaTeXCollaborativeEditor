@@ -15,7 +15,7 @@ Frontend deployment (GitHub Pages)
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
-- **MkDocs `site_url`:** set the Actions variable **`DOCS_SITE_URL`** (repository or **Production** environment, matching the `environment` on the build job) to the full public URL of the docs site, including path and a trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/`. Align this with the Pages site URL shown after deploy (`environment.url` / `steps.deployment.outputs.page_url` on the deploy job is the **site root**; MkDocs needs the **docs** subtree URL).
+- **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository or **Production** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/`. Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
 
 Runtime architecture (summary)
 - There is no custom signaling server in this repository.

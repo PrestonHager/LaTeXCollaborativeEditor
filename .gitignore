@@ -6,3 +6,4 @@ frontend/.env
 site/
 third_party/
 *.zip
+__pycache__/
