@@ -1,3 +1,4 @@
+import { joinRoom } from 'trystero';
 import { P2pTransport } from './p2pTransport';
 import type { BootstrapConfig } from './bootstrapConfig';
 
@@ -136,6 +137,57 @@ describe('P2pTransport', () => {
     transport.join('room-target');
     transport.send({ a: 1 }, 'peer-z');
     expect(send).toHaveBeenCalledWith({ a: 1 }, 'peer-z');
+  });
+
+  it('does not emit Relayed or Failed when a peer is connected before timers', () => {
+    vi.useFakeTimers();
+    let peerJoinHandler: ((peerId: string) => void) | undefined;
+    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
+      peerJoinHandler = cb;
+    });
+    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
+    const onState = vi.fn();
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState,
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+    transport.join('room-timers-skip');
+    peerJoinHandler?.('peer-early');
+    vi.advanceTimersByTime(10_000);
+    vi.advanceTimersByTime(10_000);
+    expect(onState).not.toHaveBeenCalledWith('Relayed');
+    expect(onState).not.toHaveBeenCalledWith('Failed');
+    vi.useRealTimers();
+  });
+
+  it('send is a no-op before join', () => {
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState: vi.fn(),
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+    transport.send('early');
+    expect(makeAction).not.toHaveBeenCalled();
+  });
+
+  it('disconnect skips leave when room has no leave handler', () => {
+    vi.mocked(joinRoom).mockReturnValueOnce({
+      makeAction: () => [vi.fn(), vi.fn()],
+      onPeerJoin: vi.fn(),
+      onPeerLeave: vi.fn(),
+    } as any);
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState: vi.fn(),
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+    transport.join('room-no-leave');
+    transport.disconnect();
+    expect(leave).not.toHaveBeenCalled();
   });
 
   it('disconnect clears timers and leaves the room', () => {

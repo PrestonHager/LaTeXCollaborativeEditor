@@ -19,4 +19,36 @@ describe('editor diagnostics', () => {
     view.destroy();
     parent.remove();
   });
+
+  it('applies warning and info line classes', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const state = EditorState.create({
+      doc: 'x\ny\n',
+      extensions: diagnosticsExtensions,
+    });
+    const view = new EditorView({ state, parent });
+    setEditorDiagnostics(view, [
+      { line: 1, severity: 'warning', message: 'w' },
+      { line: 2, severity: 'info', message: 'i' },
+    ]);
+    expect(parent.querySelector('.cm-warning-line')).toBeTruthy();
+    expect(parent.querySelector('.cm-info-line')).toBeTruthy();
+    view.destroy();
+    parent.remove();
+  });
+
+  it('clamps diagnostic line to document bounds', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const state = EditorState.create({
+      doc: 'only\n',
+      extensions: diagnosticsExtensions,
+    });
+    const view = new EditorView({ state, parent });
+    setEditorDiagnostics(view, [{ line: 99, severity: 'error', message: 'e' }]);
+    expect(parent.querySelector('.cm-error-line')).toBeTruthy();
+    view.destroy();
+    parent.remove();
+  });
 });
