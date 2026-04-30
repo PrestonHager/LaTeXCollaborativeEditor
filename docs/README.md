@@ -11,7 +11,7 @@ The **built documentation** is the **user guide**: getting started, editing, col
 | File | Purpose |
 |------|--------|
 | `protocol.md` | P2P / rendezvous protocol notes — update when collaboration behavior changes (`AGENTS.md`). |
-| `deployment.md` | Hosting, env vars, wasm build — update when deployment or CI changes. |
+| `deployment.md` | Hosting, env vars, CI build — update when deployment or CI changes. |
 | `dod-checklist.md` | v1 definition of done. |
 | `site-plan.md` | Internal planning notes. |
 

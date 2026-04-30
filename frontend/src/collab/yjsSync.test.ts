@@ -52,8 +52,9 @@ describe('YjsTextSync', () => {
       onLocalUpdate,
     });
     const ytext = sync.getYText();
+    const doc = sync.getDoc();
     const cmLikeOrigin = { tag: 'YSyncConfig' };
-    ytext.doc.transact(() => {
+    doc.transact(() => {
       ytext.insert(1, 'b');
     }, cmLikeOrigin);
     expect(onLocalUpdate).toHaveBeenCalledTimes(1);

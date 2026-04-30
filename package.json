@@ -3,13 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "npm --prefix frontend run dev",
-    "build:wasm": "npm --prefix frontend run build:wasm",
     "build": "npm --prefix frontend run build",
-    "test": "npm --prefix frontend run test:run && cargo test --manifest-path rust-core/Cargo.toml && cargo test --manifest-path rust-tex/Cargo.toml",
-    "test:rust": "cargo test --manifest-path rust-core/Cargo.toml && cargo test --manifest-path rust-tex/Cargo.toml",
+    "test": "npm --prefix frontend run test:run",
     "coverage:frontend": "npm --prefix frontend run test:coverage",
-    "coverage:rust-core": "cargo llvm-cov --manifest-path rust-core/Cargo.toml --fail-under-lines 97",
-    "coverage:rust-tex": "cargo llvm-cov --manifest-path rust-tex/Cargo.toml --fail-under-lines 87",
-    "test:coverage": "npm run coverage:frontend && npm run coverage:rust-core && npm run coverage:rust-tex"
+    "test:coverage": "npm run coverage:frontend"
   }
 }

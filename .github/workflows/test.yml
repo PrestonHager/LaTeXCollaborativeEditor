@@ -7,11 +7,6 @@ on:
 permissions:
   contents: read
 
-env:
-  FRONTEND_COVERAGE_LINES: "80"
-  RUST_CORE_COVERAGE_LINES: "97"
-  RUST_TEX_COVERAGE_LINES: "90"
-
 jobs:
   frontend-test:
     runs-on: ubuntu-latest
@@ -35,35 +30,3 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage
-
-  rust-core-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Run rust-core tests with coverage
-        run: cargo llvm-cov --manifest-path rust-core/Cargo.toml --locked --fail-under-lines ${{ env.RUST_CORE_COVERAGE_LINES }} --lcov --output-path rust-core/lcov.info
-      - name: Upload rust-core coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-core-coverage
-          path: rust-core/lcov.info
-
-  rust-tex-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: Run rust-tex tests with coverage
-        run: cargo llvm-cov --manifest-path rust-tex/Cargo.toml --locked --fail-under-lines ${{ env.RUST_TEX_COVERAGE_LINES }} --lcov --output-path rust-tex/lcov.info
-      - name: Upload rust-tex coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rust-tex-coverage
-          path: rust-tex/lcov.info

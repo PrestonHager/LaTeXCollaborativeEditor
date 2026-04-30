@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:wasm": "wasm-pack build ../rust-tex --target web --out-dir ../frontend/src/wasm/rust_tex_pkg --out-name rust_tex",
-    "build": "npm run build:wasm && tsc && vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
