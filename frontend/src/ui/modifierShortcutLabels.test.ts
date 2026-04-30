@@ -34,6 +34,20 @@ describe('primaryModifierLabel', () => {
     stubNavigator('Linux x86_64', 'Mozilla/5.0 (X11; Linux x86_64)');
     expect(primaryModifierLabel()).toBe('Ctrl');
   });
+
+  it('returns Ctrl when navigator.platform throws', () => {
+    const nav = { get userAgent() {
+      return '';
+    } } as Navigator;
+    Object.defineProperty(nav, 'platform', {
+      configurable: true,
+      get() {
+        throw new Error('blocked');
+      },
+    });
+    vi.stubGlobal('navigator', nav);
+    expect(primaryModifierLabel()).toBe('Ctrl');
+  });
 });
 
 describe('formatPrimaryChord', () => {

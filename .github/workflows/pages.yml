@@ -44,8 +44,18 @@ jobs:
           cache-dependency-path: requirements-docs.txt
       - name: Build documentation (MkDocs → frontend/dist/docs)
         env:
-          DOCS_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/docs/
+          DOCS_SITE_URL: ${{ vars.DOCS_SITE_URL }}
         run: |
+          set -euo pipefail
+          resolved="${DOCS_SITE_URL:-}"
+          if [ -z "$resolved" ]; then
+            resolved="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/docs/"
+          fi
+          case "$resolved" in
+            */) ;;
+            *) resolved="${resolved}/" ;;
+          esac
+          export DOCS_SITE_URL="$resolved"
           pip install -r requirements-docs.txt
           mkdocs build --site-dir frontend/dist/docs
       - uses: actions/upload-pages-artifact@v3
@@ -56,6 +66,8 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
     steps:

@@ -8,9 +8,9 @@ permissions:
   contents: read
 
 env:
-  FRONTEND_COVERAGE_LINES: "79"
+  FRONTEND_COVERAGE_LINES: "80"
   RUST_CORE_COVERAGE_LINES: "97"
-  RUST_TEX_COVERAGE_LINES: "87"
+  RUST_TEX_COVERAGE_LINES: "90"
 
 jobs:
   frontend-test:

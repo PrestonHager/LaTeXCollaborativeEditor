@@ -97,4 +97,59 @@ describe('P2pTransport', () => {
     expect(onState).toHaveBeenCalledWith('Failed');
     vi.useRealTimers();
   });
+
+  it('emits Reconnecting when the last peer leaves', () => {
+    let leaveHandler: (() => void) | undefined;
+    let joinHandler: ((peerId: string) => void) | undefined;
+    onPeerLeave.mockImplementation((cb: () => void) => {
+      leaveHandler = cb;
+    });
+    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
+      joinHandler = cb;
+    });
+    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
+    const onState = vi.fn();
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState,
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+    transport.join('room-leave');
+    joinHandler?.('solo-peer');
+    leaveHandler?.();
+    expect(onState).toHaveBeenCalledWith('Reconnecting');
+  });
+
+  it('send forwards peer id when provided', () => {
+    const send = vi.fn();
+    makeAction.mockReturnValueOnce([
+      send,
+      (_cb: (value: unknown, peerId?: string) => void) => {},
+    ]);
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState: vi.fn(),
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+    transport.join('room-target');
+    transport.send({ a: 1 }, 'peer-z');
+    expect(send).toHaveBeenCalledWith({ a: 1 }, 'peer-z');
+  });
+
+  it('disconnect clears timers and leaves the room', () => {
+    vi.useFakeTimers();
+    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
+    const transport = new P2pTransport(bootstrap, {
+      onMessage: vi.fn(),
+      onState: vi.fn(),
+      onPeerCount: vi.fn(),
+      onPeerJoin: vi.fn(),
+    });
+    transport.join('room-disc');
+    transport.disconnect();
+    expect(leave).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
 });
