@@ -5,5 +5,6 @@ frontend/coverage/
 frontend/.env
 rust-core/target/
 rust-tex/target/
+site/
 third_party/
 *.zip

@@ -1,0 +1,37 @@
+[
+  {
+    "title": "Home",
+    "content": "Overview LaTeX Collaborative Editor user guide preview collaboration Drive local storage",
+    "url": "../"
+  },
+  {
+    "title": "Getting started",
+    "content": "Open app HTTPS host guest room menu share connection editor preview footer",
+    "url": "../getting-started/"
+  },
+  {
+    "title": "Editing and preview",
+    "content": "LaTeX editor undo live preview HTML debounce compile diagnostics layout",
+    "url": "../editing-and-preview/"
+  },
+  {
+    "title": "Sharing and collaboration",
+    "content": "Share button room link clipboard WebRTC peer connection host guest",
+    "url": "../collaboration/"
+  },
+  {
+    "title": "Saving and storage",
+    "content": "Autosave Save Now local storage download tex Google Drive picker guest",
+    "url": "../saving-and-storage/"
+  },
+  {
+    "title": "Interface and layout",
+    "content": "Menu File Edit View Help command palette themes split editor preview layout",
+    "url": "../interface-layout/"
+  },
+  {
+    "title": "Keyboard shortcuts",
+    "content": "Ctrl Command ⌘ P N O S Z Y compile palette undo redo copy paste macOS Windows",
+    "url": "../keyboard-shortcuts/"
+  }
+]

@@ -23,7 +23,7 @@ export type CommandId =
   | 'view.layoutSplit'
   | 'view.layoutEditorOnly'
   | 'view.layoutPreviewOnly'
-  | 'help.shortcuts'
+  | 'help.documentation'
   | 'help.about';
 
 export type CommandState = {

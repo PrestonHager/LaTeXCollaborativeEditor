@@ -14,7 +14,8 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_API_KEY`
 - Ensure wasm tooling (e.g., wasm-pack) is available in the build environment.
 - Build the Rust wasm artifact before the frontend bundle, e.g. `npm run build:wasm`.
-- Push to main; the CI workflow builds and deploys the static frontend output (e.g., frontend/dist).
+- Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.
+- Documentation is served at **`/docs/`** (for example `https://<owner>.github.io/<repo>/docs/` on a project site).
 
 Runtime architecture (summary)
 - There is no custom signaling server in this repository.
