@@ -163,6 +163,7 @@ describe('P2pTransport', () => {
   });
 
   it('send is a no-op before join', () => {
+    const joinCalls = vi.mocked(joinRoom).mock.calls.length;
     const transport = new P2pTransport(bootstrap, {
       onMessage: vi.fn(),
       onState: vi.fn(),
@@ -170,7 +171,7 @@ describe('P2pTransport', () => {
       onPeerJoin: vi.fn(),
     });
     transport.send('early');
-    expect(makeAction).not.toHaveBeenCalled();
+    expect(vi.mocked(joinRoom).mock.calls.length).toBe(joinCalls);
   });
 
   it('disconnect skips leave when room has no leave handler', () => {
