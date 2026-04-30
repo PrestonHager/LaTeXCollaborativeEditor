@@ -41,7 +41,12 @@ export function readAppSessionState(): AppSessionState | null {
   }
 }
 
-export function writeAppSessionState(state: Omit<AppSessionState, 'updatedAt'> & { editorTheme?: ThemeMode; previewTheme?: ThemeMode }) {
+export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt' | 'editorTheme' | 'previewTheme'> & {
+  editorTheme?: ThemeMode;
+  previewTheme?: ThemeMode;
+};
+
+export function writeAppSessionState(state: WriteAppSessionPayload) {
   const payload: AppSessionState = {
     ...state,
     editorTheme: state.editorTheme ?? 'system',
