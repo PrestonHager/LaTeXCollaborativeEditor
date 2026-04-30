@@ -16,6 +16,7 @@ import { yCollab } from 'y-codemirror.next';
 import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
 import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
+import { formatPrimaryChord } from './ui/modifierShortcutLabels';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
@@ -65,6 +66,17 @@ const appLoadingLabelEl = document.getElementById('app-loading-label') as HTMLEl
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 const COMPILE_DEBOUNCE_MS = 500;
+
+/** MkDocs `serve` default in dev; production uses same-origin `/docs/` unless overridden. */
+function documentationBaseUrl(): string {
+  const fromEnv = import.meta.env.VITE_DOCS_BASE_URL as string | undefined;
+  if (fromEnv?.trim()) {
+    const u = fromEnv.trim();
+    return u.endsWith('/') ? u : `${u}/`;
+  }
+  if (import.meta.env.DEV) return 'http://127.0.0.1:8000/';
+  return new URL('docs/', globalThis.location.href).href;
+}
 const COMPILE_MIN_INTERVAL_MS = 900;
 
 const localDownload = new LocalDownloadStorage();
@@ -565,8 +577,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     applyLayoutMode();
     menuBar.refresh();
   },
-  'help.shortcuts': () => {
-    window.alert('Shortcuts:\nCtrl/Cmd+P Command Palette\nCtrl/Cmd+N New\nCtrl/Cmd+Z Undo\nCtrl/Cmd+Shift+Z or Ctrl/Cmd+Y Redo\nCtrl/Cmd+S Save\nCtrl/Cmd+Shift+S Download\nCtrl/Cmd+O Open Local\nCtrl/Cmd+Shift+O Open Drive\nCtrl/Cmd+Shift+C Compile');
+  'help.documentation': () => {
+    window.open(documentationBaseUrl(), '_blank', 'noreferrer');
   },
   'help.about': () => {
     window.open('https://github.com/PrestonHager/LaTeXCollaborativeEditor', '_blank', 'noreferrer');
@@ -610,27 +622,27 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
     {
       label: 'File',
       items: [
-        { commandId: 'file.new', label: 'New', shortcut: 'Ctrl/Cmd+N' },
-        { commandId: 'file.openLocal', label: 'Open Local', shortcut: 'Ctrl/Cmd+O' },
-        { commandId: 'file.openDrive', label: 'Open from Google Drive', shortcut: 'Ctrl/Cmd+Shift+O' },
-        { commandId: 'file.download', label: 'Download .tex', shortcut: 'Ctrl/Cmd+Shift+S' },
+        { commandId: 'file.new', label: 'New', shortcut: formatPrimaryChord('N') },
+        { commandId: 'file.openLocal', label: 'Open Local', shortcut: formatPrimaryChord('O') },
+        { commandId: 'file.openDrive', label: 'Open from Google Drive', shortcut: formatPrimaryChord('Shift+O') },
+        { commandId: 'file.download', label: 'Download .tex', shortcut: formatPrimaryChord('Shift+S') },
         { commandId: 'file.connectDrive', label: 'Connect Google Drive' },
         { commandId: 'file.saveToDrive', label: 'Save to Google Drive' },
         { commandId: 'file.moveDrive', label: 'Move to Drive Folder' },
         { commandId: 'file.renameDrive', label: 'Rename in Drive' },
-        { commandId: 'file.saveNow', label: 'Save Now', shortcut: 'Ctrl/Cmd+S' },
+        { commandId: 'file.saveNow', label: 'Save Now', shortcut: formatPrimaryChord('S') },
         { commandId: 'file.clearLocalDocs', label: 'Clear Local Docs' },
       ],
     },
     {
       label: 'Edit',
       items: [
-        { commandId: 'edit.undo', label: 'Undo', shortcut: 'Ctrl/Cmd+Z' },
-        { commandId: 'edit.redo', label: 'Redo', shortcut: 'Ctrl/Cmd+Shift+Z' },
-        { commandId: 'edit.cut', label: 'Cut', shortcut: 'Ctrl/Cmd+X' },
-        { commandId: 'edit.copy', label: 'Copy', shortcut: 'Ctrl/Cmd+C' },
-        { commandId: 'edit.paste', label: 'Paste', shortcut: 'Ctrl/Cmd+V' },
-        { commandId: 'edit.selectAll', label: 'Select All', shortcut: 'Ctrl/Cmd+A' },
+        { commandId: 'edit.undo', label: 'Undo', shortcut: formatPrimaryChord('Z') },
+        { commandId: 'edit.redo', label: 'Redo', shortcut: formatPrimaryChord('Shift+Z') },
+        { commandId: 'edit.cut', label: 'Cut', shortcut: formatPrimaryChord('X') },
+        { commandId: 'edit.copy', label: 'Copy', shortcut: formatPrimaryChord('C') },
+        { commandId: 'edit.paste', label: 'Paste', shortcut: formatPrimaryChord('V') },
+        { commandId: 'edit.selectAll', label: 'Select All', shortcut: formatPrimaryChord('A') },
       ],
     },
     {
@@ -639,7 +651,7 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
         { commandId: 'view.toggleEditorTheme', label: 'Toggle Editor Theme' },
         { commandId: 'view.togglePreviewTheme', label: 'Toggle Preview Theme' },
         { commandId: 'view.toggleSaveNow', label: 'Disable Save Now' },
-        { commandId: 'view.compileNow', label: 'Compile Now', shortcut: 'Ctrl/Cmd+Shift+C' },
+        { commandId: 'view.compileNow', label: 'Compile Now', shortcut: formatPrimaryChord('Shift+C') },
         { commandId: 'view.layoutSplit', label: 'Split View' },
         { commandId: 'view.layoutEditorOnly', label: 'Editor Only' },
         { commandId: 'view.layoutPreviewOnly', label: 'Preview Only' },
@@ -648,8 +660,8 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
     {
       label: 'Help',
       items: [
-        { commandId: 'app.commandPalette', label: 'Command Palette', shortcut: 'Ctrl/Cmd+P' },
-        { commandId: 'help.shortcuts', label: 'Keyboard Shortcuts' },
+        { commandId: 'app.commandPalette', label: 'Command Palette', shortcut: formatPrimaryChord('P') },
+        { commandId: 'help.documentation', label: 'Documentation' },
         { commandId: 'help.about', label: 'About / Repository' },
       ],
     },
@@ -671,31 +683,31 @@ const commandPalette = createCommandPalette({
 });
 
 const buildPaletteCommands = (): PaletteCommand[] => [
-  { id: 'app.commandPalette', section: 'Help', label: 'Command Palette', shortcut: 'Ctrl/Cmd+P', enabled: true },
-  { id: 'file.new', section: 'File', label: 'New', shortcut: 'Ctrl/Cmd+N', enabled: getCommandState('file.new').enabled },
-  { id: 'file.openLocal', section: 'File', label: 'Open Local', shortcut: 'Ctrl/Cmd+O', enabled: getCommandState('file.openLocal').enabled },
-  { id: 'file.openDrive', section: 'File', label: 'Open from Google Drive', shortcut: 'Ctrl/Cmd+Shift+O', enabled: getCommandState('file.openDrive').enabled },
-  { id: 'file.download', section: 'File', label: 'Download .tex', shortcut: 'Ctrl/Cmd+Shift+S', enabled: getCommandState('file.download').enabled },
+  { id: 'app.commandPalette', section: 'Help', label: 'Command Palette', shortcut: formatPrimaryChord('P'), enabled: true },
+  { id: 'file.new', section: 'File', label: 'New', shortcut: formatPrimaryChord('N'), enabled: getCommandState('file.new').enabled },
+  { id: 'file.openLocal', section: 'File', label: 'Open Local', shortcut: formatPrimaryChord('O'), enabled: getCommandState('file.openLocal').enabled },
+  { id: 'file.openDrive', section: 'File', label: 'Open from Google Drive', shortcut: formatPrimaryChord('Shift+O'), enabled: getCommandState('file.openDrive').enabled },
+  { id: 'file.download', section: 'File', label: 'Download .tex', shortcut: formatPrimaryChord('Shift+S'), enabled: getCommandState('file.download').enabled },
   { id: 'file.connectDrive', section: 'File', label: 'Connect Google Drive', enabled: getCommandState('file.connectDrive').enabled },
   { id: 'file.saveToDrive', section: 'File', label: 'Save to Google Drive', enabled: getCommandState('file.saveToDrive').enabled },
   { id: 'file.moveDrive', section: 'File', label: 'Move to Drive Folder', enabled: getCommandState('file.moveDrive').enabled },
   { id: 'file.renameDrive', section: 'File', label: 'Rename in Drive', enabled: getCommandState('file.renameDrive').enabled },
-  { id: 'file.saveNow', section: 'File', label: 'Save Now', shortcut: 'Ctrl/Cmd+S', enabled: getCommandState('file.saveNow').enabled },
+  { id: 'file.saveNow', section: 'File', label: 'Save Now', shortcut: formatPrimaryChord('S'), enabled: getCommandState('file.saveNow').enabled },
   { id: 'file.clearLocalDocs', section: 'File', label: 'Clear Local Docs', enabled: getCommandState('file.clearLocalDocs').enabled },
-  { id: 'edit.undo', section: 'Edit', label: 'Undo', shortcut: 'Ctrl/Cmd+Z', enabled: getCommandState('edit.undo').enabled },
-  { id: 'edit.redo', section: 'Edit', label: 'Redo', shortcut: 'Ctrl/Cmd+Shift+Z', enabled: getCommandState('edit.redo').enabled },
-  { id: 'edit.cut', section: 'Edit', label: 'Cut', shortcut: 'Ctrl/Cmd+X', enabled: getCommandState('edit.cut').enabled },
-  { id: 'edit.copy', section: 'Edit', label: 'Copy', shortcut: 'Ctrl/Cmd+C', enabled: getCommandState('edit.copy').enabled },
-  { id: 'edit.paste', section: 'Edit', label: 'Paste', shortcut: 'Ctrl/Cmd+V', enabled: getCommandState('edit.paste').enabled },
-  { id: 'edit.selectAll', section: 'Edit', label: 'Select All', shortcut: 'Ctrl/Cmd+A', enabled: getCommandState('edit.selectAll').enabled },
+  { id: 'edit.undo', section: 'Edit', label: 'Undo', shortcut: formatPrimaryChord('Z'), enabled: getCommandState('edit.undo').enabled },
+  { id: 'edit.redo', section: 'Edit', label: 'Redo', shortcut: formatPrimaryChord('Shift+Z'), enabled: getCommandState('edit.redo').enabled },
+  { id: 'edit.cut', section: 'Edit', label: 'Cut', shortcut: formatPrimaryChord('X'), enabled: getCommandState('edit.cut').enabled },
+  { id: 'edit.copy', section: 'Edit', label: 'Copy', shortcut: formatPrimaryChord('C'), enabled: getCommandState('edit.copy').enabled },
+  { id: 'edit.paste', section: 'Edit', label: 'Paste', shortcut: formatPrimaryChord('V'), enabled: getCommandState('edit.paste').enabled },
+  { id: 'edit.selectAll', section: 'Edit', label: 'Select All', shortcut: formatPrimaryChord('A'), enabled: getCommandState('edit.selectAll').enabled },
   { id: 'view.toggleEditorTheme', section: 'View', label: 'Toggle Editor Theme', enabled: getCommandState('view.toggleEditorTheme').enabled },
   { id: 'view.togglePreviewTheme', section: 'View', label: 'Toggle Preview Theme', enabled: getCommandState('view.togglePreviewTheme').enabled },
   { id: 'view.toggleSaveNow', section: 'View', label: 'Disable Save Now', enabled: getCommandState('view.toggleSaveNow').enabled },
-  { id: 'view.compileNow', section: 'View', label: 'Compile Now', shortcut: 'Ctrl/Cmd+Shift+C', enabled: getCommandState('view.compileNow').enabled },
+  { id: 'view.compileNow', section: 'View', label: 'Compile Now', shortcut: formatPrimaryChord('Shift+C'), enabled: getCommandState('view.compileNow').enabled },
   { id: 'view.layoutSplit', section: 'View', label: 'Split View', enabled: getCommandState('view.layoutSplit').enabled },
   { id: 'view.layoutEditorOnly', section: 'View', label: 'Editor Only', enabled: getCommandState('view.layoutEditorOnly').enabled },
   { id: 'view.layoutPreviewOnly', section: 'View', label: 'Preview Only', enabled: getCommandState('view.layoutPreviewOnly').enabled },
-  { id: 'help.shortcuts', section: 'Help', label: 'Keyboard Shortcuts', enabled: getCommandState('help.shortcuts').enabled },
+  { id: 'help.documentation', section: 'Help', label: 'Documentation', enabled: getCommandState('help.documentation').enabled },
   { id: 'help.about', section: 'Help', label: 'About / Repository', enabled: getCommandState('help.about').enabled },
 ];
 commandPalette.setCommands(buildPaletteCommands());

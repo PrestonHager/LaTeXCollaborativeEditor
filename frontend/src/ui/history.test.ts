@@ -26,4 +26,24 @@ describe('createEditHistory', () => {
     expect(history.canRedo()).toBe(false);
     expect(history.undo()).toBeNull();
   });
+
+  it('ignores record when text unchanged and supports subscribe unsubscribe', () => {
+    const history = createEditHistory({ initialText: 'same', limit: 5 });
+    let fires = 0;
+    const off = history.subscribe(() => {
+      fires += 1;
+    });
+    history.record('same');
+    expect(fires).toBe(0);
+    history.record('next');
+    expect(fires).toBe(1);
+    off();
+    history.record('after');
+    expect(fires).toBe(1);
+  });
+
+  it('returns null from redo when stack is empty', () => {
+    const history = createEditHistory({ initialText: 'x' });
+    expect(history.redo()).toBeNull();
+  });
 });

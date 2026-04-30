@@ -19,10 +19,13 @@ export class YjsTextSync {
       }, 'init');
     }
 
+    // y-codemirror.next uses the YSyncConfig instance as transaction origin (see y-sync.js transact(..., this.conf)).
+    // Only skip updates that came from the network or snapshot application so we do not echo them.
     this.doc.on('update', (update, origin) => {
-      if (origin === 'local') {
-        this.config.onLocalUpdate(update);
+      if (origin === 'remote' || origin === 'snapshot' || origin === 'snapshot-reset' || origin === 'init') {
+        return;
       }
+      this.config.onLocalUpdate(update);
     });
 
     this.yText.observe((event) => {

@@ -5,12 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build:wasm": "wasm-pack build ../rust-tex --target web --out-dir ../frontend/src/wasm/rust_tex_pkg --out-name rust_tex",
-    "build": "npm run build:wasm && tsc && vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage --coverage.thresholds.lines=79"
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",

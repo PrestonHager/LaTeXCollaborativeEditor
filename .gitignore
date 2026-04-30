@@ -3,7 +3,7 @@ frontend/node_modules/
 frontend/dist/
 frontend/coverage/
 frontend/.env
-rust-core/target/
-rust-tex/target/
+site/
 third_party/
 *.zip
+__pycache__/
