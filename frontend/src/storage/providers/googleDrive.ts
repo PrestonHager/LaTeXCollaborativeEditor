@@ -30,6 +30,8 @@ export class GoogleDriveProvider implements StorageProvider {
   private accessToken = '';
   private tokenExpiresAt = 0;
   private fileRef: DriveFileRef | null = this.readStoredFileRef();
+  // Bump this every time the linked file changes, so a slow save can tell it's stale.
+  private fileRefGeneration = 0;
   private currentStatus = 'Autosave Off';
   private static readonly storageKey = 'drive_active_file_ref';
   private static readonly tokenStorageKey = 'drive_access_token';
@@ -52,8 +54,7 @@ export class GoogleDriveProvider implements StorageProvider {
    * Call this whenever the editor switches to a different document.
    */
   detachFile() {
-    this.fileRef = null;
-    this.persistFileRef(null);
+    this.linkFile(null);
   }
 
   /**
@@ -95,9 +96,12 @@ export class GoogleDriveProvider implements StorageProvider {
   async save(content: string, fileName: string): Promise<void> {
     this.requireToken();
     if (!this.fileRef) {
+      const generation = this.fileRefGeneration;
       const fileId = await this.createFile(fileName, content);
-      this.fileRef = { id: fileId, name: fileName };
-      this.persistFileRef(this.fileRef);
+      // Only link the new file if nothing was opened or detached while we were creating it.
+      if (generation === this.fileRefGeneration) {
+        this.linkFile({ id: fileId, name: fileName });
+      }
       return;
     }
     await this.updateFile(this.fileRef.id, content);
@@ -113,8 +117,12 @@ export class GoogleDriveProvider implements StorageProvider {
       await this.save(content, newFileName);
       return;
     }
-    await this.renameFile(this.fileRef.id, newFileName);
-    await this.updateFile(this.fileRef.id, content);
+    // Hold on to the file we started with, since the link can change during the rename.
+    const fileId = this.fileRef.id;
+    const generation = this.fileRefGeneration;
+    await this.renameFile(fileId, newFileName);
+    if (generation !== this.fileRefGeneration) return;
+    await this.updateFile(fileId, content);
   }
 
   async openDocument(fileId: string): Promise<{ name: string; content: string }> {
@@ -124,8 +132,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
     const contentRes = await this.driveFetch(`${DRIVE_API}/${fileId}?alt=media`, {}, 'load file content');
     const content = await contentRes.text();
-    this.fileRef = { id: metadata.id, name: metadata.name };
-    this.persistFileRef(this.fileRef);
+    this.linkFile({ id: metadata.id, name: metadata.name });
     return { name: metadata.name, content };
   }
 
@@ -227,6 +234,13 @@ export class GoogleDriveProvider implements StorageProvider {
       this.clearAccessToken();
       throw new StorageError('Drive: Not connected. Use File > Connect Google Drive first.', { retryable: false });
     }
+  }
+
+  /** Point at a different Drive file (or none) and mark any save in flight as stale. */
+  private linkFile(fileRef: DriveFileRef | null) {
+    this.fileRef = fileRef;
+    this.fileRefGeneration += 1;
+    this.persistFileRef(fileRef);
   }
 
   private readStoredFileRef(): DriveFileRef | null {
