@@ -24,6 +24,34 @@ describe('P2pTransport', () => {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
   };
 
+  beforeEach(() => {
+    // The file-chunk action gets made after doc-msg, so give it a harmless default.
+    makeAction.mockReturnValue([vi.fn(), vi.fn()]);
+  });
+
+  it('sends and receives binary file chunks on their own action', () => {
+    let binaryReceiver: ((data: ArrayBuffer, peerId: string, metadata: unknown) => void) | undefined;
+    const sendBinary = vi.fn();
+    makeAction.mockImplementation((name: string) =>
+      name === 'file-chunk'
+        ? [sendBinary, (cb: typeof binaryReceiver) => (binaryReceiver = cb)]
+        : [vi.fn(), vi.fn()],
+    );
+    const onBinary = vi.fn();
+    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState: vi.fn(), onPeerCount: vi.fn(), onPeerJoin: vi.fn(), onBinary });
+    // Nothing to send on before joining.
+    transport.sendBinary(new Uint8Array([1]), 'peer-1', { hash: 'h' });
+    transport.join('room-b');
+    const chunk = new Uint8Array([1, 2]);
+    transport.sendBinary(chunk, 'peer-1', { hash: 'h' });
+    binaryReceiver?.(chunk.buffer, 'peer-1', { hash: 'h' });
+
+    expect(sendBinary).toHaveBeenCalledTimes(1);
+    expect(sendBinary).toHaveBeenCalledWith(chunk, 'peer-1', { hash: 'h' });
+    expect(onBinary).toHaveBeenCalledWith(chunk.buffer, 'peer-1', { hash: 'h' });
+    makeAction.mockReset();
+  });
+
   it('joins room, receives, and sends payloads', () => {
     let receiver: ((value: unknown, peerId?: string) => void) | undefined;
     let peerJoinHandler: ((peerId: string) => void) | undefined;

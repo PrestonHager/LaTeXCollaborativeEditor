@@ -9,10 +9,10 @@ vi.mock('trystero', () => ({
   joinRoom: (...args: unknown[]) => {
     joinRoomSpy(...args);
     return {
-      makeAction: () => [
+      makeAction: (name: string) => [
         vi.fn(),
         (cb: (value: unknown, peerId?: string) => void) => {
-          inboundHandler = cb;
+          if (name === 'doc-msg') inboundHandler = cb;
         },
       ],
       onPeerJoin: (cb: (peerId: string) => void) => {

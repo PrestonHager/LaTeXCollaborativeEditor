@@ -1,6 +1,7 @@
-import type { StorageProvider } from './types';
+import type { ProjectListing, ProjectSummary, StorageProvider } from './types';
 import { StorageError } from '../errors';
 import { loadScript } from './scriptLoader';
+import { basename, dirname, isInside, mimeType, replacePrefix } from '../../project/paths';
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -9,10 +10,21 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 type GoogleTokenError = { type?: string; message?: string };
-// documentId says which editor document the file belongs to, so a rename doesn't look like a different doc.
+// The single Drive file an old session was saving to, from before projects.
 type DriveFileRef = { id: string; name: string; documentId?: string };
 type StoredToken = { accessToken: string; expiresAt: number };
 type TokenResult = { ok: true } | { ok: false; reason: string };
+type DriveItem = { id: string; name: string; mimeType?: string; parents?: string[]; appProperties?: Record<string, string>; modifiedTime?: string };
+
+/**
+ * What we know about an open project's files: path to Drive id.
+ * An old single-file project has no root folder yet, just the file and the folder it sits in.
+ */
+type ProjectIndex = {
+  rootId: string;
+  paths: Map<string, { id: string; folder: boolean }>;
+  legacy?: { fileId: string; parentId: string | null; name: string };
+};
 
 declare global {
   interface Window {
@@ -23,25 +35,34 @@ declare global {
 const GIS_SCRIPT = 'https://accounts.google.com/gsi/client';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
+// Project folders are tagged so "list projects" can find them without seeing the rest of Drive.
+const PROJECT_PROPERTY = 'latexProject';
+// Old single-file projects use ids like "file:<drive file id>".
+export const LEGACY_PREFIX = 'file:';
+const LEGACY_FILE_KEY = 'drive_active_file_ref';
 // Treat the token as expired a minute early so a save doesn't race the expiry.
 const TOKEN_EXPIRY_SLACK_MS = 60_000;
 // Give up on a silent refresh after this long, so a stuck popup can't stall autosave forever.
 const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
 
+/**
+ * Projects in Google Drive. A project is a Drive folder and every project file is a real
+ * Drive file in it, with subfolders kept as they are.
+ * NOTE: the drive.file scope only lets us see files this app made or the person picked.
+ * Files added to the folder from Drive itself stay hidden until they're picked.
+ */
 export class GoogleDriveProvider implements StorageProvider {
   readonly label = 'Google Drive';
   // NOTE: we keep an expired token around until a refresh fails, it marks that we were signed in.
   private accessToken = '';
   private tokenExpiresAt = 0;
-  private fileRef: DriveFileRef | null = this.readStoredFileRef();
-  // Bump this every time the linked file changes, so a slow save can tell it's stale.
-  private fileRefGeneration = 0;
-  // The editor document that's open now. New links get stamped with it.
-  private documentId: string | null = null;
   private currentStatus = 'Autosave Off';
   private refreshing: Promise<boolean> | null = null;
   private sessionLostHandler: (() => void) | null = null;
-  private static readonly storageKey = 'drive_active_file_ref';
+  private readonly indexes = new Map<string, ProjectIndex>();
+  // Old single-file project ids that have since become real folders.
+  private readonly aliases = new Map<string, string>();
   private static readonly tokenStorageKey = 'drive_access_token';
 
   constructor() {
@@ -50,7 +71,6 @@ export class GoogleDriveProvider implements StorageProvider {
 
   status() { return this.currentStatus; }
   getAccessToken() { return this.accessToken; }
-  getCurrentFileRef() { return this.fileRef; }
 
   /** Check for a live token without opening any sign-in popup. */
   hasUsableToken(): boolean {
@@ -67,32 +87,34 @@ export class GoogleDriveProvider implements StorageProvider {
     this.sessionLostHandler = handler;
   }
 
-  /** Tell the provider which editor document is open, so files it links belong to that doc. */
-  setDocumentId(documentId: string) {
-    this.documentId = documentId;
-  }
-
-  /** Check if the linked Drive file belongs to the given editor document. */
-  isLinkedTo(documentId: string): boolean {
-    return !!this.fileRef && this.fileRef.documentId === documentId;
-  }
-
   /**
-   * Claim a link saved before we tracked document ids, but only if the file name still matches.
-   * NOTE: this is just for upgrading old sessions, everything new is matched by id.
+   * The project id for the Drive file an old session was saving to, if it belongs to documentId.
+   * Sessions from before document ids only match by file name.
    */
-  adoptLegacyFile(documentId: string, fileName: string) {
-    if (!this.fileRef || this.fileRef.documentId || this.fileRef.name !== fileName) return;
-    this.fileRef = { ...this.fileRef, documentId };
-    this.persistFileRef(this.fileRef);
+  legacyProjectId(documentId: string | undefined, fileName: string): string | null {
+    let ref: DriveFileRef | null = null;
+    try {
+      const raw = localStorage.getItem(LEGACY_FILE_KEY);
+      ref = raw ? (JSON.parse(raw) as DriveFileRef) : null;
+    } catch {
+      ref = null;
+    }
+    if (!ref?.id || !ref.name) return null;
+    const matches = ref.documentId ? ref.documentId === documentId : ref.name === fileName;
+    return matches ? `${LEGACY_PREFIX}${ref.id}` : null;
   }
 
-  /**
-   * Forget the currently linked Drive file, so the next save creates a new one.
-   * Call this whenever the editor switches to a different document.
-   */
-  detachFile() {
-    this.linkFile(null);
+  /** Forget the old single-file link, once the session has moved on to projects. */
+  forgetLegacyFile() {
+    try {
+      localStorage.removeItem(LEGACY_FILE_KEY);
+    } catch {
+      // Nothing to do if storage is locked down.
+    }
+  }
+
+  currentProjectId(projectId: string): string {
+    return this.aliases.get(projectId) ?? projectId;
   }
 
   /**
@@ -131,100 +153,267 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
-  async save(content: string, fileName: string): Promise<void> {
+  async listProjects(): Promise<ProjectSummary[]> {
     this.requireToken();
-    if (!this.fileRef) {
-      const generation = this.fileRefGeneration;
-      const owner = this.documentId;
-      const fileId = await this.createFile(fileName, content);
-      // Only link the new file if nothing was opened or detached while we were creating it.
-      if (generation === this.fileRefGeneration) {
-        this.linkFile({ id: fileId, name: fileName }, owner);
+    const q = `mimeType='${FOLDER_MIME}' and appProperties has { key='${PROJECT_PROPERTY}' and value='1' } and trashed=false`;
+    const items = await this.listAll(q, 'id,name,modifiedTime', 'list projects');
+    return items
+      .map((item) => ({ id: item.id, name: item.name, updatedAt: item.modifiedTime ? Date.parse(item.modifiedTime) : undefined }))
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  }
+
+  async createProject(name: string): Promise<ProjectSummary> {
+    this.requireToken();
+    const folder = await this.createFolderItem(name, null, { [PROJECT_PROPERTY]: '1' });
+    this.indexes.set(folder.id, { rootId: folder.id, paths: new Map() });
+    this.currentStatus = `Drive: Created project folder ${name}`;
+    return { id: folder.id, name };
+  }
+
+  async openProject(projectId: string): Promise<ProjectListing> {
+    this.requireToken();
+    const id = this.currentProjectId(projectId);
+    if (id.startsWith(LEGACY_PREFIX)) return this.openLegacyFile(id);
+
+    const res = await this.driveFetch(`${DRIVE_API}/${id}?fields=id,name,mimeType,appProperties`, {}, 'open the project folder');
+    const folder = (await res.json()) as DriveItem;
+    if (folder.mimeType !== FOLDER_MIME) throw new StorageError('Drive: That is not a folder.', { retryable: false });
+
+    // Walk the folder tree one level at a time.
+    const index: ProjectIndex = { rootId: folder.id, paths: new Map() };
+    const entries: ProjectListing['entries'] = [];
+    let level: { id: string; path: string }[] = [{ id: folder.id, path: '' }];
+    while (level.length) {
+      const next: typeof level = [];
+      for (const dir of level) {
+        const children = await this.listAll(`'${dir.id}' in parents and trashed=false`, 'id,name,mimeType', 'list project files');
+        for (const child of children) {
+          const path = dir.path ? `${dir.path}/${child.name}` : child.name;
+          if (child.mimeType === FOLDER_MIME) {
+            index.paths.set(path, { id: child.id, folder: true });
+            entries.push({ path, kind: 'folder' });
+            next.push({ id: child.id, path });
+          } else if (!child.mimeType?.startsWith('application/vnd.google-apps.')) {
+            // Skip Google Docs and Sheets, since they have no file bytes to download.
+            index.paths.set(path, { id: child.id, folder: false });
+            entries.push({ path, kind: 'file' });
+          }
+        }
       }
+      level = next;
+    }
+    this.indexes.set(projectId, index);
+    this.indexes.set(id, index);
+    this.currentStatus = `Drive: Opened ${folder.name}`;
+    return { id, name: folder.name, mainPath: folder.appProperties?.mainFile ?? null, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
+  }
+
+  async readFile(projectId: string, path: string): Promise<Uint8Array> {
+    const index = await this.ensureIndex(projectId);
+    const item = index.paths.get(path);
+    if (!item || item.folder) throw new StorageError(`Drive: ${path} was not found in this project.`, { retryable: false });
+    const res = await this.driveFetch(`${DRIVE_API}/${item.id}?alt=media`, {}, `load ${path}`);
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  async writeFile(projectId: string, path: string, data: string | Uint8Array): Promise<void> {
+    let index = await this.ensureIndex(projectId);
+    if (index.legacy && path !== index.legacy.name) index = await this.upgradeLegacy(projectId, index);
+    const body = new Blob([data as BlobPart], { type: mimeType(path) });
+    const existing = index.paths.get(path);
+    if (existing && !existing.folder) {
+      await this.driveFetch(
+        `${DRIVE_UPLOAD_API}/${existing.id}?uploadType=media`,
+        { method: 'PATCH', headers: { 'Content-Type': mimeType(path) }, body },
+        `save ${path}`,
+      );
       return;
     }
-    await this.updateFile(this.fileRef.id, content);
+    const parentId = await this.ensureFolder(index, dirname(path));
+    const metadata = new Blob([JSON.stringify({ name: basename(path), parents: [parentId] })], { type: 'application/json' });
+    const form = new FormData();
+    form.append('metadata', metadata);
+    form.append('file', body);
+    const res = await this.driveFetch(`${DRIVE_UPLOAD_API}?uploadType=multipart`, { method: 'POST', body: form }, `create ${path}`);
+    const json = (await res.json()) as Partial<DriveItem>;
+    if (!json?.id) throw new StorageError('Drive: Created a file but Google did not return its id');
+    index.paths.set(path, { id: json.id, folder: false });
+  }
+
+  async createFolder(projectId: string, path: string): Promise<void> {
+    let index = await this.ensureIndex(projectId);
+    if (index.legacy) index = await this.upgradeLegacy(projectId, index);
+    await this.ensureFolder(index, path);
+  }
+
+  async move(projectId: string, from: string, to: string): Promise<void> {
+    let index = await this.ensureIndex(projectId);
+    if (index.legacy) index = await this.upgradeLegacy(projectId, index);
+    const item = index.paths.get(from);
+    if (!item) throw new StorageError(`Drive: ${from} was not found in this project.`, { retryable: false });
+    const oldParent = this.folderId(index, dirname(from));
+    const newParent = await this.ensureFolder(index, dirname(to));
+    const url = new URL(`${DRIVE_API}/${item.id}`);
+    if (oldParent !== newParent) {
+      url.searchParams.set('addParents', newParent);
+      url.searchParams.set('removeParents', oldParent);
+    }
+    await this.driveFetch(
+      url.toString(),
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: basename(to) }) },
+      `move ${from}`,
+    );
+    // Now fix up our paths, including everything inside a moved folder.
+    for (const [path, value] of [...index.paths]) {
+      if (path !== from && !isInside(path, from)) continue;
+      index.paths.delete(path);
+      index.paths.set(replacePrefix(path, from, to), value);
+    }
+  }
+
+  async remove(projectId: string, path: string): Promise<void> {
+    let index = await this.ensureIndex(projectId);
+    if (index.legacy) index = await this.upgradeLegacy(projectId, index);
+    const item = index.paths.get(path);
+    if (item) {
+      // Move it to the Drive trash instead of deleting it for good.
+      await this.driveFetch(
+        `${DRIVE_API}/${item.id}`,
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) },
+        `delete ${path}`,
+      );
+    }
+    for (const key of [...index.paths.keys()]) {
+      if (key === path || isInside(key, path)) index.paths.delete(key);
+    }
+  }
+
+  async renameProject(projectId: string, name: string): Promise<void> {
+    const index = await this.ensureIndex(projectId);
+    // An old single file has no folder to rename yet. Its file name is a project file path instead.
+    if (index.legacy) return;
+    await this.patchMetadata(index.rootId, { name }, 'rename the project folder');
+  }
+
+  async setMainFile(projectId: string, path: string | null): Promise<void> {
+    const index = await this.ensureIndex(projectId);
+    if (index.legacy) return;
+    await this.patchMetadata(index.rootId, { appProperties: { mainFile: path } }, 'set the main file');
+  }
+
+  /** Move the project folder into another Drive folder. */
+  async moveProject(projectId: string, targetFolderId: string): Promise<void> {
+    const index = await this.ensureIndex(projectId);
+    const id = index.legacy ? index.legacy.fileId : index.rootId;
+    const detailsRes = await this.driveFetch(`${DRIVE_API}/${id}?fields=parents`, {}, 'look up the current folder');
+    const details = (await detailsRes.json()) as Partial<DriveItem>;
+    const url = new URL(`${DRIVE_API}/${id}`);
+    url.searchParams.set('addParents', targetFolderId);
+    if (details.parents?.length) url.searchParams.set('removeParents', details.parents.join(','));
+    await this.driveFetch(url.toString(), { method: 'PATCH' }, 'move the project');
+    if (index.legacy) index.legacy.parentId = targetFolderId;
+  }
+
+  private async openLegacyFile(projectId: string): Promise<ProjectListing> {
+    const fileId = projectId.slice(LEGACY_PREFIX.length);
+    const res = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=id,name,mimeType,parents`, {}, 'load file details');
+    const file = (await res.json()) as DriveItem;
+    if (file.mimeType === FOLDER_MIME) return this.openProject(file.id);
+    const index: ProjectIndex = {
+      rootId: '',
+      paths: new Map([[file.name, { id: file.id, folder: false }]]),
+      legacy: { fileId: file.id, parentId: file.parents?.[0] ?? null, name: file.name },
+    };
+    this.indexes.set(projectId, index);
+    this.currentStatus = `Drive: Opened ${file.name}`;
+    return { id: projectId, name: file.name.replace(/\.tex$/, ''), mainPath: file.name, entries: [{ path: file.name, kind: 'file' }] };
   }
 
   /**
-   * Rename the linked Drive file then write the latest content.
-   * Before, this dropped the link and created a brand new file, which left duplicates in Drive.
+   * An old single-file project just got a second file, so give it a real project folder.
+   * We make the folder next to the file, then move the file into it.
    */
-  async saveAs(content: string, _oldFileName: string, newFileName: string): Promise<void> {
-    this.requireToken();
-    if (!this.fileRef) {
-      await this.save(content, newFileName);
-      return;
-    }
-    // Hold on to the file we started with, since the link can change during the rename.
-    const fileId = this.fileRef.id;
-    const generation = this.fileRefGeneration;
-    await this.renameFile(fileId, newFileName);
-    if (generation !== this.fileRefGeneration) return;
-    await this.updateFile(fileId, content);
+  private async upgradeLegacy(projectId: string, index: ProjectIndex): Promise<ProjectIndex> {
+    const legacy = index.legacy!;
+    const folder = await this.createFolderItem(legacy.name.replace(/\.tex$/, ''), legacy.parentId, { [PROJECT_PROPERTY]: '1', mainFile: legacy.name });
+    const url = new URL(`${DRIVE_API}/${legacy.fileId}`);
+    url.searchParams.set('addParents', folder.id);
+    if (legacy.parentId) url.searchParams.set('removeParents', legacy.parentId);
+    await this.driveFetch(url.toString(), { method: 'PATCH' }, 'move the file into its project folder');
+    const upgraded: ProjectIndex = { rootId: folder.id, paths: index.paths };
+    this.indexes.set(projectId, upgraded);
+    this.indexes.set(folder.id, upgraded);
+    this.aliases.set(projectId, folder.id);
+    this.forgetLegacyFile();
+    this.currentStatus = `Drive: Moved ${legacy.name} into a new project folder`;
+    return upgraded;
   }
 
-  /** Load a Drive file and link it to documentId, which defaults to the open doc. */
-  async openDocument(fileId: string, documentId = this.documentId): Promise<{ name: string; content: string }> {
+  private async ensureIndex(projectId: string): Promise<ProjectIndex> {
     this.requireToken();
-    const metadataRes = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=id,name`, {}, 'load file details');
-    const metadata = await metadataRes.json();
-
-    const contentRes = await this.driveFetch(`${DRIVE_API}/${fileId}?alt=media`, {}, 'load file content');
-    const content = await contentRes.text();
-    this.linkFile({ id: metadata.id, name: metadata.name }, documentId);
-    return { name: metadata.name, content };
+    const known = this.indexes.get(projectId);
+    if (known) return known;
+    await this.openProject(projectId);
+    return this.indexes.get(projectId)!;
   }
 
-  async renameFile(fileId: string, newName: string): Promise<void> {
-    this.requireToken();
-    await this.driveFetch(
-      `${DRIVE_API}/${fileId}`,
+  private folderId(index: ProjectIndex, dir: string): string {
+    if (!dir) return index.rootId;
+    const item = index.paths.get(dir);
+    if (!item?.folder) throw new StorageError(`Drive: Folder ${dir} was not found in this project.`, { retryable: false });
+    return item.id;
+  }
+
+  /** Get the Drive id of a project folder, making it and its parents when they're missing. */
+  private async ensureFolder(index: ProjectIndex, dir: string): Promise<string> {
+    if (!dir) return index.rootId;
+    const known = index.paths.get(dir);
+    if (known?.folder) return known.id;
+    const parentId = await this.ensureFolder(index, dirname(dir));
+    const folder = await this.createFolderItem(basename(dir), parentId);
+    index.paths.set(dir, { id: folder.id, folder: true });
+    return folder.id;
+  }
+
+  private async createFolderItem(name: string, parentId: string | null, appProperties?: Record<string, string>): Promise<DriveItem> {
+    const res = await this.driveFetch(
+      `${DRIVE_API}?fields=id,name`,
       {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({ name, mimeType: FOLDER_MIME, ...(parentId ? { parents: [parentId] } : {}), ...(appProperties ? { appProperties } : {}) }),
       },
-      'rename file',
+      `create folder ${name}`,
     );
-    if (this.fileRef?.id === fileId) {
-      this.fileRef = { ...this.fileRef, name: newName };
-      this.persistFileRef(this.fileRef);
-    }
+    const json = (await res.json()) as DriveItem;
+    if (!json?.id) throw new StorageError('Drive: Created a folder but Google did not return its id');
+    return json;
   }
 
-  async moveFile(fileId: string, targetFolderId: string): Promise<void> {
-    this.requireToken();
-    const detailsRes = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=parents`, {}, 'look up the current folder');
-    const details = await detailsRes.json();
-    const removeParents = Array.isArray(details.parents) ? details.parents.join(',') : '';
-    const url = new URL(`${DRIVE_API}/${fileId}`);
-    url.searchParams.set('addParents', targetFolderId);
-    if (removeParents) {
-      url.searchParams.set('removeParents', removeParents);
-    }
-    await this.driveFetch(url.toString(), { method: 'PATCH' }, 'move file');
-  }
-
-  private async createFile(fileName: string, content: string): Promise<string> {
-    const metadata = new Blob([JSON.stringify({ name: fileName, mimeType: 'text/x-tex' })], { type: 'application/json' });
-    const data = new Blob([content], { type: 'text/plain' });
-    const form = new FormData();
-    form.append('metadata', metadata);
-    form.append('file', data);
-
-    const res = await this.driveFetch(`${DRIVE_UPLOAD_API}?uploadType=multipart`, { method: 'POST', body: form }, 'create file');
-    const json = await res.json();
-    if (!json?.id) throw new StorageError('Drive: Created a file but Google did not return its id');
-    return json.id;
-  }
-
-  private async updateFile(fileId: string, content: string): Promise<void> {
+  private async patchMetadata(id: string, body: Record<string, unknown>, action: string) {
     await this.driveFetch(
-      `${DRIVE_UPLOAD_API}/${fileId}?uploadType=media`,
-      { method: 'PATCH', headers: { 'Content-Type': 'text/plain' }, body: content },
-      'save file',
+      `${DRIVE_API}/${id}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+      action,
     );
+  }
+
+  /** Run a files.list query and follow every page. */
+  private async listAll(q: string, fields: string, action: string): Promise<DriveItem[]> {
+    const items: DriveItem[] = [];
+    let pageToken: string | undefined;
+    do {
+      const url = new URL(DRIVE_API);
+      url.searchParams.set('q', q);
+      url.searchParams.set('fields', `nextPageToken,files(${fields})`);
+      url.searchParams.set('pageSize', '1000');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const res = await this.driveFetch(url.toString(), {}, action);
+      const json = (await res.json()) as { files?: DriveItem[]; nextPageToken?: string };
+      items.push(...(json.files ?? []));
+      pageToken = json.nextPageToken;
+    } while (pageToken);
+    return items;
   }
 
   /**
@@ -282,16 +471,6 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
-  /**
-   * Point at a different Drive file (or none) and mark any save in flight as stale.
-   * The file is stamped with the editor document it belongs to, when we know it.
-   */
-  private linkFile(fileRef: DriveFileRef | null, documentId: string | null = null) {
-    this.fileRef = fileRef && documentId ? { ...fileRef, documentId } : fileRef;
-    this.fileRefGeneration += 1;
-    this.persistFileRef(this.fileRef);
-  }
-
   /** Get a new token without a popup. Concurrent callers share one attempt. */
   private refreshAccessToken(): Promise<boolean> {
     if (!this.refreshing) {
@@ -339,33 +518,6 @@ export class GoogleDriveProvider implements StorageProvider {
     this.clearAccessToken();
     this.currentStatus = 'Drive: Session expired';
     if (wasSignedIn) this.sessionLostHandler?.();
-  }
-
-  private readStoredFileRef(): DriveFileRef | null {
-    try {
-      const raw = localStorage.getItem(GoogleDriveProvider.storageKey);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as DriveFileRef;
-      if (!parsed?.id || !parsed?.name) return null;
-      const ref: DriveFileRef = { id: parsed.id, name: parsed.name };
-      if (typeof parsed.documentId === 'string' && parsed.documentId) ref.documentId = parsed.documentId;
-      return ref;
-    } catch {
-      return null;
-    }
-  }
-
-  private persistFileRef(fileRef: DriveFileRef | null) {
-    try {
-      if (!fileRef) {
-        localStorage.removeItem(GoogleDriveProvider.storageKey);
-        return;
-      }
-      localStorage.setItem(GoogleDriveProvider.storageKey, JSON.stringify(fileRef));
-    } catch (error) {
-      // Losing the file link only matters after a reload, so don't fail the save over it.
-      console.warn('Could not remember the open Drive file', error);
-    }
   }
 
   /**

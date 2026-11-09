@@ -1,17 +1,22 @@
 import { getBootstrapConfig } from '../net/bootstrapConfig';
 import { PeerSession } from '../net/peerSession';
 import type { TransportState } from '../net/p2pTransport';
-import { YjsTextSync } from './yjsSync';
+import { YjsDocSync } from './yjsSync';
+import { FileTransfer, type ChunkMeta } from './fileTransfer';
+import type { BlobStore } from '../project/blobStore';
 
 type SessionConfig = {
   isHost: boolean;
+  blobs: BlobStore;
   onConnectionState: (state: TransportState) => void;
-  onRemoteText: (text: string) => void;
+  /** Runs after a peer's change lands in the doc. */
+  onRemoteChange?: () => void;
   onRemoteMetadata?: (metadata: { title: string; storage: string }) => void;
-  getLocalText: () => string;
   getLocalMetadata?: () => { title: string; storage: string };
   initialState?: PersistedDocState;
-  onDocReplaced?: (text: string) => void;
+  /** A guest got a whole new doc from the host, so anything bound to the old one has to rebind. */
+  onDocReplaced?: () => void;
+  onFileProgress?: (hash: string, fraction: number | null) => void;
 };
 
 export type PersistedDocState = { docId: string; state: Uint8Array };
@@ -20,7 +25,8 @@ type SyncMessage =
   | { kind: 'snapshot'; state: number[]; docId?: string; metadata?: { title: string; storage: string } }
   | { kind: 'y-update'; update: number[] }
   | { kind: 'metadata'; metadata: { title: string; storage: string } }
-  | { kind: 'sync-request' };
+  | { kind: 'sync-request' }
+  | { kind: 'file-request'; hash: string };
 
 export class SessionController {
   private roomId: string | null = null;
@@ -30,7 +36,8 @@ export class SessionController {
   private reconnectTimer: number | undefined;
   private syncRequestTimer: number | undefined;
   private syncRequestDebounceTimer: number | undefined;
-  private readonly sync: YjsTextSync;
+  private readonly sync: YjsDocSync;
+  readonly transfer: FileTransfer;
   private hasInitialSync: boolean;
   private readonly initialSyncDebounceMs = 300;
   // The id of the Yjs doc we're editing, so guests can tell a resumed host doc from a brand new one.
@@ -41,15 +48,20 @@ export class SessionController {
     this.config = config;
     this.hasInitialSync = config.isHost;
     this.docId = config.isHost ? (config.initialState?.docId ?? crypto.randomUUID()) : null;
-    this.sync = new YjsTextSync({
-      initialText: config.isHost ? config.getLocalText() : '',
+    this.sync = new YjsDocSync({
       initialState: config.isHost ? config.initialState?.state : undefined,
-      onRemoteText: (text) => this.config.onRemoteText(text),
+      onRemoteChange: () => this.config.onRemoteChange?.(),
       onLocalUpdate: (update) => {
         if (!this.config.isHost && !this.hasInitialSync) return;
         const message: SyncMessage = { kind: 'y-update', update: Array.from(update) };
         this.session.sendMessage(message);
       },
+    });
+    this.transfer = new FileTransfer({
+      blobs: config.blobs,
+      sendMessage: (message, peerId) => this.session.sendMessage(message, peerId),
+      sendChunk: (data, meta, peerId) => this.session.sendBinary(data, peerId, meta),
+      onProgress: (hash, fraction) => this.config.onFileProgress?.(hash, fraction),
     });
     this.session = new PeerSession(getBootstrapConfig(), {
       onMessage: (payload, peerId) => this.onMessage(payload, peerId),
@@ -66,10 +78,16 @@ export class SessionController {
       },
       onPeerCount: () => undefined,
       onPeerJoin: (peerId) => {
+        this.transfer.peerJoined(peerId);
         if (!this.config.isHost) return;
         this.session.sendMessage(this.snapshotMessage(), peerId);
       },
+      onBinary: (data, peerId, metadata) => {
+        if (!isChunkMeta(metadata)) return;
+        void this.transfer.handleChunk(data, metadata, peerId);
+      },
       onPeerLeave: (peerId) => {
+        this.transfer.peerLeft(peerId);
         // When the host leaves, take the next snapshot from whoever comes back as host.
         if (peerId === this.hostPeerId) this.hostPeerId = null;
       },
@@ -107,14 +125,6 @@ export class SessionController {
     this.ensureInitialSyncRequestLoop();
   }
 
-  applyLocalText(text: string) {
-    this.sync.applyLocalText(text);
-  }
-
-  getYText() {
-    return this.sync.getYText();
-  }
-
   getDoc() {
     return this.sync.getDoc();
   }
@@ -122,10 +132,6 @@ export class SessionController {
   getPersistedState(): PersistedDocState | null {
     if (!this.config.isHost || !this.docId) return null;
     return { docId: this.docId, state: this.sync.getSnapshot() };
-  }
-
-  updateLocalText(_text: string) {
-    // Kept for compatibility with older call sites.
   }
 
   broadcastMetadata(metadata: { title: string; storage: string }) {
@@ -204,6 +210,11 @@ export class SessionController {
       return;
     }
 
+    if (message.kind === 'file-request' && peerId && typeof message.hash === 'string') {
+      void this.transfer.handleRequest(message.hash, peerId);
+      return;
+    }
+
     if (message.kind === 'sync-request' && this.config.isHost) {
       this.session.sendMessage(this.snapshotMessage(), peerId);
     }
@@ -230,11 +241,22 @@ export class SessionController {
     } else if (this.sync.hasState()) {
       // The host is on a different doc now, so start over from its copy instead of mixing the two.
       this.sync.resetFromSnapshot(update);
-      this.config.onDocReplaced?.(this.sync.getYText().toString());
+      this.config.onDocReplaced?.();
     } else {
       this.sync.applySnapshot(update);
     }
     this.docId = message.docId ?? null;
     this.hostPeerId = peerId ?? null;
   }
+}
+
+function isChunkMeta(value: unknown): value is ChunkMeta {
+  const meta = value as Partial<ChunkMeta> | null;
+  return (
+    !!meta &&
+    typeof meta.hash === 'string' &&
+    Number.isInteger(meta.index) &&
+    Number.isInteger(meta.total) &&
+    Number.isInteger(meta.size)
+  );
 }

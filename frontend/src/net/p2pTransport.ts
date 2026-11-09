@@ -9,11 +9,14 @@ type TransportCallbacks = {
   onPeerCount: (count: number) => void;
   onPeerJoin: (peerId: string) => void;
   onPeerLeave?: (peerId: string) => void;
+  /** Binary data, like a chunk of a project file. Metadata says what it is. */
+  onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
 };
 
 export class P2pTransport {
   private room: any;
   private sendTextAction: ((payload: unknown, peerId?: string) => void) | null = null;
+  private sendBinaryAction: ((data: Uint8Array, peerId: string, metadata: unknown) => void) | null = null;
   private peers = 0;
   private discoveryTimer: number | undefined;
   private failureTimer: number | undefined;
@@ -40,6 +43,11 @@ export class P2pTransport {
     const [sendText, getText] = this.room.makeAction('doc-msg');
     this.sendTextAction = sendText;
     getText((payload: unknown, peerId?: string) => this.callbacks.onMessage(payload, peerId));
+
+    // Files go over their own action, so trystero sends them as binary instead of JSON.
+    const [sendBinary, getBinary] = this.room.makeAction('file-chunk');
+    this.sendBinaryAction = sendBinary;
+    getBinary((data: ArrayBuffer, peerId: string, metadata: unknown) => this.callbacks.onBinary?.(data, peerId, metadata));
 
     this.room.onPeerJoin((peerId: string) => {
       this.peers += 1;
@@ -79,12 +87,17 @@ export class P2pTransport {
     this.sendTextAction(payload);
   }
 
+  sendBinary(data: Uint8Array, peerId: string, metadata: unknown) {
+    this.sendBinaryAction?.(data, peerId, metadata);
+  }
+
   disconnect() {
     this.cleanupTimers();
     if (this.room?.leave) this.room.leave();
     // Reset so a later join starts counting peers from zero.
     this.peers = 0;
     this.sendTextAction = null;
+    this.sendBinaryAction = null;
   }
 
   private cleanupTimers() {

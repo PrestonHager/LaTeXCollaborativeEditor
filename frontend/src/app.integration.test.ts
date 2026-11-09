@@ -10,13 +10,13 @@ describe('App integration behavior', () => {
     const editorHost = document.createElement('div');
     const editor = createEditorPane(editorHost);
     const statuses: string[] = [];
-    const save = vi.fn(async () => {});
-    const provider = { connect: async () => true, save, status: () => 'x' };
+    const save = vi.fn(async (_text: string) => {});
 
     const autosave = new AutosaveController({
-      provider: () => provider,
-      getContent: () => editor.getText(),
-      getFileName: () => 'document.tex',
+      save: async () => {
+        await save(editor.getText());
+        return undefined;
+      },
       onStatus: (s) => statuses.push(s),
     });
     autosave.enable();
@@ -25,7 +25,7 @@ describe('App integration behavior', () => {
     editor.setText('integration-content', true);
     await vi.advanceTimersByTimeAsync(4000);
 
-    expect(save).toHaveBeenCalledWith('integration-content', 'document.tex');
+    expect(save).toHaveBeenCalledWith('integration-content');
     expect(statuses).toContain('Saved');
     vi.useRealTimers();
   });

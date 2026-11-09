@@ -13,25 +13,32 @@
     -->
     <div id="app">
       <header class="topbar">
-        <h1 id="doc-title" class="doc-title">Untitled</h1>
+        <h1 id="doc-title" class="doc-title" title="Rename project">Untitled</h1>
 
         <nav id="menu-bar" class="menu-bar" role="menubar" aria-label="Main menu">
           <div class="menu-root dropdown-menu" data-menu-label="File">
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-file" aria-expanded="false">File</button>
             <div id="menu-file" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="File">
-                <button type="button" class="menu-item" role="menuitem" data-command="file.new"><span class="menu-item-label">New</span><span class="menu-item-shortcut" data-shortcut data-chord="N"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal"><span class="menu-item-label">Open Local</span><span class="menu-item-shortcut" data-shortcut data-chord="O"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.new"><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut data-chord="N"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal"><span class="menu-item-label">Open Local Project</span><span class="menu-item-shortcut" data-shortcut data-chord="O"></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive"><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+O"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.download"><span class="menu-item-label">Download .tex</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+S"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.importZip"><span class="menu-item-label">Upload .zip as New Project</span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="file.newFile"><span class="menu-item-label">New File</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.newFolder"><span class="menu-item-label">New Folder</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.upload"><span class="menu-item-label">Upload Files</span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="file.download"><span class="menu-item-label">Download Project .zip</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+S"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.downloadFile"><span class="menu-item-label">Download Current File</span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="file.connectDrive"><span class="menu-item-label">Connect Google Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveToDrive"><span class="menu-item-label">Save to Google Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.moveDrive"><span class="menu-item-label">Move to Drive Folder</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive"><span class="menu-item-label">Rename in Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive"><span class="menu-item-label">Rename Project</span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveNow"><span class="menu-item-label">Save Now</span><span class="menu-item-shortcut" data-shortcut data-chord="S"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.clearLocalDocs" data-variant="destructive"><span class="menu-item-label">Clear Local Docs</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.clearLocalDocs" data-variant="destructive"><span class="menu-item-label">Clear Local Projects</span></button>
               </div>
             </div>
           </div>
@@ -97,11 +104,59 @@
         <span id="app-loading-label" class="app-loading-label">Loading compiler assets...</span>
       </div>
 
-      <main class="split" id="split-root">
-        <section id="editor-pane" class="pane"></section>
-        <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes"></div>
-        <section id="preview-pane" class="pane"></section>
-      </main>
+      <div class="workspace">
+        <aside id="file-pane" class="file-pane" aria-label="Project files">
+          <header class="file-pane-header">
+            <span class="file-pane-title">Files</span>
+            <div class="file-pane-actions">
+              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFile" aria-label="New file" title="New file"><i data-lucide="file-plus"></i></button>
+              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFolder" aria-label="New folder" title="New folder"><i data-lucide="folder-plus"></i></button>
+              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.upload" aria-label="Upload files" title="Upload files"><i data-lucide="upload"></i></button>
+            </div>
+          </header>
+          <ul id="file-tree" class="file-tree" role="tree" aria-label="Project files"></ul>
+          <div id="file-tree-empty" class="empty file-tree-empty" hidden>
+            <header>
+              <figure><i data-lucide="folder-open"></i></figure>
+              <h3>No files yet</h3>
+              <p>Add a file, or drop files here to upload them.</p>
+            </header>
+          </div>
+          <div id="file-tree-waiting" class="empty file-tree-empty" hidden>
+            <header>
+              <figure><i data-lucide="users"></i></figure>
+              <h3>Waiting for the host</h3>
+              <p>The project's files show up here once you're connected.</p>
+            </header>
+          </div>
+          <div id="file-drop-overlay" class="file-drop-overlay" hidden><i data-lucide="upload"></i><span>Drop to upload</span></div>
+        </aside>
+
+        <main class="split" id="split-root">
+          <section id="editor-pane" class="pane editor-pane">
+            <div class="editor-file-bar">
+              <span id="active-file-name" class="editor-file-name"></span>
+              <span id="active-file-main" class="badge" data-variant="secondary" hidden>main</span>
+            </div>
+            <div id="file-viewer" class="file-viewer" hidden>
+              <div id="file-viewer-body" class="file-viewer-body"></div>
+              <div id="file-viewer-empty" class="empty" hidden>
+                <header>
+                  <figure><i data-lucide="file"></i></figure>
+                  <h3 id="file-viewer-title">No preview</h3>
+                  <p id="file-viewer-message">This file type can't be shown here.</p>
+                </header>
+                <section>
+                  <div id="file-viewer-progress" class="progress" hidden><span></span></div>
+                  <button id="file-viewer-download" type="button" class="btn" data-variant="outline" data-size="sm"><i data-lucide="download"></i>Download</button>
+                </section>
+              </div>
+            </div>
+          </section>
+          <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes"></div>
+          <section id="preview-pane" class="pane"></section>
+        </main>
+      </div>
 
       <footer class="footer">
         <span id="diagnostics" class="diagnostics" aria-live="polite"></span>
@@ -154,12 +209,93 @@
           </label>
         </section>
         <footer>
-          <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local docs</button>
+          <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local projects</button>
           <button id="settings-done" type="button" class="btn">Done</button>
         </footer>
         <button id="settings-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close settings"><i data-lucide="x"></i></button>
       </div>
     </dialog>
+
+    <!-- One row of the file tree. fileTree.ts clones it for every file and folder. -->
+    <template id="file-tree-row-template">
+      <li class="file-row" role="treeitem">
+        <button type="button" class="file-row-main" draggable="true">
+          <span class="file-row-chevron"><i data-lucide="chevron-right"></i></span>
+          <span class="file-row-icon"></span>
+          <span class="file-row-name"></span>
+          <span class="file-row-main-badge badge" data-variant="secondary" hidden>main</span>
+        </button>
+        <div class="file-row-progress progress" hidden><span></span></div>
+        <div class="file-row-actions">
+          <button type="button" class="btn" data-variant="ghost" data-size="icon-xs" data-action="main" aria-label="Set as main file" title="Set as main file"><i data-lucide="star"></i></button>
+          <button type="button" class="btn" data-variant="ghost" data-size="icon-xs" data-action="rename" aria-label="Rename or move" title="Rename or move"><i data-lucide="pencil-line"></i></button>
+          <button type="button" class="btn" data-variant="ghost" data-size="icon-xs" data-action="delete" aria-label="Delete" title="Delete"><i data-lucide="trash-2"></i></button>
+        </div>
+      </li>
+    </template>
+
+    <!-- Upload dialog. Picked or dropped files go into the project right away. -->
+    <dialog id="upload-dialog" class="dialog upload-dialog" aria-labelledby="upload-dialog-title" aria-describedby="upload-dialog-description">
+      <div>
+        <header>
+          <h2 id="upload-dialog-title">Upload files</h2>
+          <p id="upload-dialog-description">Images, .bib, .sty, .cls and other project files, up to 10 MB each.</p>
+        </header>
+        <section class="upload-dialog-body">
+          <div class="settings-row">
+            <label class="label" for="upload-folder">Upload into</label>
+            <select id="upload-folder" class="select"></select>
+          </div>
+          <label id="upload-drop" class="upload-drop" for="upload-input">
+            <i data-lucide="upload"></i>
+            <span>Drop files here, or click to pick them</span>
+          </label>
+          <input id="upload-input" type="file" multiple hidden />
+          <ul id="upload-results" class="upload-results" aria-live="polite"></ul>
+        </section>
+        <footer>
+          <button id="upload-done" type="button" class="btn">Done</button>
+        </footer>
+        <button id="upload-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close upload"><i data-lucide="x"></i></button>
+      </div>
+    </dialog>
+
+    <!-- Project picker for local projects. Rows come from IndexedDB, so projectsDialog.ts fills them in. -->
+    <dialog id="projects-dialog" class="dialog projects-dialog" aria-labelledby="projects-dialog-title" aria-describedby="projects-dialog-description">
+      <div>
+        <header>
+          <h2 id="projects-dialog-title">Open a project</h2>
+          <p id="projects-dialog-description">Projects saved in this browser.</p>
+        </header>
+        <section class="projects-dialog-body">
+          <div id="projects-list" class="item-group projects-list" role="list"></div>
+          <div id="projects-empty" class="empty" hidden>
+            <header>
+              <figure><i data-lucide="folder-open"></i></figure>
+              <h3>No saved projects</h3>
+              <p>Name a project and it gets saved here as you type.</p>
+            </header>
+          </div>
+        </section>
+        <footer>
+          <button id="projects-import-zip" type="button" class="btn" data-variant="outline"><i data-lucide="file-archive"></i>Upload .zip</button>
+          <button id="projects-done" type="button" class="btn">Close</button>
+        </footer>
+        <button id="projects-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close projects"><i data-lucide="x"></i></button>
+      </div>
+    </dialog>
+
+    <template id="project-item-template">
+      <button type="button" class="item project-item" data-variant="outline" data-size="sm" role="listitem">
+        <figure><i data-lucide="folder"></i></figure>
+        <section>
+          <h3 class="project-item-name"></h3>
+          <p class="project-item-date"></p>
+        </section>
+      </button>
+    </template>
+
+    <input id="zip-input" type="file" accept=".zip,application/zip" hidden />
 
     <script type="module" src="/src/main.ts"></script>
   </body>

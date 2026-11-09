@@ -13,12 +13,17 @@ Checklist
 - [ ] Diagnostics: compile errors are parsed and highlighted inline on the correct editor lines.
 - [ ] Preview: edits trigger an updated, correctly typeset preview using LaTeX.js.
 - [ ] Preview sandbox: the rendered preview runs inside a sandboxed iframe (`allow-scripts` only, no `allow-same-origin`) to isolate execution, `javascript:`/`vbscript:`/`data:` links are stripped, and the LaTeX.js CDN styles and fonts still load.
-- [ ] Export: the local editor content can be downloaded as a .tex file.
+- [ ] Projects: you can create a project, add files and folders, rename, move and delete them, and set the main file.
+- [ ] Project images: an uploaded image used with `\includegraphics` shows up in the preview, and `\input` and `\bibliography` resolve against the file tree.
+- [ ] Project sync: a second peer joining the room sees the full file tree and gets uploaded images over WebRTC, with progress, and files over 10 MB are refused.
+- [ ] Export: the project can be downloaded as a .zip, and a .zip can be uploaded as a new project.
+- [ ] Migration: documents saved before projects (local docs, a linked Drive file, and saved sessions) still open as one-file projects.
+- [ ] Drive projects: a project saved to Google Drive shows up as a folder with the same file tree.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
 - [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
 - [ ] Drive token expiry: after the hour-long token runs out, autosave gets a new one silently, or shows a notice and switches to saving in the browser.
-- [ ] Renames: a failed rename (signed out of Drive, Drive error, or full browser storage) keeps the old title and leaves no duplicate file in Drive or Open Local.
+- [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
 - [ ] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.
 - [ ] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).

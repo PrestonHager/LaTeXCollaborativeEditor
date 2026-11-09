@@ -305,6 +305,131 @@
     @apply size-3.5;
   }
 
+  /* Empty */
+  .empty {
+    @apply gap-4 rounded-lg border-dashed p-12;
+  }
+
+  .empty > header {
+    @apply gap-2;
+  }
+
+  .empty figure {
+    @apply mb-2;
+  }
+
+  .empty figure:has(> svg:only-child) {
+    @apply bg-muted text-foreground flex size-10 shrink-0 items-center justify-center rounded-lg [&_svg:not([class*='size-'])]:size-6;
+  }
+
+  .empty :is(h2, h3, h4) {
+    @apply text-lg font-medium tracking-tight;
+  }
+
+  .empty > header > p {
+    @apply text-muted-foreground text-sm/relaxed;
+  }
+
+  .empty > :is(section, footer) {
+    @apply gap-4 text-sm;
+  }
+
+  /* Item */
+  .item {
+    @apply rounded-md border text-sm;
+  }
+
+  .item:not([data-variant]),
+  .item[data-variant='default'] {
+    @apply border-transparent;
+  }
+
+  .item[data-variant='outline'] {
+    @apply border-border;
+  }
+
+  .item[data-variant='muted'] {
+    @apply bg-muted/50 border-transparent;
+  }
+
+  .item:not([data-size]),
+  .item[data-size='default'] {
+    @apply gap-3.5 px-4 py-3.5;
+  }
+
+  .item[data-size='sm'] {
+    @apply gap-2.5 px-3 py-2.5;
+  }
+
+  .item[data-size='xs'] {
+    @apply gap-2 px-2.5 py-2;
+  }
+
+  .item > figure {
+    @apply gap-2;
+  }
+
+  .item:has(p) > figure {
+    @apply translate-y-0.5 self-start;
+  }
+
+  .item > figure:has(> svg:only-child) {
+    @apply [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .item > figure:has(> img) {
+    @apply size-10 overflow-hidden rounded-sm;
+  }
+
+  .item[data-size='sm'] > figure:has(> img) {
+    @apply size-8;
+  }
+
+  .item[data-size='xs'] > figure:has(> img) {
+    @apply size-6;
+  }
+
+  .item > section {
+    @apply gap-1;
+  }
+
+  .item[data-size='xs'] > section {
+    @apply gap-0;
+  }
+
+  .item :is(h2, h3, h4) {
+    @apply gap-2 text-sm leading-snug font-medium underline-offset-4;
+  }
+
+  .item p {
+    @apply text-sm leading-normal;
+  }
+
+  .item[data-size='xs'] p {
+    @apply text-xs;
+  }
+
+  .item > aside,
+  .item > :is(header, footer) {
+    @apply gap-2;
+  }
+
+  .item-group {
+    @apply gap-4;
+  }
+
+  .item-group:has(> .item[data-size='sm']) {
+    @apply gap-2.5;
+  }
+
+  .item-group:has(> .item[data-size='xs']) {
+    @apply gap-2;
+  }
+
+  .item-group > hr {
+    @apply my-2;
+  }
+
   /* Label */
   .field > label,
   .label {
@@ -313,6 +438,15 @@
 
   .field > section > label {
     @apply gap-2 text-sm leading-snug font-medium in-data-[disabled=true]:opacity-50 peer-disabled:opacity-50;
+  }
+
+  /* Progress */
+  .progress {
+    @apply bg-muted h-1.5 rounded-full;
+  }
+
+  .progress > span {
+    @apply bg-primary;
   }
 
 }

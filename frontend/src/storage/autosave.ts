@@ -1,10 +1,8 @@
-import type { StorageProvider } from './providers/types';
 import { describeError, isRetryable } from './errors';
 
 type AutosaveConfig = {
-  provider: () => StorageProvider;
-  getContent: () => string;
-  getFileName: () => string;
+  /** Write the project to storage. Resolves to the provider label for the status line. */
+  save: () => Promise<string | undefined>;
   onStatus: (status: string) => void;
 };
 
@@ -54,38 +52,12 @@ export class AutosaveController {
     return this.trySave(true);
   }
 
-  /**
-   * Move the document to a new name in the active provider. Resolves to false on failure.
-   * onRenamed runs inside the save queue, so any save queued after the rename sees the new name.
-   */
-  renameDocument(oldFileName: string, newFileName: string, onRenamed?: () => void): Promise<boolean> {
-    return this.enqueue(async () => {
-      const provider = this.config.provider();
-      const revisionAtStart = this.revision;
-      this.config.onStatus('Renaming...');
-      try {
-        if (provider.saveAs) {
-          await provider.saveAs(this.config.getContent(), oldFileName, newFileName);
-        } else {
-          await provider.save(this.config.getContent(), newFileName);
-        }
-        onRenamed?.();
-        this.savedRevision = revisionAtStart;
-        this.config.onStatus(this.savedMessage(provider));
-        return true;
-      } catch (error) {
-        console.error('Rename failed', error);
-        this.config.onStatus(`Rename failed: ${describeError(error)}`);
-        return false;
-      }
-    });
-  }
-
   private trySave(force = false): Promise<boolean> {
     return this.enqueue(() => this.saveIfNeeded(force));
   }
 
-  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+  /** Run a task in the save queue, so it never overlaps a save. Used for switching projects. */
+  enqueue<T>(task: () => Promise<T>): Promise<T> {
     const run = this.queue.then(task);
     this.queue = run.catch(() => undefined);
     return run;
@@ -96,13 +68,12 @@ export class AutosaveController {
     // Check again here since a queued save may already have written these edits.
     if (!force && this.revision === this.savedRevision) return true;
 
-    const provider = this.config.provider();
     const revisionAtStart = this.revision;
     this.config.onStatus('Saving');
     try {
-      await this.withBackoff(() => provider.save(this.config.getContent(), this.config.getFileName()));
+      const label = await this.withBackoff(() => this.config.save());
       this.savedRevision = Math.max(this.savedRevision, revisionAtStart);
-      this.config.onStatus(this.revision === revisionAtStart ? this.savedMessage(provider) : 'Saving pending');
+      this.config.onStatus(this.revision === revisionAtStart ? (label ? `Saved to ${label}` : 'Saved') : 'Saving pending');
       return true;
     } catch (error) {
       console.error('Save failed', error);
@@ -111,17 +82,12 @@ export class AutosaveController {
     }
   }
 
-  private savedMessage(provider: StorageProvider) {
-    return provider.label ? `Saved to ${provider.label}` : 'Saved';
-  }
-
-  private async withBackoff(action: () => Promise<void>) {
+  private async withBackoff<T>(action: () => Promise<T>): Promise<T> {
     let lastError: unknown;
     for (const wait of RETRY_WAITS_MS) {
       if (wait) await new Promise((r) => setTimeout(r, wait));
       try {
-        await action();
-        return;
+        return await action();
       } catch (error) {
         lastError = error;
         // No point retrying an expired login or a full disk.
