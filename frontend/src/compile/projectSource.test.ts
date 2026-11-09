@@ -74,7 +74,7 @@ describe('projectToPreviewHtml', () => {
       mainPath: 'main.tex',
       texts,
       binaryPaths: ['a.png', 'late.png'],
-      imageUrl: (path) => (path === 'a.png' ? 'data:image/png;base64,AAAA' : null),
+      imageUrls: new Map([['a.png', 'data:image/png;base64,AAAA']]),
     });
     expect(result.errors).toEqual([]);
     const doc = new DOMParser().parseFromString(result.html!, 'text/html');
@@ -90,7 +90,7 @@ describe('projectToPreviewHtml', () => {
       'main.tex': '\\documentclass{article}\n\\begin{document}\n\\input{body}\n\\end{document}',
       'body.tex': 'fine\n\\begin{itemize}',
     });
-    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: [], imageUrl: () => null });
+    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: [], imageUrls: new Map() });
     expect(result.html).toBeNull();
     expect(result.errors[0].path).toBeTruthy();
   });

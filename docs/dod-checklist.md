@@ -12,6 +12,7 @@ Checklist
 - [ ] Editor readiness: the editor shows LaTeX syntax highlighting and line numbers.
 - [x] Diagnostics: compile errors are parsed and highlighted inline on the correct editor lines.
 - [x] Preview: edits trigger an updated, correctly typeset preview using LaTeX.js.
+- [ ] Preview worker: the compile runs in a Web Worker, typing stays smooth on a big document, and a `picture` still renders (it compiles on the main thread).
 - [x] Preview sandbox: the rendered preview runs inside a sandboxed iframe (`allow-scripts` only, no `allow-same-origin`) to isolate execution, `javascript:`/`vbscript:`/`data:` links are stripped, and the LaTeX.js CDN styles and fonts still load.
 - [ ] Projects: you can create a project, add files and folders, rename, move and delete them, and set the main file.
 - [ ] Project images: an uploaded image used with `\includegraphics` shows up in the preview, and `\input` and `\bibliography` resolve against the file tree.

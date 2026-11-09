@@ -36,6 +36,12 @@ export function stripDangerousUrls(doc: Document): void {
  * Typeset editor LaTeX into a full HTML document (LaTeX.js), using the raw `source` only.
  */
 export function latexSourceToPreviewHtml(source: string): { html: string | null; errors: EditorDiagnostic[] } {
+  const { doc, errors } = typeset(source);
+  return { html: doc ? doc.documentElement.outerHTML : null, errors };
+}
+
+/** Typeset LaTeX into a document, with dangerous URLs already stripped. */
+function typeset(source: string): { doc: Document | null; errors: EditorDiagnostic[] } {
   try {
     const adapted = adaptLatexSourceForLatexJs(source);
     const generator = parse(adapted, {
@@ -44,10 +50,10 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
     const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
-    return { html: doc.documentElement.outerHTML, errors: [] };
+    return { doc, errors: [] };
   } catch (err) {
     return {
-      html: null,
+      doc: null,
       errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }],
     };
   }
@@ -70,29 +76,30 @@ export type ProjectPreviewInput = {
   mainPath: string;
   texts: Map<string, string>;
   binaryPaths: string[];
-  /** Data URL for an image file, or null when its bytes haven't arrived yet. */
-  imageUrl: (path: string) => string | null;
+  /** Data URLs for image files by path. A missing one means its bytes haven't arrived yet. */
+  imageUrls: Map<string, string>;
 };
+
+export type ProjectPreviewResult = { html: string | null; errors: ProjectDiagnostic[]; missing: string[] };
 
 /**
  * Typeset the whole project, starting at the main file. \input files, images and the
  * bibliography come from the project. Errors say which file and line they belong to.
  */
-export function projectToPreviewHtml(input: ProjectPreviewInput): { html: string | null; errors: ProjectDiagnostic[]; missing: string[] } {
+export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreviewResult {
   const expanded = expandProjectSource(input.mainPath, input.texts, input.binaryPaths);
-  const result = latexSourceToPreviewHtml(expanded.source);
-  const errors = result.errors.map((error) => {
+  const { doc, errors: sourceErrors } = typeset(expanded.source);
+  const errors = sourceErrors.map((error) => {
     const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
     return { ...error, path: origin.path, line: origin.line };
   });
-  if (!result.html) return { html: null, errors, missing: expanded.missing };
+  if (!doc) return { html: null, errors, missing: expanded.missing };
 
   // Images go in after the URL check, since it would strip our data: URLs along with a peer's.
-  const doc = new DOMParser().parseFromString(result.html, 'text/html');
   for (const img of Array.from(doc.querySelectorAll('img'))) {
     const image = expanded.images.get(img.getAttribute('src') ?? '');
     if (!image) continue;
-    const url = input.imageUrl(image.path);
+    const url = input.imageUrls.get(image.path);
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.setAttribute('alt', image.path);
