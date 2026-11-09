@@ -1,4 +1,4 @@
-import { joinRoom } from 'trystero';
+import { joinRoom } from '@trystero-p2p/torrent';
 import type { BootstrapConfig } from './bootstrapConfig';
 
 export type TransportState = 'Discovering' | 'Dialing' | 'Connected' | 'Relayed' | 'Reconnecting' | 'Failed';
@@ -31,12 +31,13 @@ export class P2pTransport {
   join(roomId: string) {
     this.cleanupTimers();
     this.callbacks.onState('Discovering');
+    // Our rendezvous list is WebTorrent trackers, so this is the torrent strategy, not Nostr.
     this.room = joinRoom(
       {
         appId: this.bootstrap.appId,
-        relayUrls: this.bootstrap.rendezvous,
+        relayConfig: { urls: this.bootstrap.rendezvous },
         rtcConfig: { iceServers: this.bootstrap.iceServers },
-      } as any,
+      },
       roomId,
     );
 

@@ -5,7 +5,7 @@ Frontend deployment (GitHub Pages)
 - Configure the repository Pages source to trigger via GitHub Actions.
 - Set Actions secrets/variables as needed for runtime configuration, for example:
   - `VITE_P2P_APP_ID`
-  - `VITE_P2P_RENDEZVOUS`
+  - `VITE_P2P_RENDEZVOUS` (comma-separated WebTorrent tracker URLs, see below)
   - `VITE_STUN_URL`
   - `VITE_TURN_URL` (optional)
   - `VITE_TURN_USERNAME` (optional)
@@ -37,6 +37,10 @@ Local development
 Runtime architecture (summary)
 - There is no custom signaling server in this repository.
 - Peers discover each other via configured public rendezvous endpoints.
+- Signaling uses Trystero's torrent strategy (`@trystero-p2p/torrent`), so the rendezvous endpoints are WebTorrent trackers, not Nostr relays.
+- `VITE_P2P_RENDEZVOUS` is the full tracker list, and Trystero only connects to those.
+  If it's unset, the app uses `wss://tracker.webtorrent.dev`, `wss://tracker.openwebtorrent.com`, and `wss://tracker.files.fm:7073/announce`.
+- Public trackers come and go. If the console shows `torrent tracker failure` for one, drop it from the list.
 - Document content remains peer-to-peer after joining a room.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.

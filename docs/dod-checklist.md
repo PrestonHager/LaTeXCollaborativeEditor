@@ -25,6 +25,7 @@ Checklist
 - [ ] Drive token expiry: after the hour-long token runs out, autosave gets a new one silently, or shows a notice and switches to saving in the browser.
 - [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
 - [x] Networking: no repository-owned signaling server is required for connection setup.
+- [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.
 - [x] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.

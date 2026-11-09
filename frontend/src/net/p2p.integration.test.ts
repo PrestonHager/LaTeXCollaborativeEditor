@@ -5,7 +5,7 @@ const joinRoomSpy = vi.fn();
 let peerJoinHandler: ((peerId: string) => void) | undefined;
 let inboundHandler: ((value: unknown, peerId?: string) => void) | undefined;
 
-vi.mock('trystero', () => ({
+vi.mock('@trystero-p2p/torrent', () => ({
   joinRoom: (...args: unknown[]) => {
     joinRoomSpy(...args);
     return {

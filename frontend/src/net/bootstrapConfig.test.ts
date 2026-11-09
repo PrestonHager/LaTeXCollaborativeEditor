@@ -11,6 +11,13 @@ describe('getBootstrapConfig', () => {
     expect(config.rendezvous.length).toBeGreaterThan(0);
   });
 
+  it('defaults to WebTorrent trackers for the torrent strategy', () => {
+    vi.stubEnv('VITE_P2P_RENDEZVOUS', '');
+    const config = getBootstrapConfig('https://latex.prestonhager.com');
+    expect(config.rendezvous).toContain('wss://tracker.webtorrent.dev');
+    expect(config.rendezvous.every((url) => url.startsWith('wss://'))).toBe(true);
+  });
+
   it('returns production defaults for deployed origin', () => {
     const config = getBootstrapConfig('https://latex.prestonhager.com');
     expect(config.environment).toBe('production');

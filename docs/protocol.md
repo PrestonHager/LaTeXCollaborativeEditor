@@ -6,6 +6,9 @@ Overview
 Rendezvous and session bootstrap
 - Session links include a room identifier, e.g. ?room=<id>.
 - Peers join the same P2P topic/room via public rendezvous/bootstrap endpoints.
+- Those endpoints are WebTorrent trackers, used through Trystero's torrent strategy.
+  The list comes from `VITE_P2P_RENDEZVOUS` and is passed to Trystero as `relayConfig.urls`, so Trystero never falls back to its own relay list.
+- Trackers only see the hashed room topic and WebRTC offers and answers, never document content.
 - No repository-owned signaling server is required.
 - The host's room id is kept in the tab's sessionStorage after Share, so reloading the host tab rejoins the same room and guest links keep working.
 - The room id is stored apart from the saved document, since it's rendezvous metadata and not content.

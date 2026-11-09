@@ -15,9 +15,12 @@ export function getBootstrapConfig(origin = window.location.origin): BootstrapCo
   const isLocalhost = origin.includes('localhost');
   const environment = isLocalhost ? 'localhost' : 'production';
 
-  const defaultRendezvous = isLocalhost
-    ? ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz']
-    : ['wss://tracker.openwebtorrent.com', 'wss://tracker.webtorrent.dev'];
+  // These are WebTorrent trackers for Trystero's torrent strategy. Nostr relays won't work here.
+  const defaultRendezvous = [
+    'wss://tracker.webtorrent.dev',
+    'wss://tracker.openwebtorrent.com',
+    'wss://tracker.files.fm:7073/announce',
+  ];
 
   const rendezvous = parseCsv(import.meta.env.VITE_P2P_RENDEZVOUS).length
     ? parseCsv(import.meta.env.VITE_P2P_RENDEZVOUS)
