@@ -33,6 +33,22 @@ describe('latexSourceToPreviewHtml', () => {
     expect(errors[0].severity).toBe('error');
     expect(errors[0].message.length).toBeGreaterThan(0);
   });
+
+  it('uses the line from the LaTeX.js error location', () => {
+    const { errors } = latexSourceToPreviewHtml(
+      '\\documentclass{article}\n\\begin{document}\nHi\n\\invalidtokenalone\n\\end{document}',
+    );
+    expect(errors[0].line).toBe(4);
+  });
+
+  it('clamps error lines to the end of the source', () => {
+    const { errors } = latexSourceToPreviewHtml(
+      '\\documentclass{article}\n\\begin{document}\n\\begin{itemize}',
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0].line).toBeGreaterThanOrEqual(1);
+    expect(errors[0].line).toBeLessThanOrEqual(3);
+  });
 });
 
 describe('isDangerousUrl', () => {
