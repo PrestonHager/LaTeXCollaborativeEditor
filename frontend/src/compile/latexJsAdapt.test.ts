@@ -1,10 +1,7 @@
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import { adaptLatexSourceForLatexJs } from './latexJsAdapt';
 import { latexSourceToPreviewHtml } from './latexJsPreview';
-
-const rootDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+// A made-up paper that uses every package and command the adapter handles.
+import academicPaperTex from './__fixtures__/academic-paper.tex?raw';
 
 describe('adaptLatexSourceForLatexJs', () => {
   it('strips unsupported packages and expands nomenclature for LaTeX.js', () => {
@@ -21,9 +18,8 @@ describe('adaptLatexSourceForLatexJs', () => {
     expect(out).toContain('See $x$.');
   });
 
-  it('allows repository example.tex to preview without parse errors', () => {
-    const tex = readFileSync(join(rootDir, 'example.tex'), 'utf8');
-    const { html, errors } = latexSourceToPreviewHtml(tex);
+  it('previews a typical academic paper without parse errors', () => {
+    const { html, errors } = latexSourceToPreviewHtml(academicPaperTex);
     expect(errors).toEqual([]);
     expect(html).toBeTruthy();
     expect(html).toContain('Crimson Comet');

@@ -1,0 +1,67 @@
+%------------PACKAGES--------------------------------
+\documentclass[12pt]{article}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{geometry}
+\usepackage{indentfirst}
+\usepackage{gensymb}
+\usepackage{hyperref}
+\usepackage{fontspec}
+\usepackage{fancyhdr}
+\usepackage{nomencl}
+\usepackage{authblk}
+\usepackage{textcomp}
+\usepackage{float}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    pdftitle={Crimson Comet Design Review},
+}
+
+\geometry{
+    letterpaper,
+    margin=1in,
+}
+
+\setmainfont{Times New Roman}
+
+\makenomenclature
+\renewcommand{\nomname}{\large{List of Symbols}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Crimson Comet}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\title{Crimson Comet Design Review}
+
+\begin{document}
+
+% NOTE: authblk lines go after begin document, since the adapter turns affil into body text.
+\author[1]{Alex Example}
+\author[2]{Sam Sample}
+\affil[1]{Department of Examples, Example University}
+\affil[2]{sam@example.com}
+
+\vspace*{2cm}
+\maketitle
+\vspace{1cm}
+
+\section*{Summary}
+\addcontentsline{toc}{section}{Summary}
+The Crimson Comet is a small test rocket.\footnote{It is not a real rocket.}
+Peak thrust is measured in newtons \nomenclature{$F$}{Thrust, N} and burn time in seconds.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{comet.png}
+    \caption{The Crimson Comet on the pad.}
+\end{figure}
+
+\section*{Results}
+The motor reached 45 degrees of tilt before correction.
+All drawings are \textcopyright{} Example Team.
+
+\printnomenclature
+
+\end{document}

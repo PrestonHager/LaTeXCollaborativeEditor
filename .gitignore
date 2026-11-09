@@ -10,3 +10,4 @@ third_party/
 *.zip
 __pycache__/
 *.tex
+!frontend/src/**/__fixtures__/*.tex
