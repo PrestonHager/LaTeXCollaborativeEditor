@@ -15,6 +15,7 @@ Checklist
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
 - [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
+- [ ] Drive token expiry: after the hour-long token runs out, autosave gets a new one silently, or shows a notice and switches to saving in the browser.
 - [ ] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.
 - [ ] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).

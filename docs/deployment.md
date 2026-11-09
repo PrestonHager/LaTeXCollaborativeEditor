@@ -32,6 +32,7 @@ Runtime architecture (summary)
 - Peers discover each other via configured public rendezvous endpoints.
 - Document content remains peer-to-peer after joining a room.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
+- Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 
 Networking (STUN/TURN)
 - Start with a public STUN server such as `stun:stun.l.google.com:19302`.
