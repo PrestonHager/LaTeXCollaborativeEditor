@@ -10,7 +10,7 @@ Checklist
 - [ ] Editor readiness: the editor shows LaTeX syntax highlighting and line numbers.
 - [ ] Diagnostics: compile errors are parsed and highlighted inline on the correct editor lines.
 - [ ] Preview: edits trigger an updated, correctly typeset preview using LaTeX.js.
-- [ ] Preview sandbox: the rendered preview runs inside a sandboxed iframe to isolate execution.
+- [ ] Preview sandbox: the rendered preview runs inside a sandboxed iframe (`allow-scripts` only, no `allow-same-origin`) to isolate execution, `javascript:`/`vbscript:`/`data:` links are stripped, and the LaTeX.js CDN styles and fonts still load.
 - [ ] Export: the local editor content can be downloaded as a .tex file.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
 - [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
