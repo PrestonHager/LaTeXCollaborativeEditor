@@ -13,6 +13,9 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_CLIENT_ID`
   - `VITE_GOOGLE_API_KEY`
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
+  - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
+- The Pages workflow reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID` and `VITE_DOCS_BASE_URL` from variables (repository or **Production** environment).
+  The rendezvous and TURN values aren't passed to the build yet, so production uses the defaults in `bootstrapConfig.ts`.
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
