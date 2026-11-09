@@ -3,6 +3,7 @@ import { YjsTextSync } from './yjsSync';
 
 const joinRoom = vi.fn();
 const sendMessage = vi.fn();
+const close = vi.fn();
 let callbacks:
   | {
       onState: (s: string) => void;
@@ -28,6 +29,9 @@ vi.mock('../net/peerSession', () => ({
     }
     sendMessage(payload: unknown, peerId?: string) {
       sendMessage(payload, peerId);
+    }
+    close() {
+      close();
     }
   },
 }));
@@ -103,6 +107,53 @@ describe('SessionController', () => {
       expect.objectContaining({ kind: 'snapshot' }),
       'peer-7',
     );
+  });
+
+  it('rejoins a saved host room so ensureRoom keeps the same id', () => {
+    const controller = new SessionController({
+      isHost: true,
+      onConnectionState: vi.fn(),
+      onRemoteText: vi.fn(),
+      getLocalText: () => 'base',
+    });
+    expect(controller.getRoomId()).toBeNull();
+    controller.join('saved-room');
+    expect(controller.ensureRoom()).toBe('saved-room');
+    expect(joinRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('newRoom leaves the old room and joins a fresh one', () => {
+    vi.useFakeTimers();
+    const controller = new SessionController({
+      isHost: true,
+      onConnectionState: vi.fn(),
+      onRemoteText: vi.fn(),
+      getLocalText: () => 'base',
+    });
+    controller.join('old-room');
+    callbacks?.onState('Reconnecting');
+    const next = controller.newRoom();
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(next).not.toBe('old-room');
+    expect(controller.getRoomId()).toBe(next);
+    expect(joinRoom).toHaveBeenLastCalledWith(next);
+    // The pending reconnect for the old room is dropped.
+    vi.advanceTimersByTime(30_000);
+    expect(joinRoom.mock.calls.filter(([id]) => id === 'old-room')).toHaveLength(1);
+    vi.useRealTimers();
+  });
+
+  it('newRoom without a current room just creates one', () => {
+    const controller = new SessionController({
+      isHost: true,
+      onConnectionState: vi.fn(),
+      onRemoteText: vi.fn(),
+      getLocalText: () => 'base',
+    });
+    const room = controller.newRoom();
+    expect(close).not.toHaveBeenCalled();
+    expect(joinRoom).toHaveBeenCalledWith(room);
   });
 
   it('retries joining after reconnect/failure states', () => {

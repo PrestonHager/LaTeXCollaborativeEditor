@@ -203,6 +203,8 @@ describe('P2pTransport', () => {
     transport.join('room-disc');
     transport.disconnect();
     expect(leave).toHaveBeenCalled();
+    // Sends after leaving the room go nowhere.
+    expect(() => transport.send({ kind: 'late' })).not.toThrow();
     vi.useRealTimers();
   });
 });
