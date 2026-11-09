@@ -1,4 +1,27 @@
 import { createMenuBar, type CommandId } from './menuBar';
+import { formatPrimaryChord } from './modifierShortcutLabels';
+
+type TestMenu = { label: string; items: { commandId: CommandId; label: string; shortcut?: string; checkable?: boolean }[] };
+
+/** Write the same Basecoat menu markup index.html uses into container. */
+function withMenus(container: HTMLElement, menus: TestMenu[]) {
+  container.innerHTML = menus
+    .map((menu, index) => {
+      const items = menu.items
+        .map((item) => {
+          const role = item.checkable ? 'role="menuitemcheckbox" aria-checked="false"' : 'role="menuitem"';
+          const chord = item.shortcut ? `<span class="menu-item-shortcut" data-shortcut data-chord="${item.shortcut}"></span>` : '';
+          return `<button type="button" class="menu-item" ${role} data-command="${item.commandId}"><span class="menu-item-label">${item.label}</span>${chord}</button>`;
+        })
+        .join('');
+      return `<div class="menu-root dropdown-menu" data-menu-label="${menu.label}">
+        <button type="button" class="menu-trigger btn" aria-haspopup="menu" aria-controls="menu-${index}" aria-expanded="false">${menu.label}</button>
+        <div id="menu-${index}" class="menu-popover" data-popover aria-hidden="true"><div class="menu-list" role="menu">${items}</div></div>
+      </div>`;
+    })
+    .join('');
+  return container;
+}
 
 describe('createMenuBar', () => {
   it('renders menus and dispatches enabled command clicks', () => {
@@ -9,8 +32,7 @@ describe('createMenuBar', () => {
       ['edit.undo', false],
     ]);
 
-    const menuBar = createMenuBar(container, {
-      menus: [
+    const menuBar = createMenuBar(withMenus(container, [
         {
           label: 'File',
           items: [{ commandId: 'file.new', label: 'New', shortcut: 'Ctrl+N' }],
@@ -19,7 +41,7 @@ describe('createMenuBar', () => {
           label: 'Edit',
           items: [{ commandId: 'edit.undo', label: 'Undo', shortcut: 'Ctrl+Z' }],
         },
-      ],
+      ]), {
       getCommandState: (commandId) => ({ enabled: enabled.get(commandId) ?? true }),
       onCommand: (commandId) => calls.push(commandId),
     });
@@ -45,8 +67,7 @@ describe('createMenuBar', () => {
     document.body.appendChild(container);
     const calls: CommandId[] = [];
 
-    const menuBar = createMenuBar(container, {
-      menus: [
+    const menuBar = createMenuBar(withMenus(container, [
         {
           label: 'File',
           items: [
@@ -58,7 +79,7 @@ describe('createMenuBar', () => {
           label: 'Edit',
           items: [{ commandId: 'edit.undo', label: 'Undo' }],
         },
-      ],
+      ]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: (commandId) => calls.push(commandId),
     });
@@ -84,8 +105,7 @@ describe('createMenuBar', () => {
   it('closes open menu on Escape at document level', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const menuBar = createMenuBar(container, {
-      menus: [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }],
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -103,8 +123,7 @@ describe('createMenuBar', () => {
     document.body.appendChild(container);
     const outside = document.createElement('button');
     document.body.appendChild(outside);
-    const menuBar = createMenuBar(container, {
-      menus: [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }],
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -119,8 +138,7 @@ describe('createMenuBar', () => {
   it('wraps ArrowUp/ArrowDown between enabled items', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const menuBar = createMenuBar(container, {
-      menus: [
+    const menuBar = createMenuBar(withMenus(container, [
         {
           label: 'File',
           items: [
@@ -128,7 +146,7 @@ describe('createMenuBar', () => {
             { commandId: 'file.download', label: 'Download' },
           ],
         },
-      ],
+      ]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -146,11 +164,10 @@ describe('createMenuBar', () => {
   it('moves trigger focus with ArrowLeft and opens menu with Space', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const menuBar = createMenuBar(container, {
-      menus: [
+    const menuBar = createMenuBar(withMenus(container, [
         { label: 'File', items: [{ commandId: 'file.new', label: 'New' }] },
         { label: 'Edit', items: [{ commandId: 'edit.undo', label: 'Undo' }] },
-      ],
+      ]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -167,8 +184,7 @@ describe('createMenuBar', () => {
   it('Escape on menu item closes menu and returns focus to trigger', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const menuBar = createMenuBar(container, {
-      menus: [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }],
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -185,11 +201,10 @@ describe('createMenuBar', () => {
   it('ArrowLeft from item moves to previous trigger and opens its menu', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const menuBar = createMenuBar(container, {
-      menus: [
+    const menuBar = createMenuBar(withMenus(container, [
         { label: 'File', items: [{ commandId: 'file.new', label: 'New' }] },
         { label: 'Edit', items: [{ commandId: 'edit.undo', label: 'Undo' }] },
-      ],
+      ]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -210,8 +225,7 @@ describe('createMenuBar', () => {
       ['file.new', false],
       ['file.download', true],
     ]);
-    const menuBar = createMenuBar(container, {
-      menus: [
+    const menuBar = createMenuBar(withMenus(container, [
         {
           label: 'File',
           items: [
@@ -219,7 +233,7 @@ describe('createMenuBar', () => {
             { commandId: 'file.download', label: 'Download' },
           ],
         },
-      ],
+      ]), {
       getCommandState: (id) => ({ enabled: enabled.get(id) ?? true }),
       onCommand: () => {},
     });
@@ -234,8 +248,7 @@ describe('createMenuBar', () => {
   it('refresh toggles checked styling from command state', () => {
     const container = document.createElement('div');
     let checked = false;
-    const menuBar = createMenuBar(container, {
-      menus: [{ label: 'View', items: [{ commandId: 'view.toggleEditorTheme', label: 'Theme' }] }],
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'View', items: [{ commandId: 'view.toggleEditorTheme', label: 'Theme' }] }]), {
       getCommandState: () => ({ enabled: true, checked }),
       onCommand: () => {},
     });
@@ -249,8 +262,7 @@ describe('createMenuBar', () => {
 
   it('toggles same trigger click to close menu', () => {
     const container = document.createElement('div');
-    const menuBar = createMenuBar(container, {
-      menus: [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }],
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
     });
@@ -259,6 +271,56 @@ describe('createMenuBar', () => {
     expect(container.querySelector('.menu-root.is-open')).toBeTruthy();
     trigger.click();
     expect(container.querySelector('.menu-root.is-open')).toBeFalsy();
+    menuBar.destroy();
+  });
+
+  it('uses Basecoat dropdown markup and shows the popover only while open', () => {
+    const container = document.createElement('div');
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New', shortcut: 'N' }] }]), {
+      getCommandState: () => ({ enabled: true }),
+      onCommand: () => {},
+    });
+    const trigger = container.querySelector('.menu-trigger') as HTMLButtonElement;
+    const popover = container.querySelector('[data-popover]') as HTMLElement;
+    expect(container.querySelector('.dropdown-menu')).toBeTruthy();
+    expect(trigger.classList.contains('btn')).toBe(true);
+    expect(trigger.getAttribute('aria-controls')).toBe(popover.id);
+    expect(popover.getAttribute('aria-hidden')).toBe('true');
+    trigger.click();
+    expect(popover.getAttribute('aria-hidden')).toBe('false');
+    const item = container.querySelector('.menu-item') as HTMLButtonElement;
+    expect(item.querySelector('svg')).toBeTruthy();
+    expect(item.querySelector('[data-shortcut]')?.textContent).toBe(formatPrimaryChord('N'));
+    expect(menuBar.entries()).toEqual([
+      { commandId: 'file.new', label: 'New', section: 'File', shortcut: formatPrimaryChord('N'), inPalette: true },
+    ]);
+    menuBar.destroy();
+  });
+
+  it('flips aria-checked on checkbox items only', () => {
+    const container = document.createElement('div');
+    let checked = false;
+    const menuBar = createMenuBar(
+      withMenus(container, [
+        {
+          label: 'View',
+          items: [
+            { commandId: 'view.layoutSplit', label: 'Split View', checkable: true },
+            { commandId: 'view.compileNow', label: 'Compile Now' },
+          ],
+        },
+      ]),
+      {
+        getCommandState: () => ({ enabled: true, checked }),
+        onCommand: () => {},
+      },
+    );
+    const [checkItem, plainItem] = Array.from(container.querySelectorAll<HTMLButtonElement>('.menu-item'));
+    expect(checkItem.getAttribute('aria-checked')).toBe('false');
+    checked = true;
+    menuBar.refresh();
+    expect(checkItem.getAttribute('aria-checked')).toBe('true');
+    expect(plainItem.hasAttribute('aria-checked')).toBe(false);
     menuBar.destroy();
   });
 });

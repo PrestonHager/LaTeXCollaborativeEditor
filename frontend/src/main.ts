@@ -4,6 +4,8 @@ import { createPreviewPane } from './ui/preview';
 import { createMenuBar, type CommandId, type CommandState } from './ui/menuBar';
 import { createCommandPalette, type PaletteCommand } from './ui/commandPalette';
 import { setupShareButton } from './ui/shareButton';
+import { renderStaticIcons } from './ui/icons';
+import { createSettingsDialog } from './ui/settingsDialog';
 import { SessionController } from './collab/session';
 import { LocalDownloadStorage } from './storage/localDownload';
 import { GoogleDriveProvider } from './storage/providers/googleDrive';
@@ -25,46 +27,18 @@ import {
   type ThemeMode,
 } from './state/appSession';
 import { renameDocumentTitle, toTexName } from './storage/documentRename';
-import { formatPrimaryChord } from './ui/modifierShortcutLabels';
 import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
-app.innerHTML = `
-  <header class="topbar">
-    <h1 id="doc-title" class="doc-title">Untitled</h1>
-    <div id="menu-bar"></div>
-    <button id="share-btn">Share</button>
-    <button id="new-link-btn" hidden>New link</button>
-    <a id="share-link" class="muted" href="" target="_blank" rel="noreferrer"></a>
-    <span id="app-notice" class="muted" role="status" aria-live="polite"></span>
-    <span id="connection-status" class="pill">Disconnected</span>
-    <span id="compile-status" class="pill">Idle</span>
-    <span id="autosave-status" class="pill">Autosave Off</span>
-  </header>
-  <div id="app-loading" class="app-loading is-active" role="status" aria-live="polite">
-    <div class="app-loading-bar"></div>
-    <span id="app-loading-label" class="app-loading-label">Loading compiler assets...</span>
-  </div>
-  <main class="split" id="split-root">
-    <section id="editor-pane" class="pane"></section>
-    <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes"></div>
-    <section id="preview-pane" class="pane"></section>
-  </main>
-  <footer class="footer">
-    <span id="diagnostics" class="diagnostics" aria-live="polite"></span>
-    <nav class="legal-nav">
-      <a href="./privacy.html" target="_blank" rel="noreferrer">Privacy</a>
-      <a href="./tos.html" target="_blank" rel="noreferrer">ToS</a>
-      <a href="https://github.com/PrestonHager/LaTeXCollaborativeEditor" target="_blank" rel="noreferrer">Repository</a>
-    </nav>
-  </footer>
-`;
+// The page shell is Basecoat markup in index.html. First, swap the <i data-lucide> placeholders for icons.
+renderStaticIcons();
 
 const editor = createEditorPane(document.getElementById('editor-pane')!);
 const preview = createPreviewPane(document.getElementById('preview-pane')!);
+const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
 const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
@@ -144,7 +118,8 @@ function resolveDisplayTheme(mode: ThemeMode): 'dark' | 'light' {
 function applyEditorTheme(theme: ThemeMode) {
   editorTheme = theme;
   const display = resolveDisplayTheme(theme);
-  document.documentElement.setAttribute('data-app-chrome', display);
+  // Basecoat switches its own colors on the `dark` class.
+  document.documentElement.classList.toggle('dark', display === 'dark');
   if (theme === 'system') {
     document.documentElement.removeAttribute('data-editor-theme');
   } else {
@@ -687,13 +662,14 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     applyPreviewTheme(nextTheme[previewTheme]);
     persistAppSession();
   },
-  'view.toggleSaveNow': () => {
-    if (isClient) return;
-    saveNowEnabled = !saveNowEnabled;
-    autosaveStatusEl.textContent = saveNowEnabled ? 'Autosave On' : 'Save Now Disabled';
-    menuBar.refresh();
-    persistAppSession();
-  },
+  'view.darkMode': () => setAllThemes('dark'),
+  'view.lightMode': () => setAllThemes('light'),
+  'view.systemTheme': () => setAllThemes('system'),
+  'view.toggleSaveNow': () => setSaveNowEnabled(!saveNowEnabled),
+  'view.focusEditor': () => editor.focus(),
+  'app.openSettings': () => settingsDialog.open(),
+  'file.rename': () => renameDocument(),
+  'share.copyLink': () => shareButtonEl.click(),
   'view.compileNow': () => {
     if (compileTimer) {
       clearTimeout(compileTimer);
@@ -724,6 +700,21 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   },
 };
 
+// The palette's "Switch to ... mode" commands set the app, editor, and preview together.
+function setAllThemes(theme: ThemeMode) {
+  applyEditorTheme(theme);
+  applyPreviewTheme(theme);
+  persistAppSession();
+}
+
+function setSaveNowEnabled(enabled: boolean) {
+  if (isClient) return;
+  saveNowEnabled = enabled;
+  autosaveStatusEl.textContent = saveNowEnabled ? 'Autosave On' : 'Save Now Disabled';
+  menuBar.refresh();
+  persistAppSession();
+}
+
 /**
  * Run a command and report any error it throws, then refresh the menus.
  * Every menu, palette, and shortcut path goes through here.
@@ -736,16 +727,19 @@ const executeCommand = (commandId: CommandId) => {
   try {
     const result = commandRegistry[commandId]();
     if (result instanceof Promise) {
-      void result.catch(report).finally(() => {
-        menuBar.refresh();
-        commandPalette.setCommands(buildPaletteCommands());
-      });
+      void result.catch(report).finally(refreshCommands);
     }
   } catch (error) {
     report(error);
   }
-  menuBar.refresh();
+  refreshCommands();
 };
+
+// Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
+function refreshCommands() {
+  menuBar.refresh();
+  commandPalette.setCommands(buildPaletteCommands());
+}
 
 const getCommandState = (commandId: CommandId): CommandState => {
   switch (commandId) {
@@ -756,6 +750,7 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'file.moveDrive':
     case 'file.renameDrive':
     case 'file.clearLocalDocs':
+    case 'file.rename':
       return { enabled: !isClient };
     case 'file.saveNow':
       return { enabled: !isClient && saveNowEnabled };
@@ -780,92 +775,67 @@ const getCommandState = (commandId: CommandId): CommandState => {
 };
 
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
-  menus: [
-    {
-      label: 'File',
-      items: [
-        { commandId: 'file.new', label: 'New', shortcut: formatPrimaryChord('N') },
-        { commandId: 'file.openLocal', label: 'Open Local', shortcut: formatPrimaryChord('O') },
-        { commandId: 'file.openDrive', label: 'Open from Google Drive', shortcut: formatPrimaryChord('Shift+O') },
-        { commandId: 'file.download', label: 'Download .tex', shortcut: formatPrimaryChord('Shift+S') },
-        { commandId: 'file.connectDrive', label: 'Connect Google Drive' },
-        { commandId: 'file.saveToDrive', label: 'Save to Google Drive' },
-        { commandId: 'file.moveDrive', label: 'Move to Drive Folder' },
-        { commandId: 'file.renameDrive', label: 'Rename in Drive' },
-        { commandId: 'file.saveNow', label: 'Save Now', shortcut: formatPrimaryChord('S') },
-        { commandId: 'file.clearLocalDocs', label: 'Clear Local Docs' },
-      ],
-    },
-    {
-      label: 'Edit',
-      items: [
-        { commandId: 'edit.undo', label: 'Undo', shortcut: formatPrimaryChord('Z') },
-        { commandId: 'edit.redo', label: 'Redo', shortcut: formatPrimaryChord('Shift+Z') },
-        { commandId: 'edit.cut', label: 'Cut', shortcut: formatPrimaryChord('X') },
-        { commandId: 'edit.copy', label: 'Copy', shortcut: formatPrimaryChord('C') },
-        { commandId: 'edit.paste', label: 'Paste', shortcut: formatPrimaryChord('V') },
-        { commandId: 'edit.selectAll', label: 'Select All', shortcut: formatPrimaryChord('A') },
-      ],
-    },
-    {
-      label: 'View',
-      items: [
-        { commandId: 'view.toggleEditorTheme', label: 'Toggle Editor Theme' },
-        { commandId: 'view.togglePreviewTheme', label: 'Toggle Preview Theme' },
-        { commandId: 'view.toggleSaveNow', label: 'Disable Save Now' },
-        { commandId: 'view.compileNow', label: 'Compile Now', shortcut: formatPrimaryChord('Shift+C') },
-        { commandId: 'view.layoutSplit', label: 'Split View' },
-        { commandId: 'view.layoutEditorOnly', label: 'Editor Only' },
-        { commandId: 'view.layoutPreviewOnly', label: 'Preview Only' },
-      ],
-    },
-    {
-      label: 'Help',
-      items: [
-        { commandId: 'app.commandPalette', label: 'Command Palette', shortcut: formatPrimaryChord('P') },
-        { commandId: 'help.documentation', label: 'Documentation' },
-        { commandId: 'help.about', label: 'About / Repository' },
-      ],
-    },
-  ],
   getCommandState,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
 undo.subscribe(() => menuBar.refresh());
 
-const commandPalette = createCommandPalette({
+const commandPalette = createCommandPalette(document.getElementById('command-palette')!, {
   onSelect: (commandId) => executeCommand(commandId),
 });
 
-const buildPaletteCommands = (): PaletteCommand[] => [
-  { id: 'app.commandPalette', section: 'Help', label: 'Command Palette', shortcut: formatPrimaryChord('P'), enabled: true },
-  { id: 'file.new', section: 'File', label: 'New', shortcut: formatPrimaryChord('N'), enabled: getCommandState('file.new').enabled },
-  { id: 'file.openLocal', section: 'File', label: 'Open Local', shortcut: formatPrimaryChord('O'), enabled: getCommandState('file.openLocal').enabled },
-  { id: 'file.openDrive', section: 'File', label: 'Open from Google Drive', shortcut: formatPrimaryChord('Shift+O'), enabled: getCommandState('file.openDrive').enabled },
-  { id: 'file.download', section: 'File', label: 'Download .tex', shortcut: formatPrimaryChord('Shift+S'), enabled: getCommandState('file.download').enabled },
-  { id: 'file.connectDrive', section: 'File', label: 'Connect Google Drive', enabled: getCommandState('file.connectDrive').enabled },
-  { id: 'file.saveToDrive', section: 'File', label: 'Save to Google Drive', enabled: getCommandState('file.saveToDrive').enabled },
-  { id: 'file.moveDrive', section: 'File', label: 'Move to Drive Folder', enabled: getCommandState('file.moveDrive').enabled },
-  { id: 'file.renameDrive', section: 'File', label: 'Rename in Drive', enabled: getCommandState('file.renameDrive').enabled },
-  { id: 'file.saveNow', section: 'File', label: 'Save Now', shortcut: formatPrimaryChord('S'), enabled: getCommandState('file.saveNow').enabled },
-  { id: 'file.clearLocalDocs', section: 'File', label: 'Clear Local Docs', enabled: getCommandState('file.clearLocalDocs').enabled },
-  { id: 'edit.undo', section: 'Edit', label: 'Undo', shortcut: formatPrimaryChord('Z'), enabled: getCommandState('edit.undo').enabled },
-  { id: 'edit.redo', section: 'Edit', label: 'Redo', shortcut: formatPrimaryChord('Shift+Z'), enabled: getCommandState('edit.redo').enabled },
-  { id: 'edit.cut', section: 'Edit', label: 'Cut', shortcut: formatPrimaryChord('X'), enabled: getCommandState('edit.cut').enabled },
-  { id: 'edit.copy', section: 'Edit', label: 'Copy', shortcut: formatPrimaryChord('C'), enabled: getCommandState('edit.copy').enabled },
-  { id: 'edit.paste', section: 'Edit', label: 'Paste', shortcut: formatPrimaryChord('V'), enabled: getCommandState('edit.paste').enabled },
-  { id: 'edit.selectAll', section: 'Edit', label: 'Select All', shortcut: formatPrimaryChord('A'), enabled: getCommandState('edit.selectAll').enabled },
-  { id: 'view.toggleEditorTheme', section: 'View', label: 'Toggle Editor Theme', enabled: getCommandState('view.toggleEditorTheme').enabled },
-  { id: 'view.togglePreviewTheme', section: 'View', label: 'Toggle Preview Theme', enabled: getCommandState('view.togglePreviewTheme').enabled },
-  { id: 'view.toggleSaveNow', section: 'View', label: 'Disable Save Now', enabled: getCommandState('view.toggleSaveNow').enabled },
-  { id: 'view.compileNow', section: 'View', label: 'Compile Now', shortcut: formatPrimaryChord('Shift+C'), enabled: getCommandState('view.compileNow').enabled },
-  { id: 'view.layoutSplit', section: 'View', label: 'Split View', enabled: getCommandState('view.layoutSplit').enabled },
-  { id: 'view.layoutEditorOnly', section: 'View', label: 'Editor Only', enabled: getCommandState('view.layoutEditorOnly').enabled },
-  { id: 'view.layoutPreviewOnly', section: 'View', label: 'Preview Only', enabled: getCommandState('view.layoutPreviewOnly').enabled },
-  { id: 'help.documentation', section: 'Help', label: 'Documentation', enabled: getCommandState('help.documentation').enabled },
-  { id: 'help.about', section: 'Help', label: 'About / Repository', enabled: getCommandState('help.about').enabled },
+const settingsDialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+  getState: () => ({ editorTheme, previewTheme, saveNowEnabled, canChangeSaving: !isClient }),
+  onEditorTheme: (theme) => {
+    applyEditorTheme(theme);
+    persistAppSession();
+    refreshCommands();
+  },
+  onPreviewTheme: (theme) => {
+    applyPreviewTheme(theme);
+    persistAppSession();
+    refreshCommands();
+  },
+  onSaveNowEnabled: (enabled) => {
+    setSaveNowEnabled(enabled);
+    refreshCommands();
+  },
+  onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
+});
+
+// Commands that only show in the palette. The theme switches stand in for the menu's toggles.
+const themeSwitchCommands: { theme: ThemeMode; id: CommandId; label: string }[] = [
+  { theme: 'dark', id: 'view.darkMode', label: 'Switch to dark mode' },
+  { theme: 'light', id: 'view.lightMode', label: 'Switch to light mode' },
+  { theme: 'system', id: 'view.systemTheme', label: 'Switch to system theme' },
 ];
+const paletteOnlyCommands: { id: CommandId; section: string; label: string }[] = [
+  { id: 'file.rename', section: 'File', label: 'Rename document' },
+  { id: 'share.copyLink', section: 'Share', label: 'Copy share link' },
+  { id: 'view.focusEditor', section: 'View', label: 'Focus editor' },
+];
+
+/** Build the palette from the menu HTML, plus the palette-only commands above. */
+const buildPaletteCommands = (): PaletteCommand[] => {
+  const fromMenus = menuBar
+    .entries()
+    .filter((entry) => entry.inPalette)
+    .map((entry) => ({
+      id: entry.commandId,
+      section: entry.section,
+      // The menu shows a checkmark for this one, but the palette has to say which way it goes.
+      label: entry.commandId === 'view.toggleSaveNow' && !saveNowEnabled ? 'Enable Save Now' : entry.label,
+      shortcut: entry.shortcut,
+      enabled: getCommandState(entry.commandId).enabled,
+    }));
+  // Skip the theme switch for the theme that's already in use.
+  const themes = themeSwitchCommands
+    .filter(({ theme }) => !(editorTheme === theme && previewTheme === theme))
+    .map(({ id, label }) => ({ id, section: 'View', label, enabled: true }));
+  const extras = paletteOnlyCommands.map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
+  return [...fromMenus, ...themes, ...extras];
+};
 commandPalette.setCommands(buildPaletteCommands());
 
 const runCommand = (commandId: CommandId, event: KeyboardEvent) => {
@@ -897,6 +867,7 @@ window.addEventListener('keydown', (event) => {
   if (key === 's') return runCommand('file.saveNow', event);
   if (key === 'o') return runCommand('file.openLocal', event);
   if (key === 'c' && event.shiftKey) return runCommand('view.compileNow', event);
+  if (key === ',') return runCommand('app.openSettings', event);
 });
 
 editor.onTextChanged((text, sync = true) => {
@@ -924,7 +895,7 @@ editor.setEditable(true);
 scheduleCompile(editor.getText());
 
 setupShareButton({
-  button: document.getElementById('share-btn') as HTMLButtonElement,
+  button: shareButtonEl,
   linkEl: shareLinkEl,
   getRoomId: () => {
     const id = session.ensureRoom();
@@ -943,10 +914,10 @@ setupShareButton({
   confirmNewLink: () => window.confirm('Start a new link? Anyone using the old link will be disconnected.'),
 });
 
-if (!isClient) {
-  titleEl.addEventListener('click', async () => {
-    const next = window.prompt('Rename document:', documentName);
-    if (!next) return;
+async function renameDocument() {
+  if (isClient) return;
+  const next = window.prompt('Rename document:', documentName);
+  if (!next) return;
     // The title, peers and saved session only change once storage has the new name.
     await renameDocumentTitle(next, {
       currentName: documentName,
@@ -967,8 +938,9 @@ if (!isClient) {
         autosaveStatusEl.textContent = message;
       },
     });
-  });
 }
+
+if (!isClient) titleEl.addEventListener('click', () => void renameDocument());
 
 window.addEventListener('beforeunload', (event) => {
   persistAppSession();

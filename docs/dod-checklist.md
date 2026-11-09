@@ -23,6 +23,8 @@ Checklist
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.
 - [ ] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).
 - [ ] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
+- [ ] Bundle size: `npm run build` reports the gzipped JS and CSS under the budget in `scripts/check-bundle-size.mjs`, or the PR explains why it went over.
+- [ ] UI: menus, the command palette, and the settings dialog open above the editor and preview, work by keyboard, and look right in light and dark themes.
 
 Verification guidance
 - Prefer automated tests where possible; accompany with manual QA for session join, realtime sync, and preview rendering.

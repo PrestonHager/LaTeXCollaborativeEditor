@@ -7,7 +7,160 @@
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   </head>
   <body>
-    <div id="app"></div>
+    <!--
+      The app shell is plain Basecoat markup. src/main.ts wires behavior onto it by id and
+      data-command, and src/ui/icons.ts fills in command icons and <i data-lucide> icons.
+    -->
+    <div id="app">
+      <header class="topbar">
+        <h1 id="doc-title" class="doc-title">Untitled</h1>
+
+        <nav id="menu-bar" class="menu-bar" role="menubar" aria-label="Main menu">
+          <div class="menu-root dropdown-menu" data-menu-label="File">
+            <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-file" aria-expanded="false">File</button>
+            <div id="menu-file" class="menu-popover" data-popover aria-hidden="true">
+              <div class="menu-list" role="menu" aria-label="File">
+                <button type="button" class="menu-item" role="menuitem" data-command="file.new"><span class="menu-item-label">New</span><span class="menu-item-shortcut" data-shortcut data-chord="N"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal"><span class="menu-item-label">Open Local</span><span class="menu-item-shortcut" data-shortcut data-chord="O"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive"><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+O"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.download"><span class="menu-item-label">Download .tex</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+S"></span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="file.connectDrive"><span class="menu-item-label">Connect Google Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.saveToDrive"><span class="menu-item-label">Save to Google Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.moveDrive"><span class="menu-item-label">Move to Drive Folder</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive"><span class="menu-item-label">Rename in Drive</span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="file.saveNow"><span class="menu-item-label">Save Now</span><span class="menu-item-shortcut" data-shortcut data-chord="S"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.clearLocalDocs" data-variant="destructive"><span class="menu-item-label">Clear Local Docs</span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="menu-root dropdown-menu" data-menu-label="Edit">
+            <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-edit" aria-expanded="false">Edit</button>
+            <div id="menu-edit" class="menu-popover" data-popover aria-hidden="true">
+              <div class="menu-list" role="menu" aria-label="Edit">
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.undo"><span class="menu-item-label">Undo</span><span class="menu-item-shortcut" data-shortcut data-chord="Z"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.redo"><span class="menu-item-label">Redo</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+Z"></span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.cut"><span class="menu-item-label">Cut</span><span class="menu-item-shortcut" data-shortcut data-chord="X"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.copy"><span class="menu-item-label">Copy</span><span class="menu-item-shortcut" data-shortcut data-chord="C"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.paste"><span class="menu-item-label">Paste</span><span class="menu-item-shortcut" data-shortcut data-chord="V"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.selectAll"><span class="menu-item-label">Select All</span><span class="menu-item-shortcut" data-shortcut data-chord="A"></span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="app.openSettings"><span class="menu-item-label">Settings</span><span class="menu-item-shortcut" data-shortcut data-chord=","></span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="menu-root dropdown-menu" data-menu-label="View">
+            <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-view" aria-expanded="false">View</button>
+            <div id="menu-view" class="menu-popover" data-popover aria-hidden="true">
+              <div class="menu-list" role="menu" aria-label="View">
+                <button type="button" class="menu-item" role="menuitem" data-command="view.toggleEditorTheme" data-palette="false"><span class="menu-item-label">Toggle Editor Theme</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="view.togglePreviewTheme" data-palette="false"><span class="menu-item-label">Toggle Preview Theme</span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.toggleSaveNow"><span class="menu-item-label">Disable Save Now</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="view.compileNow"><span class="menu-item-label">Compile Now</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+C"></span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutSplit"><span class="menu-item-label">Split View</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutEditorOnly"><span class="menu-item-label">Editor Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutPreviewOnly"><span class="menu-item-label">Preview Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="menu-root dropdown-menu" data-menu-label="Help">
+            <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-help" aria-expanded="false">Help</button>
+            <div id="menu-help" class="menu-popover" data-popover aria-hidden="true">
+              <div class="menu-list" role="menu" aria-label="Help">
+                <button type="button" class="menu-item" role="menuitem" data-command="app.commandPalette"><span class="menu-item-label">Command Palette</span><span class="menu-item-shortcut" data-shortcut data-chord="P"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="help.documentation"><span class="menu-item-label">Documentation</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="help.about"><span class="menu-item-label">About / Repository</span></button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <button id="share-btn" class="btn" data-size="sm" type="button"><i data-lucide="share-2"></i>Share</button>
+        <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>New link</button>
+        <a id="share-link" class="muted share-link" href="" target="_blank" rel="noreferrer"></a>
+        <span id="app-notice" class="muted" role="status" aria-live="polite"></span>
+        <div class="status-badges">
+          <span id="connection-status" class="pill badge" data-variant="outline">Disconnected</span>
+          <span id="compile-status" class="pill badge" data-variant="outline">Idle</span>
+          <span id="autosave-status" class="pill badge" data-variant="outline">Autosave Off</span>
+        </div>
+      </header>
+
+      <div id="app-loading" class="app-loading is-active" role="status" aria-live="polite">
+        <div class="app-loading-bar"></div>
+        <span id="app-loading-label" class="app-loading-label">Loading compiler assets...</span>
+      </div>
+
+      <main class="split" id="split-root">
+        <section id="editor-pane" class="pane"></section>
+        <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes"></div>
+        <section id="preview-pane" class="pane"></section>
+      </main>
+
+      <footer class="footer">
+        <span id="diagnostics" class="diagnostics" aria-live="polite"></span>
+        <nav class="legal-nav">
+          <a class="btn" data-variant="link" data-size="xs" href="./privacy.html" target="_blank" rel="noreferrer">Privacy</a>
+          <a class="btn" data-variant="link" data-size="xs" href="./tos.html" target="_blank" rel="noreferrer">ToS</a>
+          <a class="btn" data-variant="link" data-size="xs" href="https://github.com/PrestonHager/LaTeXCollaborativeEditor" target="_blank" rel="noreferrer">Repository</a>
+        </nav>
+      </footer>
+    </div>
+
+    <!-- Command palette. The rows change on every keystroke, so commandPalette.ts renders those. -->
+    <div id="command-palette" class="command-palette-overlay" aria-hidden="true">
+      <div class="command-palette command" role="dialog" aria-label="Command palette">
+        <header>
+          <i data-lucide="search"></i>
+          <input class="command-palette-input" type="text" placeholder="Type a command..." autocomplete="off" aria-label="Search commands" />
+        </header>
+        <div class="command-palette-list" role="menu"></div>
+      </div>
+    </div>
+
+    <!-- Settings dialog. Every control applies right away, so there's no save button. -->
+    <dialog id="settings-dialog" class="dialog settings-dialog" aria-labelledby="settings-dialog-title" aria-describedby="settings-dialog-description">
+      <div>
+        <header>
+          <h2 id="settings-dialog-title">Settings</h2>
+          <p id="settings-dialog-description">Changes apply right away.</p>
+        </header>
+        <section class="settings-dialog-body">
+          <div class="settings-row">
+            <label class="label" for="settings-editor-theme">App and editor theme</label>
+            <select id="settings-editor-theme" class="select">
+              <option value="system">Match system</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <label class="label" for="settings-preview-theme">Preview theme</label>
+            <select id="settings-preview-theme" class="select">
+              <option value="system">Match system</option>
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </div>
+          <label class="label settings-row">
+            <input id="settings-disable-save-now" type="checkbox" class="input" />
+            Disable Save Now
+          </label>
+        </section>
+        <footer>
+          <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local docs</button>
+          <button id="settings-done" type="button" class="btn">Done</button>
+        </footer>
+        <button id="settings-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close settings"><i data-lucide="x"></i></button>
+      </div>
+    </dialog>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

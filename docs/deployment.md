@@ -14,6 +14,10 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_API_KEY`
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
+- The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
+- The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
+- `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). If the gzipped JS and CSS go over the budget, it prints a warning (a GitHub annotation in CI) but doesn't fail the build.
+- We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
 - Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
 - **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository or **Production** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/`. Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).

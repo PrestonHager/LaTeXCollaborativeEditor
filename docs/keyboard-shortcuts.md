@@ -9,6 +9,7 @@ While the command palette is focused, other app shortcuts are not active.
 | Action | Windows / Linux | macOS |
 |--------|-----------------|-------|
 | Open or close the **command palette** | **Ctrl+P** | **⌘+P** |
+| Open **Settings** | **Ctrl+,** | **⌘+,** |
 
 ## File
 

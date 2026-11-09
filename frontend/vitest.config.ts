@@ -12,7 +12,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.mjs'],
     setupFiles: ['src/test/setup.ts'],
     pool: 'threads',
     maxWorkers: 1,

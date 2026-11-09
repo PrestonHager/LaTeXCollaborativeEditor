@@ -1,4 +1,5 @@
 import type { CommandId } from './menuBar';
+import { commandIcon } from './icons';
 
 export type PaletteCommand = {
   id: CommandId;
@@ -36,28 +37,14 @@ function fuzzyScore(query: string, text: string): number | null {
   return contiguousBonus + compactness + startBonus;
 }
 
-export function createCommandPalette(options: PaletteOptions) {
-  const overlay = document.createElement('div');
-  overlay.className = 'command-palette-overlay';
-  overlay.setAttribute('aria-hidden', 'true');
-
-  const panel = document.createElement('div');
-  panel.className = 'command-palette';
-  panel.setAttribute('role', 'dialog');
-  panel.setAttribute('aria-label', 'Command palette');
-
-  const input = document.createElement('input');
-  input.className = 'command-palette-input';
-  input.type = 'text';
-  input.placeholder = 'Type a command...';
-  input.autocomplete = 'off';
-
-  const list = document.createElement('div');
-  list.className = 'command-palette-list';
-
-  panel.append(input, list);
-  overlay.appendChild(panel);
-  document.body.appendChild(overlay);
+/**
+ * Wire up the Basecoat command palette in the page (see index.html). The shell is HTML,
+ * and only the result rows get rendered here since they change on every keystroke.
+ */
+export function createCommandPalette(overlay: HTMLElement, options: PaletteOptions) {
+  const input = overlay.querySelector<HTMLInputElement>('.command-palette-input');
+  const list = overlay.querySelector<HTMLElement>('.command-palette-list');
+  if (!input || !list) throw new Error('Command palette markup is missing its input or list');
 
   let commands: PaletteCommand[] = [];
   let filtered: PaletteCommand[] = [];
@@ -82,30 +69,40 @@ export function createCommandPalette(options: PaletteOptions) {
       return;
     }
 
+    // Start a new group each time the section changes, since recent commands can mix sections.
     let currentSection = '';
+    let group: HTMLElement = list;
     filtered.forEach((command, index) => {
       if (command.section !== currentSection) {
         currentSection = command.section;
+        group = document.createElement('div');
+        group.setAttribute('role', 'group');
         const sectionHeader = document.createElement('div');
         sectionHeader.className = 'command-palette-section';
+        sectionHeader.setAttribute('role', 'heading');
         sectionHeader.textContent = command.section;
-        list.appendChild(sectionHeader);
+        group.appendChild(sectionHeader);
+        list.appendChild(group);
       }
       const row = document.createElement('button');
       row.type = 'button';
       row.className = 'command-palette-item';
-      if (index === activeIndex) row.classList.add('is-active');
+      row.setAttribute('role', 'menuitem');
+      if (index === activeIndex) row.classList.add('is-active', 'active');
       if (!command.enabled) row.disabled = true;
 
       const left = document.createElement('span');
       left.className = 'command-palette-main';
       left.textContent = `${command.section}: ${command.label}`;
 
-      const right = document.createElement('span');
-      right.className = 'command-palette-shortcut';
-      right.textContent = command.shortcut ?? '';
-
-      row.append(left, right);
+      row.append(commandIcon(command.id), left);
+      if (command.shortcut) {
+        const right = document.createElement('span');
+        right.className = 'command-palette-shortcut';
+        right.dataset.shortcut = '';
+        right.textContent = command.shortcut;
+        row.appendChild(right);
+      }
       row.onclick = () => {
         if (!command.enabled) return;
         markRecent(command.id);
