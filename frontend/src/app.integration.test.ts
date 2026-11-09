@@ -1,6 +1,7 @@
 import { createEditorPane } from './ui/editor';
-import { createFileMenu } from './ui/fileMenu';
-import { LocalDownloadStorage } from './storage/localDownload';
+import { createMenuBar } from './ui/menuBar';
+import { createSettingsDialog } from './ui/settingsDialog';
+import { mountAppShell } from './test/appShell';
 import { AutosaveController } from './storage/autosave';
 
 describe('App integration behavior', () => {
@@ -29,26 +30,66 @@ describe('App integration behavior', () => {
     vi.useRealTimers();
   });
 
-  it('wires file menu download action to local storage adapter', () => {
-    const local = new LocalDownloadStorage();
-    const downloadSpy = vi.spyOn(local, 'download').mockImplementation(() => {});
-
-    const host = document.createElement('div');
-    createFileMenu(host, {
-      onOpenLocal: () => undefined,
-      onOpenDrive: async () => undefined,
-      onDownload: () => local.download('doc.tex', 'x'),
-      onConnectDrive: async () => undefined,
-      onSaveToDrive: async () => undefined,
-      onMoveDrive: async () => undefined,
-      onRenameDrive: async () => undefined,
-      onSaveNow: async () => undefined,
+  it('wires every menu item in index.html to a command with an icon', () => {
+    mountAppShell();
+    const calls: string[] = [];
+    const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
+      getCommandState: () => ({ enabled: true }),
+      onCommand: (id) => calls.push(id),
     });
+    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.menu-item[data-command]'));
+    expect(items.length).toBe(menuBar.entries().length);
+    expect(items.every((item) => item.querySelector('svg'))).toBe(true);
+    const settingsItem = items.find((item) => item.dataset.command === 'app.openSettings')!;
+    expect(settingsItem.closest('.menu-root')?.getAttribute('data-menu-label')).toBe('Edit');
+    settingsItem.click();
+    expect(calls).toEqual(['app.openSettings']);
+    menuBar.destroy();
+  });
 
-    const buttons = Array.from(host.querySelectorAll('button'));
-    const downloadBtn = buttons.find((b) => b.textContent === 'Download .tex');
-    expect(downloadBtn).toBeTruthy();
-    downloadBtn!.click();
-    expect(downloadSpy).toHaveBeenCalledWith('doc.tex', 'x');
+  it('wires the settings dialog in index.html', () => {
+    mountAppShell();
+    const onEditorTheme = vi.fn();
+    const onSaveNowEnabled = vi.fn();
+    const onClearLocalDocs = vi.fn();
+    const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+      getState: () => ({ editorTheme: 'dark', previewTheme: 'light', saveNowEnabled: true, canChangeSaving: true }),
+      onEditorTheme,
+      onPreviewTheme: () => undefined,
+      onSaveNowEnabled,
+      onClearLocalDocs,
+    });
+    dialog.open();
+    expect(dialog.isOpen()).toBe(true);
+    const editorSelect = document.getElementById('settings-editor-theme') as HTMLSelectElement;
+    expect(editorSelect.value).toBe('dark');
+    expect((document.getElementById('settings-preview-theme') as HTMLSelectElement).value).toBe('light');
+    editorSelect.value = 'light';
+    editorSelect.dispatchEvent(new Event('change'));
+    expect(onEditorTheme).toHaveBeenCalledWith('light');
+    const toggle = document.getElementById('settings-disable-save-now') as HTMLInputElement;
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+    expect(onSaveNowEnabled).toHaveBeenCalledWith(false);
+    (document.getElementById('settings-clear-local') as HTMLButtonElement).click();
+    expect(onClearLocalDocs).toHaveBeenCalled();
+    (document.getElementById('settings-done') as HTMLButtonElement).click();
+    expect(dialog.isOpen()).toBe(false);
+  });
+
+  it('disables saving controls in settings for guests', () => {
+    mountAppShell();
+    const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+      getState: () => ({ editorTheme: 'system', previewTheme: 'system', saveNowEnabled: true, canChangeSaving: false }),
+      onEditorTheme: () => undefined,
+      onPreviewTheme: () => undefined,
+      onSaveNowEnabled: () => undefined,
+      onClearLocalDocs: () => undefined,
+    });
+    dialog.open();
+    expect((document.getElementById('settings-disable-save-now') as HTMLInputElement).disabled).toBe(true);
+    expect((document.getElementById('settings-clear-local') as HTMLButtonElement).disabled).toBe(true);
+    (document.getElementById('settings-close') as HTMLButtonElement).click();
+    expect(dialog.isOpen()).toBe(false);
   });
 });

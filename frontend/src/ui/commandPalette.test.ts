@@ -1,4 +1,10 @@
 import { createCommandPalette } from './commandPalette';
+import { mountAppShell } from '../test/appShell';
+
+const mountPalette = () => {
+  mountAppShell();
+  return document.getElementById('command-palette')!;
+};
 
 describe('createCommandPalette', () => {
   afterEach(() => {
@@ -7,7 +13,7 @@ describe('createCommandPalette', () => {
 
   it('filters commands and executes selected command', () => {
     const calls: string[] = [];
-    const palette = createCommandPalette({
+    const palette = createCommandPalette(mountPalette(), {
       onSelect: (id) => calls.push(id),
     });
 
@@ -26,9 +32,26 @@ describe('createCommandPalette', () => {
     expect(palette.isOpen()).toBe(false);
   });
 
+  it('renders Basecoat command groups with icons and shortcuts', () => {
+    const palette = createCommandPalette(mountPalette(), { onSelect: () => {} });
+    palette.setCommands([
+      { id: 'file.new', label: 'New', section: 'File', enabled: true, shortcut: 'Ctrl+N' },
+      { id: 'help.about', label: 'About', section: 'Help', enabled: true },
+    ]);
+    palette.open();
+
+    expect(document.querySelector('.command-palette.command > header input')).toBeTruthy();
+    const groups = document.querySelectorAll('.command-palette-list[role="menu"] > [role="group"]');
+    expect(groups.length).toBe(2);
+    const first = document.querySelector('.command-palette-list [role="menuitem"]') as HTMLButtonElement;
+    expect(first.classList.contains('active')).toBe(true);
+    expect(first.querySelector('svg')).toBeTruthy();
+    expect(first.querySelector('[data-shortcut]')?.textContent).toBe('Ctrl+N');
+  });
+
   it('promotes recently executed commands and renders section headers', () => {
     const calls: string[] = [];
-    const palette = createCommandPalette({
+    const palette = createCommandPalette(mountPalette(), {
       onSelect: (id) => calls.push(id),
     });
     palette.setCommands([
@@ -57,7 +80,7 @@ describe('createCommandPalette', () => {
 
   it('supports fuzzy query matching for abbreviated input', () => {
     const calls: string[] = [];
-    const palette = createCommandPalette({
+    const palette = createCommandPalette(mountPalette(), {
       onSelect: (id) => calls.push(id),
     });
     palette.setCommands([
@@ -75,7 +98,7 @@ describe('createCommandPalette', () => {
   });
 
   it('shows empty state when filter matches nothing', () => {
-    const palette = createCommandPalette({ onSelect: () => {} });
+    const palette = createCommandPalette(mountPalette(), { onSelect: () => {} });
     palette.setCommands([{ id: 'file.new', label: 'New', section: 'File', enabled: true }]);
     palette.open();
     const input = document.querySelector('.command-palette-input') as HTMLInputElement;
@@ -85,7 +108,7 @@ describe('createCommandPalette', () => {
   });
 
   it('closes on overlay click, Escape, and toggle', () => {
-    const palette = createCommandPalette({ onSelect: () => {} });
+    const palette = createCommandPalette(mountPalette(), { onSelect: () => {} });
     palette.setCommands([{ id: 'file.new', label: 'New', section: 'File', enabled: true }]);
     palette.open();
     expect(palette.isOpen()).toBe(true);
@@ -106,7 +129,7 @@ describe('createCommandPalette', () => {
 
   it('navigates active row with arrow keys and runs Enter on active command', () => {
     const calls: string[] = [];
-    const palette = createCommandPalette({ onSelect: (id) => calls.push(id) });
+    const palette = createCommandPalette(mountPalette(), { onSelect: (id) => calls.push(id) });
     palette.setCommands([
       { id: 'file.new', label: 'New', section: 'File', enabled: true },
       { id: 'help.about', label: 'About', section: 'Help', enabled: true },
@@ -121,7 +144,7 @@ describe('createCommandPalette', () => {
 
   it('ignores Enter when active command is disabled or arrows on empty list', () => {
     const calls: string[] = [];
-    const palette = createCommandPalette({ onSelect: (id) => calls.push(id) });
+    const palette = createCommandPalette(mountPalette(), { onSelect: (id) => calls.push(id) });
     palette.setCommands([{ id: 'file.new', label: 'New', section: 'File', enabled: false }]);
     palette.open();
     const input = document.querySelector('.command-palette-input') as HTMLInputElement;
@@ -138,7 +161,7 @@ describe('createCommandPalette', () => {
 
   it('does not select disabled rows from click', () => {
     const calls: string[] = [];
-    const palette = createCommandPalette({ onSelect: (id) => calls.push(id) });
+    const palette = createCommandPalette(mountPalette(), { onSelect: (id) => calls.push(id) });
     palette.setCommands([{ id: 'file.new', label: 'New', section: 'File', enabled: false }]);
     palette.open();
     (document.querySelector('.command-palette-item') as HTMLButtonElement).click();
@@ -147,7 +170,7 @@ describe('createCommandPalette', () => {
   });
 
   it('dedupes recent commands and sorts by label when scores tie', () => {
-    const palette = createCommandPalette({ onSelect: () => {} });
+    const palette = createCommandPalette(mountPalette(), { onSelect: () => {} });
     palette.setCommands([
       { id: 'help.about', label: 'About', section: 'Help', enabled: true },
       { id: 'file.new', label: 'New', section: 'File', enabled: true },
