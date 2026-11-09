@@ -1,4 +1,4 @@
-import { decodeYjsState, encodeYjsState, readAppSessionState, writeAppSessionState } from './appSession';
+import { createDocumentId, decodeYjsState, encodeYjsState, readAppSessionState, writeAppSessionState } from './appSession';
 
 describe('appSession state', () => {
   beforeEach(() => {
@@ -21,6 +21,33 @@ describe('appSession state', () => {
     expect(loaded?.content).toBe('hello');
     expect(loaded?.providerMode).toBe('drive');
     expect(loaded?.saveNowEnabled).toBe(false);
+  });
+
+  it('keeps the document id, and leaves it out for older sessions', () => {
+    writeAppSessionState({
+      documentName: 'Draft',
+      documentId: 'doc-1',
+      content: '',
+      providerMode: 'local',
+      saveNowEnabled: true,
+    });
+    expect(readAppSessionState()?.documentId).toBe('doc-1');
+
+    localStorage.setItem(
+      'latex_editor_app_session_v1',
+      JSON.stringify({ documentName: 'x', content: '', providerMode: 'local', saveNowEnabled: true }),
+    );
+    expect(readAppSessionState()?.documentId).toBeUndefined();
+  });
+
+  it('makes a different document id each time, even without crypto.randomUUID', () => {
+    expect(createDocumentId()).not.toBe(createDocumentId());
+    vi.stubGlobal('crypto', {});
+    try {
+      expect(createDocumentId()).toMatch(/^[a-z0-9]+-[a-z0-9]+$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('returns null for malformed payload', () => {

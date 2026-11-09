@@ -33,6 +33,10 @@ Runtime architecture (summary)
 - Document content remains peer-to-peer after joining a room.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
+- Renaming a document only changes the title (and what peers see) after the rename works in storage.
+  If it fails, the old name stays.
+- The linked Drive file is tied to a document id kept in the browser session, not to its file name.
+  Reconnecting Drive after a rename keeps the same file and renames it to match.
 
 Networking (STUN/TURN)
 - Start with a public STUN server such as `stun:stun.l.google.com:19302`.

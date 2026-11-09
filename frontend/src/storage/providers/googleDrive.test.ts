@@ -364,6 +364,80 @@ describe('GoogleDriveProvider', () => {
     expect(localStorage.getItem('drive_active_file_ref')).toBeNull();
   });
 
+  describe('document ownership', () => {
+    it('stamps a newly created file with the open document id', async () => {
+      const provider = connectedProvider();
+      provider.setDocumentId('doc-1');
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'n1' }) }));
+
+      await provider.save('body', 'a.tex');
+
+      expect(provider.getCurrentFileRef()).toEqual({ id: 'n1', name: 'a.tex', documentId: 'doc-1' });
+      expect(provider.isLinkedTo('doc-1')).toBe(true);
+      expect(provider.isLinkedTo('doc-2')).toBe(false);
+      // The owner survives a reload.
+      expect(new GoogleDriveProvider().isLinkedTo('doc-1')).toBe(true);
+    });
+
+    it('links the file a create started for, even if the doc id changes mid-save', async () => {
+      const provider = connectedProvider();
+      provider.setDocumentId('doc-1');
+      let finishCreate!: (value: unknown) => void;
+      vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(new Promise((resolve) => (finishCreate = resolve))));
+
+      const saving = provider.save('body', 'a.tex');
+      await Promise.resolve();
+      provider.setDocumentId('doc-2');
+      finishCreate({ ok: true, json: async () => ({ id: 'n1' }) });
+      await saving;
+
+      expect(provider.isLinkedTo('doc-1')).toBe(true);
+    });
+
+    it('keeps the owner when the file is renamed', async () => {
+      const provider = connectedProvider();
+      (provider as any).fileRef = { id: 'f1', name: 'a.tex', documentId: 'doc-1' };
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+
+      await provider.saveAs('body', 'a.tex', 'b.tex');
+
+      expect(provider.getCurrentFileRef()).toEqual({ id: 'f1', name: 'b.tex', documentId: 'doc-1' });
+    });
+
+    it('links an opened file to the id it was given', async () => {
+      const provider = connectedProvider();
+      provider.setDocumentId('doc-1');
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'f1', name: 'doc.tex' }) })
+          .mockResolvedValueOnce({ ok: true, text: async () => 'content' }),
+      );
+
+      await provider.openDocument('f1', 'doc-2');
+
+      expect(provider.isLinkedTo('doc-2')).toBe(true);
+      expect(provider.isLinkedTo('doc-1')).toBe(false);
+    });
+
+    it('adopts a link saved before ids only when the name matches', () => {
+      localStorage.setItem('drive_active_file_ref', JSON.stringify({ id: 'f1', name: 'a.tex' }));
+      const provider = new GoogleDriveProvider();
+
+      provider.adoptLegacyFile('doc-1', 'b.tex');
+      expect(provider.isLinkedTo('doc-1')).toBe(false);
+
+      provider.adoptLegacyFile('doc-1', 'a.tex');
+      expect(provider.isLinkedTo('doc-1')).toBe(true);
+      expect(localStorage.getItem('drive_active_file_ref')).toContain('doc-1');
+
+      // A link that already has an owner is never taken over.
+      provider.adoptLegacyFile('doc-2', 'a.tex');
+      expect(provider.isLinkedTo('doc-1')).toBe(true);
+    });
+  });
+
   it('connect returns false when client id is missing', async () => {
     vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
     const provider = new GoogleDriveProvider();
