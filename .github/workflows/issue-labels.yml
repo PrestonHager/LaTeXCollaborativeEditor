@@ -1,0 +1,83 @@
+name: Issue Labels
+
+# End users can't set labels on their own, so this applies the area label
+# they picked in the issue form, and makes sure only collaborators with
+# write access can set priority labels.
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  issues: write
+
+jobs:
+  area-from-form:
+    if: github.event.action == 'opened' || github.event.action == 'edited'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            // Map the form dropdown options to repo labels.
+            const areaLabels = {
+              'Collaboration (P2P sync, rooms)': 'area: collaboration',
+              'Storage (local saving, autosave, Google Drive)': 'area: storage',
+              'Sign-in (Google account)': 'area: auth',
+              'Preview (LaTeX rendering, diagnostics)': 'area: preview',
+              'Editor (typing, undo, shortcuts)': 'area: editor',
+              'UI (menus, layout, accessibility)': 'area: ui',
+            };
+
+            // First, find the "### Area" section that issue forms render.
+            const body = context.payload.issue.body || '';
+            const match = body.match(/^### Area\s*\n+([^\n]+)/m);
+            if (!match) return;
+            const label = areaLabels[match[1].trim()];
+
+            // Only add the label if the issue has no area label yet, so we
+            // don't fight a collaborator who already re-triaged it.
+            const current = context.payload.issue.labels.map((l) => l.name);
+            if (!label || current.some((name) => name.startsWith('area: '))) return;
+
+            await github.rest.issues.addLabels({
+              ...context.repo,
+              issue_number: context.issue.number,
+              labels: [label],
+            });
+
+  guard-priority:
+    if: github.event.action == 'labeled' && startsWith(github.event.label.name, 'priority:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            // Check what access the person who added the label has.
+            // NOTE: triage users show up as "read" here, so they're blocked too.
+            let permission;
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                ...context.repo,
+                username: context.actor,
+              });
+              permission = data.permission;
+            } catch (error) {
+              // Some app/bot accounts can't be looked up, so leave their labels alone.
+              core.info(`Could not check permission for ${context.actor}: ${error.message}`);
+              return;
+            }
+            if (['admin', 'write'].includes(permission)) return;
+
+            // Not allowed, so take the label back off and say why.
+            const label = context.payload.label.name;
+            await github.rest.issues.removeLabel({
+              ...context.repo,
+              issue_number: context.issue.number,
+              name: label,
+            });
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `Removed \`${label}\`. Priority labels are set by maintainers during triage.`,
+            });
