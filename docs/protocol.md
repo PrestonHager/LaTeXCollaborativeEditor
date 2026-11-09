@@ -7,6 +7,9 @@ Rendezvous and session bootstrap
 - Session links include a room identifier, e.g. ?room=<id>.
 - Peers join the same P2P topic/room via public rendezvous/bootstrap endpoints.
 - No repository-owned signaling server is required.
+- The host's room id is kept in the tab's sessionStorage after Share, so reloading the host tab rejoins the same room and guest links keep working.
+- The room id is stored apart from the saved document, since it's rendezvous metadata and not content.
+- The host can click New link to leave the current room and start a fresh one, which disconnects anyone on the old link.
 
 Transport behavior
 - The app uses a transport layer over a third-party rendezvous infrastructure (WebRTC-like semantics).

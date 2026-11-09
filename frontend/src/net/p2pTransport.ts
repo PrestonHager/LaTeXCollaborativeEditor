@@ -80,6 +80,9 @@ export class P2pTransport {
   disconnect() {
     this.cleanupTimers();
     if (this.room?.leave) this.room.leave();
+    // Reset so a later join starts counting peers from zero.
+    this.peers = 0;
+    this.sendTextAction = null;
   }
 
   private cleanupTimers() {

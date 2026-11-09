@@ -77,6 +77,22 @@ export class SessionController {
     return this.roomId;
   }
 
+  getRoomId() {
+    return this.roomId;
+  }
+
+  newRoom() {
+    // Leave the current room first, so guests on the old link stop getting updates.
+    if (this.reconnectTimer) {
+      window.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+    this.reconnectAttempts = 0;
+    if (this.roomId) this.session.close();
+    this.roomId = null;
+    return this.ensureRoom();
+  }
+
   join(roomId: string) {
     this.roomId = roomId;
     this.session.joinRoom(roomId);

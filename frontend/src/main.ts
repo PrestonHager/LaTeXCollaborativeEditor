@@ -17,6 +17,7 @@ import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
 import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
 import { formatPrimaryChord } from './ui/modifierShortcutLabels';
+import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -27,6 +28,7 @@ app.innerHTML = `
     <h1 id="doc-title" class="doc-title">Untitled</h1>
     <div id="menu-bar"></div>
     <button id="share-btn">Share</button>
+    <button id="new-link-btn" hidden>New link</button>
     <a id="share-link" class="muted" href="" target="_blank" rel="noreferrer"></a>
     <span id="app-notice" class="muted" role="status" aria-live="polite"></span>
     <span id="connection-status" class="pill">Disconnected</span>
@@ -846,7 +848,10 @@ editor.onTextChanged((text, sync = true) => {
   persistAppSession();
 });
 
+// Guests join the room in the URL, and a reloaded host rejoins the room this tab already shared.
+const hostRoomId = isClient ? null : readHostRoomId();
 if (roomId) session.join(roomId);
+else if (hostRoomId) session.join(hostRoomId);
 installSplitter();
 applyLayoutMode();
 editor.setEditable(false);
@@ -858,9 +863,21 @@ scheduleCompile(editor.getText());
 setupShareButton({
   button: document.getElementById('share-btn') as HTMLButtonElement,
   linkEl: shareLinkEl,
-  getRoomId: () => session.ensureRoom(),
+  getRoomId: () => {
+    const id = session.ensureRoom();
+    if (!isClient) writeHostRoomId(id);
+    return id;
+  },
   getCurrentUrl: () => location.href,
   onStatus: (message) => showNotice(message),
+  initialRoomId: hostRoomId,
+  newLinkButton: isClient ? undefined : (document.getElementById('new-link-btn') as HTMLButtonElement),
+  getNewRoomId: () => {
+    const id = session.newRoom();
+    writeHostRoomId(id);
+    return id;
+  },
+  confirmNewLink: () => window.confirm('Start a new link? Anyone using the old link will be disconnected.'),
 });
 
 if (!isClient) {
