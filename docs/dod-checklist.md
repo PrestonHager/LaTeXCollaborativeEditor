@@ -22,6 +22,7 @@ Checklist
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
 - [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
+- [ ] Drive save errors: a full Drive shows "Google Drive is full" right away without retries, and a Drive rate limit gets retried.
 - [ ] Drive token expiry: after the hour-long token runs out, autosave gets a new one silently, or shows a notice and switches to saving in the browser.
 - [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
 - [x] Networking: no repository-owned signaling server is required for connection setup.

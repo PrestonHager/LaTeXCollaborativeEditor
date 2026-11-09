@@ -1,5 +1,9 @@
 import { GoogleDriveProvider, LEGACY_PREFIX } from './googleDrive';
 import { StorageError } from '../errors';
+import * as Y from 'yjs';
+import { saveProject, type SavedManifest } from '../projectSaver';
+import { ProjectDoc } from '../../project/projectDoc';
+import type { BlobStore } from '../../project/blobStore';
 
 const loadScript = vi.fn(async () => undefined);
 vi.mock('./scriptLoader', () => ({ loadScript: (...args: unknown[]) => loadScript(...(args as [])) }));
@@ -247,6 +251,56 @@ describe('GoogleDriveProvider', () => {
     });
   });
 
+  describe('sorts errors by Google\'s reason', () => {
+    const failWith = (status: number, error: Record<string, unknown>) =>
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status, json: async () => ({ error }) }));
+
+    it('does not retry a full Drive and says so plainly', async () => {
+      // The message mentions "quota", which the old check took for a rate limit.
+      failWith(403, { message: 'The user\'s Drive storage quota has been exceeded.', errors: [{ reason: 'storageQuotaExceeded' }] });
+      const failure = connectedProvider().listProjects();
+      await expect(failure).rejects.toMatchObject({ retryable: false, status: 403 });
+      await expect(failure).rejects.toThrow(/Google Drive is full/);
+    });
+
+    it.each(['rateLimitExceeded', 'userRateLimitExceeded'])('retries %s', async (reason) => {
+      failWith(403, { message: 'Slow down', errors: [{ reason }] });
+      const failure = connectedProvider().listProjects();
+      await expect(failure).rejects.toMatchObject({ retryable: true, status: 403 });
+      await expect(failure).rejects.toThrow(/limiting requests/);
+    });
+
+    it('reads the reason from error.details too', async () => {
+      failWith(403, { message: 'Too many', details: [{ reason: 'userRateLimitExceeded' }] });
+      await expect(connectedProvider().listProjects()).rejects.toMatchObject({ retryable: true, status: 403 });
+    });
+
+    it('retries a backend error', async () => {
+      failWith(503, { message: 'Backend Error', errors: [{ reason: 'backendError' }] });
+      await expect(connectedProvider().listProjects()).rejects.toMatchObject({
+        message: 'Drive: Could not list projects (HTTP 503: Backend Error).',
+        retryable: true,
+      });
+    });
+
+    it('does not retry other 403s, even when the message mentions rate or quota', async () => {
+      failWith(403, { message: 'Daily quota and rate exceeded', errors: [{ reason: 'dailyLimitExceeded' }] });
+      await expect(connectedProvider().listProjects()).rejects.toMatchObject({ retryable: false, status: 403 });
+      failWith(403, { message: 'Insufficient permissions', errors: [{ reason: 'insufficientFilePermissions' }] });
+      await expect(connectedProvider().listProjects()).rejects.toThrow(/Permission denied.*Insufficient permissions/);
+    });
+
+    it('does not retry a 400', async () => {
+      failWith(400, { message: 'Bad Request', errors: [{ reason: 'badRequest' }] });
+      await expect(connectedProvider().listProjects()).rejects.toMatchObject({ retryable: false, status: 400 });
+    });
+
+    it('copes with an error body that is not JSON', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 502, json: async () => { throw new SyntaxError('bad'); } }));
+      await expect(connectedProvider().listProjects()).rejects.toMatchObject({ message: 'Drive: Could not list projects (HTTP 502).', retryable: true });
+    });
+  });
+
   it('turns network failures into a readable error', async () => {
     const provider = connectedProvider();
     vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')));
@@ -455,6 +509,92 @@ describe('GoogleDriveProvider', () => {
       await provider.openProject('p');
       await provider.moveProject('p', 'elsewhere');
       expect(drive.files.get('p')!.parents).toEqual(['elsewhere']);
+    });
+
+    describe('when a save with a rename fails partway', () => {
+      const quotaError = { ok: false, status: 403, json: async () => ({ error: { message: 'Storage quota exceeded', errors: [{ reason: 'storageQuotaExceeded' }] } }) };
+      const rateError = { ok: false, status: 403, json: async () => ({ error: { message: 'Rate limit', errors: [{ reason: 'rateLimitExceeded' }] } }) };
+      const isUpload = (input: string) => input.includes('/upload/');
+      const isRename = (input: string, init: RequestInit = {}) =>
+        init.method === 'PATCH' && !isUpload(input) && typeof init.body === 'string' && 'name' in JSON.parse(init.body);
+
+      /** Make a saved project in the fake Drive, then return a save that keeps its manifest between runs. */
+      async function savedProject() {
+        const drive = fakeDrive();
+        const provider = connectedProvider();
+        const project = new ProjectDoc(new Y.Doc());
+        project.setName('Thesis');
+        const main = project.createTextFile('main.tex', 'v1');
+        project.createTextFile('ch/a.tex', 'a');
+        const blobs = { get: async () => undefined } as unknown as BlobStore;
+        let manifest: SavedManifest | null = null;
+        const save = async () => {
+          const result = await saveProject({
+            provider, project, blobs, manifest, projectId: manifest?.projectId ?? null,
+            onStep: (step) => { manifest = step; },
+          });
+          manifest = result.manifest;
+        };
+        await save();
+        const real = drive.fetchMock.getMockImplementation()!;
+        return { drive, project, main, save, real, folder: () => drive.files.get(manifest!.projectId)!, manifest: () => manifest! };
+      }
+
+      it('uploads before renaming, so a failed upload leaves the old name and a clear error', async () => {
+        const t = await savedProject();
+        t.project.setName('Renamed');
+        t.project.getText(t.main).insert(2, ' edited');
+        t.drive.fetchMock.mockImplementation(async (input, init) => (isUpload(input) ? quotaError : t.real(input, init)) as any);
+
+        await expect(t.save()).rejects.toMatchObject({ retryable: false, message: expect.stringMatching(/Google Drive is full/) });
+        // Nothing was renamed, so "the save failed" is the whole story.
+        expect(t.folder().name).toBe('Thesis');
+        expect(t.drive.fetchMock.mock.calls.some(([input, init]) => isRename(input, init))).toBe(false);
+        expect(t.manifest().name).toBe('Thesis');
+
+        // Once Drive has room, the next save writes the file and then renames.
+        t.drive.fetchMock.mockImplementation(t.real);
+        await t.save();
+        expect(t.folder().name).toBe('Renamed');
+        expect(text(t.drive.find('main.tex')!.content!)).toBe('v1 edited');
+      });
+
+      it('keeps the uploaded file when only the rename fails, and retries just the rename', async () => {
+        const t = await savedProject();
+        t.project.setName('Renamed');
+        t.project.getText(t.main).insert(2, ' edited');
+        t.drive.fetchMock.mockImplementation(async (input, init) => (isRename(input, init) ? rateError : t.real(input, init)) as any);
+
+        await expect(t.save()).rejects.toMatchObject({ retryable: true, message: expect.stringMatching(/rename the project folder/) });
+        expect(text(t.drive.find('main.tex')!.content!)).toBe('v1 edited');
+        expect(t.folder().name).toBe('Thesis');
+        expect(t.manifest().name).toBe('Thesis');
+
+        t.drive.fetchMock.mockImplementation(t.real);
+        t.drive.fetchMock.mockClear();
+        await t.save();
+        expect(t.folder().name).toBe('Renamed');
+        // Only the rename went out, the file was already saved.
+        expect(t.drive.fetchMock.mock.calls.some(([input]) => isUpload(input))).toBe(false);
+      });
+
+      it('remembers a file move when the upload after it fails', async () => {
+        const t = await savedProject();
+        t.project.movePath('ch/a.tex', 'a.tex');
+        t.project.getText(t.main).insert(2, ' edited');
+        t.drive.fetchMock.mockImplementation(async (input, init) => (isUpload(input) ? quotaError : t.real(input, init)) as any);
+
+        await expect(t.save()).rejects.toThrow(/Google Drive is full/);
+        // The move made it to Drive and the manifest knows, so the next save doesn't move it twice.
+        expect(t.drive.find('a.tex')!.parents).toEqual([t.folder().id]);
+        expect(Object.values(t.manifest().files).map((file) => file.path)).toContain('a.tex');
+
+        t.drive.fetchMock.mockImplementation(t.real);
+        t.drive.fetchMock.mockClear();
+        await t.save();
+        expect(t.drive.fetchMock.mock.calls.filter(([input, init]) => isRename(input, init))).toHaveLength(0);
+        expect(text(t.drive.find('main.tex')!.content!)).toBe('v1 edited');
+      });
     });
 
     it('explains a 404 as a missing or inaccessible file', async () => {
