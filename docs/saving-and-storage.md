@@ -51,6 +51,8 @@ If the deployment includes Google Picker credentials, you can:
 2. **Open from Google Drive** — pick a project folder, or an old single `.tex` file.
 3. **Save to Google Drive** — saves the project as a Drive folder. Each file is a real Drive file inside it, with subfolders kept as they are.
 4. **Move to Drive Folder** / **Rename Project** — move the project folder somewhere else in Drive, or rename it.
+5. **Disconnect Google Drive** — sign out and revoke the app's access token.
+   Your edits keep saving in this browser as a new local project.
 
 If **Connect** or **Open** fails, check the status message in the header (for example missing API key on that deployment).
 
@@ -61,6 +63,9 @@ If **Connect** or **Open** fails, check the status message in the header (for ex
 - If Google is limiting requests, the app waits a moment and tries again on its own.
 - A save writes your files first and renames the project folder last.
   If a save fails partway, whatever finished stays saved, and the next save picks up the rest.
+- The sign-in only lasts for the current tab.
+  Reloading the tab keeps you signed in, but a new tab or a restarted browser asks you to connect again, and saves go to this browser until you do.
+- To see who's signed in, open **Settings** or hover over the save status in the header.
 - Moving a project between this browser and Drive saves a new copy there. The old copy stays where it was.
 - The app can only see files it made or that you picked. If you add a file to the project folder in Drive itself, the app won't see it yet. Upload it from the editor instead.
 - Opening an old single `.tex` file keeps saving to that file. Once you add a second file, the app makes a project folder next to the file and moves the file into it.

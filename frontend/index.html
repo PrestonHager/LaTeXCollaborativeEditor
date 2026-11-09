@@ -33,6 +33,7 @@
                 <button type="button" class="menu-item" role="menuitem" data-command="file.downloadFile"><span class="menu-item-label">Download Current File</span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="file.connectDrive"><span class="menu-item-label">Connect Google Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.disconnectDrive"><span class="menu-item-label">Disconnect Google Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveToDrive"><span class="menu-item-label">Save to Google Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.moveDrive"><span class="menu-item-label">Move to Drive Folder</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive"><span class="menu-item-label">Rename Project</span></button>
@@ -207,6 +208,10 @@
             <input id="settings-disable-save-now" type="checkbox" class="input" />
             Disable Save Now
           </label>
+          <div class="settings-row">
+            <span class="label">Google Drive</span>
+            <span id="settings-drive-account" class="muted">Not connected</span>
+          </div>
         </section>
         <footer>
           <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local projects</button>

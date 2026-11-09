@@ -38,6 +38,7 @@ function connectedProvider() {
 describe('GoogleDriveProvider', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     loadScript.mockReset();
@@ -56,7 +57,9 @@ describe('GoogleDriveProvider', () => {
     expect(provider.getAccessToken()).toBe('token-123');
     expect(provider.hasUsableToken()).toBe(true);
     expect(provider.status()).toBe('Drive: Connected');
-    expect(localStorage.getItem('drive_access_token')).toContain('token-123');
+    // The token stays in this tab's sessionStorage, never in localStorage.
+    expect(sessionStorage.getItem('drive_session_token')).toContain('token-123');
+    expect(localStorage.getItem('drive_access_token')).toBeNull();
     // Only one popup, a second one would be blocked by the browser.
     expect(gis.requestAccessToken).toHaveBeenCalledTimes(1);
   });
@@ -90,7 +93,7 @@ describe('GoogleDriveProvider', () => {
 
   it('reuses cached access token without prompting oauth again', async () => {
     const expiresAt = Date.now() + 60 * 60 * 1000;
-    localStorage.setItem('drive_access_token', JSON.stringify({ accessToken: 'cached-token', expiresAt }));
+    sessionStorage.setItem('drive_session_token', JSON.stringify({ accessToken: 'cached-token', expiresAt }));
     const gis = stubGis(() => undefined);
 
     const provider = new GoogleDriveProvider();
@@ -226,7 +229,7 @@ describe('GoogleDriveProvider', () => {
 
   it('clears the token and asks to reconnect on 401', async () => {
     const provider = connectedProvider();
-    localStorage.setItem('drive_access_token', JSON.stringify({ accessToken: 'token', expiresAt: Date.now() + 3600_000 }));
+    sessionStorage.setItem('drive_session_token', JSON.stringify({ accessToken: 'token', expiresAt: Date.now() + 3600_000 }));
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: { message: 'Invalid Credentials' } }) }),
@@ -236,7 +239,7 @@ describe('GoogleDriveProvider', () => {
     await expect(failure).rejects.toBeInstanceOf(StorageError);
     await expect(failure).rejects.toMatchObject({ retryable: false, status: 401 });
     expect(provider.hasUsableToken()).toBe(false);
-    expect(localStorage.getItem('drive_access_token')).toBeNull();
+    expect(sessionStorage.getItem('drive_session_token')).toBeNull();
   });
 
   it('includes the Google error message for server errors', async () => {
@@ -623,18 +626,158 @@ describe('GoogleDriveProvider', () => {
   });
 
   it('ignores corrupt stored token JSON', () => {
-    localStorage.setItem('drive_access_token', '{bad');
+    sessionStorage.setItem('drive_session_token', '{bad');
     const provider = new GoogleDriveProvider();
     expect((provider as any).accessToken).toBe('');
   });
 
   it('drops expired cached token on construction', () => {
-    localStorage.setItem(
-      'drive_access_token',
+    sessionStorage.setItem(
+      'drive_session_token',
       JSON.stringify({ accessToken: 'expired', expiresAt: Date.now() - 120_000 }),
     );
     const provider = new GoogleDriveProvider();
     expect((provider as any).accessToken).toBe('');
+    expect(sessionStorage.getItem('drive_session_token')).toBeNull();
+  });
+
+  it('removes a token an old build left in localStorage and does not use it', () => {
+    localStorage.setItem('drive_access_token', JSON.stringify({ accessToken: 'old-token', expiresAt: Date.now() + 3600_000 }));
+    const provider = new GoogleDriveProvider();
+    expect(provider.isSignedIn()).toBe(false);
     expect(localStorage.getItem('drive_access_token')).toBeNull();
+  });
+
+  it('restores the token and account from sessionStorage after a reload', () => {
+    sessionStorage.setItem(
+      'drive_session_token',
+      JSON.stringify({ accessToken: 'tab-token', expiresAt: Date.now() + 3600_000, account: 'me@example.com' }),
+    );
+    const provider = new GoogleDriveProvider();
+    expect(provider.hasUsableToken()).toBe(true);
+    expect(provider.accountLabel()).toBe('me@example.com');
+  });
+
+  describe('signed-in account', () => {
+    it('looks up the email with the about endpoint and keeps it for this tab', async () => {
+      const provider = connectedProvider();
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ user: { emailAddress: 'me@example.com', displayName: 'Me' } }) });
+      vi.stubGlobal('fetch', fetchMock);
+
+      expect(await provider.loadAccount()).toBe('me@example.com');
+      expect(provider.accountLabel()).toBe('me@example.com');
+      expect(String(fetchMock.mock.calls[0][0])).toContain('/drive/v3/about');
+      expect(sessionStorage.getItem('drive_session_token')).toContain('me@example.com');
+      // A second call uses what we already know.
+      await provider.loadAccount();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to the display name', async () => {
+      const provider = connectedProvider();
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ user: { displayName: 'Me' } }) }));
+      expect(await provider.loadAccount()).toBe('Me');
+    });
+
+    it('leaves the account unknown when the lookup fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const provider = connectedProvider();
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({}) }));
+      expect(await provider.loadAccount()).toBeNull();
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')));
+      expect(await provider.loadAccount()).toBeNull();
+      expect(provider.accountLabel()).toBeNull();
+      expect(provider.isSignedIn()).toBe(true);
+    });
+
+    it('skips the lookup without a token', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      expect(await new GoogleDriveProvider().loadAccount()).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('drops the lookup if we signed out while it ran', async () => {
+      const provider = connectedProvider();
+      let answer: (value: unknown) => void = () => undefined;
+      vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { answer = resolve; })));
+      const lookup = provider.loadAccount();
+      await provider.disconnect();
+      answer({ ok: true, json: async () => ({ user: { emailAddress: 'me@example.com' } }) });
+      expect(await lookup).toBeNull();
+      expect(provider.accountLabel()).toBeNull();
+    });
+  });
+
+  describe('disconnect', () => {
+    it('revokes the token and forgets everything about the session', async () => {
+      const revoke = vi.fn((_token: string, done: () => void) => done());
+      window.google = { accounts: { oauth2: { revoke } } };
+      const provider = connectedProvider();
+      (provider as any).account = 'me@example.com';
+      (provider as any).writeStoredToken();
+      (provider as any).indexes.set('p1', { rootId: 'p1', paths: new Map() });
+      localStorage.setItem('drive_active_file_ref', JSON.stringify({ id: 'f1', name: 'main.tex' }));
+
+      await provider.disconnect();
+
+      expect(revoke).toHaveBeenCalledWith('token', expect.any(Function));
+      expect(provider.isSignedIn()).toBe(false);
+      expect(provider.accountLabel()).toBeNull();
+      expect(provider.status()).toBe('Drive: Disconnected');
+      expect(sessionStorage.getItem('drive_session_token')).toBeNull();
+      expect(localStorage.getItem('drive_active_file_ref')).toBeNull();
+      expect((provider as any).indexes.size).toBe(0);
+      await expect(provider.listProjects()).rejects.toThrow(/Not connected/);
+    });
+
+    it('still signs out when the sign-in script cannot load', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      loadScript.mockRejectedValueOnce(new Error('blocked'));
+      const provider = connectedProvider();
+      await provider.disconnect();
+      expect(provider.isSignedIn()).toBe(false);
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('does not wait forever for Google to answer the revoke', async () => {
+      vi.useFakeTimers();
+      try {
+        window.google = { accounts: { oauth2: { revoke: vi.fn() } } };
+        const provider = connectedProvider();
+        const done = provider.disconnect();
+        await vi.advanceTimersByTimeAsync(5_000);
+        await done;
+        expect(provider.isSignedIn()).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('skips the revoke call when there is no token', async () => {
+      const provider = new GoogleDriveProvider();
+      await provider.disconnect();
+      expect(loadScript).not.toHaveBeenCalled();
+      expect(provider.status()).toBe('Drive: Disconnected');
+    });
+
+    it('ignores a token refresh that finishes after the sign-out', async () => {
+      vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'client-id');
+      let finish: () => void = () => undefined;
+      stubGis((config) => {
+        finish = () => config.callback({ access_token: 'late-token', expires_in: 3600 });
+      });
+      const provider = connectedProvider();
+      (provider as any).tokenExpiresAt = Date.now() - 1000;
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okList()));
+      const save = provider.listProjects();
+      // Let the refresh reach GIS before we sign out.
+      await vi.waitFor(() => expect(window.google.accounts.oauth2.initTokenClient).toHaveBeenCalled());
+      window.google.accounts.oauth2.revoke = (_token: string, done: () => void) => done();
+      await provider.disconnect();
+      finish();
+      await expect(save).rejects.toThrow(/Session expired/);
+      expect(provider.isSignedIn()).toBe(false);
+    });
   });
 });

@@ -92,4 +92,25 @@ describe('App integration behavior', () => {
     (document.getElementById('settings-close') as HTMLButtonElement).click();
     expect(dialog.isOpen()).toBe(false);
   });
+
+  it('shows who is signed in to Drive in settings', () => {
+    mountAppShell();
+    let driveAccount: string | null = null;
+    const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+      getState: () => ({ editorTheme: 'system', previewTheme: 'system', saveNowEnabled: true, canChangeSaving: true, driveAccount }),
+      onEditorTheme: () => undefined,
+      onPreviewTheme: () => undefined,
+      onSaveNowEnabled: () => undefined,
+      onClearLocalDocs: () => undefined,
+    });
+    const label = document.getElementById('settings-drive-account')!;
+    dialog.open();
+    expect(label.textContent).toBe('Not connected');
+    driveAccount = '';
+    dialog.refresh();
+    expect(label.textContent).toBe('Connected');
+    driveAccount = 'me@example.com';
+    dialog.refresh();
+    expect(label.textContent).toBe('Signed in as me@example.com');
+  });
 });
