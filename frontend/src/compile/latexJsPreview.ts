@@ -19,7 +19,18 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
   } catch (err) {
     return {
       html: null,
-      errors: [{ line: 1, severity: 'error', message: String(err) }],
+      errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }],
     };
   }
+}
+
+/**
+ * Get the 1-based line of a LaTeX.js parse error. The adapter keeps line breaks in place,
+ * so this line is already the editor line.
+ */
+function errorLine(err: unknown, source: string): number {
+  const line = (err as { location?: { start?: { line?: unknown } } } | null)?.location?.start?.line;
+  if (typeof line !== 'number' || !Number.isInteger(line) || line < 1) return 1;
+  // Clamp in case the error points past the end, like a missing \end{document}.
+  return Math.min(line, source.split('\n').length);
 }
