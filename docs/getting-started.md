@@ -2,35 +2,45 @@
 
 ## Open the app
 
-Use the URL where the editor is hosted (for example your team’s GitHub Pages site or a custom domain). The app needs **HTTPS** in production so the browser can use real-time collaboration features reliably.
+Go to the address where the editor is hosted, like your team's GitHub Pages site.
+The site needs HTTPS so collaboration and the clipboard work.
+
+While the page loads, a bar under the header says "Loading compiler assets...".
 
 ## Main areas of the screen
 
-| Area | Purpose |
-|------|--------|
-| **Title** | Shows the current document name. |
-| **Menu bar** | File, Edit, View, and Help actions (same actions appear in the command palette). |
-| **Share** | Creates a collaboration link for the current room (see [Sharing and collaboration](collaboration.md)). |
-| **Connection / compile / autosave** | Short status labels for networking, preview build, and saving. |
-| **Editor** | Your LaTeX source. |
-| **Preview** | Rendered output in a sandboxed view. |
-| **Splitter** | In split layout, drag the vertical bar to change how much space the editor and preview use. |
-| **Footer** | Diagnostics when the preview reports issues; links to Privacy, Terms, and the repository. |
+![The main screen with each area labeled](assets/screenshots/overview-light.png#only-light)
+![The main screen with each area labeled](assets/screenshots/overview-dark.png#only-dark)
+
+- **Project name** (top left): click it to rename the project.
+- **Menu bar**: File, Edit, View, and Help. The same commands are in the [command palette](interface-layout.md#command-palette).
+- **Share** and **New link**: make and reset the collaboration link. See [Sharing and collaboration](collaboration.md).
+- **Notice**: short messages next to Share, like "Share link copied to clipboard".
+- **Status pills**: connection, compile, and autosave. See [Status and error messages](messages.md).
+- **Files panel** (left): the project's file tree. See [Projects and files](projects.md).
+- **Editor** (middle): the open text file. Images and PDFs open in a viewer here instead.
+- **Preview** (right): the rendered document.
+- **Splitter**: drag the bar between the editor and preview to resize them.
+- **Footer**: preview diagnostics, plus links to Privacy, Terms, and the repository.
+
+For a diagram of how these fit together, see [How the app fits together](how-it-fits.md).
 
 ## Host vs guest
 
-- **Host (normal tab)**  
-  You opened the app **without** a `room` parameter in the address bar. You can use **File** actions such as opening local documents, connecting Google Drive, and clearing local storage (see [Saving and storage](saving-and-storage.md)). You start or continue a session and can use **Share** to invite others.
-
-- **Guest (joined room)**  
-  You opened a link that includes **`?room=…`**. You edit the same document as the host over a peer connection. File operations that change **your** Drive or **your** local document list are turned off, because the session follows the host’s document. The status line may show that you are using the host’s storage context.
+- **Host**: you opened the app without `?room=` in the address. You own the project. You can open, save, and start projects, connect Google Drive, and click **Share** to invite people.
+- **Guest**: you opened a link with `?room=...`. You edit the host's project over a direct connection. You can add and edit files, but you can't open, save, or start projects. Those menu items are grayed out. The autosave pill shows where the host is saving.
 
 ## First edits
 
-The editor starts with a small LaTeX skeleton. Type in the left pane; the preview on the right updates after a brief pause. If something cannot be processed for preview, a message may appear in the footer (see [Editing and preview](editing-and-preview.md)).
+A new tab starts with a starter project: one `main.tex` with a small LaTeX skeleton.
+
+1. Type in the editor. The preview updates after a short pause.
+2. Click **Untitled** at the top left and give the project a name. Now it autosaves to this browser.
+3. Add files with the buttons at the top of the Files panel, or drop files onto it.
+4. If something can't be shown, the footer says what and where. See [Editing and preview](editing-and-preview.md#diagnostics).
 
 ## Next steps
 
-- [Editing and preview](editing-and-preview.md)  
-- [Sharing and collaboration](collaboration.md)  
+- [Projects and files](projects.md)
+- [Sharing and collaboration](collaboration.md)
 - [Keyboard shortcuts](keyboard-shortcuts.md)

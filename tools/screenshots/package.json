@@ -1,0 +1,13 @@
+{
+  "name": "latex-editor-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Takes the docs screenshots with Playwright. Kept apart from frontend/ so Playwright never ends up in the app.",
+  "scripts": {
+    "shoot": "playwright install chromium && node shoot.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.65.0",
+    "sharp": "^0.35.5"
+  }
+}

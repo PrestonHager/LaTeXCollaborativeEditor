@@ -94,6 +94,126 @@ LaTeX preview channel
 - PDF and EPS figures can't be shown by LaTeX.js, so the preview puts a note in their place.
 - Assets (CSS/fonts/scripts) may be loaded from public CDNs; document LaTeX content is never sent to a server for preview.
 
+## Sequence diagrams
+
+These follow the code in `frontend/src/net/` and `frontend/src/collab/`.
+GitHub renders them, and so does MkDocs if this page is ever published.
+
+### Bootstrap
+
+The transport is trystero over WebTorrent trackers (`VITE_P2P_RENDEZVOUS`, or the defaults in `bootstrapConfig.ts`).
+The trackers only carry WebRTC offers and answers for the room topic.
+Document data starts after the data channel is open.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Host tab
+    participant T as Public trackers
+    participant G as Guest tab
+
+    Note over H: On load the badge says Not sharing.<br/>The host is not in a room yet.
+    H->>H: Share: ensureRoom() makes a random room id
+    H->>H: Save the room id in sessionStorage
+    H->>T: joinRoom(appId, roomId), announce
+    Note over H: Badge: Waiting for peers
+    H-->>H: Copy ?room= link
+    G->>G: Open the link (isClient = true)
+    G->>T: joinRoom(appId, roomId), announce
+    T-->>H: WebRTC offer from guest
+    H-->>T: Answer
+    T-->>G: Answer
+    Note over H,G: STUN (and TURN if set) find a path.<br/>Data channel opens.
+    H->>H: onPeerJoin, badge: Connected · 1 peer<br/>(Relayed if getStats() shows TURN)
+    G->>G: onPeerJoin, badge: Connected · 1 peer
+    opt the last peer leaves
+        Note over H,G: Badge: Reconnecting.<br/>Rejoin with backoff 1, 2, 4 ... 20 s.
+    end
+```
+
+### Initial sync
+
+The host sends a snapshot when a peer joins.
+The guest also sends `sync-request` every second until it gets one, in case the first snapshot was missed.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant H as Host
+    participant G as Guest
+
+    H->>G: doc-msg {kind: snapshot, state, docId, metadata}
+    G->>H: doc-msg {kind: sync-request} (every 1 s until a snapshot lands)
+    H->>G: doc-msg {kind: snapshot, ...}
+    alt same docId as the guest's doc
+        G->>G: Merge the snapshot
+        G->>H: doc-msg {kind: y-update} with edits the host is missing
+    else different docId and the guest has state
+        G->>G: Throw away the old doc, start from the snapshot
+        G->>G: onDocReplaced: rebind the editor and file tree
+    else guest has nothing yet
+        G->>G: Apply the snapshot
+    end
+    G->>G: Remember the host's peer id.<br/>Ignore snapshots from anyone else.
+    G->>G: Show metadata (title, host storage)
+```
+
+### Live edits
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Peer A
+    participant B as Peer B
+    participant C as Peer C
+
+    A->>A: Local Yjs update (typing, rename, upload entry)
+    par broadcast
+        A->>B: doc-msg {kind: y-update, update}
+    and
+        A->>C: doc-msg {kind: y-update, update}
+    end
+    B->>B: Apply, recompile, rebind tree
+    C->>C: Apply, recompile, rebind tree
+    Note over A: Host only: after a rename or storage change
+    A->>B: doc-msg {kind: metadata, title, storage}
+```
+
+### Project file transfer
+
+Binary files are not in the Yjs doc, only their hash.
+A peer that sees a hash it has no bytes for asks the room.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R as Receiver
+    participant S1 as Peer with the file
+    participant S2 as Another peer with the file
+
+    R->>R: Tree change: entry with hash h, not in BlobStore or IndexedDB
+    R->>S1: doc-msg {kind: file-request, hash: h}
+    R->>S2: doc-msg {kind: file-request, hash: h}
+    S1->>R: file-chunk (bytes, {hash, index: 0, total, size})
+    S2->>R: file-chunk (bytes, {hash, index: 0, total, size})
+    Note over R: Stick with S1, the first to answer.<br/>Drop chunks from S2.
+    S1->>R: file-chunk ... index: total - 1
+    R->>R: Join chunks, check size and SHA-256
+    alt hash matches
+        R->>R: BlobStore.put, save to IndexedDB, recompile
+    else bad hash, a missing chunk, or 15 s with no chunk
+        R->>S1: file-request again (up to 4 tries)
+    end
+    opt S1 leaves mid-transfer
+        R->>S2: file-request again
+    end
+    opt a new peer joins
+        R->>S2: file-request for every file still missing
+    end
+```
+
+Files over 10 MB are never sent, and a chunk header claiming more than that ends the transfer.
+
 Security and privacy notes
 - All document payloads are exchanged directly between peers.
 - Rendezvous metadata contains only routing/session information, not document content.

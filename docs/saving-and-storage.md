@@ -1,25 +1,15 @@
 # Saving and storage
 
-## Projects
+The host saves the whole project, either to this browser or to Google Drive.
+Guests don't save, the host does it for them.
+For working with files inside a project, see [Projects and files](projects.md).
 
-Everything you open, save, and share is a **project**: a folder with a main `.tex` file and any other files it uses, like images, `.bib` files, chapters, and custom `.sty` or `.cls` files.
+## Autosave and Save Now
 
-- The **Files** panel on the left shows the project's file tree.
-- Click a text file to edit it. Images and PDFs open in a viewer instead.
-- Use the buttons at the top of the panel (or the **File** menu) to add a file, add a folder, or upload files.
-- Hover a file to rename or move it (type a path with `/` to move it into a folder), delete it, or make it the main file.
-- Drag a file onto a folder to move it there.
-- Drop files from your computer onto the panel to upload them. Drop them on a folder to upload into that folder.
-- Uploads can be up to 10 MB each.
-- The **main file** is the one the preview starts from. It's the `.tex` file with `\documentclass` unless you pick another one.
-- Click the project name at the top left to rename the project.
+When you're the host, the app autosaves your project.
 
-## Autosave and “Save Now”
-
-When you are the **host** and not only a guest in someone else’s room, the app can **autosave** the project through the active storage provider.
-
-- The **autosave** line in the header tells you whether autosaving is active and often names the provider (for example local storage or Google Drive).
-- A new project isn't saved until it has a name. Saving asks for one if it needs it.
+- A project isn't saved until it has a name. Click the title at the top left, or use **Save Now**, and it asks for one.
+- After an edit, the save happens once you've stopped typing for 4 seconds. It also checks every minute.
 - Saves only write what changed: edited files, new files, moves, renames, and deletes.
 - **Save Now** (File menu or shortcut) saves right away instead of waiting for autosave.
 - **View > Pause Saving** (also in **Settings**) stops autosave and **Save Now** until you turn it off, so you can experiment without writing anything back.
@@ -28,53 +18,87 @@ When you are the **host** and not only a guest in someone else’s room, the app
   If you try to leave the page with unsaved edits, the browser asks you to confirm first.
   Saving to Google Drive or switching to another project still saves the current one, so you don't lose those edits.
   The setting is remembered after a reload.
-- A file a guest just uploaded gets saved once its bytes reach the host.
+- If a save fails, it tries again a few times before showing **Save Error** in the autosave pill.
+- A file a guest uploads gets saved once its bytes reach the host.
+- If you try to close the tab before the last save is done, the browser asks if you want to leave.
 
-Guests in a `?room=…` session see the host’s storage context in the status area. They can add and edit files in the shared project, but they don't save it themselves.
+**File > Save Now** (**Ctrl+S**) saves right away.
+
+**View > Disable Save Now** (also in Settings) turns off the Save Now command and **Ctrl+S**.
+It doesn't stop autosave.
+The pill says "Save Now Disabled" while it's on.
+
+The autosave pill tells you what's going on: **Saving pending**, **Saving**, **Saved to this browser**, **Saved to Google Drive**, or **Save Error: ...**.
+The full list is in [Status and error messages](messages.md#autosave-pill).
+
+Guests see the host's storage in the pill instead, like "Saved on host Google Drive".
 
 ## Local storage (browser)
 
-The app keeps projects in the browser's IndexedDB for this site.
+By default, projects are saved in this browser's storage (IndexedDB) for this site.
 
-- **Open Local Project** lists your saved projects, newest first, and opens the one you pick.
-- **Clear Local Projects** removes every project saved in this browser. It asks you to confirm first, since this can't be undone.
-- If browser storage is full or blocked (some private browsing modes), the autosave line says so. Download a .zip so you don't lose work.
+- **File > Open Local Project** (**Ctrl+O**) lists your saved projects, newest first. Click one to open it.
+- **File > Clear Local Projects** deletes every project saved in this browser. It asks first, since this can't be undone. The same button is in Settings.
+- If browser storage is full or blocked (some private browsing modes), the autosave pill says so. See [Storage full](troubleshooting.md#storage-full).
 - Documents saved by older versions of the app get moved into one-file projects the first time you open the new version.
 
-Local data is **per browser, per site**. Clearing site data in the browser or using another device will not carry those files over.
+Local data is per browser and per site.
+It doesn't follow you to another browser or device, and clearing site data deletes it.
+Download a `.zip` now and then if browser storage is your only copy.
 
 ## Download and upload a .zip
 
-- **Download Project .zip** saves the whole project to your computer.
-- **Download Current File** saves just the open file.
-- **Upload .zip as New Project** makes a new project from a .zip, like one downloaded from Overleaf. If everything in the zip sits in one folder, that folder becomes the project root.
+- **File > Download Project .zip** (**Ctrl+Shift+S**) saves the whole project to your computer.
+- **File > Download Current File** saves just the open file.
+- **File > Upload .zip as New Project** makes a new project from a `.zip`, like one from Overleaf.
+
+More in [Projects and files](projects.md#downloading).
 
 ## Google Drive
 
-If the deployment includes Google Picker credentials, you can:
+Drive only works if the site was set up with Google keys.
+If it wasn't, you'll see **Drive config missing** or **Drive: API key missing**.
 
-1. **Connect Google Drive** — sign in and establish a session with Drive.
-2. **Open from Google Drive** — pick a project folder, or an old single `.tex` file.
-3. **Save to Google Drive** — saves the project as a Drive folder. Each file is a real Drive file inside it, with subfolders kept as they are.
-4. **Move to Drive Folder** / **Rename Project** — move the project folder somewhere else in Drive, or rename it.
-5. **Disconnect Google Drive** — sign out and revoke the app's access token.
-   Your edits keep saving in this browser as a new local project.
+![The File menu with the Drive commands](assets/screenshots/file-menu-light.png#only-light)
+![The File menu with the Drive commands](assets/screenshots/file-menu-dark.png#only-dark)
 
-If **Connect** or **Open** fails, check the status message in the header (for example missing API key on that deployment).
+The File menu has these Drive commands, all host-only:
 
-- **Connect** opens a Google sign-in popup. If your browser blocks it, the status line tells you; allow popups for the site and try again.
-- Google sign-ins last about an hour. When the session expires, saves stop and the status line asks you to use **Connect Google Drive** again. After a page reload with an expired session, the app saves to this browser until you reconnect.
+- **Connect Google Drive**: sign in to Google, then autosave goes to Drive. If the project has no name yet, the pill says "Drive: Connected (name the project to save)".
+- **Save to Google Drive**: asks for a name if needed, signs in if needed, and saves right away.
+- **Open from Google Drive** (**Ctrl+Shift+O**): pick a project folder, or an old single `.tex` file.
+- **Move to Drive Folder**: pick a Drive folder to move the project folder into. Only works once the project is saved in Drive.
+- **Rename Project**: renames the project. The next save renames the Drive folder too.
+- **Disconnect Google Drive**: signs out and revokes the app's Drive token. Your edits keep saving in this browser as a new local project.
+
+How a project looks in Drive:
+
+- A project is a Drive folder, and each file is a real Drive file inside it, with subfolders kept as they are.
+- Files you delete in the app go to the Drive trash.
+- Moving a project from this browser to Drive saves a new copy there. The old copy in the browser stays.
+- An old single `.tex` file from before projects keeps saving to that file. When you add a second file, the app makes a project folder next to it and moves the file in.
+
+What the app can see:
+
+- The app asks only for the `drive.file` permission. It can see files it made and files you pick, nothing else.
+- If you add a file to the project folder in Drive itself, the app won't see it. Upload it from the editor instead.
+
+Sign-in:
+
+- Sign-in opens a Google popup. If your browser blocks it, see [Popups blocked](troubleshooting.md#popups-blocked).
+- Sign-ins last about an hour. The app tries to renew quietly. If that fails, it saves to this browser and shows a notice, so nothing is lost. Use **Connect Google Drive** to switch back.
+- The sign-in only lasts for the current tab. Reloading the tab keeps you signed in, but a new tab or a restarted browser asks you to connect again, and saves go to this browser until you do.
+- To see who's signed in, open **Settings** or hover over the save status in the header.
+
+When a save fails:
+
 - If your Google Drive is full, the status line says "Google Drive is full" and the app stops retrying.
   Free up space in Drive, or download a .zip so you don't lose work.
 - If Google is limiting requests, the app waits a moment and tries again on its own.
 - A save writes your files first and renames the project folder last.
   If a save fails partway, whatever finished stays saved, and the next save picks up the rest.
-- The sign-in only lasts for the current tab.
-  Reloading the tab keeps you signed in, but a new tab or a restarted browser asks you to connect again, and saves go to this browser until you do.
-- To see who's signed in, open **Settings** or hover over the save status in the header.
-- Moving a project between this browser and Drive saves a new copy there. The old copy stays where it was.
-- The app can only see files it made or that you picked. If you add a file to the project folder in Drive itself, the app won't see it yet. Upload it from the editor instead.
-- Opening an old single `.tex` file keeps saving to that file. Once you add a second file, the app makes a project folder next to the file and moves the file into it.
+
+More: [Drive sign-in](troubleshooting.md#drive-sign-in).
 
 ### When a file changed somewhere else
 
@@ -94,9 +118,12 @@ If someone changed the file in the meantime (in the Drive web UI, on another dev
 
 ## New project
 
-**New Project** starts a fresh project with a starter `main.tex`, after you confirm. The project you were on stays saved where it was.
+**File > New Project** (**Ctrl+N**) starts a fresh project with a starter `main.tex`, after you confirm.
+The project you were on stays saved where it was.
+New projects save to wherever you were saving before, browser or Drive.
 
 ## Related topics
 
-- [Getting started](getting-started.md)  
-- [Collaboration](collaboration.md)  
+- [Projects and files](projects.md)
+- [Getting started](getting-started.md)
+- [Sharing and collaboration](collaboration.md)

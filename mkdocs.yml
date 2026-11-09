@@ -24,14 +24,35 @@ theme:
     - navigation.tabs
     - search.suggest
     - search.highlight
+  # Light and dark schemes, so screenshots can use #only-light and #only-dark.
   palette:
-    primary: blue
-    accent: light-blue
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: light-blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: light-blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
 
 markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+  # Mermaid diagrams render from ```mermaid fences. Material loads Mermaid itself.
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - attr_list
+  - md_in_html
+  - tables
   - admonition
   - pymdownx.details
   - toc:
@@ -40,9 +61,16 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
+  - How it fits together: how-it-fits.md
+  - Projects & files: projects.md
   - Editing & preview: editing-and-preview.md
   - Sharing & collaboration: collaboration.md
   - Saving & storage: saving-and-storage.md
   - Interface & layout: interface-layout.md
   - Keyboard shortcuts: keyboard-shortcuts.md
+  - Help:
+      - Troubleshooting: troubleshooting.md
+      - Status & error messages: messages.md
+      - What's supported: whats-supported.md
+      - FAQ: faq.md
   - Search: search.md

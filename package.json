@@ -7,6 +7,7 @@
     "test": "npm --prefix frontend run test:run",
     "coverage:frontend": "npm --prefix frontend run test:coverage",
     "test:coverage": "npm run coverage:frontend",
-    "test:e2e": "npm --prefix e2e test"
+    "test:e2e": "npm --prefix e2e test",
+    "screenshots": "npm run build && npm --prefix tools/screenshots install --no-audit --no-fund && npm --prefix tools/screenshots run shoot"
   }
 }
