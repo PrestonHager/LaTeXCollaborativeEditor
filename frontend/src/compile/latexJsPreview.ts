@@ -1,4 +1,5 @@
 import { HtmlGenerator, parse } from 'latex.js';
+import { adaptLatexSourceForLatexJs } from './latexJsAdapt';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** LaTeX.js static assets (CSS, fonts, JS) — same version as the `latex.js` npm dependency. */
@@ -9,7 +10,8 @@ export const LATEX_JS_ASSET_BASE = 'https://cdn.jsdelivr.net/npm/latex.js@0.12.6
  */
 export function latexSourceToPreviewHtml(source: string): { html: string | null; errors: EditorDiagnostic[] } {
   try {
-    const generator = parse(source, {
+    const adapted = adaptLatexSourceForLatexJs(source);
+    const generator = parse(adapted, {
       generator: new HtmlGenerator({ hyphenate: false, documentClass: 'article' }),
     });
     const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);

@@ -3,7 +3,11 @@ frontend/node_modules/
 frontend/dist/
 frontend/coverage/
 frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 site/
 third_party/
 *.zip
 __pycache__/
+*.tex
+!frontend/src/**/__fixtures__/*.tex

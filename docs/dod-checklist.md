@@ -13,6 +13,7 @@ Checklist
 - [ ] Preview sandbox: the rendered preview runs inside a sandboxed iframe to isolate execution.
 - [ ] Export: the local editor content can be downloaded as a .tex file.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
+- [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
 - [ ] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.

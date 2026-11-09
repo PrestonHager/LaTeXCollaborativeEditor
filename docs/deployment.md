@@ -18,6 +18,15 @@ Frontend deployment (GitHub Pages)
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
 - **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository or **Production** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/`. Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
 
+Local development
+- The dev server always runs on `http://localhost:5173`. It won't pick another port if that one is taken, since Google OAuth only allows exact origins.
+- Use a separate Google Cloud project (or at least a separate OAuth client and API key) for development.
+- In that project, add `http://localhost:5173` to the OAuth client's Authorized JavaScript origins. If the API key has website restrictions, allow `http://localhost:5173/*` too.
+- Copy `frontend/.env.development.example` to `frontend/.env.development.local` and fill in the dev keys. Vite loads it only for `npm run dev`, and it overrides `frontend/.env`.
+- `.local` env files are gitignored, so the dev keys stay out of the repo.
+- Never put a client secret in any env file. Anything starting with `VITE_` can end up in the browser bundle.
+- In VS Code, the **Dev server + Chrome** or **Dev server + Edge** launch configs start Vite and open a debug browser once it's ready. **Debug current test file** runs Vitest on the open file with breakpoints.
+
 Runtime architecture (summary)
 - There is no custom signaling server in this repository.
 - Peers discover each other via configured public rendezvous endpoints.
