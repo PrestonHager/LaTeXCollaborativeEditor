@@ -33,7 +33,7 @@ export type CommandId =
   | 'view.darkMode'
   | 'view.lightMode'
   | 'view.systemTheme'
-  | 'view.toggleSaveNow'
+  | 'view.togglePauseSaving'
   | 'view.compileNow'
   | 'view.focusEditor'
   | 'view.layoutSplit'

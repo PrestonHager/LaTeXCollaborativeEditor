@@ -104,6 +104,81 @@ describe('AutosaveController', () => {
     expect(statuses[statuses.length - 1]).toBe('Saving pending');
   });
 
+  it('does not save while paused, then saves the paused edits on resume', async () => {
+    vi.useFakeTimers();
+    const statuses: string[] = [];
+    const save = vi.fn(async () => {});
+    const autosave = new AutosaveController({ save: saver(save), onStatus: (s) => statuses.push(s) });
+    autosave.enable();
+    autosave.setPaused(true);
+    expect(autosave.isPaused()).toBe(true);
+    autosave.markDirty();
+    // Run past both the debounce and the interval.
+    await vi.advanceTimersByTimeAsync(61000);
+    expect(save).not.toHaveBeenCalled();
+    expect(autosave.hasUnsavedChanges()).toBe(true);
+    expect(statuses[statuses.length - 1]).toBe('Saving paused');
+
+    autosave.setPaused(false);
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(autosave.hasUnsavedChanges()).toBe(false));
+    expect(statuses[statuses.length - 1]).toBe('Saved');
+  });
+
+  it('cancels a pending debounced save when paused', async () => {
+    vi.useFakeTimers();
+    const save = vi.fn(async () => {});
+    const autosave = new AutosaveController({ save: saver(save), onStatus: () => undefined });
+    autosave.enable();
+    autosave.markDirty();
+    autosave.setPaused(true);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('says autosave is on when resuming with nothing to save', () => {
+    const statuses: string[] = [];
+    const save = vi.fn(async () => {});
+    const autosave = new AutosaveController({ save: saver(save), onStatus: (s) => statuses.push(s) });
+    autosave.enable();
+    autosave.setPaused(true);
+    // Setting the same value again does nothing.
+    autosave.setPaused(true);
+    expect(statuses.filter((s) => s === 'Saving paused')).toHaveLength(1);
+    autosave.setPaused(false);
+    expect(save).not.toHaveBeenCalled();
+    expect(statuses[statuses.length - 1]).toBe('Autosave On');
+  });
+
+  it('shows the paused status when enabled while paused', () => {
+    const statuses: string[] = [];
+    const autosave = new AutosaveController({ save: saver(vi.fn(async () => {})), onStatus: (s) => statuses.push(s) });
+    autosave.setPaused(true);
+    autosave.enable();
+    expect(statuses[statuses.length - 1]).toBe('Saving paused');
+  });
+
+  it('keeps the paused status after a forced save leaves edits behind', async () => {
+    const statuses: string[] = [];
+    let release: () => void = () => undefined;
+    const save = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const autosave = new AutosaveController({ save: saver(save), onStatus: (s) => statuses.push(s) });
+    autosave.enable();
+    autosave.setPaused(true);
+    const pending = autosave.saveNow();
+    await vi.waitFor(() => expect(save).toHaveBeenCalled());
+    autosave.markDirty();
+    release();
+    expect(await pending).toBe(true);
+    expect(autosave.hasUnsavedChanges()).toBe(true);
+    expect(statuses[statuses.length - 1]).toBe('Saving paused');
+  });
+
   it('enable clears an existing interval before starting a new one', () => {
     vi.useFakeTimers();
     const clearIntervalSpy = vi.spyOn(window, 'clearInterval');

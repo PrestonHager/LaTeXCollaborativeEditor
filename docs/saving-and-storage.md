@@ -21,7 +21,13 @@ When you are the **host** and not only a guest in someone else’s room, the app
 - The **autosave** line in the header tells you whether autosaving is active and often names the provider (for example local storage or Google Drive).
 - A new project isn't saved until it has a name. Saving asks for one if it needs it.
 - Saves only write what changed: edited files, new files, moves, renames, and deletes.
-- **Save Now** (File menu or shortcut) forces a save when autosave is enabled. You can **disable Save Now / autosave** from the **View** menu when you want to experiment without writing back immediately (menu label toggles accordingly).
+- **Save Now** (File menu or shortcut) saves right away instead of waiting for autosave.
+- **View > Pause Saving** (also in **Settings**) stops autosave and **Save Now** until you turn it off, so you can experiment without writing anything back.
+  The autosave line says **Saving paused** while it's on, and the palette shows **Resume Saving**.
+  Edits you make while paused are saved as soon as you resume.
+  If you try to leave the page with unsaved edits, the browser asks you to confirm first.
+  Saving to Google Drive or switching to another project still saves the current one, so you don't lose those edits.
+  The setting is remembered after a reload.
 - A file a guest just uploaded gets saved once its bytes reach the host.
 
 Guests in a `?room=…` session see the host’s storage context in the status area. They can add and edit files in the shared project, but they don't save it themselves.

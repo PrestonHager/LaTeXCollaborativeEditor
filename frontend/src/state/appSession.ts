@@ -7,6 +7,7 @@ export type AppSessionState = {
   documentName: string;
   content: string;
   providerMode: ProviderMode;
+  // False when saving is paused. It keeps its old name so saved sessions still load.
   saveNowEnabled: boolean;
   editorTheme: ThemeMode;
   previewTheme: ThemeMode;
