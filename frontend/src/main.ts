@@ -1,7 +1,6 @@
 import './style.css';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
-import { createEditHistory } from './ui/history';
 import { createMenuBar, type CommandId, type CommandState } from './ui/menuBar';
 import { createCommandPalette, type PaletteCommand } from './ui/commandPalette';
 import { setupShareButton } from './ui/shareButton';
@@ -12,18 +11,22 @@ import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
-import { yCollab } from 'y-codemirror.next';
+import { createCollabUndo } from './collab/undo';
 import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
 import {
   createDocumentId,
   readAppSessionState,
   writeAppSessionState,
+  encodeYjsState,
+  decodeYjsState,
+  type PersistedYjsState,
   type ProviderMode,
   type ThemeMode,
 } from './state/appSession';
 import { renameDocumentTitle, toTexName } from './storage/documentRename';
 import { formatPrimaryChord } from './ui/modifierShortcutLabels';
+import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -34,6 +37,7 @@ app.innerHTML = `
     <h1 id="doc-title" class="doc-title">Untitled</h1>
     <div id="menu-bar"></div>
     <button id="share-btn">Share</button>
+    <button id="new-link-btn" hidden>New link</button>
     <a id="share-link" class="muted" href="" target="_blank" rel="noreferrer"></a>
     <span id="app-notice" class="muted" role="status" aria-live="polite"></span>
     <span id="connection-status" class="pill">Disconnected</span>
@@ -160,6 +164,10 @@ function applyPreviewTheme(theme: ThemeMode) {
   window.dispatchEvent(new CustomEvent('previewthemechange'));
 }
 
+// The session is created further down, so until then keep whatever Yjs state was restored.
+let restoredYjsState: PersistedYjsState | undefined;
+let currentYjsState = (): PersistedYjsState | undefined => restoredYjsState;
+
 const persistAppSession = () => {
   if (isClient) return;
   writeAppSessionState({
@@ -170,6 +178,7 @@ const persistAppSession = () => {
     saveNowEnabled,
     editorTheme,
     previewTheme,
+    yjs: currentYjsState(),
   });
 };
 
@@ -259,6 +268,7 @@ if (!isClient) {
     editorTheme = restored.editorTheme;
     previewTheme = restored.previewTheme;
     titleEl.textContent = documentName;
+    restoredYjsState = restored.yjs;
     if (restored.content) {
       editor.setText(restored.content, false);
     }
@@ -308,8 +318,32 @@ const session = new SessionController({
     title: documentName,
     storage: currentStorageLabel(),
   }),
+  initialState: restoredDocState(),
+  onDocReplaced: (text) => {
+    // The guest got a whole new doc, so unbind, show its text, then bind the editor to it.
+    editor.setCollabExtensions([]);
+    editor.setText(text, false);
+    // The old undo stack points at a doc that's gone, so start a fresh one on the new text.
+    undo.manager.destroy();
+    undo = createCollabUndo(session.getYText());
+    undo.subscribe(() => menuBar.refresh());
+    editor.setCollabExtensions(undo.extensions());
+    menuBar.refresh();
+  },
 });
-editor.setCollabExtensions([yCollab(session.getYText(), null)]);
+// Undo goes through Yjs so it only reverts our own edits, not a peer's.
+let undo = createCollabUndo(session.getYText());
+editor.setCollabExtensions(undo.extensions());
+currentYjsState = () => {
+  const persisted = session.getPersistedState();
+  return persisted ? { docId: persisted.docId, state: encodeYjsState(persisted.state) } : undefined;
+};
+
+function restoredDocState() {
+  if (!restoredYjsState) return undefined;
+  const state = decodeYjsState(restoredYjsState.state);
+  return state ? { docId: restoredYjsState.docId, state } : undefined;
+}
 
 let compileTimer: ReturnType<typeof setTimeout> | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -383,18 +417,6 @@ const scheduleCompile = (source: string) => {
     requestCompile(pendingSource);
     compileTimer = null;
   }, COMPILE_DEBOUNCE_MS);
-};
-
-const history = createEditHistory({
-  initialText: editor.getText(),
-  limit: 100,
-});
-let applyingHistoryChange = false;
-
-const runWithHistoryApply = (nextText: string) => {
-  applyingHistoryChange = true;
-  editor.setText(nextText, true);
-  applyingHistoryChange = false;
 };
 
 /** Switch to a different document id and tell Drive, so new links belong to this doc. */
@@ -638,16 +660,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     await localAppProvider.clear();
     autosaveStatusEl.textContent = 'Local saved docs cleared';
   },
-  'edit.undo': () => {
-    const next = history.undo();
-    if (next === null) return;
-    runWithHistoryApply(next);
-  },
-  'edit.redo': () => {
-    const next = history.redo();
-    if (next === null) return;
-    runWithHistoryApply(next);
-  },
+  'edit.undo': () => undo.undo(),
+  'edit.redo': () => undo.redo(),
   'edit.cut': () => {
     editor.focus();
     document.execCommand('cut');
@@ -746,9 +760,9 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'file.saveNow':
       return { enabled: !isClient && saveNowEnabled };
     case 'edit.undo':
-      return { enabled: history.canUndo() };
+      return { enabled: undo.canUndo() };
     case 'edit.redo':
-      return { enabled: history.canRedo() };
+      return { enabled: undo.canRedo() };
     case 'view.toggleEditorTheme':
     case 'view.togglePreviewTheme':
       return { enabled: true };
@@ -818,7 +832,7 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-history.subscribe(() => menuBar.refresh());
+undo.subscribe(() => menuBar.refresh());
 
 const commandPalette = createCommandPalette({
   onSelect: (commandId) => executeCommand(commandId),
@@ -887,13 +901,8 @@ window.addEventListener('keydown', (event) => {
 
 editor.onTextChanged((text, sync = true) => {
   scheduleCompile(text);
-  if (sync) {
-    if (!applyingHistoryChange) {
-      history.record(text);
-    }
-  } else {
-    history.rebase(text);
-  }
+  // Loading a different document shouldn't be undoable, so drop the stack.
+  if (!sync) undo.clear();
   if (!isClient && documentName !== 'Untitled') {
     autosave.markDirty();
   }
@@ -902,7 +911,10 @@ editor.onTextChanged((text, sync = true) => {
   persistAppSession();
 });
 
+// Guests join the room in the URL, and a reloaded host rejoins the room this tab already shared.
+const hostRoomId = isClient ? null : readHostRoomId();
 if (roomId) session.join(roomId);
+else if (hostRoomId) session.join(hostRoomId);
 installSplitter();
 applyLayoutMode();
 editor.setEditable(false);
@@ -914,9 +926,21 @@ scheduleCompile(editor.getText());
 setupShareButton({
   button: document.getElementById('share-btn') as HTMLButtonElement,
   linkEl: shareLinkEl,
-  getRoomId: () => session.ensureRoom(),
+  getRoomId: () => {
+    const id = session.ensureRoom();
+    if (!isClient) writeHostRoomId(id);
+    return id;
+  },
   getCurrentUrl: () => location.href,
   onStatus: (message) => showNotice(message),
+  initialRoomId: hostRoomId,
+  newLinkButton: isClient ? undefined : (document.getElementById('new-link-btn') as HTMLButtonElement),
+  getNewRoomId: () => {
+    const id = session.newRoom();
+    writeHostRoomId(id);
+    return id;
+  },
+  confirmNewLink: () => window.confirm('Start a new link? Anyone using the old link will be disconnected.'),
 });
 
 if (!isClient) {

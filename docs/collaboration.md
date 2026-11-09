@@ -8,6 +8,10 @@
 
 Send that link to people you want in the session. They should open it in a **modern browser** with WebRTC allowed (same requirements as other real-time web apps).
 
+If you reload the host tab, it rejoins the same room and the link keeps working.
+The room is remembered per tab, so closing the tab or opening a new one starts fresh.
+To drop everyone on the old link, click **New link** next to Share.
+
 ## Connection status
 
 The **Connection** pill in the header reflects whether the peer session is up, connecting, or disconnected. If someone cannot join, check firewalls, VPNs, and whether a **TURN** server is required on restrictive networks (that is configured by whoever deployed the app).

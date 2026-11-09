@@ -81,6 +81,82 @@ describe('setupShareButton', () => {
     expect(link.textContent).toBe('http://localhost:5173/?room=next-room');
   });
 
+  it('shows the saved room link on load without copying', () => {
+    const button = document.createElement('button');
+    const link = document.createElement('a');
+    const newLink = document.createElement('button');
+    const copyText = vi.fn(async () => undefined);
+
+    setupShareButton({
+      button,
+      linkEl: link,
+      getRoomId: () => 'saved',
+      getCurrentUrl: () => 'https://host/',
+      copyText,
+      initialRoomId: 'saved',
+      newLinkButton: newLink,
+      getNewRoomId: () => 'fresh',
+    });
+
+    expect(link.textContent).toBe('https://host/?room=saved');
+    expect(newLink.hidden).toBe(false);
+    expect(copyText).not.toHaveBeenCalled();
+  });
+
+  it('keeps New link hidden until there is a link', async () => {
+    const button = document.createElement('button');
+    const link = document.createElement('a');
+    const newLink = document.createElement('button');
+
+    setupShareButton({
+      button,
+      linkEl: link,
+      getRoomId: () => 'r',
+      getCurrentUrl: () => 'https://host/',
+      copyText: async () => undefined,
+      newLinkButton: newLink,
+      getNewRoomId: () => 'fresh',
+    });
+
+    expect(newLink.hidden).toBe(true);
+    button.click();
+    expect(newLink.hidden).toBe(false);
+  });
+
+  it('New link swaps in a fresh room after confirming', async () => {
+    const button = document.createElement('button');
+    const link = document.createElement('a');
+    const newLink = document.createElement('button');
+    const copyText = vi.fn(async () => undefined);
+    const getNewRoomId = vi.fn(() => 'fresh');
+    let confirmed = false;
+
+    setupShareButton({
+      button,
+      linkEl: link,
+      getRoomId: () => 'old',
+      getCurrentUrl: () => 'https://host/',
+      copyText,
+      initialRoomId: 'old',
+      newLinkButton: newLink,
+      getNewRoomId,
+      confirmNewLink: () => confirmed,
+    });
+
+    // First, a declined confirm leaves the old link alone.
+    newLink.click();
+    expect(getNewRoomId).not.toHaveBeenCalled();
+    expect(link.textContent).toBe('https://host/?room=old');
+
+    // Now confirm and the new link is shown and copied.
+    confirmed = true;
+    newLink.click();
+    await Promise.resolve();
+    expect(getNewRoomId).toHaveBeenCalledTimes(1);
+    expect(link.textContent).toBe('https://host/?room=fresh');
+    expect(copyText).toHaveBeenCalledWith('https://host/?room=fresh');
+  });
+
   it('uses navigator.clipboard when copyText is omitted', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });

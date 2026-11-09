@@ -1,6 +1,6 @@
 import { EditorState, Compartment, EditorSelection } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { bracketMatching } from '@codemirror/language';
@@ -31,7 +31,6 @@ export function createEditorPane(container: HTMLElement) {
       EditorView.lineWrapping,
       highlightActiveLine(),
       highlightActiveLineGutter(),
-      history(),
       bracketMatching(),
       closeBrackets(),
       lintGutter(),
@@ -44,7 +43,6 @@ export function createEditorPane(container: HTMLElement) {
       ]),
       keymap.of([
         ...defaultKeymap,
-        ...historyKeymap,
         ...closeBracketsKeymap,
         indentWithTab,
       ]),
