@@ -1,12 +1,17 @@
 import type { StorageProvider } from './types';
+import { StorageError } from '../errors';
+import { loadScript } from './scriptLoader';
 
 type GoogleTokenResponse = {
   access_token?: string;
   expires_in?: number;
   error?: string;
+  error_description?: string;
 };
+type GoogleTokenError = { type?: string; message?: string };
 type DriveFileRef = { id: string; name: string };
 type StoredToken = { accessToken: string; expiresAt: number };
+type TokenResult = { ok: true } | { ok: false; reason: string };
 
 declare global {
   interface Window {
@@ -14,22 +19,53 @@ declare global {
   }
 }
 
+const GIS_SCRIPT = 'https://accounts.google.com/gsi/client';
+const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
+const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
+// Treat the token as expired a minute early so a save doesn't race the expiry.
+const TOKEN_EXPIRY_SLACK_MS = 60_000;
+
 export class GoogleDriveProvider implements StorageProvider {
-  private accessToken = this.readStoredAccessToken();
+  readonly label = 'Google Drive';
+  private accessToken = '';
+  private tokenExpiresAt = 0;
   private fileRef: DriveFileRef | null = this.readStoredFileRef();
   private currentStatus = 'Autosave Off';
   private static readonly storageKey = 'drive_active_file_ref';
   private static readonly tokenStorageKey = 'drive_access_token';
 
+  constructor() {
+    this.readStoredAccessToken();
+  }
+
   status() { return this.currentStatus; }
   getAccessToken() { return this.accessToken; }
   getCurrentFileRef() { return this.fileRef; }
 
+  /** Check for a live token without opening any sign-in popup. */
+  hasUsableToken(): boolean {
+    return this.accessToken.length > 0 && this.tokenExpiresAt - TOKEN_EXPIRY_SLACK_MS > Date.now();
+  }
+
+  /**
+   * Forget the currently linked Drive file, so the next save creates a new one.
+   * Call this whenever the editor switches to a different document.
+   */
+  detachFile() {
+    this.fileRef = null;
+    this.persistFileRef(null);
+  }
+
+  /**
+   * Sign in with Google Identity Services and get a Drive access token.
+   * NOTE: this opens a popup, so it has to run from a user click or the browser will block it.
+   */
   async connect(): Promise<boolean> {
     if (this.hasUsableToken()) {
       this.currentStatus = 'Drive: Connected';
       return true;
     }
+    this.clearAccessToken();
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
       this.currentStatus = 'Drive config missing';
@@ -37,30 +73,27 @@ export class GoogleDriveProvider implements StorageProvider {
     }
     this.currentStatus = 'Drive: Connecting...';
     try {
-      await this.ensureScript('https://accounts.google.com/gsi/client');
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: () => {
-          // Callback is supplied per-request below.
-        },
-      });
-      const silent = await this.requestAccessToken(tokenClient, '');
-      if (silent) {
+      await loadScript(GIS_SCRIPT, 'Google sign-in');
+      const oauth2 = window.google?.accounts?.oauth2;
+      if (!oauth2?.initTokenClient) {
+        throw new Error('Google sign-in script loaded but the OAuth client is missing');
+      }
+      const result = await this.requestAccessToken(oauth2, clientId);
+      if (result.ok) {
         this.currentStatus = 'Drive: Connected';
         return true;
       }
-      const consent = await this.requestAccessToken(tokenClient, 'consent');
-      this.currentStatus = consent ? 'Drive: Connected' : 'Drive: Authorization failed';
-      return consent;
-    } catch {
+      this.currentStatus = `Drive: ${result.reason}`;
+      return false;
+    } catch (error) {
+      console.error('Google Drive connect failed', error);
       this.currentStatus = 'Drive: Connection failed';
       return false;
     }
   }
 
   async save(content: string, fileName: string): Promise<void> {
-    if (!this.accessToken) throw new Error('Google Drive not connected');
+    this.requireToken();
     if (!this.fileRef) {
       const fileId = await this.createFile(fileName, content);
       this.fileRef = { id: fileId, name: fileName };
@@ -70,24 +103,26 @@ export class GoogleDriveProvider implements StorageProvider {
     await this.updateFile(this.fileRef.id, content);
   }
 
+  /**
+   * Rename the linked Drive file then write the latest content.
+   * Before, this dropped the link and created a brand new file, which left duplicates in Drive.
+   */
   async saveAs(content: string, _oldFileName: string, newFileName: string): Promise<void> {
-    this.fileRef = null;
-    this.persistFileRef(null);
-    await this.save(content, newFileName);
+    this.requireToken();
+    if (!this.fileRef) {
+      await this.save(content, newFileName);
+      return;
+    }
+    await this.renameFile(this.fileRef.id, newFileName);
+    await this.updateFile(this.fileRef.id, content);
   }
 
   async openDocument(fileId: string): Promise<{ name: string; content: string }> {
-    if (!this.accessToken) throw new Error('Google Drive not connected');
-    const metadataRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name`, {
-      headers: { Authorization: `Bearer ${this.accessToken}` },
-    });
-    if (!metadataRes.ok) throw new Error('Drive: Failed to load file metadata');
+    this.requireToken();
+    const metadataRes = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=id,name`, {}, 'load file details');
     const metadata = await metadataRes.json();
 
-    const contentRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${this.accessToken}` },
-    });
-    if (!contentRes.ok) throw new Error('Drive: Failed to load file content');
+    const contentRes = await this.driveFetch(`${DRIVE_API}/${fileId}?alt=media`, {}, 'load file content');
     const content = await contentRes.text();
     this.fileRef = { id: metadata.id, name: metadata.name };
     this.persistFileRef(this.fileRef);
@@ -95,16 +130,16 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   async renameFile(fileId: string, newName: string): Promise<void> {
-    if (!this.accessToken) throw new Error('Google Drive not connected');
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-      method: 'PATCH',
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
+    this.requireToken();
+    await this.driveFetch(
+      `${DRIVE_API}/${fileId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
       },
-      body: JSON.stringify({ name: newName }),
-    });
-    if (!res.ok) throw new Error('Drive: Failed to rename file');
+      'rename file',
+    );
     if (this.fileRef?.id === fileId) {
       this.fileRef = { ...this.fileRef, name: newName };
       this.persistFileRef(this.fileRef);
@@ -112,23 +147,16 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   async moveFile(fileId: string, targetFolderId: string): Promise<void> {
-    if (!this.accessToken) throw new Error('Google Drive not connected');
-    const detailsRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
-      headers: { Authorization: `Bearer ${this.accessToken}` },
-    });
-    if (!detailsRes.ok) throw new Error('Drive: Failed to fetch parent folder');
+    this.requireToken();
+    const detailsRes = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=parents`, {}, 'look up the current folder');
     const details = await detailsRes.json();
     const removeParents = Array.isArray(details.parents) ? details.parents.join(',') : '';
-    const url = new URL(`https://www.googleapis.com/drive/v3/files/${fileId}`);
+    const url = new URL(`${DRIVE_API}/${fileId}`);
     url.searchParams.set('addParents', targetFolderId);
     if (removeParents) {
       url.searchParams.set('removeParents', removeParents);
     }
-    const moveRes = await fetch(url.toString(), {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${this.accessToken}` },
-    });
-    if (!moveRes.ok) throw new Error('Drive: Failed to move file');
+    await this.driveFetch(url.toString(), { method: 'PATCH' }, 'move file');
   }
 
   private async createFile(fileName: string, content: string): Promise<string> {
@@ -138,36 +166,67 @@ export class GoogleDriveProvider implements StorageProvider {
     form.append('metadata', metadata);
     form.append('file', data);
 
-    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${this.accessToken}` },
-      body: form,
-    });
-    if (!res.ok) throw new Error('Drive: Failed to create file');
+    const res = await this.driveFetch(`${DRIVE_UPLOAD_API}?uploadType=multipart`, { method: 'POST', body: form }, 'create file');
     const json = await res.json();
+    if (!json?.id) throw new StorageError('Drive: Created a file but Google did not return its id');
     return json.id;
   }
 
   private async updateFile(fileId: string, content: string): Promise<void> {
-    const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'text/plain' },
-      body: content,
-    });
-    if (!res.ok) throw new Error('Drive: Failed to update file');
+    await this.driveFetch(
+      `${DRIVE_UPLOAD_API}/${fileId}?uploadType=media`,
+      { method: 'PATCH', headers: { 'Content-Type': 'text/plain' }, body: content },
+      'save file',
+    );
   }
 
-  private async ensureScript(src: string): Promise<void> {
-    if (document.querySelector(`script[src="${src}"]`)) return;
-    await new Promise<void>((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
-      document.head.appendChild(script);
+  /**
+   * Call the Drive API with our token and turn failures into readable errors.
+   * A 401 means the token died, so we clear it and tell the user to reconnect.
+   */
+  private async driveFetch(url: string, init: RequestInit, action: string): Promise<Response> {
+    const headers = { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${this.accessToken}` };
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, headers });
+    } catch (error) {
+      throw new StorageError(`Drive: Could not ${action}. Check your connection and try again.`, { cause: error });
+    }
+    if (res.ok) return res;
+
+    const detail = await readGoogleErrorMessage(res);
+    if (res.status === 401) {
+      this.clearAccessToken();
+      this.currentStatus = 'Drive: Session expired';
+      throw new StorageError('Drive: Session expired. Use File > Connect Google Drive to sign in again.', {
+        retryable: false,
+        status: 401,
+      });
+    }
+    if (res.status === 404) {
+      // NOTE: with the drive.file scope we only see files this app created or the user picked.
+      throw new StorageError(
+        `Drive: Could not ${action}. The file was not found or this app does not have access to it.`,
+        { retryable: false, status: 404 },
+      );
+    }
+    if (res.status === 403) {
+      throw new StorageError(`Drive: Permission denied while trying to ${action}${detail ? ` (${detail})` : ''}.`, {
+        retryable: /rate|quota/i.test(detail),
+        status: 403,
+      });
+    }
+    throw new StorageError(`Drive: Could not ${action} (HTTP ${res.status}${detail ? `: ${detail}` : ''}).`, {
+      retryable: res.status >= 500 || res.status === 429,
+      status: res.status,
     });
+  }
+
+  private requireToken() {
+    if (!this.hasUsableToken()) {
+      this.clearAccessToken();
+      throw new StorageError('Drive: Not connected. Use File > Connect Google Drive first.', { retryable: false });
+    }
   }
 
   private readStoredFileRef(): DriveFileRef | null {
@@ -183,51 +242,107 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   private persistFileRef(fileRef: DriveFileRef | null) {
-    if (!fileRef) {
-      localStorage.removeItem(GoogleDriveProvider.storageKey);
-      return;
+    try {
+      if (!fileRef) {
+        localStorage.removeItem(GoogleDriveProvider.storageKey);
+        return;
+      }
+      localStorage.setItem(GoogleDriveProvider.storageKey, JSON.stringify(fileRef));
+    } catch (error) {
+      // Losing the file link only matters after a reload, so don't fail the save over it.
+      console.warn('Could not remember the open Drive file', error);
     }
-    localStorage.setItem(GoogleDriveProvider.storageKey, JSON.stringify(fileRef));
   }
 
-  private hasUsableToken(): boolean {
-    return this.accessToken.length > 0;
-  }
-
-  private requestAccessToken(tokenClient: any, prompt: '' | 'consent'): Promise<boolean> {
+  /**
+   * Ask Google for a token. We only make one request: GIS shows the consent screen on its own
+   * when needed, and a second popup after an await gets blocked since it's no longer a user click.
+   */
+  private requestAccessToken(oauth2: any, clientId: string): Promise<TokenResult> {
     return new Promise((resolve) => {
-      tokenClient.callback = (resp: GoogleTokenResponse) => {
-        if (!resp?.access_token || resp.error) {
-          resolve(false);
-          return;
-        }
-        this.accessToken = resp.access_token;
-        const expiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000;
-        this.persistAccessToken({ accessToken: this.accessToken, expiresAt });
-        resolve(true);
-      };
-      tokenClient.requestAccessToken({ prompt });
+      const tokenClient = oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'https://www.googleapis.com/auth/drive.file',
+        callback: (resp: GoogleTokenResponse) => {
+          if (!resp?.access_token || resp.error) {
+            resolve({ ok: false, reason: describeTokenError(resp?.error, resp?.error_description) });
+            return;
+          }
+          const expiresAt = Date.now() + (resp.expires_in ?? 3600) * 1000;
+          this.setAccessToken(resp.access_token, expiresAt);
+          resolve({ ok: true });
+        },
+        // Without this the promise never settles when the popup is closed or blocked.
+        error_callback: (err: GoogleTokenError) => {
+          resolve({ ok: false, reason: describeTokenError(err?.type, err?.message) });
+        },
+      });
+      tokenClient.requestAccessToken({ prompt: '' });
     });
   }
 
-  private readStoredAccessToken(): string {
+  private setAccessToken(accessToken: string, expiresAt: number) {
+    this.accessToken = accessToken;
+    this.tokenExpiresAt = expiresAt;
     try {
-      const raw = localStorage.getItem(GoogleDriveProvider.tokenStorageKey);
-      if (!raw) return '';
-      const parsed = JSON.parse(raw) as StoredToken;
-      if (!parsed?.accessToken || !parsed?.expiresAt) return '';
-      const isExpired = parsed.expiresAt <= Date.now() + 60_000;
-      if (isExpired) {
-        localStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
-        return '';
-      }
-      return parsed.accessToken;
-    } catch {
-      return '';
+      const stored: StoredToken = { accessToken, expiresAt };
+      localStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(stored));
+    } catch (error) {
+      console.warn('Could not cache the Drive token; you will need to reconnect after reload', error);
     }
   }
 
-  private persistAccessToken(token: StoredToken) {
-    localStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(token));
+  private clearAccessToken() {
+    this.accessToken = '';
+    this.tokenExpiresAt = 0;
+    try {
+      localStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+    } catch {
+      // Nothing else to do if storage is locked down.
+    }
+  }
+
+  private readStoredAccessToken() {
+    try {
+      const raw = localStorage.getItem(GoogleDriveProvider.tokenStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StoredToken;
+      if (!parsed?.accessToken || !parsed?.expiresAt) return;
+      if (parsed.expiresAt <= Date.now() + TOKEN_EXPIRY_SLACK_MS) {
+        localStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+        return;
+      }
+      this.accessToken = parsed.accessToken;
+      this.tokenExpiresAt = parsed.expiresAt;
+    } catch {
+      // Corrupt cache, just start signed out.
+    }
+  }
+}
+
+/** Map GIS error codes to something a person can act on. */
+function describeTokenError(code?: string, message?: string): string {
+  switch (code) {
+    case 'popup_failed_to_open':
+      return 'Sign-in popup was blocked. Allow popups for this site and try again.';
+    case 'popup_closed':
+      return 'Sign-in was canceled.';
+    case 'access_denied':
+      return 'Access was denied. Grant Drive access to save files.';
+    case undefined:
+    case '':
+      return 'Authorization failed';
+    default:
+      return `Authorization failed (${message || code})`;
+  }
+}
+
+/** Pull Google's error message out of a failed response, if there is one. */
+async function readGoogleErrorMessage(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    return typeof body?.error?.message === 'string' ? body.error.message : '';
+  } catch {
+    return '';
   }
 }

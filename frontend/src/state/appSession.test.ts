@@ -80,4 +80,14 @@ describe('appSession state', () => {
     expect(raw.editorTheme).toBe('system');
     expect(raw.previewTheme).toBe('system');
   });
+
+  it('writeAppSessionState returns false instead of throwing when storage is full', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+    const ok = writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true });
+    expect(ok).toBe(false);
+    spy.mockRestore();
+  });
 });

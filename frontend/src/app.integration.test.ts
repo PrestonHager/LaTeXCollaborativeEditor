@@ -22,9 +22,7 @@ describe('App integration behavior', () => {
 
     editor.onTextChanged(() => autosave.markDirty());
     editor.setText('integration-content', true);
-    vi.advanceTimersByTime(4000);
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(4000);
 
     expect(save).toHaveBeenCalledWith('integration-content', 'document.tex');
     expect(statuses).toContain('Saved');

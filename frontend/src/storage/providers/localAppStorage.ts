@@ -1,24 +1,49 @@
 import type { StorageProvider } from './types';
+import { StorageError, isQuotaError } from '../errors';
 
 const STORAGE_KEY = 'latex_editor_docs';
 
 type StoredDocs = Record<string, string>;
 
 function readDocs(): StoredDocs {
-  const raw = localStorage.getItem(STORAGE_KEY);
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch (error) {
+    throw new StorageError('Browser storage is unavailable. Private browsing or site settings may be blocking it.', {
+      retryable: false,
+      cause: error,
+    });
+  }
   if (!raw) return {};
   try {
-    return JSON.parse(raw) as StoredDocs;
+    const parsed = JSON.parse(raw) as unknown;
+    // Only keep string entries, in case something else wrote junk under our key.
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+    );
   } catch {
     return {};
   }
 }
 
 function writeDocs(docs: StoredDocs) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+  } catch (error) {
+    if (isQuotaError(error)) {
+      throw new StorageError('Browser storage is full. Download a copy, then clear old local docs.', {
+        retryable: false,
+        cause: error,
+      });
+    }
+    throw new StorageError('Could not write to browser storage.', { retryable: false, cause: error });
+  }
 }
 
 export class LocalAppStorageProvider implements StorageProvider {
+  readonly label = 'this browser';
   private currentStatus = 'Local storage ready';
 
   async connect(): Promise<boolean> {

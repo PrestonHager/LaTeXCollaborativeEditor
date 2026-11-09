@@ -41,12 +41,19 @@ export function readAppSessionState(): AppSessionState | null {
   }
 }
 
-export function writeAppSessionState(state: Omit<AppSessionState, 'updatedAt'> & { editorTheme?: ThemeMode; previewTheme?: ThemeMode }) {
+export function writeAppSessionState(state: Omit<AppSessionState, 'updatedAt' | 'editorTheme' | 'previewTheme'> & { editorTheme?: ThemeMode; previewTheme?: ThemeMode }): boolean {
   const payload: AppSessionState = {
     ...state,
     editorTheme: state.editorTheme ?? 'system',
     previewTheme: state.previewTheme ?? 'system',
     updatedAt: Date.now(),
   };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    // This runs on every keystroke, so a full or blocked storage must never throw into the editor.
+    console.warn('Could not save the app session to browser storage', error);
+    return false;
+  }
 }

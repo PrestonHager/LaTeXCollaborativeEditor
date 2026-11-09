@@ -1,3 +1,5 @@
+import { loadScript } from './scriptLoader';
+
 type PickerKind = 'file' | 'folder';
 
 type PickerSelection = {
@@ -12,36 +14,37 @@ declare global {
   }
 }
 
-let pickerScriptPromise: Promise<void> | null = null;
-let gapiScriptPromise: Promise<void> | null = null;
-
-const ensureScript = (src: string): Promise<void> => {
-  if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(script);
-  });
-};
+let pickerLoadPromise: Promise<void> | null = null;
 
 async function ensurePickerLoaded() {
-  if (!pickerScriptPromise) {
-    pickerScriptPromise = ensureScript('https://apis.google.com/js/api.js');
+  if (!pickerLoadPromise) {
+    pickerLoadPromise = (async () => {
+      await Promise.all([
+        loadScript('https://apis.google.com/js/api.js', 'the Google Picker'),
+        loadScript('https://accounts.google.com/gsi/client', 'Google sign-in'),
+      ]);
+      if (!window.gapi?.load) throw new Error('Google Picker script loaded but gapi is missing');
+      await new Promise<void>((resolve, reject) => {
+        window.gapi.load('picker', { callback: () => resolve(), onerror: () => reject(new Error('Could not load the Google Picker')) });
+      });
+    })().catch((error) => {
+      // Let the next click try again instead of caching the failure forever.
+      pickerLoadPromise = null;
+      throw error;
+    });
   }
-  if (!gapiScriptPromise) {
-    gapiScriptPromise = ensureScript('https://accounts.google.com/gsi/client');
-  }
-  await Promise.all([pickerScriptPromise, gapiScriptPromise]);
-  await new Promise<void>((resolve) => window.gapi.load('picker', () => resolve()));
+  await pickerLoadPromise;
 }
 
+/**
+ * Show the Google Picker and resolve with the chosen file or folder, or null if canceled.
+ * The appId (Cloud project number) is needed so the drive.file scope grants access to
+ * files the user picks that this app didn't create.
+ */
 export async function openGooglePicker(config: {
   accessToken: string;
   apiKey: string;
+  appId?: string;
   kind: PickerKind;
 }): Promise<PickerSelection | null> {
   await ensurePickerLoaded();
@@ -53,10 +56,13 @@ export async function openGooglePicker(config: {
         ? new picker.DocsView(picker.ViewId.FOLDERS).setSelectFolderEnabled(true)
         : new picker.DocsView(picker.ViewId.DOCS);
 
-    const pickerInstance = new picker.PickerBuilder()
+    let builder = new picker.PickerBuilder()
       .setOAuthToken(config.accessToken)
       .setDeveloperKey(config.apiKey)
-      .addView(view)
+      .addView(view);
+    if (config.appId) builder = builder.setAppId(config.appId);
+
+    const pickerInstance = builder
       .setCallback((data: any) => {
         if (data.action === picker.Action.PICKED && data.docs?.length) {
           const doc = data.docs[0];
