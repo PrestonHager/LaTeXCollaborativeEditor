@@ -1,7 +1,6 @@
 import './style.css';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
-import { createEditHistory } from './ui/history';
 import { createMenuBar, type CommandId, type CommandState } from './ui/menuBar';
 import { createCommandPalette, type PaletteCommand } from './ui/commandPalette';
 import { setupShareButton } from './ui/shareButton';
@@ -12,7 +11,7 @@ import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
-import { yCollab } from 'y-codemirror.next';
+import { createCollabUndo } from './collab/undo';
 import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
 import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
@@ -293,7 +292,9 @@ const session = new SessionController({
     storage: currentStorageLabel(),
   }),
 });
-editor.setCollabExtensions([yCollab(session.getYText(), null)]);
+// Undo goes through Yjs so it only reverts our own edits, not a peer's.
+const undo = createCollabUndo(session.getYText());
+editor.setCollabExtensions(undo.extensions());
 
 let compileTimer: ReturnType<typeof setTimeout> | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -367,18 +368,6 @@ const scheduleCompile = (source: string) => {
     requestCompile(pendingSource);
     compileTimer = null;
   }, COMPILE_DEBOUNCE_MS);
-};
-
-const history = createEditHistory({
-  initialText: editor.getText(),
-  limit: 100,
-});
-let applyingHistoryChange = false;
-
-const runWithHistoryApply = (nextText: string) => {
-  applyingHistoryChange = true;
-  editor.setText(nextText, true);
-  applyingHistoryChange = false;
 };
 
 const openLocalDocument = () => {
@@ -595,16 +584,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     await localAppProvider.clear();
     autosaveStatusEl.textContent = 'Local saved docs cleared';
   },
-  'edit.undo': () => {
-    const next = history.undo();
-    if (next === null) return;
-    runWithHistoryApply(next);
-  },
-  'edit.redo': () => {
-    const next = history.redo();
-    if (next === null) return;
-    runWithHistoryApply(next);
-  },
+  'edit.undo': () => undo.undo(),
+  'edit.redo': () => undo.redo(),
   'edit.cut': () => {
     editor.focus();
     document.execCommand('cut');
@@ -703,9 +684,9 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'file.saveNow':
       return { enabled: !isClient && saveNowEnabled };
     case 'edit.undo':
-      return { enabled: history.canUndo() };
+      return { enabled: undo.canUndo() };
     case 'edit.redo':
-      return { enabled: history.canRedo() };
+      return { enabled: undo.canRedo() };
     case 'view.toggleEditorTheme':
     case 'view.togglePreviewTheme':
       return { enabled: true };
@@ -775,7 +756,7 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-history.subscribe(() => menuBar.refresh());
+undo.subscribe(() => menuBar.refresh());
 
 const commandPalette = createCommandPalette({
   onSelect: (commandId) => executeCommand(commandId),
@@ -844,13 +825,8 @@ window.addEventListener('keydown', (event) => {
 
 editor.onTextChanged((text, sync = true) => {
   scheduleCompile(text);
-  if (sync) {
-    if (!applyingHistoryChange) {
-      history.record(text);
-    }
-  } else {
-    history.rebase(text);
-  }
+  // Loading a different document shouldn't be undoable, so drop the stack.
+  if (!sync) undo.clear();
   if (!isClient && documentName !== 'Untitled') {
     autosave.markDirty();
   }
