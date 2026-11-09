@@ -14,7 +14,17 @@ To drop everyone on the old link, click **New link** next to Share.
 
 ## Connection status
 
-The **Connection** pill in the header reflects whether the peer session is up, connecting, or disconnected. If someone cannot join, check firewalls, VPNs, and whether a **TURN** server is required on restrictive networks (that is configured by whoever deployed the app).
+The connection badge in the header shows where the peer session is at, plus how many peers are connected.
+
+- **Not sharing**: you haven't clicked Share and you're not in a room.
+- **Waiting for peers**: you're in the room, but nobody else has joined yet.
+  This is normal right after sharing.
+- **Connected · 2 peers**: you're talking to peers directly.
+- **Relayed · 1 peer**: at least one peer is connected through a **TURN** relay server instead of directly.
+  It still works, it's just a longer path.
+- **Reconnecting**: everyone dropped off, so the app is rejoining the room.
+
+If someone cannot join, check firewalls, VPNs, and whether a **TURN** server is required on restrictive networks (that is configured by whoever deployed the app).
 
 ## What is shared vs not shared
 

@@ -8,7 +8,8 @@ import type { BlobStore } from '../project/blobStore';
 type SessionConfig = {
   isHost: boolean;
   blobs: BlobStore;
-  onConnectionState: (state: TransportState) => void;
+  /** Gets the connection state and how many peers are connected. */
+  onConnectionState: (state: TransportState, peers: number) => void;
   /** Runs after a peer's change lands in the doc. */
   onRemoteChange?: () => void;
   onRemoteMetadata?: (metadata: { title: string; storage: string }) => void;
@@ -43,6 +44,8 @@ export class SessionController {
   // The id of the Yjs doc we're editing, so guests can tell a resumed host doc from a brand new one.
   private docId: string | null;
   private hostPeerId: string | null = null;
+  private connectionState: TransportState = 'Not sharing';
+  private peerCount = 0;
 
   constructor(config: SessionConfig) {
     this.config = config;
@@ -66,17 +69,21 @@ export class SessionController {
     this.session = new PeerSession(getBootstrapConfig(), {
       onMessage: (payload, peerId) => this.onMessage(payload, peerId),
       onState: (state) => {
-        this.config.onConnectionState(state);
-        if (state === 'Connected') {
+        this.connectionState = state;
+        this.config.onConnectionState(state, this.peerCount);
+        if (state === 'Connected' || state === 'Relayed') {
           this.reconnectAttempts = 0;
           this.ensureInitialSyncRequestLoop();
           return;
         }
-        if ((state === 'Failed' || state === 'Reconnecting') && this.roomId) {
+        if (state === 'Reconnecting' && this.roomId) {
           this.scheduleReconnect();
         }
       },
-      onPeerCount: () => undefined,
+      onPeerCount: (count) => {
+        this.peerCount = count;
+        this.config.onConnectionState(this.connectionState, count);
+      },
       onPeerJoin: (peerId) => {
         this.transfer.peerJoined(peerId);
         if (!this.config.isHost) return;
@@ -92,7 +99,7 @@ export class SessionController {
         if (peerId === this.hostPeerId) this.hostPeerId = null;
       },
     });
-    this.config.onConnectionState('Discovering');
+    this.config.onConnectionState('Not sharing', 0);
   }
 
   ensureRoom() {

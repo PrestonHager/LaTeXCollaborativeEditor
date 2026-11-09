@@ -12,6 +12,7 @@ import { createUploadDialog } from './ui/uploadDialog';
 import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { SessionController } from './collab/session';
+import { connectionLabel } from './net/p2pTransport';
 import { LocalDownloadStorage } from './storage/localDownload';
 import { GoogleDriveProvider, LEGACY_PREFIX } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
@@ -239,8 +240,8 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 const session: SessionController = new SessionController({
   isHost: !isClient,
   blobs,
-  onConnectionState: (status) => {
-    document.getElementById('connection-status')!.textContent = status;
+  onConnectionState: (status, peers) => {
+    document.getElementById('connection-status')!.textContent = connectionLabel(status, peers);
   },
   onRemoteMetadata: ({ storage }) => {
     hostStorageText = storage;

@@ -5,6 +5,7 @@ const transportMocks = vi.hoisted(() => ({
   join: vi.fn(),
   send: vi.fn(),
   disconnect: vi.fn(),
+  getPeerCount: vi.fn(() => 3),
 }));
 
 vi.mock('./p2pTransport', () => ({
@@ -12,6 +13,7 @@ vi.mock('./p2pTransport', () => ({
     join = transportMocks.join;
     send = transportMocks.send;
     disconnect = transportMocks.disconnect;
+    getPeerCount = transportMocks.getPeerCount;
   },
 }));
 
@@ -58,6 +60,7 @@ describe('PeerSession', () => {
       onPeerCount: vi.fn(),
       onPeerJoin: vi.fn(),
     });
+    expect(session.getPeerCount()).toBe(3);
     session.close();
     expect(transportMocks.disconnect).toHaveBeenCalled();
   });

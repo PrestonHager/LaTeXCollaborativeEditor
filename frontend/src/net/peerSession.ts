@@ -28,6 +28,10 @@ export class PeerSession {
     this.transport.sendBinary(data, peerId, metadata);
   }
 
+  getPeerCount() {
+    return this.transport.getPeerCount();
+  }
+
   close() {
     this.transport.disconnect();
   }
