@@ -159,8 +159,22 @@ describe('AutosaveController', () => {
       getFileName: () => 'x.tex',
       onStatus: (s) => statuses.push(s),
     });
-    expect(await autosave.renameDocument('old.tex', 'new.tex')).toBe(false);
+    const onRenamed = vi.fn();
+    expect(await autosave.renameDocument('old.tex', 'new.tex', onRenamed)).toBe(false);
     expect(statuses).toContain('Rename failed: nope');
+    expect(onRenamed).not.toHaveBeenCalled();
+  });
+
+  it('renameDocument calls onRenamed once the rename worked', async () => {
+    const onRenamed = vi.fn();
+    const autosave = new AutosaveController({
+      provider: () => makeProvider(vi.fn(async () => {}), { saveAs: vi.fn(async () => {}) }),
+      getContent: () => 'body',
+      getFileName: () => 'x.tex',
+      onStatus: () => undefined,
+    });
+    expect(await autosave.renameDocument('old.tex', 'new.tex', onRenamed)).toBe(true);
+    expect(onRenamed).toHaveBeenCalledTimes(1);
   });
 
   it('saveNow surfaces the reason when save exhausts retries', async () => {

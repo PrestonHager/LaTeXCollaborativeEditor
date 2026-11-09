@@ -9,6 +9,8 @@ export type AppSessionState = {
   editorTheme: ThemeMode;
   previewTheme: ThemeMode;
   updatedAt: number;
+  // Stable id for the open document, so a linked Drive file survives a rename.
+  documentId?: string;
 };
 
 const SESSION_KEY = 'latex_editor_app_session_v1';
@@ -35,6 +37,7 @@ export function readAppSessionState(): AppSessionState | null {
       editorTheme: validTheme(parsed.editorTheme) ? parsed.editorTheme : 'system',
       previewTheme: validTheme(parsed.previewTheme) ? parsed.previewTheme : 'system',
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+      documentId: typeof parsed.documentId === 'string' && parsed.documentId ? parsed.documentId : undefined,
     };
   } catch {
     return null;
@@ -45,6 +48,12 @@ export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt' | 'editor
   editorTheme?: ThemeMode;
   previewTheme?: ThemeMode;
 };
+
+/** Make a new id for a document. Falls back to a random string where crypto.randomUUID is missing. */
+export function createDocumentId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
 export function writeAppSessionState(state: WriteAppSessionPayload): boolean {
   const payload: AppSessionState = {

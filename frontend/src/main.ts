@@ -15,7 +15,14 @@ import { openGooglePicker } from './storage/providers/googlePicker';
 import { yCollab } from 'y-codemirror.next';
 import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
-import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
+import {
+  createDocumentId,
+  readAppSessionState,
+  writeAppSessionState,
+  type ProviderMode,
+  type ThemeMode,
+} from './state/appSession';
+import { renameDocumentTitle, toTexName } from './storage/documentRename';
 import { formatPrimaryChord } from './ui/modifierShortcutLabels';
 import { describeError } from './storage/errors';
 
@@ -87,6 +94,8 @@ const localAppProvider = new LocalAppStorageProvider();
 const driveProvider = new GoogleDriveProvider();
 let activeProvider: StorageProvider = localAppProvider;
 let documentName = 'Untitled';
+// Stays the same through renames, so the linked Drive file can tell it's still the same doc.
+let documentId = createDocumentId();
 let saveNowEnabled = true;
 let editorTheme: ThemeMode = 'system';
 let previewTheme: ThemeMode = 'system';
@@ -98,7 +107,6 @@ const driveAppId = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined;
 const NOTICE_TIMEOUT_MS = 8000;
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
-const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
 const stripTexName = (name: string) => (name.endsWith('.tex') ? name.slice(0, -4) : name);
 const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 'drive' : 'local');
 // Tell guests where the host is actually saving, instead of always saying local storage.
@@ -156,6 +164,7 @@ const persistAppSession = () => {
   if (isClient) return;
   writeAppSessionState({
     documentName,
+    documentId,
     content: editor.getText(),
     providerMode: getProviderMode(),
     saveNowEnabled,
@@ -240,6 +249,12 @@ if (!isClient) {
   const restored = readAppSessionState();
   if (restored) {
     documentName = restored.documentName || 'Untitled';
+    if (restored.documentId) {
+      documentId = restored.documentId;
+    } else {
+      // Sessions from before document ids keep their Drive link only if the name still matches.
+      driveProvider.adoptLegacyFile(documentId, toTexName(documentName));
+    }
     saveNowEnabled = restored.saveNowEnabled;
     editorTheme = restored.editorTheme;
     previewTheme = restored.previewTheme;
@@ -259,6 +274,7 @@ if (!isClient) {
       }
     }
   }
+  driveProvider.setDocumentId(documentId);
 
   // Now turn on autosave, then show the restore message so it isn't overwritten.
   void localAppProvider.connect().then(() => {
@@ -381,6 +397,28 @@ const runWithHistoryApply = (nextText: string) => {
   applyingHistoryChange = false;
 };
 
+/** Switch to a different document id and tell Drive, so new links belong to this doc. */
+const useDocumentId = (id: string) => {
+  documentId = id;
+  driveProvider.setDocumentId(id);
+};
+
+/**
+ * Keep the linked Drive file only if it belongs to this doc, then catch up its name.
+ * The name can lag behind when the doc was renamed while Drive was signed out.
+ */
+const syncLinkedDriveFile = async () => {
+  const linked = driveProvider.getCurrentFileRef();
+  if (!linked) return;
+  if (!driveProvider.isLinkedTo(documentId)) {
+    driveProvider.detachFile();
+    return;
+  }
+  if (documentName !== 'Untitled' && linked.name !== toTexName(documentName)) {
+    await autosave.renameDocument(linked.name, toTexName(documentName));
+  }
+};
+
 const openLocalDocument = () => {
   const names = localAppProvider.listDocuments();
   if (!names.length) {
@@ -406,6 +444,7 @@ const openLocalDocument = () => {
   titleEl.textContent = documentName;
   // Unlink any Drive file, otherwise reconnecting Drive later would overwrite it with this doc.
   driveProvider.detachFile();
+  useDocumentId(createDocumentId());
   activeProvider = localAppProvider;
   autosave.enable();
   editor.setText(content);
@@ -459,7 +498,10 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     documentName = 'Untitled';
     titleEl.textContent = documentName;
     // Unlink the old Drive file so saving the new doc creates a new file instead of overwriting it.
-    if (!isClient) driveProvider.detachFile();
+    if (!isClient) {
+      driveProvider.detachFile();
+      useDocumentId(createDocumentId());
+    }
     editor.setText('\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n');
     autosaveStatusEl.textContent = isClient ? hostStorageLabel : 'Autosave On';
     persistAppSession();
@@ -481,7 +523,10 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     }
     autosaveStatusEl.textContent = `Drive: Loading ${picked.name}`;
     try {
-      const opened = await driveProvider.openDocument(picked.id);
+      // Link the file to a new doc id, and only switch to that id once it opened.
+      const openedId = createDocumentId();
+      const opened = await driveProvider.openDocument(picked.id, openedId);
+      useDocumentId(openedId);
       documentName = stripTexName(opened.name);
       titleEl.textContent = documentName;
       activeProvider = driveProvider;
@@ -502,10 +547,9 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'file.connectDrive': async () => {
     if (isClient) return;
     if (!(await ensureDriveConnected())) return;
-    // A remembered Drive file from another document would get overwritten, so unlink it.
-    const linked = driveProvider.getCurrentFileRef();
-    if (linked && linked.name !== toTexName(documentName)) driveProvider.detachFile();
     activeProvider = driveProvider;
+    // A remembered Drive file from another document would get overwritten, so unlink it.
+    await syncLinkedDriveFile();
     autosave.enable();
     autosaveStatusEl.textContent =
       documentName === 'Untitled' ? 'Drive: Connected (name doc to save)' : 'Drive: Connected';
@@ -515,9 +559,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     if (isClient) return;
     if (!promptForDocumentName()) return;
     if (!(await ensureDriveConnected())) return;
-    const linked = driveProvider.getCurrentFileRef();
-    if (linked && linked.name !== toTexName(documentName)) driveProvider.detachFile();
     activeProvider = driveProvider;
+    await syncLinkedDriveFile();
     autosave.enable();
     autosaveStatusEl.textContent = 'Drive: Saving...';
     // saveNow reports its own failure reason in the status line, so only overwrite it on success.
@@ -879,24 +922,27 @@ setupShareButton({
 if (!isClient) {
   titleEl.addEventListener('click', async () => {
     const next = window.prompt('Rename document:', documentName);
-    if (!next || !next.trim() || next.trim() === documentName) return;
-
-    // An untitled doc was never saved, so there's nothing to rename in storage yet.
-    const wasUntitled = documentName === 'Untitled';
-    const oldFileName = toTexName(documentName);
-    documentName = next.trim();
-    titleEl.textContent = documentName;
-    session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
-    persistAppSession();
-    if (wasUntitled) {
-      autosave.markDirty();
-      return;
-    }
-    if (activeProvider === driveProvider && !driveProvider.isSignedIn()) {
-      autosaveStatusEl.textContent = 'Drive: Session expired. Reconnect Drive to rename the file there.';
-      return;
-    }
-    await autosave.renameDocument(oldFileName, toTexName(documentName));
+    if (!next) return;
+    // The title, peers and saved session only change once storage has the new name.
+    await renameDocumentTitle(next, {
+      currentName: documentName,
+      storageBlocker: () =>
+        activeProvider === driveProvider && !driveProvider.isSignedIn()
+          ? 'Drive: Session expired. Use File > Connect Google Drive, then rename again.'
+          : null,
+      renameInStorage: (oldFileName, newFileName, onRenamed) =>
+        autosave.renameDocument(oldFileName, newFileName, onRenamed),
+      commitName: (name) => {
+        documentName = name;
+        titleEl.textContent = documentName;
+        session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
+        persistAppSession();
+      },
+      markDirty: () => autosave.markDirty(),
+      onStatus: (message) => {
+        autosaveStatusEl.textContent = message;
+      },
+    });
   });
 }
 

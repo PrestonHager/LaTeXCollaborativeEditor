@@ -9,7 +9,8 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 type GoogleTokenError = { type?: string; message?: string };
-type DriveFileRef = { id: string; name: string };
+// documentId says which editor document the file belongs to, so a rename doesn't look like a different doc.
+type DriveFileRef = { id: string; name: string; documentId?: string };
 type StoredToken = { accessToken: string; expiresAt: number };
 type TokenResult = { ok: true } | { ok: false; reason: string };
 
@@ -35,6 +36,8 @@ export class GoogleDriveProvider implements StorageProvider {
   private fileRef: DriveFileRef | null = this.readStoredFileRef();
   // Bump this every time the linked file changes, so a slow save can tell it's stale.
   private fileRefGeneration = 0;
+  // The editor document that's open now. New links get stamped with it.
+  private documentId: string | null = null;
   private currentStatus = 'Autosave Off';
   private refreshing: Promise<boolean> | null = null;
   private sessionLostHandler: (() => void) | null = null;
@@ -62,6 +65,26 @@ export class GoogleDriveProvider implements StorageProvider {
   /** Run this when the token expired and a silent refresh couldn't get a new one. */
   onSessionLost(handler: () => void) {
     this.sessionLostHandler = handler;
+  }
+
+  /** Tell the provider which editor document is open, so files it links belong to that doc. */
+  setDocumentId(documentId: string) {
+    this.documentId = documentId;
+  }
+
+  /** Check if the linked Drive file belongs to the given editor document. */
+  isLinkedTo(documentId: string): boolean {
+    return !!this.fileRef && this.fileRef.documentId === documentId;
+  }
+
+  /**
+   * Claim a link saved before we tracked document ids, but only if the file name still matches.
+   * NOTE: this is just for upgrading old sessions, everything new is matched by id.
+   */
+  adoptLegacyFile(documentId: string, fileName: string) {
+    if (!this.fileRef || this.fileRef.documentId || this.fileRef.name !== fileName) return;
+    this.fileRef = { ...this.fileRef, documentId };
+    this.persistFileRef(this.fileRef);
   }
 
   /**
@@ -112,10 +135,11 @@ export class GoogleDriveProvider implements StorageProvider {
     this.requireToken();
     if (!this.fileRef) {
       const generation = this.fileRefGeneration;
+      const owner = this.documentId;
       const fileId = await this.createFile(fileName, content);
       // Only link the new file if nothing was opened or detached while we were creating it.
       if (generation === this.fileRefGeneration) {
-        this.linkFile({ id: fileId, name: fileName });
+        this.linkFile({ id: fileId, name: fileName }, owner);
       }
       return;
     }
@@ -140,14 +164,15 @@ export class GoogleDriveProvider implements StorageProvider {
     await this.updateFile(fileId, content);
   }
 
-  async openDocument(fileId: string): Promise<{ name: string; content: string }> {
+  /** Load a Drive file and link it to documentId, which defaults to the open doc. */
+  async openDocument(fileId: string, documentId = this.documentId): Promise<{ name: string; content: string }> {
     this.requireToken();
     const metadataRes = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=id,name`, {}, 'load file details');
     const metadata = await metadataRes.json();
 
     const contentRes = await this.driveFetch(`${DRIVE_API}/${fileId}?alt=media`, {}, 'load file content');
     const content = await contentRes.text();
-    this.linkFile({ id: metadata.id, name: metadata.name });
+    this.linkFile({ id: metadata.id, name: metadata.name }, documentId);
     return { name: metadata.name, content };
   }
 
@@ -257,11 +282,14 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
-  /** Point at a different Drive file (or none) and mark any save in flight as stale. */
-  private linkFile(fileRef: DriveFileRef | null) {
-    this.fileRef = fileRef;
+  /**
+   * Point at a different Drive file (or none) and mark any save in flight as stale.
+   * The file is stamped with the editor document it belongs to, when we know it.
+   */
+  private linkFile(fileRef: DriveFileRef | null, documentId: string | null = null) {
+    this.fileRef = fileRef && documentId ? { ...fileRef, documentId } : fileRef;
     this.fileRefGeneration += 1;
-    this.persistFileRef(fileRef);
+    this.persistFileRef(this.fileRef);
   }
 
   /** Get a new token without a popup. Concurrent callers share one attempt. */
@@ -319,7 +347,9 @@ export class GoogleDriveProvider implements StorageProvider {
       if (!raw) return null;
       const parsed = JSON.parse(raw) as DriveFileRef;
       if (!parsed?.id || !parsed?.name) return null;
-      return parsed;
+      const ref: DriveFileRef = { id: parsed.id, name: parsed.name };
+      if (typeof parsed.documentId === 'string' && parsed.documentId) ref.documentId = parsed.documentId;
+      return ref;
     } catch {
       return null;
     }

@@ -54,8 +54,11 @@ export class AutosaveController {
     return this.trySave(true);
   }
 
-  /** Move the document to a new name in the active provider. Resolves to false on failure. */
-  renameDocument(oldFileName: string, newFileName: string): Promise<boolean> {
+  /**
+   * Move the document to a new name in the active provider. Resolves to false on failure.
+   * onRenamed runs inside the save queue, so any save queued after the rename sees the new name.
+   */
+  renameDocument(oldFileName: string, newFileName: string, onRenamed?: () => void): Promise<boolean> {
     return this.enqueue(async () => {
       const provider = this.config.provider();
       const revisionAtStart = this.revision;
@@ -66,6 +69,7 @@ export class AutosaveController {
         } else {
           await provider.save(this.config.getContent(), newFileName);
         }
+        onRenamed?.();
         this.savedRevision = revisionAtStart;
         this.config.onStatus(this.savedMessage(provider));
         return true;
