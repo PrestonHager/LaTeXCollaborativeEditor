@@ -1,3 +1,6 @@
+/** Sandbox flags for the preview iframe. No allow-same-origin, so peer content can't reach the app. */
+export const PREVIEW_SANDBOX = 'allow-scripts';
+
 export function createPreviewPane(container: HTMLElement) {
   const root = document.createElement('div');
   root.className = 'preview';
@@ -8,7 +11,7 @@ export function createPreviewPane(container: HTMLElement) {
   const frame = document.createElement('iframe');
   frame.className = 'preview-html-frame';
   frame.title = 'LaTeX preview';
-  frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  frame.setAttribute('sandbox', PREVIEW_SANDBOX);
 
   const loading = document.createElement('div');
   loading.className = 'preview-loading';

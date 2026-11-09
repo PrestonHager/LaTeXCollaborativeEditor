@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest something new or a change to how the editor works.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? Let us know.
+        Please search the existing issues first in case someone already asked for it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Tell us what's annoying or missing, not just the solution.
+      placeholder: I always end up having to ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      description: How you'd want it to work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've thought about
+      description: Workarounds you use now, or other ways it could be done.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the editor would this change? Pick your best guess.
+      options:
+        - Collaboration (P2P sync, rooms)
+        - Storage (local saving, autosave, Google Drive)
+        - Sign-in (Google account)
+        - Preview (LaTeX rendering, diagnostics)
+        - Editor (typing, undo, shortcuts)
+        - UI (menus, layout, accessibility)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Mockups, links to other editors that do this, etc.
+    validations:
+      required: false
