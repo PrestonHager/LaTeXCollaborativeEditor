@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { LEGACY_TEXT_ID, ProjectDoc } from './projectDoc';
+import { LEGACY_TEXT_ID, MAX_PROJECT_NAME_LENGTH, ProjectDoc } from './projectDoc';
 
 /** Two peers whose docs pass updates straight to each other. */
 function pair() {
@@ -30,6 +30,26 @@ function offlinePair() {
 }
 
 describe('ProjectDoc', () => {
+  it('skips entries a peer wrote with unsafe paths or a bad kind, and cuts long names', () => {
+    const doc = new Y.Doc();
+    const project = new ProjectDoc(doc);
+    // Write straight to the shared map, the way a peer's raw update could.
+    const files = doc.getMap<unknown>('files');
+    files.set('ok', { path: 'main.tex', kind: 'text' });
+    files.set('up', { path: '../outside.tex', kind: 'text' });
+    files.set('abs', { path: '/etc/passwd', kind: 'text' });
+    files.set('drive', { path: 'C:/boot.ini', kind: 'binary', hash: 'abc', size: 1 });
+    files.set('long', { path: 'x'.repeat(10_000), kind: 'text' });
+    files.set('kind', { path: 'weird.tex', kind: 'script' });
+    files.set('nopath', { kind: 'text' });
+    doc.getMap<unknown>('meta').set('name', 'n'.repeat(MAX_PROJECT_NAME_LENGTH + 50));
+
+    expect(project.entries().map((entry) => entry.id)).toEqual(['ok']);
+    expect(project.getName()).toHaveLength(MAX_PROJECT_NAME_LENGTH);
+    doc.getMap<unknown>('meta').set('name', 5);
+    expect(project.getName()).toBe('');
+  });
+
   it('creates text files, folders and binary files, and shares them with a peer', () => {
     const { a, b } = pair();
     a.setName('Thesis');

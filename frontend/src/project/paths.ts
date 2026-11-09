@@ -3,6 +3,9 @@
 /** Largest file we accept for upload or peer transfer, in bytes. */
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
+/** Longest file path we keep, in characters. */
+export const MAX_PATH_LENGTH = 512;
+
 const TEXT_EXTENSIONS = new Set([
   'tex', 'ltx', 'sty', 'cls', 'bib', 'bst', 'bbx', 'cbx', 'def', 'cfg', 'clo', 'dtx', 'ins',
   'txt', 'md', 'csv', 'tsv', 'dat', 'json', 'xml', 'yaml', 'yml', 'tikz', 'pgf', 'gnuplot', 'lua', 'py', 'r',
@@ -32,7 +35,19 @@ export function normalizePath(raw: string): string | null {
     if (trimmed === '..') return null;
     parts.push(trimmed);
   }
-  return parts.length ? parts.join('/') : null;
+  if (!parts.length) return null;
+  const path = parts.join('/');
+  return path.length <= MAX_PATH_LENGTH ? path : null;
+}
+
+/**
+ * Check a path that came from a peer, like one in the shared file tree.
+ * It has to already be in the clean form normalizePath gives, so no "..", no leading "/",
+ * no backslashes, and no drive letter like "C:".
+ */
+export function isSafePath(path: unknown): path is string {
+  if (typeof path !== 'string' || /^[A-Za-z]:/.test(path)) return false;
+  return normalizePath(path) === path;
 }
 
 export function dirname(path: string): string {

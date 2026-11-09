@@ -223,11 +223,14 @@ describe('SessionController', () => {
     controller.join('abc');
     const hostSource = createSource('');
     hostSource.apply('hello');
-    callbacks?.onMessage({ kind: 'snapshot', state: hostSource.snapshot() });
-    callbacks?.onMessage({
-      kind: 'y-update',
-      update: hostSource.apply('hello!'),
-    });
+    callbacks?.onMessage({ kind: 'snapshot', state: hostSource.snapshot() }, 'host');
+    callbacks?.onMessage(
+      {
+        kind: 'y-update',
+        update: hostSource.apply('hello!'),
+      },
+      'host',
+    );
 
     expect(onRemoteText).toHaveBeenCalledWith('hello');
     expect(onRemoteText).toHaveBeenCalledWith('hello!');
@@ -269,7 +272,7 @@ describe('SessionController', () => {
     controller.join('abc');
     const hostSource = createSource('');
     hostSource.apply('host-current-doc');
-    callbacks?.onMessage({ kind: 'snapshot', state: hostSource.snapshot() });
+    callbacks?.onMessage({ kind: 'snapshot', state: hostSource.snapshot() }, 'host');
 
     expect(onRemoteText).toHaveBeenCalledWith('host-current-doc');
   });
@@ -369,10 +372,15 @@ describe('SessionController', () => {
       onRemoteMetadata,
     });
     controller.join('abc');
-    callbacks?.onMessage({
-      kind: 'metadata',
-      metadata: { title: 'Shared Doc', storage: 'Saved on host local storage' },
-    });
+    // Metadata only counts once we know who the host is, from its snapshot.
+    callbacks?.onMessage({ kind: 'snapshot', state: createSource('').snapshot() }, 'host');
+    callbacks?.onMessage(
+      {
+        kind: 'metadata',
+        metadata: { title: 'Shared Doc', storage: 'Saved on host local storage' },
+      },
+      'host',
+    );
 
     expect(onRemoteMetadata).toHaveBeenCalledWith({
       title: 'Shared Doc',
@@ -410,5 +418,136 @@ describe('SessionController', () => {
     callbacks?.onPeerCount(2);
     callbacks?.onState('Relayed');
     expect(onConnectionState).toHaveBeenLastCalledWith('Relayed', 2);
+  });
+
+  describe('drops bad peer messages', () => {
+    let warn: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    const guest = () => {
+      const onRemoteText = vi.fn();
+      const onRemoteMetadata = vi.fn();
+      const controller = new SessionController({
+        isHost: false,
+        onConnectionState: vi.fn(),
+        blobs: new BlobStore(),
+        onRemoteChange: () => onRemoteText(controller.getDoc().getText('doc').toString()),
+        onRemoteMetadata,
+      });
+      controller.join('abc');
+      return { controller, onRemoteText, onRemoteMetadata };
+    };
+
+    it('drops malformed messages with a dev warning', () => {
+      const { onRemoteText } = guest();
+      callbacks?.onMessage(null, 'peer-1');
+      callbacks?.onMessage({ kind: 'y-update', update: 'not bytes' }, 'peer-1');
+      callbacks?.onMessage({ kind: 'y-update', update: [999] }, 'peer-1');
+      callbacks?.onMessage({ kind: 'mystery' }, 'peer-1');
+
+      expect(onRemoteText).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledTimes(4);
+      expect(warn).toHaveBeenCalledWith('Dropped peer message: malformed or too big', null);
+    });
+
+    it('drops updates and snapshots that are not real Yjs updates', () => {
+      const { onRemoteText } = guest();
+      callbacks?.onMessage({ kind: 'y-update', update: [255, 255, 255, 255, 255] }, 'peer-1');
+      callbacks?.onMessage({ kind: 'snapshot', state: [255, 255, 255, 255, 255] }, 'host');
+
+      expect(onRemoteText).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith('Dropped peer message: update is not a Yjs update', 'peer-1');
+      expect(warn).toHaveBeenCalledWith('Dropped peer message: snapshot is not a Yjs update', 'host');
+    });
+
+    it('drops snapshots with no peer id', () => {
+      const { onRemoteText } = guest();
+      const source = createSource('');
+      source.apply('sneaky');
+      callbacks?.onMessage({ kind: 'snapshot', state: source.snapshot() });
+
+      expect(onRemoteText).not.toHaveBeenCalled();
+    });
+
+    it('drops snapshots from a peer other than the host', () => {
+      const { onRemoteText } = guest();
+      const host = createSource('');
+      host.apply('from host');
+      callbacks?.onMessage({ kind: 'snapshot', state: host.snapshot() }, 'host');
+      const other = createSource('');
+      other.apply('from someone else');
+      callbacks?.onMessage({ kind: 'snapshot', state: other.snapshot() }, 'peer-evil');
+
+      expect(onRemoteText).toHaveBeenLastCalledWith('from host');
+      expect(warn).toHaveBeenCalledWith('Dropped peer message: snapshot from a peer that is not the host', 'peer-evil');
+    });
+
+    it('drops metadata before the host is known, and from anyone but the host', () => {
+      const { onRemoteMetadata } = guest();
+      const metadata = { title: 'Fake', storage: 'Fake' };
+      callbacks?.onMessage({ kind: 'metadata', metadata }, 'peer-evil');
+      callbacks?.onMessage({ kind: 'snapshot', state: createSource('').snapshot() }, 'host');
+      callbacks?.onMessage({ kind: 'metadata', metadata }, 'peer-evil');
+      callbacks?.onMessage({ kind: 'metadata', metadata });
+
+      expect(onRemoteMetadata).not.toHaveBeenCalled();
+      callbacks?.onMessage({ kind: 'metadata', metadata: { title: 'Real', storage: 'Host' } }, 'host');
+      expect(onRemoteMetadata).toHaveBeenCalledWith({ title: 'Real', storage: 'Host' });
+    });
+
+    it('drops metadata with an overly long title', () => {
+      const { onRemoteMetadata } = guest();
+      callbacks?.onMessage({ kind: 'snapshot', state: createSource('').snapshot() }, 'host');
+      callbacks?.onMessage({ kind: 'metadata', metadata: { title: 'x'.repeat(10_000), storage: 'Host' } }, 'host');
+
+      expect(onRemoteMetadata).not.toHaveBeenCalled();
+    });
+
+    it('host drops snapshots and metadata from guests', () => {
+      const onRemoteText = vi.fn();
+      const onRemoteMetadata = vi.fn();
+      const controller = new SessionController({
+        isHost: true,
+        onConnectionState: vi.fn(),
+        blobs: new BlobStore(),
+        onRemoteChange: () => onRemoteText(controller.getDoc().getText('doc').toString()),
+        onRemoteMetadata,
+      });
+      controller.join('abc');
+      const source = createSource('');
+      source.apply('takeover');
+      callbacks?.onMessage({ kind: 'snapshot', state: source.snapshot() }, 'peer-1');
+      callbacks?.onMessage({ kind: 'metadata', metadata: { title: 'x', storage: 'y' } }, 'peer-1');
+
+      expect(onRemoteText).not.toHaveBeenCalled();
+      expect(onRemoteMetadata).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith('Dropped peer message: metadata from a peer that is not the host', 'peer-1');
+    });
+
+    it('drops file requests with a bad hash and bad file chunks', async () => {
+      const blobs = new BlobStore();
+      const controller = new SessionController({ isHost: true, blobs, onConnectionState: vi.fn() });
+      controller.join('abc');
+      callbacks?.onMessage({ kind: 'file-request', hash: '../secret' }, 'peer-1');
+      callbacks?.onMessage({ kind: 'file-request', hash: { toString: () => 'x' } }, 'peer-1');
+
+      const hash = await blobs.put(new Uint8Array([9]));
+      const guestBlobs = new BlobStore();
+      const guestSession = new SessionController({ isHost: false, blobs: guestBlobs, onConnectionState: vi.fn() });
+      guestSession.transfer.request('abc123');
+      // Too big for one chunk, and a total that doesn't fit the size.
+      callbacks?.onBinary?.(new ArrayBuffer(512 * 1024), 'peer-1', { hash: 'abc123', index: 0, total: 1, size: 512 * 1024 });
+      callbacks?.onBinary?.(new Uint8Array([1]).buffer, 'peer-1', { hash: 'abc123', index: 0, total: 50, size: 1 });
+
+      expect(sendBinary).not.toHaveBeenCalled();
+      expect(guestSession.transfer.isTransferring('abc123')).toBe(true);
+      expect(guestBlobs.has(hash)).toBe(false);
+      expect(warn).toHaveBeenCalledWith('Dropped peer message: bad file chunk', expect.anything());
+    });
   });
 });

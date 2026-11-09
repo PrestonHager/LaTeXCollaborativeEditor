@@ -59,6 +59,32 @@ File transfer
 - File bytes only travel between peers over WebRTC, the same as document text. Nothing is uploaded to a server.
 - Peers keep files they've seen in IndexedDB by hash, so a reload doesn't have to ask again.
 
+Message validation and limits
+- Anyone with the room link can join and send anything, so every incoming message is checked before it's used.
+- The checks live in `frontend/src/collab/messages.ts`. They're small hand-written type checks, not a schema library.
+- Bad messages are dropped quietly. In dev builds they also log a `console.warn` saying why.
+- Messages on the document channel:
+  - `{ kind: 'y-update', update }`: `update` is an array of bytes (integers 0 to 255), at most 10 MB, and it has to decode as a Yjs update.
+  - `{ kind: 'snapshot', state, docId?, metadata? }`: `state` is a byte array of at most 20 MB that decodes as a Yjs update. `docId` is a string of at most 128 characters.
+  - `{ kind: 'metadata', metadata }`: `metadata` is `{ title, storage }`. The title is at most 200 characters and the storage label at most 200.
+  - `{ kind: 'sync-request' }`: no other fields.
+  - `{ kind: 'file-request', hash }`: `hash` is 1 to 128 letters, digits, or dashes.
+  - Anything else, or anything with the wrong types, is dropped. Fields we don't know about are stripped.
+- File chunks on the `file-chunk` action:
+  - The data is binary and at most 256 KB per chunk.
+  - `size` is at most 10 MB, `total` is between 1 and `size` (or 1 for an empty file), and `index` is below `total`.
+  - The receiver stops a transfer and asks again once the chunks add up to more than `size`.
+- At most 4 files come in at once. The rest wait in a queue and start as slots free up.
+- At most 4 file requests are served at once, and a repeat request from the same peer for a file already going out is ignored. The peer asks again later.
+- Host-only messages:
+  - Only the host sends `snapshot` and `metadata`. The host ignores both if a guest sends them.
+  - A guest takes the first snapshot as coming from the host, and from then on ignores snapshots from any other peer.
+  - A guest ignores `metadata` unless it comes from that host. Metadata from before the first snapshot is ignored, since the snapshot carries it anyway.
+  - Only the host answers `sync-request`.
+- File paths in the shared `files` map have to be clean relative paths: no `..`, no leading `/`, no backslashes, no drive letters like `C:`, and at most 512 characters.
+  Entries a peer writes with a bad path or an unknown kind are skipped, so they never show up in the file tree, the preview, or a zip.
+- The project name in `meta` is cut to 200 characters when shown.
+
 LaTeX preview channel
 - Preview rendering is performed locally in the browser using LaTeX.js.
 - The preview reads the whole project, starting at the main file. `\input` and `\include` files are inlined, `\includegraphics` images go in as data URLs, and `\bibliography` gets a simple numbered reference list built from the .bib files.

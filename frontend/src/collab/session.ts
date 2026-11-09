@@ -1,9 +1,10 @@
 import { getBootstrapConfig } from '../net/bootstrapConfig';
 import { PeerSession } from '../net/peerSession';
 import type { TransportState } from '../net/p2pTransport';
-import { YjsDocSync } from './yjsSync';
-import { FileTransfer, type ChunkMeta } from './fileTransfer';
+import { YjsDocSync, isWellFormedUpdate } from './yjsSync';
+import { FileTransfer } from './fileTransfer';
 import type { BlobStore } from '../project/blobStore';
+import { dropMessage, parseChunk, parseSyncMessage, type SyncMessage } from './messages';
 
 type SessionConfig = {
   isHost: boolean;
@@ -21,13 +22,6 @@ type SessionConfig = {
 };
 
 export type PersistedDocState = { docId: string; state: Uint8Array };
-
-type SyncMessage =
-  | { kind: 'snapshot'; state: number[]; docId?: string; metadata?: { title: string; storage: string } }
-  | { kind: 'y-update'; update: number[] }
-  | { kind: 'metadata'; metadata: { title: string; storage: string } }
-  | { kind: 'sync-request' }
-  | { kind: 'file-request'; hash: string };
 
 export class SessionController {
   private roomId: string | null = null;
@@ -90,8 +84,12 @@ export class SessionController {
         this.session.sendMessage(this.snapshotMessage(), peerId);
       },
       onBinary: (data, peerId, metadata) => {
-        if (!isChunkMeta(metadata)) return;
-        void this.transfer.handleChunk(data, metadata, peerId);
+        const chunk = parseChunk(data, metadata);
+        if (!chunk) {
+          dropMessage('bad file chunk', metadata);
+          return;
+        }
+        void this.transfer.handleChunk(chunk.data, chunk.meta, peerId);
       },
       onPeerLeave: (peerId) => {
         this.transfer.peerLeft(peerId);
@@ -184,13 +182,23 @@ export class SessionController {
   }
 
   private onMessage(payload: unknown, peerId?: string) {
-    const message = payload as SyncMessage;
-    if (!message || typeof message !== 'object' || !('kind' in message)) return;
+    // First check the shape and size, since anyone with the link can send us anything.
+    const message = parseSyncMessage(payload);
+    if (!message) {
+      dropMessage('malformed or too big', payload);
+      return;
+    }
 
     if (message.kind === 'snapshot') {
-      if (this.config.isHost) return;
       // Only the host sends snapshots, so once we know who that is, ignore them from anyone else.
-      if (this.hostPeerId && peerId !== this.hostPeerId) return;
+      if (this.config.isHost || !peerId || (this.hostPeerId && peerId !== this.hostPeerId)) {
+        dropMessage('snapshot from a peer that is not the host', peerId);
+        return;
+      }
+      if (!isWellFormedUpdate(new Uint8Array(message.state))) {
+        dropMessage('snapshot is not a Yjs update', peerId);
+        return;
+      }
       this.applyHostSnapshot(message, peerId);
       this.hasInitialSync = true;
       if (this.syncRequestDebounceTimer) {
@@ -208,16 +216,26 @@ export class SessionController {
     }
 
     if (message.kind === 'y-update') {
-      this.sync.applyRemoteUpdate(new Uint8Array(message.update));
+      const update = new Uint8Array(message.update);
+      if (!isWellFormedUpdate(update)) {
+        dropMessage('update is not a Yjs update', peerId);
+        return;
+      }
+      this.sync.applyRemoteUpdate(update);
       return;
     }
 
-    if (message.kind === 'metadata' && !this.config.isHost && this.config.onRemoteMetadata) {
-      this.config.onRemoteMetadata(message.metadata);
+    if (message.kind === 'metadata') {
+      // Metadata is host-only too, and we only know the host once its snapshot came in.
+      if (this.config.isHost || !peerId || peerId !== this.hostPeerId) {
+        dropMessage('metadata from a peer that is not the host', peerId);
+        return;
+      }
+      this.config.onRemoteMetadata?.(message.metadata);
       return;
     }
 
-    if (message.kind === 'file-request' && peerId && typeof message.hash === 'string') {
+    if (message.kind === 'file-request' && peerId) {
       void this.transfer.handleRequest(message.hash, peerId);
       return;
     }
@@ -255,15 +273,4 @@ export class SessionController {
     this.docId = message.docId ?? null;
     this.hostPeerId = peerId ?? null;
   }
-}
-
-function isChunkMeta(value: unknown): value is ChunkMeta {
-  const meta = value as Partial<ChunkMeta> | null;
-  return (
-    !!meta &&
-    typeof meta.hash === 'string' &&
-    Number.isInteger(meta.index) &&
-    Number.isInteger(meta.total) &&
-    Number.isInteger(meta.size)
-  );
 }

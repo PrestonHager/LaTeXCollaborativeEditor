@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { basename, dirname, guessMainFile, isInside, normalizePath, replacePrefix, uniquePath } from './paths';
+import { basename, dirname, guessMainFile, isInside, isSafePath, normalizePath, replacePrefix, uniquePath } from './paths';
 
 export type EntryKind = 'text' | 'binary' | 'folder';
 
@@ -19,6 +19,9 @@ type StoredEntry = Omit<ProjectEntry, 'id'>;
 export const LEGACY_TEXT_ID = 'doc';
 // File ops use their own origin, so the editor's undo stack never picks them up.
 export const PROJECT_ORIGIN = 'project';
+/** Longest project name we show, in characters. */
+export const MAX_PROJECT_NAME_LENGTH = 200;
+const ENTRY_KINDS: readonly unknown[] = ['text', 'binary', 'folder'];
 
 function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -50,10 +53,11 @@ export class ProjectDoc {
    * Every entry, sorted by path.
    * Two peers can make the same path at once, so later ids (by sort order) get a " (2)" style name.
    * Every peer picks the same names, since it only depends on the shared state.
+   * Entries a peer wrote with a bad path or kind (like "../x" or "/etc/x") are skipped.
    */
   entries(): ProjectEntry[] {
     const raw = [...this.files.entries()]
-      .filter(([, value]) => value && typeof value.path === 'string')
+      .filter(([, value]) => value && isSafePath(value.path) && ENTRY_KINDS.includes(value.kind))
       .map(([id, value]) => ({ id, ...value }))
       .sort((a, b) => a.path.localeCompare(b.path) || a.id.localeCompare(b.id));
     const taken = new Set<string>();
@@ -89,7 +93,9 @@ export class ProjectDoc {
   }
 
   getName(): string {
-    return this.meta.get('name') ?? '';
+    // A peer can write any name, so cut it down to size.
+    const name = this.meta.get('name');
+    return typeof name === 'string' ? name.slice(0, MAX_PROJECT_NAME_LENGTH) : '';
   }
 
   setName(name: string) {

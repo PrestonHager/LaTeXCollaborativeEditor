@@ -42,6 +42,7 @@ Runtime architecture (summary)
   If it's unset, the app uses `wss://tracker.webtorrent.dev`, `wss://tracker.openwebtorrent.com`, and `wss://tracker.files.fm:7073/announce`.
 - Public trackers come and go. If the console shows `torrent tracker failure` for one, drop it from the list.
 - Document content remains peer-to-peer after joining a room.
+- Every peer checks the messages it gets and drops bad ones, since anyone with the room link can join. The limits are in `docs/protocol.md`. Nothing about this needs a server or any config.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - A project in Drive is a folder, tagged with an `appProperties` flag so the app can list its projects.

@@ -5,7 +5,7 @@ import { BlobStore, hashBytes } from '../project/blobStore';
 import { resetDbForTests } from '../storage/idb';
 
 /** Two peers, wired so the receiver's requests reach the sender and chunks come back. */
-async function setup(options: { chunkBytes?: number; maxBytes?: number; retryMs?: number; maxAttempts?: number } = {}) {
+async function setup(options: { chunkBytes?: number; maxBytes?: number; retryMs?: number; maxAttempts?: number; maxInFlight?: number } = {}) {
   const senderBlobs = new BlobStore();
   const receiverBlobs = new BlobStore();
   const chunks: { data: Uint8Array; meta: ChunkMeta; peerId: string }[] = [];
@@ -17,6 +17,7 @@ async function setup(options: { chunkBytes?: number; maxBytes?: number; retryMs?
     sendChunk: (data, meta, peerId) => chunks.push({ data: data.slice(), meta, peerId }),
     chunkBytes: options.chunkBytes ?? 4,
     maxBytes: options.maxBytes,
+    maxInFlight: options.maxInFlight,
   });
   const receiver = new FileTransfer({
     blobs: receiverBlobs,
@@ -27,6 +28,7 @@ async function setup(options: { chunkBytes?: number; maxBytes?: number; retryMs?
     maxBytes: options.maxBytes,
     retryMs: options.retryMs,
     maxAttempts: options.maxAttempts,
+    maxInFlight: options.maxInFlight,
   });
   return { sender, receiver, senderBlobs, receiverBlobs, chunks, requests, progress };
 }
@@ -137,5 +139,63 @@ describe('FileTransfer', () => {
     t.receiver.request('x');
     t.receiver.cancelAll();
     expect(t.receiver.isTransferring('x')).toBe(false);
+  });
+
+  it('only has a few files coming in at once, and queues the rest', async () => {
+    const t = await setup({ maxInFlight: 2 });
+    const first = await t.senderBlobs.put(new Uint8Array([1]));
+    t.receiver.request(first);
+    t.receiver.request('second');
+    t.receiver.request('third');
+    t.receiver.request('fourth');
+    t.receiver.request('third');
+    // Only the first two get asked for, but all of them count as on the way.
+    expect(t.requests.map((r) => r.hash)).toEqual([first, 'second']);
+    expect(t.receiver.isTransferring('third')).toBe(true);
+    expect(t.progress).toContainEqual(['fourth', 0]);
+
+    // The queued file we got some other way is skipped when a slot frees up.
+    await t.receiverBlobs.put(new Uint8Array([7]), 'third');
+    await t.sender.handleRequest(first, 'receiver');
+    await t.receiver.handleChunk(t.chunks[0].data, t.chunks[0].meta, 'sender');
+    expect(t.requests.map((r) => r.hash)).toEqual([first, 'second', 'fourth']);
+    expect(t.progress).toContainEqual(['third', null]);
+
+    // Cancelling clears the queue too.
+    t.receiver.request('fifth');
+    t.receiver.cancelAll();
+    expect(t.receiver.isTransferring('fifth')).toBe(false);
+    expect(t.requests.map((r) => r.hash)).not.toContain('fifth');
+  });
+
+  it('ignores repeat requests while a file is going out, and too many at once', async () => {
+    const t = await setup({ maxInFlight: 1 });
+    const hash = await t.senderBlobs.put(new Uint8Array([1, 2, 3]));
+    const other = await t.senderBlobs.put(new Uint8Array([4, 5, 6]));
+    // Make it read from storage, so the requests overlap like they would for a file not in memory.
+    vi.spyOn(t.senderBlobs, 'peek').mockReturnValue(undefined);
+    await Promise.all([
+      t.sender.handleRequest(hash, 'receiver'),
+      t.sender.handleRequest(hash, 'receiver'),
+      t.sender.handleRequest(other, 'someone'),
+    ]);
+    expect(t.chunks.map((chunk) => chunk.meta.hash)).toEqual([hash]);
+    // Once it's done, the same request goes through again.
+    await t.sender.handleRequest(other, 'someone');
+    expect(t.chunks.map((chunk) => chunk.meta.hash)).toEqual([hash, other]);
+  });
+
+  it('starts over once chunks add up to more than the file size', async () => {
+    const t = await setup();
+    const hash = await hashBytes(new Uint8Array([1, 2, 3]));
+    t.receiver.request(hash);
+    await t.receiver.handleChunk(new Uint8Array([1, 2]), { hash, index: 0, total: 2, size: 3 }, 'liar');
+    await t.receiver.handleChunk(new Uint8Array([3, 4]), { hash, index: 1, total: 2, size: 3 }, 'liar');
+    expect(t.requests).toHaveLength(2);
+    expect(t.receiverBlobs.has(hash)).toBe(false);
+    // A sender that changes the chunk count starts the count over.
+    await t.receiver.handleChunk(new Uint8Array([1, 2]), { hash, index: 0, total: 2, size: 3 }, 'p');
+    await t.receiver.handleChunk(new Uint8Array([1, 2, 3]), { hash, index: 0, total: 1, size: 3 }, 'p');
+    expect(t.receiverBlobs.has(hash)).toBe(true);
   });
 });
