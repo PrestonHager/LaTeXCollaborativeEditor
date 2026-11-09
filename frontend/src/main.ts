@@ -17,6 +17,7 @@ import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
 import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
 import { formatPrimaryChord } from './ui/modifierShortcutLabels';
+import { describeError } from './storage/errors';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
@@ -27,6 +28,7 @@ app.innerHTML = `
     <div id="menu-bar"></div>
     <button id="share-btn">Share</button>
     <a id="share-link" class="muted" href="" target="_blank" rel="noreferrer"></a>
+    <span id="app-notice" class="muted" role="status" aria-live="polite"></span>
     <span id="connection-status" class="pill">Disconnected</span>
     <span id="compile-status" class="pill">Idle</span>
     <span id="autosave-status" class="pill">Autosave Off</span>
@@ -63,6 +65,7 @@ const editorPane = document.getElementById('editor-pane') as HTMLElement;
 const previewPane = document.getElementById('preview-pane') as HTMLElement;
 const appLoadingEl = document.getElementById('app-loading') as HTMLElement;
 const appLoadingLabelEl = document.getElementById('app-loading-label') as HTMLElement;
+const appNoticeEl = document.getElementById('app-notice') as HTMLElement;
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 const COMPILE_DEBOUNCE_MS = 500;
@@ -91,10 +94,32 @@ let layoutMode: 'split' | 'editor-only' | 'preview-only' = 'split';
 let splitRatio = 0.5;
 const hostStorageLabel = 'Saved on host local storage';
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
+const driveAppId = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined;
+const NOTICE_TIMEOUT_MS = 8000;
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
 const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
 const stripTexName = (name: string) => (name.endsWith('.tex') ? name.slice(0, -4) : name);
 const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 'drive' : 'local');
+// Tell guests where the host is actually saving, instead of always saying local storage.
+const currentStorageLabel = () => (activeProvider === driveProvider ? 'Saved on host Google Drive' : hostStorageLabel);
+
+/** Show a short message in the header, then clear it after a few seconds. */
+function showNotice(message: string, isError = false) {
+  appNoticeEl.textContent = message;
+  appNoticeEl.classList.toggle('is-error', isError);
+  if (noticeTimer) clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    appNoticeEl.textContent = '';
+    noticeTimer = null;
+  }, NOTICE_TIMEOUT_MS);
+}
+
+// Catch anything a command forgot to handle, so failures never just vanish into the console.
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled error', event.reason);
+  showNotice(describeError(event.reason), true);
+});
 
 function resolveDisplayTheme(mode: ThemeMode): 'dark' | 'light' {
   if (mode === 'dark') return 'dark';
@@ -179,9 +204,14 @@ const installSplitter = () => {
 const promptForDocumentName = (): boolean => {
   if (documentName !== 'Untitled') return true;
   const next = window.prompt('Enter a document name before saving:', '');
-  if (!next || !next.trim()) return false;
+  if (!next || !next.trim()) {
+    showNotice('Save canceled: the document needs a name first.');
+    return false;
+  }
   documentName = next.trim();
   titleEl.textContent = documentName;
+  session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
+  persistAppSession();
   return true;
 };
 
@@ -194,12 +224,8 @@ const autosave = new AutosaveController({
   },
 });
 if (!isClient) {
-  void localAppProvider.connect().then(() => autosave.enable());
-} else {
-  autosaveStatusEl.textContent = hostStorageLabel;
-}
-
-if (!isClient) {
+  // First, restore the last session so we know which provider to save to.
+  let restoreMessage: string | null = null;
   const restored = readAppSessionState();
   if (restored) {
     documentName = restored.documentName || 'Untitled';
@@ -211,18 +237,25 @@ if (!isClient) {
       editor.setText(restored.content, false);
     }
     if (restored.providerMode === 'drive') {
-      activeProvider = driveProvider;
-      void driveProvider.connect().then((ok) => {
-        if (ok) {
-          autosaveStatusEl.textContent = 'Drive: Session restored';
-        } else {
-          activeProvider = localAppProvider;
-          autosaveStatusEl.textContent = 'Drive restore failed; using local';
-          persistAppSession();
-        }
-      });
+      // Only reuse Drive when the cached token is still good. Calling connect() here would open
+      // a sign-in popup on page load, which browsers block, and saves would silently fail.
+      if (driveProvider.hasUsableToken()) {
+        activeProvider = driveProvider;
+        restoreMessage = 'Drive: Session restored';
+      } else {
+        restoreMessage = 'Drive session expired; saving locally. Reconnect Drive from the File menu.';
+        persistAppSession();
+      }
     }
   }
+
+  // Now turn on autosave, then show the restore message so it isn't overwritten.
+  void localAppProvider.connect().then(() => {
+    autosave.enable();
+    if (restoreMessage) autosaveStatusEl.textContent = restoreMessage;
+  });
+} else {
+  autosaveStatusEl.textContent = hostStorageLabel;
 }
 
 applyEditorTheme(editorTheme);
@@ -246,7 +279,7 @@ const session = new SessionController({
   getLocalText: () => editor.getText(),
   getLocalMetadata: () => ({
     title: documentName,
-    storage: hostStorageLabel,
+    storage: currentStorageLabel(),
   }),
 });
 editor.setCollabExtensions([yCollab(session.getYText(), null)]);
@@ -338,7 +371,7 @@ const runWithHistoryApply = (nextText: string) => {
 };
 
 const openLocalDocument = () => {
-  const names = localAppProvider.listDocuments?.() ?? [];
+  const names = localAppProvider.listDocuments();
   if (!names.length) {
     autosaveStatusEl.textContent = 'No local docs found';
     return;
@@ -352,7 +385,7 @@ const openLocalDocument = () => {
     selectedName = `${selectedName}.tex`;
   }
 
-  const content = localAppProvider.loadDocument?.(selectedName) ?? null;
+  const content = localAppProvider.loadDocument(selectedName);
   if (content === null) {
     autosaveStatusEl.textContent = `Local doc not found: ${selectedName}`;
     return;
@@ -360,6 +393,8 @@ const openLocalDocument = () => {
 
   documentName = selectedName.endsWith('.tex') ? selectedName.slice(0, -4) : selectedName;
   titleEl.textContent = documentName;
+  // Unlink any Drive file, otherwise reconnecting Drive later would overwrite it with this doc.
+  driveProvider.detachFile();
   activeProvider = localAppProvider;
   autosave.enable();
   editor.setText(content);
@@ -381,7 +416,24 @@ const ensureDriveConnected = async () => {
 const ensureDrivePickerConfig = () => {
   if (driveApiKey) return true;
   autosaveStatusEl.textContent = 'Drive: API key missing';
+  showNotice('Google Drive picker is not set up on this site (VITE_GOOGLE_API_KEY is missing).', true);
   return false;
+};
+
+/** Open the Drive picker and turn script or popup failures into a status message. */
+const pickFromDrive = async (kind: 'file' | 'folder') => {
+  try {
+    return await openGooglePicker({
+      accessToken: driveProvider.getAccessToken(),
+      apiKey: driveApiKey!,
+      appId: driveAppId,
+      kind,
+    });
+  } catch (error) {
+    console.error('Google Picker failed', error);
+    autosaveStatusEl.textContent = `Drive: ${describeError(error)}`;
+    return undefined;
+  }
 };
 
 const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
@@ -393,6 +445,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     if (!confirmed) return;
     documentName = 'Untitled';
     titleEl.textContent = documentName;
+    // Unlink the old Drive file so saving the new doc creates a new file instead of overwriting it.
+    if (!isClient) driveProvider.detachFile();
     editor.setText('\\documentclass{article}\n\\begin{document}\n\n\\end{document}\n');
     autosaveStatusEl.textContent = isClient ? hostStorageLabel : 'Autosave On';
     persistAppSession();
@@ -406,11 +460,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     if (!ensureDrivePickerConfig()) return;
     if (!(await ensureDriveConnected())) return;
     autosaveStatusEl.textContent = 'Drive: Opening picker...';
-    const picked = await openGooglePicker({
-      accessToken: driveProvider.getAccessToken(),
-      apiKey: driveApiKey!,
-      kind: 'file',
-    });
+    const picked = await pickFromDrive('file');
+    if (picked === undefined) return;
     if (!picked) {
       autosaveStatusEl.textContent = 'Drive: File selection canceled';
       return;
@@ -426,16 +477,21 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       autosaveStatusEl.textContent = `Drive: Opened ${opened.name}`;
       persistAppSession();
     } catch (error) {
-      autosaveStatusEl.textContent = String(error);
+      console.error('Drive open failed', error);
+      autosaveStatusEl.textContent = describeError(error);
     }
   },
   'file.download': () => {
     if (!promptForDocumentName()) return;
     localDownload.download(toTexName(documentName), editor.getText());
+    showNotice(`Downloaded ${toTexName(documentName)}`);
   },
   'file.connectDrive': async () => {
     if (isClient) return;
     if (!(await ensureDriveConnected())) return;
+    // A remembered Drive file from another document would get overwritten, so unlink it.
+    const linked = driveProvider.getCurrentFileRef();
+    if (linked && linked.name !== toTexName(documentName)) driveProvider.detachFile();
     activeProvider = driveProvider;
     autosave.enable();
     autosaveStatusEl.textContent =
@@ -446,15 +502,16 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     if (isClient) return;
     if (!promptForDocumentName()) return;
     if (!(await ensureDriveConnected())) return;
+    const linked = driveProvider.getCurrentFileRef();
+    if (linked && linked.name !== toTexName(documentName)) driveProvider.detachFile();
     activeProvider = driveProvider;
     autosave.enable();
     autosaveStatusEl.textContent = 'Drive: Saving...';
-    try {
-      await autosave.saveNow();
+    // saveNow reports its own failure reason in the status line, so only overwrite it on success.
+    if (await autosave.saveNow()) {
       autosaveStatusEl.textContent = `Drive: Saved ${toTexName(documentName)}`;
+      session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
       persistAppSession();
-    } catch (error) {
-      autosaveStatusEl.textContent = String(error);
     }
   },
   'file.moveDrive': async () => {
@@ -467,11 +524,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       return;
     }
     autosaveStatusEl.textContent = 'Drive: Select destination folder...';
-    const folder = await openGooglePicker({
-      accessToken: driveProvider.getAccessToken(),
-      apiKey: driveApiKey!,
-      kind: 'folder',
-    });
+    const folder = await pickFromDrive('folder');
+    if (folder === undefined) return;
     if (!folder) {
       autosaveStatusEl.textContent = 'Drive: Move canceled';
       return;
@@ -480,7 +534,8 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       await driveProvider.moveFile(fileRef.id, folder.id);
       autosaveStatusEl.textContent = `Drive: Move successful (${folder.name})`;
     } catch (error) {
-      autosaveStatusEl.textContent = String(error);
+      console.error('Drive move failed', error);
+      autosaveStatusEl.textContent = describeError(error);
     }
   },
   'file.renameDrive': async () => {
@@ -498,19 +553,33 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       documentName = stripTexName(nextName.trim());
       titleEl.textContent = documentName;
       autosaveStatusEl.textContent = 'Drive: Rename successful';
+      session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
       persistAppSession();
     } catch (error) {
-      autosaveStatusEl.textContent = String(error);
+      console.error('Drive rename failed', error);
+      autosaveStatusEl.textContent = describeError(error);
     }
   },
   'file.saveNow': async () => {
     if (isClient || !saveNowEnabled) return;
     if (!promptForDocumentName()) return;
+    if (activeProvider === driveProvider && !driveProvider.hasUsableToken()) {
+      autosaveStatusEl.textContent = 'Drive: Session expired. Use File > Connect Google Drive to sign in again.';
+      return;
+    }
     await autosave.saveNow();
   },
   'file.clearLocalDocs': async () => {
     if (isClient) return;
-    await localAppProvider.clear?.();
+    // This deletes every doc saved in this browser, so make sure first.
+    const count = localAppProvider.listDocuments().length;
+    if (count === 0) {
+      autosaveStatusEl.textContent = 'No local docs to clear';
+      return;
+    }
+    const confirmed = window.confirm(`Delete all ${count} document(s) saved in this browser? This cannot be undone.`);
+    if (!confirmed) return;
+    await localAppProvider.clear();
     autosaveStatusEl.textContent = 'Local saved docs cleared';
   },
   'edit.undo': () => {
@@ -583,6 +652,29 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'help.about': () => {
     window.open('https://github.com/PrestonHager/LaTeXCollaborativeEditor', '_blank', 'noreferrer');
   },
+};
+
+/**
+ * Run a command and report any error it throws, then refresh the menus.
+ * Every menu, palette, and shortcut path goes through here.
+ */
+const executeCommand = (commandId: CommandId) => {
+  const report = (error: unknown) => {
+    console.error(`Command ${commandId} failed`, error);
+    showNotice(describeError(error), true);
+  };
+  try {
+    const result = commandRegistry[commandId]();
+    if (result instanceof Promise) {
+      void result.catch(report).finally(() => {
+        menuBar.refresh();
+        commandPalette.setCommands(buildPaletteCommands());
+      });
+    }
+  } catch (error) {
+    report(error);
+  }
+  menuBar.refresh();
 };
 
 const getCommandState = (commandId: CommandId): CommandState => {
@@ -667,19 +759,13 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
     },
   ],
   getCommandState,
-  onCommand: (commandId) => {
-    void commandRegistry[commandId]();
-    menuBar.refresh();
-  },
+  onCommand: (commandId) => executeCommand(commandId),
 });
 
 history.subscribe(() => menuBar.refresh());
 
 const commandPalette = createCommandPalette({
-  onSelect: (commandId) => {
-    void commandRegistry[commandId]();
-    menuBar.refresh();
-  },
+  onSelect: (commandId) => executeCommand(commandId),
 });
 
 const buildPaletteCommands = (): PaletteCommand[] => [
@@ -716,12 +802,13 @@ const runCommand = (commandId: CommandId, event: KeyboardEvent) => {
   const state = getCommandState(commandId);
   if (!state.enabled) return;
   event.preventDefault();
-  void commandRegistry[commandId]();
-  menuBar.refresh();
+  executeCommand(commandId);
   commandPalette.setCommands(buildPaletteCommands());
 };
 
 window.addEventListener('keydown', (event) => {
+  // The editor already handled this key (like its own undo), so don't run it a second time.
+  if (event.defaultPrevented) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
     event.preventDefault();
     commandPalette.toggle();
@@ -773,22 +860,38 @@ setupShareButton({
   linkEl: shareLinkEl,
   getRoomId: () => session.ensureRoom(),
   getCurrentUrl: () => location.href,
+  onStatus: (message) => showNotice(message),
 });
 
 if (!isClient) {
   titleEl.addEventListener('click', async () => {
-  const next = window.prompt('Rename document:', documentName);
-  if (!next || !next.trim() || next.trim() === documentName) return;
+    const next = window.prompt('Rename document:', documentName);
+    if (!next || !next.trim() || next.trim() === documentName) return;
 
-  const oldFileName = toTexName(documentName);
-  documentName = next.trim();
-  titleEl.textContent = documentName;
-  await autosave.renameDocument(oldFileName, toTexName(documentName));
-  session.broadcastMetadata({ title: documentName, storage: hostStorageLabel });
-  persistAppSession();
+    // An untitled doc was never saved, so there's nothing to rename in storage yet.
+    const wasUntitled = documentName === 'Untitled';
+    const oldFileName = toTexName(documentName);
+    documentName = next.trim();
+    titleEl.textContent = documentName;
+    session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
+    persistAppSession();
+    if (wasUntitled) {
+      autosave.markDirty();
+      return;
+    }
+    if (activeProvider === driveProvider && !driveProvider.hasUsableToken()) {
+      autosaveStatusEl.textContent = 'Drive: Session expired. Reconnect Drive to rename the file there.';
+      return;
+    }
+    await autosave.renameDocument(oldFileName, toTexName(documentName));
   });
 }
 
-window.addEventListener('beforeunload', () => {
+window.addEventListener('beforeunload', (event) => {
   persistAppSession();
+  // Warn before closing if the last save hasn't gone through yet.
+  if (autosave.hasUnsavedChanges()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
 });

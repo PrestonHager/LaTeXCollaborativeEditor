@@ -70,7 +70,9 @@ export class SessionController {
   }
 
   ensureRoom() {
-    if (!this.roomId) this.roomId = crypto.randomUUID();
+    // Only join once. Clicking Share again used to re-join the room and re-register handlers.
+    if (this.roomId) return this.roomId;
+    this.roomId = crypto.randomUUID();
     this.session.joinRoom(this.roomId);
     return this.roomId;
   }

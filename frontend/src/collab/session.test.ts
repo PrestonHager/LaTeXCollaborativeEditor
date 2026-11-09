@@ -91,6 +91,10 @@ describe('SessionController', () => {
 
     expect(room).toBeTruthy();
     expect(joinRoom).toHaveBeenCalled();
+    // A second Share click returns the same room without joining again.
+    const callsBefore = joinRoom.mock.calls.length;
+    expect(controller.ensureRoom()).toBe('abc');
+    expect(joinRoom.mock.calls.length).toBe(callsBefore);
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'y-update' }),
       undefined,

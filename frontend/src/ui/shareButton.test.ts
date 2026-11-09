@@ -22,6 +22,48 @@ describe('setupShareButton', () => {
     expect(copyText).toHaveBeenCalledWith('https://latex.prestonhager.com/?foo=bar&room=room-123');
   });
 
+  it('reports copy success and failure through onStatus', async () => {
+    const button = document.createElement('button');
+    const link = document.createElement('a');
+    const onStatus = vi.fn();
+    let fail = false;
+    setupShareButton({
+      button,
+      linkEl: link,
+      getRoomId: () => 'r',
+      getCurrentUrl: () => 'https://host/',
+      copyText: async () => {
+        if (fail) throw new Error('denied');
+      },
+      onStatus,
+    });
+
+    button.click();
+    await vi.waitFor(() => expect(onStatus).toHaveBeenCalledWith('Share link copied to clipboard'));
+    fail = true;
+    button.click();
+    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith(expect.stringContaining('Could not copy')));
+  });
+
+  it('reports when the room cannot be created', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const button = document.createElement('button');
+    const link = document.createElement('a');
+    const onStatus = vi.fn();
+    setupShareButton({
+      button,
+      linkEl: link,
+      getRoomId: () => {
+        throw new Error('no crypto');
+      },
+      getCurrentUrl: () => 'https://host/',
+      onStatus,
+    });
+    button.click();
+    expect(onStatus).toHaveBeenCalledWith(expect.stringContaining('Could not start a share session'));
+    expect(link.textContent).toBe('');
+  });
+
   it('replaces previous room value when URL already has room param', async () => {
     const button = document.createElement('button');
     const link = document.createElement('a');
