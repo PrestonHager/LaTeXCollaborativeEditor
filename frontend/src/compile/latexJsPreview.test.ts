@@ -1,4 +1,4 @@
-import { isDangerousUrl, latexSourceToPreviewHtml, LATEX_JS_ASSET_BASE } from './latexJsPreview';
+import { addChangesNote, isDangerousUrl, latexSourceToPreviewHtml, LATEX_JS_ASSET_BASE } from './latexJsPreview';
 
 describe('latexSourceToPreviewHtml', () => {
   it('returns HTML for minimal valid LaTeX', () => {
@@ -23,6 +23,46 @@ describe('latexSourceToPreviewHtml', () => {
     expect(html).toContain('>a</a>');
     expect(html).toContain('href="https://ok.example"');
     expect(html).toContain(LATEX_JS_ASSET_BASE);
+  });
+
+  it('adds no note when nothing was changed', () => {
+    const { html, changes } = latexSourceToPreviewHtml(
+      '\\documentclass{article}\\begin{document}Hi\\end{document}',
+    );
+    expect(changes).toEqual([]);
+    expect(html).not.toContain('lc-preview-note');
+  });
+
+  it('adds a note listing what was stripped or rewritten', () => {
+    const { html, errors, changes } = latexSourceToPreviewHtml(
+      [
+        '\\documentclass{article}',
+        '\\usepackage{geometry}',
+        '\\begin{document}',
+        'Hi\\footnote{x}.',
+        '\\end{document}',
+      ].join('\n'),
+    );
+    expect(errors).toEqual([]);
+    expect(changes).toHaveLength(2);
+    const doc = new DOMParser().parseFromString(html ?? '', 'text/html');
+    const note = doc.body.firstElementChild;
+    expect(note?.className).toBe('lc-preview-note');
+    expect(note?.querySelector('summary')?.textContent).toBe('Preview is approximate: 2 changes made for LaTeX.js.');
+    expect(Array.from(note?.querySelectorAll('li') ?? [], (li) => li.textContent)).toEqual(changes);
+  });
+
+  it('keeps the change notes when the parse fails', () => {
+    const { html, changes } = latexSourceToPreviewHtml('\\usepackage{geometry}\n\\invalidtokenalone');
+    expect(html).toBeNull();
+    expect(changes).toEqual(["Removed packages the preview can't load: geometry."]);
+  });
+
+  it('says "change" for a single change', () => {
+    const doc = new DOMParser().parseFromString('<html><body><p>x</p></body></html>', 'text/html');
+    addChangesNote(doc, ['Removed \\vspace.']);
+    expect(doc.querySelector('summary')?.textContent).toBe('Preview is approximate: 1 change made for LaTeX.js.');
+    expect(doc.body.lastElementChild?.tagName).toBe('P');
   });
 
   it('returns structured error when parse fails', () => {

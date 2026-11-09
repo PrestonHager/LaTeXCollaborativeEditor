@@ -62,12 +62,14 @@ function stripAllMacroGroups(source: string, name: string): string {
   return s;
 }
 
-/** Remove lines that are only \usepackage{unsupported} (optional [...] args). */
-function stripUnsupportedUsePackages(source: string): string {
+/** Remove lines that are only \usepackage{unsupported} (optional [...] args), and note which ones went. */
+function stripUnsupportedUsePackages(source: string, removed: Set<string>): string {
   const re = /^\s*\\usepackage(?:\[[^\]]*])?\s*\{\s*([^}\s]+)\s*\}\s*(?:%[^\n]*)?\s*$/gm;
-  return source.replace(re, (line, pkg: string) =>
-    UNSUPPORTED_USEPACKAGES.has(pkg.trim()) ? keepLineBreaks(line) : line,
-  );
+  return source.replace(re, (line, pkg: string) => {
+    if (!UNSUPPORTED_USEPACKAGES.has(pkg.trim())) return line;
+    removed.add(pkg.trim());
+    return keepLineBreaks(line);
+  });
 }
 
 /** Blank out single-line preamble commands that break or duplicate stubs. */
@@ -239,25 +241,133 @@ function inlineFootnotes(source: string): string {
   return s;
 }
 
+// Environments whose body LaTeX reads as plain text, so the rewrites must leave them alone.
+const VERBATIM_ENVIRONMENTS = new Set(['verbatim', 'verbatim*', 'Verbatim', 'lstlisting', 'minted', 'comment']);
+
+// Private-use characters mark a hidden piece of text. Real documents don't use them.
+const MASK_OPEN = '';
+const MASK_CLOSE = '';
+const MASK_PATTERN = /(\d+)/g;
+
+/**
+ * Hide comments, \verb text, and verbatim-like environment bodies behind tokens, so the
+ * rewrites can't touch them. Tokens never hold a line break, so line numbers stay put.
+ */
+function maskProtectedText(source: string): { masked: string; unmask: (text: string) => string } {
+  const saved: string[] = [];
+  const hide = (text: string) => {
+    if (!text) return '';
+    saved.push(text);
+    return `${MASK_OPEN}${saved.length - 1}${MASK_CLOSE}`;
+  };
+  let environment: string | null = null;
+
+  const lines = source.split('\n').map((line) => {
+    let out = '';
+    let i = 0;
+    while (i < line.length) {
+      // Inside a verbatim block, hide everything up to its \end.
+      if (environment) {
+        const end = line.indexOf(`\\end{${environment}}`, i);
+        if (end === -1) {
+          out += hide(line.slice(i));
+          break;
+        }
+        out += hide(line.slice(i, end));
+        i = end;
+        environment = null;
+        continue;
+      }
+      const rest = line.slice(i);
+      // Keep the % so line-based patterns still see a comment, but hide what follows it.
+      if (rest[0] === '%') {
+        out += `%${hide(rest.slice(1))}`;
+        break;
+      }
+      if (rest[0] !== '\\') {
+        out += rest[0];
+        i += 1;
+        continue;
+      }
+      const begin = /^\\begin\s*\{([^}]*)\}/.exec(rest);
+      if (begin && VERBATIM_ENVIRONMENTS.has(begin[1].trim())) {
+        out += begin[0];
+        i += begin[0].length;
+        environment = begin[1].trim();
+        continue;
+      }
+      const verb = /^\\verb\*?([^a-zA-Z\s])/.exec(rest);
+      if (verb) {
+        // Hide the whole \verb, up to its closing delimiter or the end of the line.
+        const close = rest.indexOf(verb[1], verb[0].length);
+        const length = close === -1 ? rest.length : close + 1;
+        out += hide(rest.slice(0, length));
+        i += length;
+        continue;
+      }
+      // Copy the backslash and the next character together, so \% isn't read as a comment.
+      out += rest.slice(0, 2);
+      i += 2;
+    }
+    return out;
+  });
+
+  return {
+    masked: lines.join('\n'),
+    unmask: (text) => text.replace(MASK_PATTERN, (m, n: string) => saved[Number(n)] ?? m),
+  };
+}
+
+type Rewrite = { note: string | null; apply: (source: string) => string };
+
+// Each rewrite in order, with the note to show in the preview when it changes something.
+const REWRITES: Rewrite[] = [
+  { note: 'Removed fancyhdr and nomencl setup commands.', apply: (s) => stripRenewcommandNomname(stripLinesMatching(s, LINE_REMOVE_PATTERNS)) },
+  { note: 'Removed \\hypersetup.', apply: (s) => stripAllMacroGroups(s, 'hypersetup') },
+  { note: 'Removed \\geometry.', apply: (s) => stripAllMacroGroups(s, 'geometry') },
+  { note: 'Removed \\setmainfont.', apply: (s) => stripAllMacroGroups(s, 'setmainfont') },
+  { note: 'Showed authblk \\author and \\affil as plain text.', apply: (s) => replaceAffilCommands(normalizeAuthblkAuthor(s)) },
+  { note: 'Showed figures in place instead of floating.', apply: (s) => normalizeFigureEnvironment(normalizeFigurePlacement(s)) },
+  { note: 'Showed \\nomenclature entries as plain text and dropped \\printnomenclature.', apply: (s) => expandNomenclatureCalls(stripPrintNomenclature(s)) },
+  // The copyright sign looks the same either way, so there's nothing to note.
+  { note: null, apply: expandTextCopyright },
+  { note: "Put a note in place of images the browser can't show.", apply: placeholderIncludeGraphics },
+  { note: 'Showed \\caption as bold text.', apply: rewriteCaption },
+  { note: 'Showed footnotes inline in parentheses.', apply: inlineFootnotes },
+  { note: 'Removed \\vspace.', apply: stripVspace },
+  { note: 'Removed \\addcontentsline.', apply: stripAddContentsLine },
+];
+
+export type AdaptedSource = {
+  source: string;
+  /** Short notes on what was removed or rewritten, for showing with the preview. */
+  changes: string[];
+};
+
+/**
+ * Adapt LaTeX for LaTeX.js and say what changed. Comments and verbatim-like text are
+ * left exactly as they were.
+ */
+export function adaptLatexSource(source: string): AdaptedSource {
+  const { masked, unmask } = maskProtectedText(source);
+  const changes: string[] = [];
+
+  // First, drop the packages LaTeX.js can't load.
+  const packages = new Set<string>();
+  let s = stripUnsupportedUsePackages(masked, packages);
+  if (packages.size) changes.push(`Removed packages the preview can't load: ${[...packages].join(', ')}.`);
+
+  // Then run each rewrite and note the ones that did something.
+  for (const rewrite of REWRITES) {
+    const next = rewrite.apply(s);
+    if (next !== s && rewrite.note) changes.push(rewrite.note);
+    s = next;
+  }
+
+  // Finally, put the hidden text back.
+  return { source: unmask(s), changes };
+}
+
 export function adaptLatexSourceForLatexJs(source: string): string {
-  let s = source;
-  s = stripUnsupportedUsePackages(s);
-  s = stripLinesMatching(s, LINE_REMOVE_PATTERNS);
-  s = stripRenewcommandNomname(s);
-  s = stripAllMacroGroups(s, 'hypersetup');
-  s = stripAllMacroGroups(s, 'geometry');
-  s = stripAllMacroGroups(s, 'setmainfont');
-  s = normalizeAuthblkAuthor(s);
-  s = replaceAffilCommands(s);
-  s = normalizeFigurePlacement(s);
-  s = normalizeFigureEnvironment(s);
-  s = stripPrintNomenclature(s);
-  s = expandNomenclatureCalls(s);
-  s = expandTextCopyright(s);
-  s = placeholderIncludeGraphics(s);
-  s = rewriteCaption(s);
-  s = inlineFootnotes(s);
-  s = stripVspace(s);
-  s = stripAddContentsLine(s);
-  return s;
+  return adaptLatexSource(source).source;
 }

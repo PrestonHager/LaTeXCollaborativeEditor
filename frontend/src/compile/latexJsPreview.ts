@@ -1,5 +1,5 @@
 import { HtmlGenerator, parse } from 'latex.js';
-import { adaptLatexSourceForLatexJs } from './latexJsAdapt';
+import { adaptLatexSource } from './latexJsAdapt';
 import { expandProjectSource } from './projectSource';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
@@ -33,28 +33,57 @@ export function stripDangerousUrls(doc: Document): void {
 }
 
 /**
- * Typeset editor LaTeX into a full HTML document (LaTeX.js), using the raw `source` only.
+ * Add a small note to the top of the preview listing what the adapter removed or rewrote,
+ * so people know the preview isn't exact. It's a <details>, so it works without scripts.
  */
-export function latexSourceToPreviewHtml(source: string): { html: string | null; errors: EditorDiagnostic[] } {
-  const { doc, errors } = typeset(source);
-  return { html: doc ? doc.documentElement.outerHTML : null, errors };
+export function addChangesNote(doc: Document, changes: string[]): void {
+  if (!changes.length) return;
+  const note = doc.createElement('details');
+  note.className = 'lc-preview-note';
+  note.setAttribute(
+    'style',
+    'font:12px/1.4 system-ui,sans-serif;color:#555;background:#f6f6f6;border:1px solid #ddd;border-radius:4px;padding:4px 8px;margin:8px;',
+  );
+  const summary = doc.createElement('summary');
+  summary.setAttribute('style', 'cursor:pointer;');
+  summary.textContent = `Preview is approximate: ${changes.length} change${changes.length === 1 ? '' : 's'} made for LaTeX.js.`;
+  const list = doc.createElement('ul');
+  list.setAttribute('style', 'margin:4px 0;padding-left:20px;');
+  for (const change of changes) {
+    const item = doc.createElement('li');
+    item.textContent = change;
+    list.appendChild(item);
+  }
+  note.append(summary, list);
+  // The worker's mini DOM has no prepend, so we insert before the first child instead.
+  doc.body.insertBefore(note, doc.body.firstChild);
 }
 
-/** Typeset LaTeX into a document, with dangerous URLs already stripped. */
-function typeset(source: string): { doc: Document | null; errors: EditorDiagnostic[] } {
+/**
+ * Typeset editor LaTeX into a full HTML document (LaTeX.js), using the raw `source` only.
+ */
+export function latexSourceToPreviewHtml(source: string): { html: string | null; errors: EditorDiagnostic[]; changes: string[] } {
+  const { doc, errors, changes } = typeset(source);
+  return { html: doc ? doc.documentElement.outerHTML : null, errors, changes };
+}
+
+/** Typeset LaTeX into a document, with dangerous URLs stripped and the changes note added. */
+function typeset(source: string): { doc: Document | null; errors: EditorDiagnostic[]; changes: string[] } {
+  const adapted = adaptLatexSource(source);
   try {
-    const adapted = adaptLatexSourceForLatexJs(source);
-    const generator = parse(adapted, {
+    const generator = parse(adapted.source, {
       generator: new HtmlGenerator({ hyphenate: false, documentClass: 'article' }),
     });
     const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
-    return { doc, errors: [] };
+    addChangesNote(doc, adapted.changes);
+    return { doc, errors: [], changes: adapted.changes };
   } catch (err) {
     return {
       doc: null,
       errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }],
+      changes: adapted.changes,
     };
   }
 }
