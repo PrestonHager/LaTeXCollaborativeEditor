@@ -7,6 +7,7 @@ Overview
 Checklist
 - [ ] Sharing and session bootstrap: a link that creates/joins the same room across two browsers works reliably.
 - [ ] Host reload: reloading the host tab after Share rejoins the same room, and New link starts a fresh one.
+- [ ] Host reload with guests: a guest still connected while the host reloads keeps syncing in both directions, and edits it made while the host was away reach the host.
 - [ ] Real-time collaboration: concurrent edits synchronize in both directions with acceptable latency.
 - [ ] Editor readiness: the editor shows LaTeX syntax highlighting and line numbers.
 - [ ] Diagnostics: compile errors are parsed and highlighted inline on the correct editor lines.

@@ -6,6 +6,7 @@ type PeerSessionCallbacks = {
   onState: (state: TransportState) => void;
   onPeerCount: (count: number) => void;
   onPeerJoin: (peerId: string) => void;
+  onPeerLeave?: (peerId: string) => void;
 };
 
 export class PeerSession {

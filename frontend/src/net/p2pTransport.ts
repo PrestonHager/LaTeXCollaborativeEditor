@@ -8,6 +8,7 @@ type TransportCallbacks = {
   onState: (state: TransportState) => void;
   onPeerCount: (count: number) => void;
   onPeerJoin: (peerId: string) => void;
+  onPeerLeave?: (peerId: string) => void;
 };
 
 export class P2pTransport {
@@ -47,9 +48,10 @@ export class P2pTransport {
       this.callbacks.onPeerJoin(peerId);
     });
 
-    this.room.onPeerLeave(() => {
+    this.room.onPeerLeave((peerId: string) => {
       this.peers = Math.max(0, this.peers - 1);
       this.callbacks.onPeerCount(this.peers);
+      this.callbacks.onPeerLeave?.(peerId);
       if (this.peers === 0) {
         this.callbacks.onState('Reconnecting');
       }
