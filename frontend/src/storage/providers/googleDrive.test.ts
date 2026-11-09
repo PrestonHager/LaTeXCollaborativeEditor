@@ -396,6 +396,67 @@ describe('GoogleDriveProvider', () => {
     expect(provider.getCurrentFileRef()).toEqual({ id: 'new-id', name: 'fresh.tex' });
   });
 
+  it('a slow first save does not replace a file opened while it ran', async () => {
+    const provider = connectedProvider();
+    let finishCreate: (value: unknown) => void = () => undefined;
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(new Promise((resolve) => { finishCreate = resolve; }))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'b', name: 'b.tex' }) })
+      .mockResolvedValueOnce({ ok: true, text: async () => 'b content' })
+      .mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // First, start the first save of an unsaved doc and leave createFile hanging.
+    const firstSave = provider.save('a content', 'a.tex');
+    // Now open file B while that save is still in flight.
+    await provider.openDocument('b');
+    // Then let the create finish, which used to link the new file A.
+    finishCreate({ ok: true, json: async () => ({ id: 'a' }) });
+    await firstSave;
+
+    expect(provider.getCurrentFileRef()).toEqual({ id: 'b', name: 'b.tex' });
+    expect(localStorage.getItem('drive_active_file_ref')).toContain('"b"');
+
+    // Finally, the next autosave has to write into B, not A.
+    await provider.save('b edits', 'b.tex');
+    expect(fetchMock.mock.calls[3][0]).toContain('/files/b?uploadType=media');
+  });
+
+  it('a slow first save does not relink after detachFile', async () => {
+    const provider = connectedProvider();
+    let finishCreate: (value: unknown) => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(new Promise((resolve) => { finishCreate = resolve; })));
+
+    const firstSave = provider.save('a content', 'a.tex');
+    provider.detachFile();
+    finishCreate({ ok: true, json: async () => ({ id: 'a' }) });
+    await firstSave;
+
+    expect(provider.getCurrentFileRef()).toBeNull();
+  });
+
+  it('saveAs does not write into a file opened during the rename', async () => {
+    const provider = connectedProvider();
+    (provider as any).fileRef = { id: 'a', name: 'a.tex' };
+    let finishRename: (value: unknown) => void = () => undefined;
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(new Promise((resolve) => { finishRename = resolve; }))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'b', name: 'b.tex' }) })
+      .mockResolvedValueOnce({ ok: true, text: async () => 'b content' });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const rename = provider.saveAs('a content', 'a.tex', 'renamed.tex');
+    await provider.openDocument('b');
+    finishRename({ ok: true });
+    await rename;
+
+    // The rename went to A and nothing got written into B.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(provider.getCurrentFileRef()).toEqual({ id: 'b', name: 'b.tex' });
+  });
+
   it('save updates existing file in place', async () => {
     const provider = connectedProvider();
     (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
