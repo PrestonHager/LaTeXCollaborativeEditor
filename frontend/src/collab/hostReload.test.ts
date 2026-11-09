@@ -1,4 +1,5 @@
 import { SessionController, type PersistedDocState } from './session';
+import { createCollabUndo } from './undo';
 
 type PeerCallbacks = {
   onState: (state: string) => void;
@@ -136,6 +137,43 @@ describe('host reload with a guest still connected', () => {
 
     guest.controller.applyLocalText('fresh from guest');
     expect(textOf(reloaded)).toBe('fresh from guest');
+    expect(hasPending(reloaded)).toBe(false);
+  });
+
+  it('gives the guest a fresh undo after a reset that only reverts its own edits', () => {
+    const host = createPeer(true, 'old').controller;
+    host.join('room');
+    const guest = createPeer(false, '');
+    guest.controller.join('room');
+    let undo = createCollabUndo(guest.controller.getYText());
+    // Rebuild undo on reset, the same way main.ts does.
+    guest.onDocReplaced.mockImplementation(() => {
+      undo.manager.destroy();
+      undo = createCollabUndo(guest.controller.getYText());
+    });
+
+    // First, the guest makes an undoable edit on the old doc.
+    const oldText = guest.controller.getYText();
+    guest.controller.getDoc().transact(() => oldText.insert(oldText.length, ' guest'));
+    expect(undo.canUndo()).toBe(true);
+
+    // Now the host comes back with a new doc, so the guest starts over with an empty stack.
+    reload(host);
+    const reloaded = createPeer(true, 'fresh').controller;
+    reloaded.join('room');
+    expect(guest.onDocReplaced).toHaveBeenCalled();
+    expect(undo.canUndo()).toBe(false);
+
+    // Then the guest and host both edit, and the guest undoes only its own change.
+    const newText = guest.controller.getYText();
+    guest.controller.getDoc().transact(() => newText.insert(newText.length, ' guest'));
+    reloaded.getDoc().transact(() => reloaded.getYText().insert(0, 'Host '));
+    expect(textOf(guest.controller)).toBe('Host fresh guest');
+
+    undo.undo();
+    expect(textOf(guest.controller)).toBe('Host fresh');
+    expect(textOf(reloaded)).toBe('Host fresh');
+    expect(undo.canUndo()).toBe(false);
     expect(hasPending(reloaded)).toBe(false);
   });
 
