@@ -10,36 +10,38 @@
     <!--
       The app shell is plain Basecoat markup. src/main.ts wires behavior onto it by id and
       data-command, and src/ui/icons.ts fills in command icons and <i data-lucide> icons.
+      Links with data-help get their docs URL from src/ui/helpLinks.ts.
     -->
     <div id="app">
+      <a class="skip-link btn" href="#editor-pane">Skip to editor</a>
       <header class="topbar">
-        <h1 id="doc-title" class="doc-title" title="Rename project">Untitled</h1>
+        <h1 class="doc-title-heading"><button id="doc-title" type="button" class="doc-title" data-tooltip="Rename project" data-side="bottom" data-align="start">Untitled</button></h1>
 
         <nav id="menu-bar" class="menu-bar" role="menubar" aria-label="Main menu">
           <div class="menu-root dropdown-menu" data-menu-label="File">
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-file" aria-expanded="false">File</button>
             <div id="menu-file" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="File">
-                <button type="button" class="menu-item" role="menuitem" data-command="file.new"><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut data-chord="N"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal"><span class="menu-item-label">Open Local Project</span><span class="menu-item-shortcut" data-shortcut data-chord="O"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive"><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+O"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.importZip"><span class="menu-item-label">Upload .zip as New Project</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.new" data-description="Start a fresh project. The current one stays saved."><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut data-chord="N"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal" data-description="Open a project saved in this browser."><span class="menu-item-label">Open Local Project</span><span class="menu-item-shortcut" data-shortcut data-chord="O"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive" data-description="Pick a project folder or .tex file from Google Drive."><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+O"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.importZip" data-description="Turn a .zip of files into a new project."><span class="menu-item-label">Upload .zip as New Project</span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitem" data-command="file.newFile"><span class="menu-item-label">New File</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.newFolder"><span class="menu-item-label">New Folder</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.upload"><span class="menu-item-label">Upload Files</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.newFile" data-description="Add an empty text file to the project."><span class="menu-item-label">New File</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.newFolder" data-description="Add a folder to the project."><span class="menu-item-label">New Folder</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.upload" data-description="Add images, .bib, .sty and other files to the project."><span class="menu-item-label">Upload Files</span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitem" data-command="file.download"><span class="menu-item-label">Download Project .zip</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+S"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.downloadFile"><span class="menu-item-label">Download Current File</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.download" data-description="Download every file in the project as a .zip."><span class="menu-item-label">Download Project .zip</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+S"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.downloadFile" data-description="Download the file that's open right now."><span class="menu-item-label">Download Current File</span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitem" data-command="file.connectDrive"><span class="menu-item-label">Connect Google Drive</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.disconnectDrive"><span class="menu-item-label">Disconnect Google Drive</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.saveToDrive"><span class="menu-item-label">Save to Google Drive</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.moveDrive"><span class="menu-item-label">Move to Drive Folder</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive"><span class="menu-item-label">Rename Project</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.connectDrive" data-description="Sign in to Google Drive and save the project there."><span class="menu-item-label">Connect Google Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.disconnectDrive" data-description="Sign out of Google Drive in this tab. Edits save in this browser after that."><span class="menu-item-label">Disconnect Google Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.saveToDrive" data-description="Save the project to Google Drive now."><span class="menu-item-label">Save to Google Drive</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.moveDrive" data-description="Move the project's Drive folder somewhere else in Drive."><span class="menu-item-label">Move to Drive Folder</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive" data-description="Change the project name, here and in storage."><span class="menu-item-label">Rename Project</span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitem" data-command="file.saveNow"><span class="menu-item-label">Save Now</span><span class="menu-item-shortcut" data-shortcut data-chord="S"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.clearLocalDocs" data-variant="destructive"><span class="menu-item-label">Clear Local Projects</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.saveNow" data-description="Save right away instead of waiting for autosave."><span class="menu-item-label">Save Now</span><span class="menu-item-shortcut" data-shortcut data-chord="S"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.clearLocalDocs" data-variant="destructive" data-description="Delete every project saved in this browser."><span class="menu-item-label">Clear Local Projects</span></button>
               </div>
             </div>
           </div>
@@ -48,15 +50,15 @@
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-edit" aria-expanded="false">Edit</button>
             <div id="menu-edit" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="Edit">
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.undo"><span class="menu-item-label">Undo</span><span class="menu-item-shortcut" data-shortcut data-chord="Z"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.redo"><span class="menu-item-label">Redo</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+Z"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.undo" data-description="Undo your last edit. Other people's edits stay."><span class="menu-item-label">Undo</span><span class="menu-item-shortcut" data-shortcut data-chord="Z"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.redo" data-description="Bring back the edit you just undid."><span class="menu-item-label">Redo</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+Z"></span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.cut"><span class="menu-item-label">Cut</span><span class="menu-item-shortcut" data-shortcut data-chord="X"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.copy"><span class="menu-item-label">Copy</span><span class="menu-item-shortcut" data-shortcut data-chord="C"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.paste"><span class="menu-item-label">Paste</span><span class="menu-item-shortcut" data-shortcut data-chord="V"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.selectAll"><span class="menu-item-label">Select All</span><span class="menu-item-shortcut" data-shortcut data-chord="A"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.cut" data-description="Cut the selected text."><span class="menu-item-label">Cut</span><span class="menu-item-shortcut" data-shortcut data-chord="X"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.copy" data-description="Copy the selected text."><span class="menu-item-label">Copy</span><span class="menu-item-shortcut" data-shortcut data-chord="C"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.paste" data-description="Paste from the clipboard."><span class="menu-item-label">Paste</span><span class="menu-item-shortcut" data-shortcut data-chord="V"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.selectAll" data-description="Select everything in the open file."><span class="menu-item-label">Select All</span><span class="menu-item-shortcut" data-shortcut data-chord="A"></span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitem" data-command="app.openSettings"><span class="menu-item-label">Settings</span><span class="menu-item-shortcut" data-shortcut data-chord=","></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="app.openSettings" data-description="Change themes and how saving works."><span class="menu-item-label">Settings</span><span class="menu-item-shortcut" data-shortcut data-chord=","></span></button>
               </div>
             </div>
           </div>
@@ -65,14 +67,14 @@
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-view" aria-expanded="false">View</button>
             <div id="menu-view" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="View">
-                <button type="button" class="menu-item" role="menuitem" data-command="view.toggleEditorTheme" data-palette="false"><span class="menu-item-label">Toggle Editor Theme</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="view.togglePreviewTheme" data-palette="false"><span class="menu-item-label">Toggle Preview Theme</span></button>
-                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.togglePauseSaving"><span class="menu-item-label">Pause Saving</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="view.compileNow"><span class="menu-item-label">Compile Now</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+C"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="view.toggleEditorTheme" data-palette="false" data-description="Cycle the app and editor theme: dark, light, system."><span class="menu-item-label">Toggle Editor Theme</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="view.togglePreviewTheme" data-palette="false" data-description="Cycle the preview theme: dark, light, system."><span class="menu-item-label">Toggle Preview Theme</span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.togglePauseSaving" data-description="Stop autosave and Save Now until you turn saving back on."><span class="menu-item-label">Pause Saving</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="view.compileNow" data-description="Rebuild the preview right away."><span class="menu-item-label">Compile Now</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+C"></span></button>
                 <hr role="separator" />
-                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutSplit"><span class="menu-item-label">Split View</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
-                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutEditorOnly"><span class="menu-item-label">Editor Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
-                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutPreviewOnly"><span class="menu-item-label">Preview Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutSplit" data-description="Show the editor and preview side by side."><span class="menu-item-label">Split View</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutEditorOnly" data-description="Hide the preview and give the editor the whole width."><span class="menu-item-label">Editor Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutPreviewOnly" data-description="Hide the editor and give the preview the whole width."><span class="menu-item-label">Preview Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
               </div>
             </div>
           </div>
@@ -81,24 +83,55 @@
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-help" aria-expanded="false">Help</button>
             <div id="menu-help" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="Help">
-                <button type="button" class="menu-item" role="menuitem" data-command="app.commandPalette"><span class="menu-item-label">Command Palette</span><span class="menu-item-shortcut" data-shortcut data-chord="P"></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="help.documentation"><span class="menu-item-label">Documentation</span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="help.about"><span class="menu-item-label">About / Repository</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="app.commandPalette" data-description="Search every command by name or what it does."><span class="menu-item-label">Command Palette</span><span class="menu-item-shortcut" data-shortcut data-chord="P"></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="help.documentation" data-description="Open the user guide in a new tab."><span class="menu-item-label">Documentation</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="help.shortcuts" data-description="Open the list of keyboard shortcuts in a new tab."><span class="menu-item-label">Keyboard Shortcuts</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="help.tour" data-description="Take the short tour of the main parts of the app again."><span class="menu-item-label">Show Tour</span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="help.reportBug" data-description="Open a bug report on GitHub with your browser and app version filled in."><span class="menu-item-label">Report a Bug</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="help.requestFeature" data-description="Suggest a new feature or change on GitHub."><span class="menu-item-label">Request a Feature</span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitem" data-command="help.about" data-description="Show the app version and links to the code and policies."><span class="menu-item-label">About</span></button>
               </div>
             </div>
           </div>
         </nav>
 
-        <button id="share-btn" class="btn" data-size="sm" type="button"><i data-lucide="share-2"></i>Share</button>
-        <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>New link</button>
-        <a id="share-link" class="muted share-link" href="" target="_blank" rel="noreferrer"></a>
-        <span id="app-notice" class="muted" role="status" aria-live="polite"></span>
+        <div id="share-area" class="share-area">
+          <button id="share-btn" class="btn" data-size="sm" type="button"><i data-lucide="share-2"></i>Share</button>
+          <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>New link</button>
+          <a id="share-link" class="muted share-link" href="" target="_blank" rel="noreferrer"></a>
+          <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="share" aria-label="Help with sharing" data-tooltip="Help with sharing" data-side="bottom"><i data-lucide="circle-help"></i></a>
+        </div>
+        <span id="app-notice" class="app-notice" role="status" aria-live="polite">
+          <span data-notice-text></span>
+          <a class="btn" data-variant="link" data-size="xs" data-notice-learn target="_blank" rel="noreferrer" hidden>Learn more</a>
+          <a class="btn" data-variant="link" data-size="xs" data-notice-report target="_blank" rel="noreferrer" hidden>Report this</a>
+        </span>
         <div class="status-badges">
-          <span id="connection-status" class="pill badge" data-variant="outline">Not sharing</span>
-          <span id="compile-status" class="pill badge" data-variant="outline">Idle</span>
-          <span id="autosave-status" class="pill badge" data-variant="outline">Autosave Off</span>
+          <span class="pill badge" data-variant="outline" title="Who you're editing with"><i data-lucide="users"></i><span id="connection-status" role="status" aria-live="polite">Not shared</span></span>
+          <span class="pill badge" data-variant="outline" title="Preview status"><i data-lucide="play"></i><span id="compile-status">Idle</span></span>
+          <span class="pill badge" data-variant="outline" title="Where and when the project last saved"><i data-lucide="save"></i><span id="autosave-status">Autosave Off</span></span>
+          <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="saving" aria-label="Help with saving and storage" data-tooltip="Help with saving" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
         </div>
       </header>
+
+      <!-- Common actions. Each button runs the same command as its menu item, and toolbar.ts adds the icons. -->
+      <div id="toolbar" class="toolbar" role="toolbar" aria-label="Common actions">
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFile" aria-label="New file" data-tooltip="New file" data-side="bottom" data-align="start"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.upload" aria-label="Upload files" data-tooltip="Upload files" data-side="bottom"></button>
+        <span class="toolbar-separator" aria-hidden="true"></span>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.saveNow" data-chord="S" aria-label="Save now" data-tooltip="Save now" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.compileNow" data-chord="Shift+C" aria-label="Compile now" data-tooltip="Compile now" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-side="bottom"></button>
+        <span class="toolbar-separator" aria-hidden="true"></span>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutSplit" aria-label="Split view" data-tooltip="Split view" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutEditorOnly" aria-label="Editor only" data-tooltip="Editor only" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutPreviewOnly" aria-label="Preview only" data-tooltip="Preview only" data-side="bottom"></button>
+        <span class="toolbar-separator" aria-hidden="true"></span>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="app.commandPalette" data-chord="P" aria-label="Command palette" data-tooltip="Command palette" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="help.documentation" aria-label="Documentation" data-tooltip="Documentation" data-side="bottom"></button>
+      </div>
 
       <div id="app-loading" class="app-loading is-active" role="status" aria-live="polite">
         <div class="app-loading-bar"></div>
@@ -110,9 +143,10 @@
           <header class="file-pane-header">
             <span class="file-pane-title">Files</span>
             <div class="file-pane-actions">
-              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFile" aria-label="New file" title="New file"><i data-lucide="file-plus"></i></button>
-              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFolder" aria-label="New folder" title="New folder"><i data-lucide="folder-plus"></i></button>
-              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.upload" aria-label="Upload files" title="Upload files"><i data-lucide="upload"></i></button>
+              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFile" aria-label="New file" data-tooltip="New file" data-side="bottom"><i data-lucide="file-plus"></i></button>
+              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.newFolder" aria-label="New folder" data-tooltip="New folder" data-side="bottom"><i data-lucide="folder-plus"></i></button>
+              <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.upload" aria-label="Upload files" data-tooltip="Upload files" data-side="bottom"><i data-lucide="upload"></i></button>
+              <a class="btn help-link" data-variant="ghost" data-size="icon-sm" data-help="fileTree" aria-label="Help with files" data-tooltip="Help with files" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
             </div>
           </header>
           <ul id="file-tree" class="file-tree" role="tree" aria-label="Project files"></ul>
@@ -120,24 +154,41 @@
             <header>
               <figure><i data-lucide="folder-open"></i></figure>
               <h3>No files yet</h3>
-              <p>Add a file, or drop files here to upload them.</p>
+              <p>Drag one in or click Upload. You can also start with a new empty file.</p>
             </header>
+            <section>
+              <button type="button" class="btn" data-size="sm" data-command="file.upload"><i data-lucide="upload"></i>Upload</button>
+              <button type="button" class="btn" data-variant="outline" data-size="sm" data-command="file.newFile"><i data-lucide="file-plus"></i>New file</button>
+            </section>
           </div>
           <div id="file-tree-waiting" class="empty file-tree-empty" hidden>
             <header>
               <figure><i data-lucide="users"></i></figure>
               <h3>Waiting for the host</h3>
-              <p>The project's files show up here once you're connected.</p>
+              <p>The project's files show up here once you're connected. If nothing happens, ask the host to keep their tab open.</p>
             </header>
+            <section>
+              <a class="btn" data-variant="link" data-size="sm" data-help="p2pProblems">Connection problems?</a>
+            </section>
           </div>
           <div id="file-drop-overlay" class="file-drop-overlay" hidden><i data-lucide="upload"></i><span>Drop to upload</span></div>
         </aside>
 
         <main class="split" id="split-root">
-          <section id="editor-pane" class="pane editor-pane">
+          <section id="editor-pane" class="pane editor-pane" aria-label="Editor" tabindex="-1">
             <div class="editor-file-bar">
               <span id="active-file-name" class="editor-file-name"></span>
               <span id="active-file-main" class="badge" data-variant="secondary" hidden>main</span>
+            </div>
+            <div id="editor-empty" class="empty editor-empty" hidden>
+              <header>
+                <figure><i data-lucide="file"></i></figure>
+                <h3>No file open</h3>
+                <p>Pick a file in the file tree to edit it, or make a new one.</p>
+              </header>
+              <section>
+                <button type="button" class="btn" data-variant="outline" data-size="sm" data-command="file.newFile"><i data-lucide="file-plus"></i>New file</button>
+              </section>
             </div>
             <div id="file-viewer" class="file-viewer" hidden>
               <div id="file-viewer-body" class="file-viewer-body"></div>
@@ -154,14 +205,32 @@
               </div>
             </div>
           </section>
-          <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes"></div>
-          <section id="preview-pane" class="pane"></section>
+          <div id="splitter" class="splitter" role="separator" aria-orientation="vertical" aria-label="Resize panes" aria-controls="editor-pane" aria-valuemin="20" aria-valuemax="80" aria-valuenow="50" tabindex="0"></div>
+          <section id="preview-pane" class="pane preview-pane" aria-label="Preview">
+            <div class="pane-bar">
+              <span>Preview</span>
+              <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="preview" aria-label="Help with the preview" data-tooltip="Help with the preview" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
+            </div>
+            <div id="preview-empty" class="empty preview-empty" hidden>
+              <header>
+                <figure><i data-lucide="file-text"></i></figure>
+                <h3>Nothing to preview yet</h3>
+                <p>The preview shows the project's main file. Hover a .tex file in the file tree and click the star to make it the main file.</p>
+              </header>
+              <section>
+                <a class="btn" data-variant="link" data-size="sm" data-help="mainFile">About the main file</a>
+              </section>
+            </div>
+          </section>
         </main>
       </div>
 
       <footer class="footer">
-        <span id="diagnostics" class="diagnostics" aria-live="polite"></span>
-        <nav class="legal-nav">
+        <span class="diagnostics-area">
+          <span id="diagnostics" class="diagnostics" aria-live="polite"></span>
+          <a id="diagnostics-help" class="btn" data-variant="link" data-size="xs" data-help="diagnostics" hidden>Learn more</a>
+        </span>
+        <nav class="legal-nav" aria-label="Site">
           <a class="btn" data-variant="link" data-size="xs" href="./privacy.html" target="_blank" rel="noreferrer">Privacy</a>
           <a class="btn" data-variant="link" data-size="xs" href="./tos.html" target="_blank" rel="noreferrer">ToS</a>
           <a class="btn" data-variant="link" data-size="xs" href="https://github.com/PrestonHager/LaTeXCollaborativeEditor" target="_blank" rel="noreferrer">Repository</a>
@@ -174,9 +243,13 @@
       <div class="command-palette command" role="dialog" aria-label="Command palette">
         <header>
           <i data-lucide="search"></i>
-          <input class="command-palette-input" type="text" placeholder="Type a command..." autocomplete="off" aria-label="Search commands" />
+          <input class="command-palette-input" type="text" placeholder="Type a command, or what you want to do..." autocomplete="off" aria-label="Search commands" aria-controls="command-palette-list" />
         </header>
-        <div class="command-palette-list" role="menu"></div>
+        <div id="command-palette-list" class="command-palette-list" role="menu" aria-label="Commands"></div>
+        <footer class="command-palette-footer">
+          <span>Use the arrow keys and Enter to run a command, Esc to close.</span>
+          <a class="btn" data-variant="link" data-size="xs" data-help="commandPalette">Learn more</a>
+        </footer>
       </div>
     </div>
 
@@ -215,6 +288,7 @@
         </section>
         <footer>
           <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local projects</button>
+          <a class="btn" data-variant="link" data-size="sm" data-help="settings">Help with settings</a>
           <button id="settings-done" type="button" class="btn">Done</button>
         </footer>
         <button id="settings-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close settings"><i data-lucide="x"></i></button>
@@ -259,6 +333,7 @@
           <ul id="upload-results" class="upload-results" aria-live="polite"></ul>
         </section>
         <footer>
+          <a class="btn" data-variant="link" data-size="sm" data-help="uploading">Help with uploads</a>
           <button id="upload-done" type="button" class="btn">Done</button>
         </footer>
         <button id="upload-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close upload"><i data-lucide="x"></i></button>
@@ -270,7 +345,7 @@
       <div>
         <header>
           <h2 id="projects-dialog-title">Open a project</h2>
-          <p id="projects-dialog-description">Projects saved in this browser.</p>
+          <p id="projects-dialog-description">Projects saved in this browser. For Google Drive, use File > Open from Google Drive.</p>
         </header>
         <section class="projects-dialog-body">
           <div id="projects-list" class="item-group projects-list" role="list"></div>
@@ -278,12 +353,16 @@
             <header>
               <figure><i data-lucide="folder-open"></i></figure>
               <h3>No saved projects</h3>
-              <p>Name a project and it gets saved here as you type.</p>
+              <p>Name a project and it gets saved here as you type. You can also upload a .zip to start one.</p>
             </header>
           </div>
         </section>
         <footer>
           <button id="projects-import-zip" type="button" class="btn" data-variant="outline"><i data-lucide="file-archive"></i>Upload .zip</button>
+          <span class="dialog-help-links">
+            <a class="btn" data-variant="link" data-size="sm" data-help="localStorage">Browser storage</a>
+            <a class="btn" data-variant="link" data-size="sm" data-help="drive">Google Drive</a>
+          </span>
           <button id="projects-done" type="button" class="btn">Close</button>
         </footer>
         <button id="projects-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close projects"><i data-lucide="x"></i></button>
@@ -314,6 +393,55 @@
         </footer>
       </div>
     </dialog>
+
+    <!-- About dialog. aboutDialog.ts fills in the version. -->
+    <dialog id="about-dialog" class="dialog about-dialog" aria-labelledby="about-dialog-title" aria-describedby="about-dialog-description">
+      <div>
+        <header>
+          <h2 id="about-dialog-title">About</h2>
+          <p id="about-dialog-description">A collaborative LaTeX editor that runs in your browser. Your project goes straight between browsers over WebRTC, not through our server.</p>
+        </header>
+        <section class="about-dialog-body">
+          <p>Version <span id="about-version"></span></p>
+          <ul class="about-links">
+            <li><a class="btn" data-variant="link" data-size="sm" data-help="gettingStarted">Documentation</a></li>
+            <li><a class="btn" data-variant="link" data-size="sm" data-help="supported">What's supported</a></li>
+            <li><a class="btn" data-variant="link" data-size="sm" href="https://github.com/PrestonHager/LaTeXCollaborativeEditor" target="_blank" rel="noreferrer">Source code on GitHub</a></li>
+            <li><a class="btn" data-variant="link" data-size="sm" href="./privacy.html" target="_blank" rel="noreferrer">Privacy</a></li>
+            <li><a class="btn" data-variant="link" data-size="sm" href="./tos.html" target="_blank" rel="noreferrer">Terms of service</a></li>
+          </ul>
+        </section>
+        <footer>
+          <button id="about-done" type="button" class="btn">Close</button>
+        </footer>
+        <button id="about-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close about"><i data-lucide="x"></i></button>
+      </div>
+    </dialog>
+
+    <!-- First-run tour. tour.ts walks through the steps below and puts this card next to each target. -->
+    <div id="tour" class="tour" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-body" hidden>
+      <p class="tour-count" data-tour-count></p>
+      <h2 id="tour-title" class="tour-title" data-tour-title></h2>
+      <p id="tour-body" class="tour-body" data-tour-body></p>
+      <footer class="tour-footer">
+        <a class="btn" data-variant="link" data-size="xs" data-help="gettingStarted">Read the full docs</a>
+        <span class="tour-buttons">
+          <button type="button" class="btn" data-variant="ghost" data-size="sm" data-tour-skip>Skip tour</button>
+          <button type="button" class="btn" data-variant="outline" data-size="sm" data-tour-back>Back</button>
+          <button type="button" class="btn" data-size="sm" data-tour-next>Next</button>
+        </span>
+      </footer>
+    </div>
+    <ol id="tour-steps" hidden>
+      <li data-target="#menu-bar" data-title="Menus">Everything the app can do is in these menus. Press Ctrl+P (or Cmd+P) to search them all.</li>
+      <li data-target="#toolbar" data-title="Toolbar">The things you do most, like save, compile, and share, are one click away here.</li>
+      <li data-target="#file-pane" data-title="Files">Your project's files. Drag files in to upload them, and star a .tex file to make it the main file.</li>
+      <li data-target="#editor-pane" data-title="Editor">Write LaTeX here. Anyone you share with edits the same files at the same time.</li>
+      <li data-target="#preview-pane" data-title="Preview">The preview updates as you type. Errors show up in the editor and at the bottom of the page.</li>
+      <li data-target="#share-area" data-title="Share">Click Share to copy a link. Whoever opens it joins you, browser to browser.</li>
+      <li data-target=".status-badges" data-title="Status">See who's connected, whether the preview is up to date, and where and when the project last saved.</li>
+      <li data-target="[aria-controls='menu-help']" data-title="Help">Find the docs, keyboard shortcuts, bug reports, and this tour again in Help.</li>
+    </ol>
 
     <input id="zip-input" type="file" accept=".zip,application/zip" hidden />
 

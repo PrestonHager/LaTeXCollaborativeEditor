@@ -38,6 +38,7 @@ Checklist
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
 - [x] Bundle size: `npm run build` reports the gzipped JS and CSS under the budget in `scripts/check-bundle-size.mjs`, or the PR explains why it went over.
 - [ ] UI: menus, the command palette, and the settings dialog open above the editor and preview, work by keyboard, and look right in light and dark themes.
+- [ ] Help: Help has docs, shortcuts, bug report, feature request, tour, and About; `?` links and error notices open the right docs section; the bug form only prefills browser, OS, and app version; and the first-run tour shows once, can be skipped, and reopens from Help.
 
 Verification guidance
 - Prefer automated tests where possible; accompany with manual QA for session join, realtime sync, and preview rendering.

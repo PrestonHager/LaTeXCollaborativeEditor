@@ -49,6 +49,11 @@ import {
   X,
   TextCursorInput,
   SquarePen,
+  Keyboard,
+  Bug,
+  Lightbulb,
+  Signpost,
+  CircleHelp,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -93,17 +98,25 @@ const commandIcons: Record<CommandId, IconNode> = {
   'view.layoutEditorOnly': PanelLeft,
   'view.layoutPreviewOnly': PanelRight,
   'help.documentation': BookOpen,
+  'help.shortcuts': Keyboard,
+  'help.tour': Signpost,
+  'help.reportBug': Bug,
+  'help.requestFeature': Lightbulb,
   'help.about': Info,
 };
 
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
 const staticIcons = {
+  CircleHelp,
+  Play,
+  Save,
   Check,
   ChevronRight,
   Download,
   File,
   FileArchive,
   FilePlus,
+  FileText,
   Folder,
   FolderOpen,
   FolderPlus,

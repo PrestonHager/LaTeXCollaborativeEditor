@@ -6,12 +6,26 @@ export type PaletteCommand = {
   label: string;
   section: string;
   shortcut?: string;
+  /** One line saying what the command does. Search matches it too. */
+  description?: string;
   enabled: boolean;
 };
 
 type PaletteOptions = {
   onSelect: (commandId: CommandId) => void;
 };
+
+/**
+ * Score a command for a query. Labels match loosely, but descriptions only match whole
+ * words, since a fuzzy match on a long sentence would match almost anything.
+ */
+export function scoreCommand(query: string, command: PaletteCommand): number | null {
+  const labelScore = fuzzyScore(query, `${command.section} ${command.label} ${command.shortcut ?? ''}`.toLowerCase());
+  if (labelScore !== null) return labelScore;
+  const description = (command.description ?? '').toLowerCase();
+  const words = query.split(/\s+/).filter(Boolean);
+  return words.length && words.every((word) => description.includes(word)) ? 1 : null;
+}
 
 function fuzzyScore(query: string, text: string): number | null {
   if (!query) return 0;
@@ -51,6 +65,7 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
   const recentOrder: CommandId[] = [];
   let activeIndex = 0;
   let isOpen = false;
+  let returnFocus: HTMLElement | null = null;
 
   const markRecent = (commandId: CommandId) => {
     const existing = recentOrder.indexOf(commandId);
@@ -61,6 +76,7 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
 
   const render = () => {
     list.replaceChildren();
+    input.removeAttribute('aria-activedescendant');
     if (!filtered.length) {
       const empty = document.createElement('div');
       empty.className = 'command-palette-empty';
@@ -88,12 +104,26 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
       row.type = 'button';
       row.className = 'command-palette-item';
       row.setAttribute('role', 'menuitem');
-      if (index === activeIndex) row.classList.add('is-active', 'active');
+      row.id = `command-palette-item-${index}`;
+      // Focus stays in the search box, so tell screen readers which row the arrow keys are on.
+      if (index === activeIndex) {
+        row.classList.add('is-active', 'active');
+        input.setAttribute('aria-activedescendant', row.id);
+      }
       if (!command.enabled) row.disabled = true;
 
       const left = document.createElement('span');
       left.className = 'command-palette-main';
-      left.textContent = `${command.section}: ${command.label}`;
+      const label = document.createElement('span');
+      label.className = 'command-palette-label';
+      label.textContent = `${command.section}: ${command.label}`;
+      left.appendChild(label);
+      if (command.description) {
+        const description = document.createElement('span');
+        description.className = 'command-palette-description';
+        description.textContent = command.description;
+        left.appendChild(description);
+      }
 
       row.append(commandIcon(command.id), left);
       if (command.shortcut) {
@@ -103,13 +133,8 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
         right.textContent = command.shortcut;
         row.appendChild(right);
       }
-      row.onclick = () => {
-        if (!command.enabled) return;
-        markRecent(command.id);
-        options.onSelect(command.id);
-        close();
-      };
-      list.appendChild(row);
+      row.onclick = () => run(command);
+      group.appendChild(row);
     });
   };
 
@@ -117,8 +142,7 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
     const query = input.value.trim().toLowerCase();
     const base = commands
       .map((command) => {
-      const haystack = `${command.section} ${command.label} ${command.shortcut ?? ''}`.toLowerCase();
-      const score = fuzzyScore(query, haystack);
+      const score = scoreCommand(query, command);
       if (score === null) return null;
       return { command, score };
       })
@@ -138,7 +162,17 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
     render();
   };
 
+  // Close first so focus goes back where it was, then run it. A command that opens a dialog takes focus from there.
+  const run = (command: PaletteCommand) => {
+    if (!command.enabled) return;
+    markRecent(command.id);
+    close();
+    options.onSelect(command.id);
+  };
+
   const open = () => {
+    const active = document.activeElement;
+    returnFocus = active instanceof HTMLElement && !overlay.contains(active) ? active : null;
     isOpen = true;
     overlay.classList.add('is-open');
     overlay.setAttribute('aria-hidden', 'false');
@@ -148,9 +182,12 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
   };
 
   const close = () => {
+    if (!isOpen) return;
     isOpen = false;
     overlay.classList.remove('is-open');
     overlay.setAttribute('aria-hidden', 'true');
+    if (returnFocus?.isConnected) returnFocus.focus();
+    returnFocus = null;
   };
 
   overlay.addEventListener('click', (event) => {
@@ -181,10 +218,7 @@ export function createCommandPalette(overlay: HTMLElement, options: PaletteOptio
     if (event.key === 'Enter') {
       event.preventDefault();
       const selected = filtered[activeIndex];
-      if (!selected || !selected.enabled) return;
-      markRecent(selected.id);
-      options.onSelect(selected.id);
-      close();
+      if (selected) run(selected);
     }
   });
 
