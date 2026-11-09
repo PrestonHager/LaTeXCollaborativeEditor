@@ -1,4 +1,16 @@
+import 'fake-indexeddb/auto';
 import { SessionController, type PersistedDocState } from './session';
+import * as Y from 'yjs';
+import { BlobStore } from '../project/blobStore';
+
+/** Replace the old single-document text, the way typing would. */
+const setText = (doc: Y.Doc, text: string) => {
+  const yText = doc.getText('doc');
+  doc.transact(() => {
+    yText.delete(0, yText.length);
+    yText.insert(0, text);
+  }, 'local');
+};
 import { createCollabUndo } from './undo';
 
 type PeerCallbacks = {
@@ -64,15 +76,19 @@ const createPeer = (isHost: boolean, text: string, initialState?: PersistedDocSt
   const controller = new SessionController({
     isHost,
     onConnectionState: vi.fn(),
-    onRemoteText: vi.fn(),
-    getLocalText: () => text,
+    blobs: new BlobStore(),
     initialState,
     onDocReplaced,
   });
+  // A host without saved state starts from its own text, the way main.ts seeds a new project.
+  if (isHost && !initialState && text) {
+    const doc = controller.getDoc();
+    doc.transact(() => doc.getText('doc').insert(0, text), 'init');
+  }
   return { controller, onDocReplaced };
 };
 
-const textOf = (controller: SessionController) => controller.getYText().toString();
+const textOf = (controller: SessionController) => controller.getDoc().getText('doc').toString();
 
 const hasPending = (controller: SessionController) => {
   const store = controller.getDoc().store;
@@ -96,14 +112,14 @@ describe('host reload with a guest still connected', () => {
     guest.controller.join('room');
     expect(textOf(guest.controller)).toBe('hello');
 
-    guest.controller.applyLocalText('hello guest');
+    setText(guest.controller.getDoc(), 'hello guest');
     expect(textOf(host)).toBe('hello guest');
 
     // Now the host reloads from what it saved, and the guest types while it's gone.
     const saved = host.getPersistedState();
     expect(saved).not.toBeNull();
     reload(host);
-    guest.controller.applyLocalText('hello guest, again');
+    setText(guest.controller.getDoc(), 'hello guest, again');
 
     const reloaded = createPeer(true, 'hello guest', saved!).controller;
     reloaded.join('room');
@@ -112,8 +128,8 @@ describe('host reload with a guest still connected', () => {
     expect(guest.onDocReplaced).not.toHaveBeenCalled();
     expect(textOf(reloaded)).toBe('hello guest, again');
 
-    guest.controller.applyLocalText('hello guest, again!');
-    reloaded.applyLocalText('Hi! hello guest, again!');
+    setText(guest.controller.getDoc(), 'hello guest, again!');
+    setText(reloaded.getDoc(), 'Hi! hello guest, again!');
     expect(textOf(reloaded)).toBe('Hi! hello guest, again!');
     expect(textOf(guest.controller)).toBe('Hi! hello guest, again!');
     expect(hasPending(reloaded)).toBe(false);
@@ -125,17 +141,17 @@ describe('host reload with a guest still connected', () => {
     host.join('room');
     const guest = createPeer(false, '');
     guest.controller.join('room');
-    guest.controller.applyLocalText('old text');
+    setText(guest.controller.getDoc(), 'old text');
     reload(host);
 
     // No persisted state, so the host builds an unrelated doc.
     const reloaded = createPeer(true, 'fresh').controller;
     reloaded.join('room');
 
-    expect(guest.onDocReplaced).toHaveBeenCalledWith('fresh');
+    expect(guest.onDocReplaced).toHaveBeenCalled();
     expect(textOf(guest.controller)).toBe('fresh');
 
-    guest.controller.applyLocalText('fresh from guest');
+    setText(guest.controller.getDoc(), 'fresh from guest');
     expect(textOf(reloaded)).toBe('fresh from guest');
     expect(hasPending(reloaded)).toBe(false);
   });
@@ -145,15 +161,15 @@ describe('host reload with a guest still connected', () => {
     host.join('room');
     const guest = createPeer(false, '');
     guest.controller.join('room');
-    let undo = createCollabUndo(guest.controller.getYText());
+    let undo = createCollabUndo(guest.controller.getDoc().getText('doc'));
     // Rebuild undo on reset, the same way main.ts does.
     guest.onDocReplaced.mockImplementation(() => {
       undo.manager.destroy();
-      undo = createCollabUndo(guest.controller.getYText());
+      undo = createCollabUndo(guest.controller.getDoc().getText('doc'));
     });
 
     // First, the guest makes an undoable edit on the old doc.
-    const oldText = guest.controller.getYText();
+    const oldText = guest.controller.getDoc().getText('doc');
     guest.controller.getDoc().transact(() => oldText.insert(oldText.length, ' guest'));
     expect(undo.canUndo()).toBe(true);
 
@@ -165,9 +181,9 @@ describe('host reload with a guest still connected', () => {
     expect(undo.canUndo()).toBe(false);
 
     // Then the guest and host both edit, and the guest undoes only its own change.
-    const newText = guest.controller.getYText();
+    const newText = guest.controller.getDoc().getText('doc');
     guest.controller.getDoc().transact(() => newText.insert(newText.length, ' guest'));
-    reloaded.getDoc().transact(() => reloaded.getYText().insert(0, 'Host '));
+    reloaded.getDoc().transact(() => reloaded.getDoc().getText('doc').insert(0, 'Host '));
     expect(textOf(guest.controller)).toBe('Host fresh guest');
 
     undo.undo();

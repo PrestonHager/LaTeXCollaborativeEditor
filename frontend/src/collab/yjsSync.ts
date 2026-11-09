@@ -1,15 +1,15 @@
 import * as Y from 'yjs';
 
 type YjsSyncConfig = {
-  initialText: string;
   initialState?: Uint8Array;
-  onRemoteText: (text: string) => void;
+  /** Runs after a change from a peer or a snapshot lands in the doc. */
+  onRemoteChange?: () => void;
   onLocalUpdate: (update: Uint8Array) => void;
 };
 
-export class YjsTextSync {
+/** Keeps one Yjs doc (the whole project) and tells us which updates to send to peers. */
+export class YjsDocSync {
   private doc = new Y.Doc();
-  private yText = this.doc.getText('doc');
   private readonly config: YjsSyncConfig;
 
   constructor(config: YjsSyncConfig) {
@@ -18,38 +18,20 @@ export class YjsTextSync {
     if (config.initialState) {
       Y.applyUpdate(this.doc, config.initialState, 'init');
     }
-    if (config.initialText && this.yText.toString() !== config.initialText) {
-      this.doc.transact(() => {
-        this.yText.delete(0, this.yText.length);
-        this.yText.insert(0, config.initialText);
-      }, 'init');
-    }
     this.listen();
   }
 
   private listen() {
-    // y-codemirror.next uses the YSyncConfig instance as transaction origin (see y-sync.js transact(..., this.conf)).
-    // Only skip updates that came from the network or snapshot application so we do not echo them.
-    this.doc.on('update', (update, origin) => {
-      if (origin === 'remote' || origin === 'snapshot' || origin === 'init') {
+    // y-codemirror.next uses its YSyncConfig instance as the transaction origin, and file ops use
+    // their own, so only skip updates that came from the network or a snapshot to avoid echoing them.
+    this.doc.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin === 'remote' || origin === 'snapshot') {
+        this.config.onRemoteChange?.();
         return;
       }
+      if (origin === 'init') return;
       this.config.onLocalUpdate(update);
     });
-
-    this.yText.observe((event) => {
-      if (event.transaction.origin !== 'remote' && event.transaction.origin !== 'snapshot') return;
-      this.config.onRemoteText(this.yText.toString());
-    });
-  }
-
-  applyLocalText(nextText: string) {
-    const current = this.yText.toString();
-    if (current === nextText) return;
-    this.doc.transact(() => {
-      this.yText.delete(0, this.yText.length);
-      this.yText.insert(0, nextText);
-    }, 'local');
   }
 
   applyRemoteUpdate(update: Uint8Array) {
@@ -63,11 +45,10 @@ export class YjsTextSync {
   }
 
   // Throw away our doc and start over from a snapshot of a different doc.
-  // Deleting our text in place doesn't work, since later updates would point at items the sender never had.
+  // Deleting our content in place doesn't work, since later updates would point at items the sender never had.
   resetFromSnapshot(update: Uint8Array) {
     this.doc.destroy();
     this.doc = new Y.Doc();
-    this.yText = this.doc.getText('doc');
     this.listen();
     Y.applyUpdate(this.doc, update, 'snapshot');
   }
@@ -78,10 +59,6 @@ export class YjsTextSync {
 
   getSnapshot() {
     return Y.encodeStateAsUpdate(this.doc);
-  }
-
-  getYText() {
-    return this.yText;
   }
 
   getDoc() {

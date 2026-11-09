@@ -1,10 +1,12 @@
 import { loadScript } from './scriptLoader';
 
-type PickerKind = 'file' | 'folder';
+// 'project' shows folders and files, so you can open a project folder or an old single .tex file.
+type PickerKind = 'project' | 'folder';
 
 type PickerSelection = {
   id: string;
   name: string;
+  isFolder: boolean;
 };
 
 declare global {
@@ -37,7 +39,7 @@ async function ensurePickerLoaded() {
 }
 
 /**
- * Show the Google Picker and resolve with the chosen file or folder, or null if canceled.
+ * Show the Google Picker and resolve with the chosen project folder, file, or folder, or null if canceled.
  * The appId (Cloud project number) is needed so the drive.file scope grants access to
  * files the user picks that this app didn't create.
  */
@@ -54,7 +56,7 @@ export async function openGooglePicker(config: {
     const view =
       config.kind === 'folder'
         ? new picker.DocsView(picker.ViewId.FOLDERS).setSelectFolderEnabled(true)
-        : new picker.DocsView(picker.ViewId.DOCS);
+        : new picker.DocsView(picker.ViewId.DOCS).setIncludeFolders(true).setSelectFolderEnabled(true);
 
     let builder = new picker.PickerBuilder()
       .setOAuthToken(config.accessToken)
@@ -66,7 +68,7 @@ export async function openGooglePicker(config: {
       .setCallback((data: any) => {
         if (data.action === picker.Action.PICKED && data.docs?.length) {
           const doc = data.docs[0];
-          resolve({ id: doc.id, name: doc.name });
+          resolve({ id: doc.id, name: doc.name, isFolder: doc.mimeType === 'application/vnd.google-apps.folder' });
           return;
         }
         if (data.action === picker.Action.CANCEL) {

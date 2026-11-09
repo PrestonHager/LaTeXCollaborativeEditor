@@ -1,5 +1,6 @@
 import { HtmlGenerator, parse } from 'latex.js';
 import { adaptLatexSourceForLatexJs } from './latexJsAdapt';
+import { expandProjectSource } from './projectSource';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** LaTeX.js static assets (CSS, fonts, JS) — same version as the `latex.js` npm dependency. */
@@ -61,4 +62,43 @@ function errorLine(err: unknown, source: string): number {
   if (typeof line !== 'number' || !Number.isInteger(line) || line < 1) return 1;
   // Clamp in case the error points past the end, like a missing \end{document}.
   return Math.min(line, source.split('\n').length);
+}
+
+export type ProjectDiagnostic = EditorDiagnostic & { path: string };
+
+export type ProjectPreviewInput = {
+  mainPath: string;
+  texts: Map<string, string>;
+  binaryPaths: string[];
+  /** Data URL for an image file, or null when its bytes haven't arrived yet. */
+  imageUrl: (path: string) => string | null;
+};
+
+/**
+ * Typeset the whole project, starting at the main file. \input files, images and the
+ * bibliography come from the project. Errors say which file and line they belong to.
+ */
+export function projectToPreviewHtml(input: ProjectPreviewInput): { html: string | null; errors: ProjectDiagnostic[]; missing: string[] } {
+  const expanded = expandProjectSource(input.mainPath, input.texts, input.binaryPaths);
+  const result = latexSourceToPreviewHtml(expanded.source);
+  const errors = result.errors.map((error) => {
+    const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
+    return { ...error, path: origin.path, line: origin.line };
+  });
+  if (!result.html) return { html: null, errors, missing: expanded.missing };
+
+  // Images go in after the URL check, since it would strip our data: URLs along with a peer's.
+  const doc = new DOMParser().parseFromString(result.html, 'text/html');
+  for (const img of Array.from(doc.querySelectorAll('img'))) {
+    const image = expanded.images.get(img.getAttribute('src') ?? '');
+    if (!image) continue;
+    const url = input.imageUrl(image.path);
+    img.removeAttribute('width');
+    img.removeAttribute('height');
+    img.setAttribute('alt', image.path);
+    img.setAttribute('style', `max-width:100%;${image.widthPercent ? `width:${image.widthPercent}%;` : ''}`);
+    if (url) img.setAttribute('src', url);
+    else img.removeAttribute('src');
+  }
+  return { html: doc.documentElement.outerHTML, errors, missing: expanded.missing };
 }

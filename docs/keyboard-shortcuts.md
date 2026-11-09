@@ -15,10 +15,10 @@ While the command palette is focused, other app shortcuts are not active.
 
 | Action | Windows / Linux | macOS |
 |--------|-----------------|-------|
-| **New** document (after confirmation) | **Ctrl+N** | **⌘+N** |
-| **Open Local** (host only) | **Ctrl+O** | **⌘+O** |
+| **New Project** (after confirmation) | **Ctrl+N** | **⌘+N** |
+| **Open Local Project** (host only) | **Ctrl+O** | **⌘+O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⌘+Shift+O** |
-| **Download .tex** | **Ctrl+Shift+S** | **⌘+Shift+S** |
+| **Download Project .zip** | **Ctrl+Shift+S** | **⌘+Shift+S** |
 | **Save Now** (when enabled) | **Ctrl+S** | **⌘+S** |
 
 ## Edit

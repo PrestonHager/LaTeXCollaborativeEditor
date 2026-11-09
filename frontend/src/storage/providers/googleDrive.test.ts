@@ -1,7 +1,5 @@
-import { GoogleDriveProvider } from './googleDrive';
+import { GoogleDriveProvider, LEGACY_PREFIX } from './googleDrive';
 import { StorageError } from '../errors';
-import { AutosaveController } from '../autosave';
-import type { StorageProvider } from './types';
 
 const loadScript = vi.fn(async () => undefined);
 vi.mock('./scriptLoader', () => ({ loadScript: (...args: unknown[]) => loadScript(...(args as [])) }));
@@ -21,6 +19,9 @@ function stubGis(respond: (config: TokenClientConfig) => void) {
   window.google = { accounts: { oauth2: { initTokenClient } } };
   return { initTokenClient, requestAccessToken };
 }
+
+/** A files.list answer with nothing in it. */
+const okList = (files: unknown[] = []) => ({ ok: true, json: async () => ({ files }) });
 
 /** Make a provider that already has a live token. */
 function connectedProvider() {
@@ -108,7 +109,6 @@ describe('GoogleDriveProvider', () => {
     function expiredProvider() {
       vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'client-id');
       const provider = connectedProvider();
-      (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
       (provider as any).tokenExpiresAt = Date.now() - 1000;
       return provider;
     }
@@ -118,12 +118,12 @@ describe('GoogleDriveProvider', () => {
     it('silently gets a new token and keeps saving to Drive', async () => {
       const provider = expiredProvider();
       const gis = stubGis((config) => config.callback({ access_token: 'fresh-token', expires_in: 3600 }));
-      const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+      const fetchMock = vi.fn().mockResolvedValue(okList());
       vi.stubGlobal('fetch', fetchMock);
       const lost = vi.fn();
       provider.onSessionLost(lost);
 
-      await provider.save('next', 'x.tex');
+      await provider.listProjects();
 
       expect(gis.requestAccessToken).toHaveBeenCalledWith({ prompt: '' });
       expect(authHeader(fetchMock.mock.calls[0])).toBe('Bearer fresh-token');
@@ -134,9 +134,9 @@ describe('GoogleDriveProvider', () => {
     it('shares one refresh between saves that run at the same time', async () => {
       const provider = expiredProvider();
       const gis = stubGis((config) => config.callback({ access_token: 'fresh-token', expires_in: 3600 }));
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(okList()));
 
-      await Promise.all([provider.save('a', 'x.tex'), provider.save('b', 'x.tex')]);
+      await Promise.all([provider.listProjects(), provider.listProjects()]);
 
       expect(gis.requestAccessToken).toHaveBeenCalledTimes(1);
     });
@@ -144,15 +144,14 @@ describe('GoogleDriveProvider', () => {
     it('retries once with a new token when Drive returns 401', async () => {
       vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'client-id');
       const provider = connectedProvider();
-      (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
       stubGis((config) => config.callback({ access_token: 'fresh-token', expires_in: 3600 }));
       const fetchMock = vi
         .fn()
         .mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) })
-        .mockResolvedValueOnce({ ok: true });
+        .mockResolvedValueOnce(okList());
       vi.stubGlobal('fetch', fetchMock);
 
-      await provider.save('next', 'x.tex');
+      await provider.listProjects();
 
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(authHeader(fetchMock.mock.calls[1])).toBe('Bearer fresh-token');
@@ -161,13 +160,12 @@ describe('GoogleDriveProvider', () => {
     it('gives up after a second 401 and ends the session', async () => {
       vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'client-id');
       const provider = connectedProvider();
-      (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
       stubGis((config) => config.callback({ access_token: 'fresh-token', expires_in: 3600 }));
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }));
       const lost = vi.fn();
       provider.onSessionLost(lost);
 
-      await expect(provider.save('next', 'x.tex')).rejects.toMatchObject({ retryable: false, status: 401 });
+      await expect(provider.listProjects()).rejects.toMatchObject({ retryable: false, status: 401 });
       expect(lost).toHaveBeenCalledTimes(1);
       expect(provider.isSignedIn()).toBe(false);
     });
@@ -180,7 +178,7 @@ describe('GoogleDriveProvider', () => {
       const lost = vi.fn();
       provider.onSessionLost(lost);
 
-      await expect(provider.save('next', 'x.tex')).rejects.toMatchObject({
+      await expect(provider.listProjects()).rejects.toMatchObject({
         message: expect.stringMatching(/Session expired/),
         retryable: false,
       });
@@ -190,7 +188,7 @@ describe('GoogleDriveProvider', () => {
       expect(provider.status()).toBe('Drive: Session expired');
       expect(localStorage.getItem('drive_access_token')).toBeNull();
       // After that we're signed out, so later saves fail fast without asking GIS again.
-      await expect(provider.save('next', 'x.tex')).rejects.toThrow(/Not connected/);
+      await expect(provider.listProjects()).rejects.toThrow(/Not connected/);
       expect(lost).toHaveBeenCalledTimes(1);
     });
 
@@ -203,7 +201,7 @@ describe('GoogleDriveProvider', () => {
         const lost = vi.fn();
         provider.onSessionLost(lost);
 
-        const failure = expect(provider.save('next', 'x.tex')).rejects.toThrow(/Session expired/);
+        const failure = expect(provider.listProjects()).rejects.toThrow(/Session expired/);
         await vi.advanceTimersByTimeAsync(20_000);
         await failure;
         expect(lost).toHaveBeenCalledTimes(1);
@@ -217,74 +215,20 @@ describe('GoogleDriveProvider', () => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       loadScript.mockRejectedValueOnce(new Error('blocked'));
       vi.stubGlobal('fetch', vi.fn());
-      await expect(provider.save('next', 'x.tex')).rejects.toThrow(/Session expired/);
+      await expect(provider.listProjects()).rejects.toThrow(/Session expired/);
       expect(provider.isSignedIn()).toBe(false);
     });
-
-    it('lets autosave fall back to local storage so the edit is kept', async () => {
-      const provider = expiredProvider();
-      stubGis((config) => config.error_callback({ type: 'popup_failed_to_open' }));
-      vi.stubGlobal('fetch', vi.fn());
-      vi.spyOn(console, 'error').mockImplementation(() => undefined);
-      const local = { label: 'Local', save: vi.fn(async () => undefined), status: () => 'ok', connect: async () => true };
-      let active: StorageProvider = provider;
-      const autosave = new AutosaveController({
-        provider: () => active,
-        getContent: () => 'latest edit',
-        getFileName: () => 'x.tex',
-        onStatus: () => undefined,
-      });
-      // Do what main.ts does: switch to local and save again.
-      provider.onSessionLost(() => {
-        active = local as unknown as StorageProvider;
-        void autosave.saveNow();
-      });
-
-      expect(await autosave.saveNow()).toBe(false);
-      expect(await autosave.saveNow()).toBe(true);
-      expect(local.save).toHaveBeenCalledWith('latest edit', 'x.tex');
-    });
-  });
-
-  it('opens document and persists selected file', async () => {
-    const provider = connectedProvider();
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ id: 'f1', name: 'doc.tex' }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          text: async () => 'content',
-        }),
-    );
-
-    const opened = await provider.openDocument('f1');
-
-    expect(opened).toEqual({ name: 'doc.tex', content: 'content' });
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'f1', name: 'doc.tex' });
-    expect(localStorage.getItem('drive_active_file_ref')).toContain('doc.tex');
-  });
-
-  it('explains a 404 on open as a missing or inaccessible file', async () => {
-    const provider = connectedProvider();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) }));
-    await expect(provider.openDocument('f1')).rejects.toThrow(/not found or this app does not have access/);
   });
 
   it('clears the token and asks to reconnect on 401', async () => {
     const provider = connectedProvider();
     localStorage.setItem('drive_access_token', JSON.stringify({ accessToken: 'token', expiresAt: Date.now() + 3600_000 }));
-    (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: { message: 'Invalid Credentials' } }) }),
     );
 
-    const failure = provider.save('next', 'x.tex');
+    const failure = provider.listProjects();
     await expect(failure).rejects.toBeInstanceOf(StorageError);
     await expect(failure).rejects.toMatchObject({ retryable: false, status: 401 });
     expect(provider.hasUsableToken()).toBe(false);
@@ -293,148 +237,230 @@ describe('GoogleDriveProvider', () => {
 
   it('includes the Google error message for server errors', async () => {
     const provider = connectedProvider();
-    (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({ error: { message: 'Backend Error' } }) }),
     );
-    await expect(provider.save('next', 'x.tex')).rejects.toMatchObject({
-      message: 'Drive: Could not save file (HTTP 500: Backend Error).',
+    await expect(provider.listProjects()).rejects.toMatchObject({
+      message: 'Drive: Could not list projects (HTTP 500: Backend Error).',
       retryable: true,
     });
   });
 
   it('turns network failures into a readable error', async () => {
     const provider = connectedProvider();
-    (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
     vi.stubGlobal('fetch', vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch')));
-    await expect(provider.save('next', 'x.tex')).rejects.toThrow(/Check your connection/);
+    await expect(provider.listProjects()).rejects.toThrow(/Check your connection/);
   });
 
   it('refuses to save without a token', async () => {
     const provider = new GoogleDriveProvider();
-    await expect(provider.save('x', 'x.tex')).rejects.toThrow(/Not connected/);
+    await expect(provider.listProjects()).rejects.toThrow(/Not connected/);
   });
 
-  it('renames and moves current file', async () => {
-    const provider = connectedProvider();
-    (provider as any).fileRef = { id: 'f1', name: 'old.tex' };
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({ ok: true })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ parents: ['p1'] }) })
-        .mockResolvedValueOnce({ ok: true }),
-    );
+  describe('projects as Drive folders', () => {
+    type FakeFile = { id: string; name: string; mimeType: string; parents: string[]; appProperties?: Record<string, string | null>; content?: Uint8Array; trashed?: boolean };
+    const FOLDER = 'application/vnd.google-apps.folder';
 
-    await provider.renameFile('f1', 'new.tex');
-    await provider.moveFile('f1', 'folder2');
+    const readBlob = async (blob: Blob): Promise<Uint8Array> => {
+      if (typeof blob.arrayBuffer === 'function') return new Uint8Array(await blob.arrayBuffer());
+      return new Uint8Array(await new Response(blob as BodyInit).arrayBuffer());
+    };
 
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'f1', name: 'new.tex' });
-  });
+    /** A tiny in-memory Drive that answers the calls the provider makes. */
+    function fakeDrive(seed: FakeFile[] = []) {
+      const files = new Map(seed.map((file) => [file.id, file]));
+      let nextId = 0;
+      const reply = (body: unknown) => ({ ok: true, status: 200, json: async () => body, arrayBuffer: async () => body });
+      const fetchMock = vi.fn(async (input: string, init: RequestInit = {}) => {
+        const url = new URL(input);
+        const method = init.method ?? 'GET';
+        const idMatch = /\/files\/([^/?]+)/.exec(url.pathname);
+        const id = idMatch?.[1];
+        if (method === 'GET' && !id) {
+          const q = url.searchParams.get('q') ?? '';
+          const parent = /'([^']+)' in parents/.exec(q)?.[1];
+          const list = [...files.values()].filter((file) => {
+            if (file.trashed) return false;
+            if (parent) return file.parents.includes(parent);
+            return file.mimeType === FOLDER && file.appProperties?.latexProject === '1';
+          });
+          return reply({ files: list.map(({ id: fid, name, mimeType }) => ({ id: fid, name, mimeType, modifiedTime: '2026-01-01T00:00:00Z' })) });
+        }
+        if (method === 'GET' && id) {
+          const file = files.get(id);
+          if (!file) return { ok: false, status: 404, json: async () => ({}) };
+          if (url.searchParams.get('alt') === 'media') return { ok: true, status: 200, arrayBuffer: async () => file.content!.buffer };
+          return reply(file);
+        }
+        if (method === 'POST' && url.pathname.includes('/upload/')) {
+          const form = init.body as FormData;
+          const metadata = JSON.parse(new TextDecoder().decode(await readBlob(form.get('metadata') as Blob)));
+          const created: FakeFile = { id: `f${(nextId += 1)}`, name: metadata.name, mimeType: 'text/plain', parents: metadata.parents ?? ['root'], content: await readBlob(form.get('file') as Blob) };
+          files.set(created.id, created);
+          return reply({ id: created.id });
+        }
+        if (method === 'POST') {
+          const body = JSON.parse(init.body as string);
+          const created: FakeFile = { id: `d${(nextId += 1)}`, name: body.name, mimeType: body.mimeType, parents: body.parents ?? ['root'], appProperties: body.appProperties };
+          files.set(created.id, created);
+          return reply({ id: created.id, name: created.name });
+        }
+        if (method === 'PATCH' && id) {
+          const file = files.get(id)!;
+          if (url.pathname.includes('/upload/')) {
+            file.content = await readBlob(init.body as Blob);
+            return reply({ id });
+          }
+          const add = url.searchParams.get('addParents');
+          const remove = url.searchParams.get('removeParents');
+          if (remove) file.parents = file.parents.filter((parent) => !remove.split(',').includes(parent));
+          if (add) file.parents.push(add);
+          if (init.body) {
+            const body = JSON.parse(init.body as string);
+            if (body.name) file.name = body.name;
+            if (body.trashed) file.trashed = true;
+            if (body.appProperties) file.appProperties = { ...file.appProperties, ...body.appProperties };
+          }
+          return reply({ id });
+        }
+        throw new Error(`Unexpected Drive call ${method} ${input}`);
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return { files, fetchMock, find: (name: string) => [...files.values()].find((file) => file.name === name && !file.trashed) };
+    }
 
-  it('saveAs renames the linked file instead of creating a duplicate', async () => {
-    const provider = connectedProvider();
-    (provider as any).fileRef = { id: 'f1', name: 'old.tex' };
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
+    const bytes = (text: string) => new TextEncoder().encode(text);
+    const text = (data: Uint8Array) => new TextDecoder().decode(data);
 
-    await provider.saveAs('body', 'old.tex', 'new.tex');
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0][0]).toContain('/files/f1');
-    expect(fetchMock.mock.calls[1][0]).toContain('/files/f1?uploadType=media');
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'f1', name: 'new.tex' });
-  });
-
-  it('saveAs creates a file when nothing is linked yet', async () => {
-    const provider = connectedProvider();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'n1' }) }));
-    await provider.saveAs('body', 'old.tex', 'new.tex');
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'n1', name: 'new.tex' });
-  });
-
-  it('detachFile forgets the linked file', () => {
-    localStorage.setItem('drive_active_file_ref', JSON.stringify({ id: 'f1', name: 'a.tex' }));
-    const provider = new GoogleDriveProvider();
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'f1', name: 'a.tex' });
-    provider.detachFile();
-    expect(provider.getCurrentFileRef()).toBeNull();
-    expect(localStorage.getItem('drive_active_file_ref')).toBeNull();
-  });
-
-  describe('document ownership', () => {
-    it('stamps a newly created file with the open document id', async () => {
+    it('makes a tagged folder per project and real files and subfolders inside it', async () => {
+      const drive = fakeDrive();
       const provider = connectedProvider();
-      provider.setDocumentId('doc-1');
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'n1' }) }));
+      const { id } = await provider.createProject('Thesis');
+      await provider.writeFile(id, 'main.tex', '\\documentclass{article}');
+      await provider.writeFile(id, 'figures/plot.png', new Uint8Array([1, 2]));
+      await provider.setMainFile(id, 'main.tex');
 
-      await provider.save('body', 'a.tex');
+      const folder = drive.files.get(id)!;
+      expect(folder.mimeType).toBe(FOLDER);
+      expect(folder.appProperties).toMatchObject({ latexProject: '1', mainFile: 'main.tex' });
+      const figures = drive.find('figures')!;
+      expect(figures.parents).toEqual([id]);
+      expect(drive.find('plot.png')!.parents).toEqual([figures.id]);
 
-      expect(provider.getCurrentFileRef()).toEqual({ id: 'n1', name: 'a.tex', documentId: 'doc-1' });
-      expect(provider.isLinkedTo('doc-1')).toBe(true);
-      expect(provider.isLinkedTo('doc-2')).toBe(false);
-      // The owner survives a reload.
-      expect(new GoogleDriveProvider().isLinkedTo('doc-1')).toBe(true);
+      // Writing again updates the same file instead of making a duplicate.
+      await provider.writeFile(id, 'main.tex', 'changed');
+      expect([...drive.files.values()].filter((file) => file.name === 'main.tex')).toHaveLength(1);
+      expect(text(drive.find('main.tex')!.content!)).toBe('changed');
+
+      expect((await provider.listProjects()).map((project) => project.name)).toEqual(['Thesis']);
     });
 
-    it('links the file a create started for, even if the doc id changes mid-save', async () => {
+    it('opens a folder project, walking subfolders and skipping Google Docs', async () => {
+      fakeDrive([
+        { id: 'root1', name: 'Paper', mimeType: FOLDER, parents: ['root'], appProperties: { latexProject: '1', mainFile: 'paper.tex' } },
+        { id: 'a', name: 'paper.tex', mimeType: 'text/x-tex', parents: ['root1'], content: bytes('hi') },
+        { id: 'b', name: 'img', mimeType: FOLDER, parents: ['root1'] },
+        { id: 'c', name: 'x.png', mimeType: 'image/png', parents: ['b'], content: new Uint8Array([9]) },
+        { id: 'd', name: 'Notes', mimeType: 'application/vnd.google-apps.document', parents: ['root1'] },
+      ]);
       const provider = connectedProvider();
-      provider.setDocumentId('doc-1');
-      let finishCreate!: (value: unknown) => void;
-      vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(new Promise((resolve) => (finishCreate = resolve))));
-
-      const saving = provider.save('body', 'a.tex');
-      await Promise.resolve();
-      provider.setDocumentId('doc-2');
-      finishCreate({ ok: true, json: async () => ({ id: 'n1' }) });
-      await saving;
-
-      expect(provider.isLinkedTo('doc-1')).toBe(true);
+      const listing = await provider.openProject('root1');
+      expect(listing).toEqual({
+        id: 'root1',
+        name: 'Paper',
+        mainPath: 'paper.tex',
+        entries: [
+          { path: 'img', kind: 'folder' },
+          { path: 'img/x.png', kind: 'file' },
+          { path: 'paper.tex', kind: 'file' },
+        ],
+      });
+      expect(Array.from(await provider.readFile('root1', 'img/x.png'))).toEqual([9]);
+      await expect(provider.readFile('root1', 'missing.tex')).rejects.toThrow(/was not found/);
     });
 
-    it('keeps the owner when the file is renamed', async () => {
+    it('moves, renames and trashes files and folders', async () => {
+      const drive = fakeDrive();
       const provider = connectedProvider();
-      (provider as any).fileRef = { id: 'f1', name: 'a.tex', documentId: 'doc-1' };
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+      const { id } = await provider.createProject('P');
+      await provider.writeFile(id, 'ch/intro.tex', 'a');
+      await provider.move(id, 'ch', 'chapters');
+      expect(drive.find('chapters')).toBeTruthy();
+      // The file moved along with its folder, so it can still be written by its new path.
+      await provider.writeFile(id, 'chapters/intro.tex', 'b');
+      expect(text(drive.find('intro.tex')!.content!)).toBe('b');
 
-      await provider.saveAs('body', 'a.tex', 'b.tex');
-
-      expect(provider.getCurrentFileRef()).toEqual({ id: 'f1', name: 'b.tex', documentId: 'doc-1' });
+      await provider.move(id, 'chapters/intro.tex', 'intro.tex');
+      expect(drive.find('intro.tex')!.parents).toEqual([id]);
+      await provider.createFolder(id, 'empty');
+      await provider.remove(id, 'chapters');
+      expect(drive.find('chapters')).toBeUndefined();
+      await provider.renameProject(id, 'Renamed');
+      expect(drive.files.get(id)!.name).toBe('Renamed');
+      await expect(provider.move(id, 'nope.tex', 'x.tex')).rejects.toThrow(/was not found/);
     });
 
-    it('links an opened file to the id it was given', async () => {
+    it('loads the project index on demand after a reload', async () => {
+      const drive = fakeDrive([
+        { id: 'p', name: 'P', mimeType: FOLDER, parents: ['root'], appProperties: { latexProject: '1' } },
+        { id: 'm', name: 'main.tex', mimeType: 'text/plain', parents: ['p'], content: bytes('old') },
+      ]);
       const provider = connectedProvider();
-      provider.setDocumentId('doc-1');
-      vi.stubGlobal(
-        'fetch',
-        vi
-          .fn()
-          .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'f1', name: 'doc.tex' }) })
-          .mockResolvedValueOnce({ ok: true, text: async () => 'content' }),
-      );
-
-      await provider.openDocument('f1', 'doc-2');
-
-      expect(provider.isLinkedTo('doc-2')).toBe(true);
-      expect(provider.isLinkedTo('doc-1')).toBe(false);
+      await provider.writeFile('p', 'main.tex', 'new');
+      expect(text(drive.files.get('m')!.content!)).toBe('new');
+      await expect(provider.openProject('m')).rejects.toThrow(/not a folder/);
     });
 
-    it('adopts a link saved before ids only when the name matches', () => {
-      localStorage.setItem('drive_active_file_ref', JSON.stringify({ id: 'f1', name: 'a.tex' }));
-      const provider = new GoogleDriveProvider();
+    it('opens an old single file as a one-file project, then gives it a folder when it grows', async () => {
+      const drive = fakeDrive([{ id: 'old', name: 'essay.tex', mimeType: 'text/plain', parents: ['mine'], content: bytes('text') }]);
+      localStorage.setItem('drive_active_file_ref', JSON.stringify({ id: 'old', name: 'essay.tex' }));
+      const provider = connectedProvider();
+      const legacyId = provider.legacyProjectId(undefined, 'essay.tex')!;
+      expect(legacyId).toBe(`${LEGACY_PREFIX}old`);
+      expect(provider.legacyProjectId(undefined, 'other.tex')).toBeNull();
 
-      provider.adoptLegacyFile('doc-1', 'b.tex');
-      expect(provider.isLinkedTo('doc-1')).toBe(false);
+      const listing = await provider.openProject(legacyId);
+      expect(listing).toMatchObject({ name: 'essay', mainPath: 'essay.tex', entries: [{ path: 'essay.tex', kind: 'file' }] });
+      // Saving the main file keeps writing to the same Drive file, like before projects.
+      await provider.writeFile(legacyId, 'essay.tex', 'edited');
+      await provider.renameProject(legacyId, 'ignored');
+      await provider.setMainFile(legacyId, 'essay.tex');
+      expect(text(drive.files.get('old')!.content!)).toBe('edited');
+      expect(provider.currentProjectId(legacyId)).toBe(legacyId);
 
-      provider.adoptLegacyFile('doc-1', 'a.tex');
-      expect(provider.isLinkedTo('doc-1')).toBe(true);
-      expect(localStorage.getItem('drive_active_file_ref')).toContain('doc-1');
+      // A second file needs a real project folder, made next to the old file.
+      await provider.writeFile(legacyId, 'refs.bib', '@book{a, title={A}}');
+      const folderId = provider.currentProjectId(legacyId);
+      expect(folderId).not.toBe(legacyId);
+      const folder = drive.files.get(folderId)!;
+      expect(folder).toMatchObject({ name: 'essay', parents: ['mine'], appProperties: { latexProject: '1', mainFile: 'essay.tex' } });
+      expect(drive.files.get('old')!.parents).toEqual([folderId]);
+      expect(drive.find('refs.bib')!.parents).toEqual([folderId]);
+      expect(localStorage.getItem('drive_active_file_ref')).toBeNull();
+    });
 
-      // A link that already has an owner is never taken over.
-      provider.adoptLegacyFile('doc-2', 'a.tex');
-      expect(provider.isLinkedTo('doc-1')).toBe(true);
+    it('matches an old link by document id when it has one', () => {
+      localStorage.setItem('drive_active_file_ref', JSON.stringify({ id: 'f', name: 'a.tex', documentId: 'doc-1' }));
+      const provider = connectedProvider();
+      expect(provider.legacyProjectId('doc-1', 'renamed.tex')).toBe(`${LEGACY_PREFIX}f`);
+      expect(provider.legacyProjectId('doc-2', 'a.tex')).toBeNull();
+      localStorage.setItem('drive_active_file_ref', '{bad');
+      expect(provider.legacyProjectId('doc-1', 'a.tex')).toBeNull();
+    });
+
+    it('moves the project folder into another Drive folder', async () => {
+      const drive = fakeDrive([{ id: 'p', name: 'P', mimeType: FOLDER, parents: ['root'], appProperties: { latexProject: '1' } }]);
+      const provider = connectedProvider();
+      await provider.openProject('p');
+      await provider.moveProject('p', 'elsewhere');
+      expect(drive.files.get('p')!.parents).toEqual(['elsewhere']);
+    });
+
+    it('explains a 404 as a missing or inaccessible file', async () => {
+      fakeDrive();
+      const provider = connectedProvider();
+      await expect(provider.openProject('gone')).rejects.toThrow(/not found or this app does not have access/);
     });
   });
 
@@ -456,98 +482,6 @@ describe('GoogleDriveProvider', () => {
     expect(provider.status()).toBe('Drive: Connection failed');
   });
 
-  it('save creates a new Drive file when none is open', async () => {
-    const provider = connectedProvider();
-    (provider as any).fileRef = null;
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'new-id' }),
-      }),
-    );
-    await provider.save('tex', 'fresh.tex');
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'new-id', name: 'fresh.tex' });
-  });
-
-  it('a slow first save does not replace a file opened while it ran', async () => {
-    const provider = connectedProvider();
-    let finishCreate: (value: unknown) => void = () => undefined;
-    const fetchMock = vi
-      .fn()
-      .mockReturnValueOnce(new Promise((resolve) => { finishCreate = resolve; }))
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'b', name: 'b.tex' }) })
-      .mockResolvedValueOnce({ ok: true, text: async () => 'b content' })
-      .mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchMock);
-
-    // First, start the first save of an unsaved doc and leave createFile hanging.
-    const firstSave = provider.save('a content', 'a.tex');
-    // Now open file B while that save is still in flight.
-    await provider.openDocument('b');
-    // Then let the create finish, which used to link the new file A.
-    finishCreate({ ok: true, json: async () => ({ id: 'a' }) });
-    await firstSave;
-
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'b', name: 'b.tex' });
-    expect(localStorage.getItem('drive_active_file_ref')).toContain('"b"');
-
-    // Finally, the next autosave has to write into B, not A.
-    await provider.save('b edits', 'b.tex');
-    expect(fetchMock.mock.calls[3][0]).toContain('/files/b?uploadType=media');
-  });
-
-  it('a slow first save does not relink after detachFile', async () => {
-    const provider = connectedProvider();
-    let finishCreate: (value: unknown) => void = () => undefined;
-    vi.stubGlobal('fetch', vi.fn().mockReturnValueOnce(new Promise((resolve) => { finishCreate = resolve; })));
-
-    const firstSave = provider.save('a content', 'a.tex');
-    provider.detachFile();
-    finishCreate({ ok: true, json: async () => ({ id: 'a' }) });
-    await firstSave;
-
-    expect(provider.getCurrentFileRef()).toBeNull();
-  });
-
-  it('saveAs does not write into a file opened during the rename', async () => {
-    const provider = connectedProvider();
-    (provider as any).fileRef = { id: 'a', name: 'a.tex' };
-    let finishRename: (value: unknown) => void = () => undefined;
-    const fetchMock = vi
-      .fn()
-      .mockReturnValueOnce(new Promise((resolve) => { finishRename = resolve; }))
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'b', name: 'b.tex' }) })
-      .mockResolvedValueOnce({ ok: true, text: async () => 'b content' });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const rename = provider.saveAs('a content', 'a.tex', 'renamed.tex');
-    await provider.openDocument('b');
-    finishRename({ ok: true });
-    await rename;
-
-    // The rename went to A and nothing got written into B.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(provider.getCurrentFileRef()).toEqual({ id: 'b', name: 'b.tex' });
-  });
-
-  it('save updates existing file in place', async () => {
-    const provider = connectedProvider();
-    (provider as any).fileRef = { id: 'fid', name: 'x.tex' };
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true }));
-    await provider.save('next', 'x.tex');
-    expect(fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/files/fid?uploadType=media'),
-      expect.objectContaining({ method: 'PATCH' }),
-    );
-  });
-
-  it('ignores corrupt stored file ref JSON', () => {
-    localStorage.setItem('drive_active_file_ref', '{not-json');
-    const provider = new GoogleDriveProvider();
-    expect(provider.getCurrentFileRef()).toBeNull();
-  });
-
   it('ignores corrupt stored token JSON', () => {
     localStorage.setItem('drive_access_token', '{bad');
     const provider = new GoogleDriveProvider();
@@ -562,23 +496,5 @@ describe('GoogleDriveProvider', () => {
     const provider = new GoogleDriveProvider();
     expect((provider as any).accessToken).toBe('');
     expect(localStorage.getItem('drive_access_token')).toBeNull();
-  });
-
-  it('moveFile sends removeParents when Drive returns parents', async () => {
-    const provider = connectedProvider();
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ parents: ['oldp'] }),
-        })
-        .mockResolvedValueOnce({ ok: true }),
-    );
-    await provider.moveFile('f1', 'folder2');
-    const patchUrl = (fetch as any).mock.calls[1][0] as string;
-    expect(patchUrl).toContain('removeParents=oldp');
-    expect(patchUrl).toContain('addParents=folder2');
   });
 });

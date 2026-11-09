@@ -1,6 +1,6 @@
 export class LocalDownloadStorage {
-  download(fileName: string, text: string) {
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  download(fileName: string, data: string | Uint8Array, type = 'text/plain;charset=utf-8') {
+    const blob = new Blob([data as BlobPart], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

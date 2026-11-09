@@ -1,14 +1,28 @@
+import 'fake-indexeddb/auto';
 import { SessionController } from './session';
-import { YjsTextSync } from './yjsSync';
+import * as Y from 'yjs';
+import { BlobStore } from '../project/blobStore';
+
+/** Replace the old single-document text, the way typing would. */
+const setText = (doc: Y.Doc, text: string) => {
+  const yText = doc.getText('doc');
+  doc.transact(() => {
+    yText.delete(0, yText.length);
+    yText.insert(0, text);
+  }, 'local');
+};
 
 const joinRoom = vi.fn();
 const sendMessage = vi.fn();
 const close = vi.fn();
+const sendBinary = vi.fn();
 let callbacks:
   | {
       onState: (s: string) => void;
       onPeerJoin: (peerId: string) => void;
       onMessage: (payload: unknown, peerId?: string) => void;
+      onPeerLeave?: (peerId: string) => void;
+      onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
     }
   | undefined;
 
@@ -20,6 +34,8 @@ vi.mock('../net/peerSession', () => ({
         onState: (s: string) => void;
         onPeerJoin: (peerId: string) => void;
         onMessage: (payload: unknown, peerId?: string) => void;
+        onPeerLeave?: (peerId: string) => void;
+        onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
       },
     ) {
       callbacks = cb;
@@ -29,6 +45,9 @@ vi.mock('../net/peerSession', () => ({
     }
     sendMessage(payload: unknown, peerId?: string) {
       sendMessage(payload, peerId);
+    }
+    sendBinary(data: Uint8Array, peerId: string, metadata: unknown) {
+      sendBinary(data, peerId, metadata);
     }
     close() {
       close();
@@ -50,33 +69,31 @@ describe('SessionController', () => {
     vi.clearAllMocks();
   });
 
+  /** Make the update that turns one text into another, from a fresh doc. */
   const createUpdate = (from: string, to: string): number[] => {
+    const doc = new Y.Doc();
+    if (from) doc.getText('doc').insert(0, from);
     let update: Uint8Array | null = null;
-    const sync = new YjsTextSync({
-      initialText: from,
-      onRemoteText: vi.fn(),
-      onLocalUpdate: (next) => {
-        update = next;
-      },
+    doc.on('update', (next: Uint8Array) => {
+      update = next;
     });
-    sync.applyLocalText(to);
+    setText(doc, to);
     return Array.from(update ?? new Uint8Array());
   };
 
+  /** A stand-in host doc that hands out snapshots and updates. */
   const createSource = (initialText: string) => {
+    const doc = new Y.Doc();
+    if (initialText) doc.getText('doc').insert(0, initialText);
     const updates: Uint8Array[] = [];
-    const sync = new YjsTextSync({
-      initialText,
-      onRemoteText: vi.fn(),
-      onLocalUpdate: (update) => updates.push(update),
-    });
+    doc.on('update', (update: Uint8Array) => updates.push(update));
     return {
       apply(text: string) {
-        sync.applyLocalText(text);
+        setText(doc, text);
         return Array.from(updates.at(-1) ?? new Uint8Array());
       },
       snapshot() {
-        return Array.from(sync.getSnapshot());
+        return Array.from(Y.encodeStateAsUpdate(doc));
       },
     };
   };
@@ -85,12 +102,11 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'base',
+      blobs: new BlobStore(),
     });
     const room = controller.ensureRoom();
     controller.join('abc');
-    controller.applyLocalText('baseX');
+    setText(controller.getDoc(), 'baseX');
     callbacks?.onPeerJoin('peer-7');
 
     expect(room).toBeTruthy();
@@ -113,8 +129,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'base',
+      blobs: new BlobStore(),
     });
     expect(controller.getRoomId()).toBeNull();
     controller.join('saved-room');
@@ -127,8 +142,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'base',
+      blobs: new BlobStore(),
     });
     controller.join('old-room');
     callbacks?.onState('Reconnecting');
@@ -148,8 +162,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'base',
+      blobs: new BlobStore(),
     });
     const room = controller.newRoom();
     expect(close).not.toHaveBeenCalled();
@@ -161,8 +174,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'base',
+      blobs: new BlobStore(),
     });
     controller.join('abc');
     callbacks?.onState('Reconnecting');
@@ -176,8 +188,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: false,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'client-template',
+      blobs: new BlobStore(),
     });
     controller.join('abc');
     callbacks?.onState('Connected');
@@ -204,8 +215,8 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: false,
       onConnectionState: vi.fn(),
-      onRemoteText,
-      getLocalText: () => '',
+      blobs: new BlobStore(),
+      onRemoteChange: () => onRemoteText(controller.getDoc().getText('doc').toString()),
     });
     controller.join('abc');
     const hostSource = createSource('');
@@ -225,8 +236,8 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: false,
       onConnectionState: vi.fn(),
-      onRemoteText,
-      getLocalText: () => '',
+      blobs: new BlobStore(),
+      onRemoteChange: () => onRemoteText(controller.getDoc().getText('doc').toString()),
     });
     controller.join('abc');
     const updateA = createUpdate('', 'A');
@@ -250,8 +261,8 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: false,
       onConnectionState: vi.fn(),
-      onRemoteText,
-      getLocalText: () => 'client-default-template',
+      blobs: new BlobStore(),
+      onRemoteChange: () => onRemoteText(controller.getDoc().getText('doc').toString()),
     });
     controller.join('abc');
     const hostSource = createSource('');
@@ -265,13 +276,12 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: false,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'client-template',
+      blobs: new BlobStore(),
     });
     controller.join('abc');
     sendMessage.mockClear();
 
-    controller.applyLocalText('client-typed-before-sync');
+    setText(controller.getDoc(), 'client-typed-before-sync');
 
     expect(sendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'y-update' }),
@@ -283,8 +293,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'host-doc',
+      blobs: new BlobStore(),
       getLocalMetadata: () => ({ title: 'Host Doc', storage: 'Saved on host local storage' }),
     });
     controller.join('abc');
@@ -304,8 +313,7 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => 'host-doc',
+      blobs: new BlobStore(),
       getLocalMetadata: () => ({ title: 'Host Doc', storage: 'Saved on host local storage' }),
     });
     controller.join('abc');
@@ -324,11 +332,10 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
-      getLocalText: () => '',
+      blobs: new BlobStore(),
     });
     controller.join('abc');
-    controller.applyLocalText('latest-local-doc');
+    setText(controller.getDoc(), 'latest-local-doc');
     callbacks?.onPeerJoin('peer-late');
 
     expect(sendMessage).toHaveBeenCalledWith(
@@ -342,8 +349,8 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: true,
       onConnectionState: vi.fn(),
-      onRemoteText,
-      getLocalText: () => 'host-doc',
+      blobs: new BlobStore(),
+      onRemoteChange: () => onRemoteText(controller.getDoc().getText('doc').toString()),
     });
     controller.join('abc');
     callbacks?.onMessage({ kind: 'snapshot', state: [] });
@@ -356,9 +363,8 @@ describe('SessionController', () => {
     const controller = new SessionController({
       isHost: false,
       onConnectionState: vi.fn(),
-      onRemoteText: vi.fn(),
+      blobs: new BlobStore(),
       onRemoteMetadata,
-      getLocalText: () => '',
     });
     controller.join('abc');
     callbacks?.onMessage({
@@ -370,5 +376,26 @@ describe('SessionController', () => {
       title: 'Shared Doc',
       storage: 'Saved on host local storage',
     });
+  });
+  it('sends files peers ask for, and takes in chunks of files it asked for', async () => {
+    const blobs = new BlobStore();
+    const progress = vi.fn();
+    const controller = new SessionController({ isHost: true, blobs, onConnectionState: vi.fn(), onFileProgress: progress });
+    controller.join('abc');
+    const hash = await blobs.put(new Uint8Array([1, 2, 3]));
+    callbacks?.onMessage({ kind: 'file-request', hash }, 'peer-1');
+    await vi.waitFor(() => expect(sendBinary).toHaveBeenCalledWith(expect.any(Uint8Array), 'peer-1', { hash, index: 0, total: 1, size: 3 }));
+
+    // Now the other way: ask for a file and get it back in one chunk.
+    const other = new BlobStore();
+    const guest = new SessionController({ isHost: false, blobs: other, onConnectionState: vi.fn(), onFileProgress: progress });
+    guest.transfer.request(hash);
+    expect(sendMessage).toHaveBeenCalledWith({ kind: 'file-request', hash }, undefined);
+    callbacks?.onBinary?.(new Uint8Array([1, 2, 3]).buffer, 'peer-1', { hash: 'bad' });
+    callbacks?.onBinary?.(new Uint8Array([1, 2, 3]).buffer, 'peer-1', { hash, index: 0, total: 1, size: 3 });
+    await vi.waitFor(() => expect(other.has(hash)).toBe(true));
+    expect(progress).toHaveBeenCalledWith(hash, null);
+    callbacks?.onPeerJoin('peer-2');
+    callbacks?.onPeerLeave?.('peer-2');
   });
 });

@@ -1,3 +1,5 @@
+import type { SavedManifest } from '../storage/projectSaver';
+
 export type ProviderMode = 'local' | 'drive';
 export type ThemeMode = 'dark' | 'light' | 'system';
 
@@ -13,6 +15,10 @@ export type AppSessionState = {
   documentId?: string;
   // The host's Yjs doc, so a reload resumes the same doc its guests have instead of starting a new one.
   yjs?: PersistedYjsState;
+  // The stored project we save to, its open file, and what the last save wrote.
+  projectId?: string;
+  activeFileId?: string;
+  manifest?: SavedManifest;
 };
 
 // The state is a base64 encoded Yjs update.
@@ -47,10 +53,24 @@ export function readAppSessionState(): AppSessionState | null {
         parsed.yjs && typeof parsed.yjs.docId === 'string' && typeof parsed.yjs.state === 'string'
           ? { docId: parsed.yjs.docId, state: parsed.yjs.state }
           : undefined,
+      projectId: typeof parsed.projectId === 'string' && parsed.projectId ? parsed.projectId : undefined,
+      activeFileId: typeof parsed.activeFileId === 'string' && parsed.activeFileId ? parsed.activeFileId : undefined,
+      manifest: isManifest(parsed.manifest) ? parsed.manifest : undefined,
     };
   } catch {
     return null;
   }
+}
+
+function isManifest(value: unknown): value is SavedManifest {
+  const manifest = value as Partial<SavedManifest> | null | undefined;
+  return (
+    !!manifest &&
+    typeof manifest.projectId === 'string' &&
+    typeof manifest.name === 'string' &&
+    !!manifest.files &&
+    typeof manifest.files === 'object'
+  );
 }
 
 export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt' | 'editorTheme' | 'previewTheme'> & {

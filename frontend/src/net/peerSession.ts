@@ -7,6 +7,7 @@ type PeerSessionCallbacks = {
   onPeerCount: (count: number) => void;
   onPeerJoin: (peerId: string) => void;
   onPeerLeave?: (peerId: string) => void;
+  onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
 };
 
 export class PeerSession {
@@ -21,6 +22,10 @@ export class PeerSession {
 
   sendMessage(payload: unknown, peerId?: string) {
     this.transport.send(payload, peerId);
+  }
+
+  sendBinary(data: Uint8Array, peerId: string, metadata: unknown) {
+    this.transport.sendBinary(data, peerId, metadata);
   }
 
   close() {

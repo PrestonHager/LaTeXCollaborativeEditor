@@ -189,14 +189,16 @@ function expandTextCopyright(source: string): string {
 }
 
 /**
- * LaTeX.js resolves graphics via the host environment; bundled preview has no project image files.
- * Replace with visible placeholder text so the rest of the document still typesets.
+ * Leave project images (already swapped for lcimg tokens by projectSource.ts) for LaTeX.js to place.
+ * Anything else is missing or a format the browser can't show, like PDF or EPS, so put in a note instead.
  */
 function placeholderIncludeGraphics(source: string): string {
-  return source.replace(
-    /\\includegraphics(?:\[[^\]]*])?\s*\{[^}]*\}/g,
-    (m) => `\\par\\noindent\\textit{Figure image omitted in browser preview.}\\par${keepLineBreaks(m)}`,
-  );
+  return source.replace(/\\includegraphics(?:\[[^\]]*])?\s*\{([^}]*)\}/g, (m, name: string) => {
+    if (/^lcimg\d+$/.test(name)) return m;
+    // Drop characters that mean something to LaTeX, so a strange file name can't break the preview.
+    const shown = name.replace(/[\\{}$&#^_%~]/g, '');
+    return `\\par\\noindent\\textit{Figure \\texttt{${shown}} can't be shown in the browser preview.}\\par${keepLineBreaks(m)}`;
+  });
 }
 
 /** Outside `figure`, `\\caption` is unavailable in LaTeX.js; turn into bold heading text. */

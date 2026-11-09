@@ -2,6 +2,17 @@ import {
   createElement,
   createIcons,
   BookOpen,
+  ChevronRight,
+  File,
+  FileArchive,
+  FileDown,
+  FileImage,
+  FileText,
+  Folder,
+  FolderPlus,
+  Star,
+  Upload,
+  Users,
   Check,
   ClipboardPaste,
   CloudUpload,
@@ -60,6 +71,11 @@ const commandIcons: Record<CommandId, IconNode> = {
   'file.renameDrive': PencilLine,
   'file.saveNow': Save,
   'file.clearLocalDocs': Trash2,
+  'file.newFile': FilePlus,
+  'file.newFolder': FolderPlus,
+  'file.upload': Upload,
+  'file.importZip': FileArchive,
+  'file.downloadFile': FileDown,
   'edit.undo': Undo2,
   'edit.redo': Redo2,
   'edit.cut': Scissors,
@@ -78,7 +94,28 @@ const commandIcons: Record<CommandId, IconNode> = {
 };
 
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
-const staticIcons = { Check, Search, Share2, X };
+const staticIcons = {
+  Check,
+  ChevronRight,
+  Download,
+  File,
+  FileArchive,
+  FilePlus,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  PencilLine,
+  Search,
+  Share2,
+  Star,
+  Trash2,
+  Upload,
+  Users,
+  X,
+};
+
+/** Icons for file tree rows, picked by kind. */
+export const fileIcons = { File, FileImage, FileText, Folder, FolderOpen };
 
 /** Build an SVG icon. Icons are decorative, so screen readers skip them. */
 export function icon(node: IconNode, className = 'size-4'): SVGElement {
