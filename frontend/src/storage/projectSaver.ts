@@ -2,19 +2,25 @@ import type { StorageProvider } from './providers/types';
 import type { ProjectDoc } from '../project/projectDoc';
 import type { BlobStore } from '../project/blobStore';
 import { isInside, replacePrefix } from '../project/paths';
+import { ConflictError, type FileConflict } from './conflicts';
 
-/** What we last wrote to storage, so the next save only sends what changed. */
+/**
+ * What we last wrote to storage, so the next save only sends what changed.
+ * version is the storage's own file version from that load or save, if it has one.
+ */
 export type SavedManifest = {
   projectId: string;
   name: string;
   mainPath: string | null;
-  files: Record<string, { path: string; kind: 'text' | 'binary' | 'folder'; rev: string }>;
+  files: Record<string, { path: string; kind: 'text' | 'binary' | 'folder'; rev: string; version?: string }>;
 };
 
 export type SaveResult = {
   manifest: SavedManifest;
   /** Binary files we couldn't write yet because their bytes haven't arrived from a peer. */
   pending: number;
+  /** Files we didn't write because they changed in storage since we last saw them. */
+  conflicts: FileConflict[];
 };
 
 /** A quick fingerprint of some text, so we can tell if a file changed since the last save. */
@@ -40,6 +46,10 @@ export async function saveProject(options: {
   manifest: SavedManifest | null;
   projectId: string | null;
   onStep?: (manifest: SavedManifest) => void;
+  /** File ids waiting on a conflict choice. We skip them so nothing gets overwritten meanwhile. */
+  held?: ReadonlySet<string>;
+  /** File ids the person chose to overwrite even though they changed in storage. */
+  overwrite?: ReadonlySet<string>;
 }): Promise<SaveResult> {
   const { provider, project, blobs } = options;
   const name = project.getName() || 'Untitled';
@@ -88,6 +98,19 @@ export async function saveProject(options: {
     step();
   }
 
+  // Write one file, checking it against the version we last saw. A conflict holds just that file.
+  const conflicts: FileConflict[] = [];
+  const write = async (id: string, path: string, data: string | Uint8Array): Promise<{ version?: string } | null> => {
+    const check = { expectedVersion: manifest.files[id]?.version, force: options.overwrite?.has(id) };
+    try {
+      return (await provider.writeFile(manifest.projectId, path, data, check)) ?? {};
+    } catch (error) {
+      if (!(error instanceof ConflictError)) throw error;
+      conflicts.push({ id, path, remoteVersion: error.remoteVersion });
+      return null;
+    }
+  };
+
   // Then make empty folders and write files that are new or changed.
   let pending = 0;
   for (const entry of current) {
@@ -99,12 +122,14 @@ export async function saveProject(options: {
       step();
       continue;
     }
+    if (options.held?.has(entry.id)) continue;
     if (entry.kind === 'text') {
       const text = project.getText(entry.id).toString();
       const rev = textRev(text);
       if (saved?.rev === rev) continue;
-      await provider.writeFile(manifest.projectId, entry.path, text);
-      manifest.files[entry.id] = { path: entry.path, kind: 'text', rev };
+      const written = await write(entry.id, entry.path, text);
+      if (!written) continue;
+      manifest.files[entry.id] = { path: entry.path, kind: 'text', rev, version: written.version };
       step();
       continue;
     }
@@ -115,8 +140,9 @@ export async function saveProject(options: {
       pending += 1;
       continue;
     }
-    await provider.writeFile(manifest.projectId, entry.path, bytes);
-    manifest.files[entry.id] = { path: entry.path, kind: 'binary', rev };
+    const written = await write(entry.id, entry.path, bytes);
+    if (!written) continue;
+    manifest.files[entry.id] = { path: entry.path, kind: 'binary', rev, version: written.version };
     step();
   }
 
@@ -140,17 +166,20 @@ export async function saveProject(options: {
     manifest.projectId = canonical;
     step();
   }
-  return { manifest, pending };
+  return { manifest, pending, conflicts };
 }
 
 /**
  * Build the manifest for a project we just loaded from storage, so the first save only writes edits.
+ * Pass versionOf to keep each file's storage version from the load.
  */
-export function manifestFromProject(projectId: string, project: ProjectDoc): SavedManifest {
+export function manifestFromProject(projectId: string, project: ProjectDoc, versionOf?: (path: string) => string | undefined): SavedManifest {
   const files: SavedManifest['files'] = {};
   for (const entry of project.entries()) {
     const rev = entry.kind === 'text' ? textRev(project.getText(entry.id).toString()) : entry.kind === 'binary' ? (entry.hash ?? '') : '';
     files[entry.id] = { path: entry.path, kind: entry.kind, rev };
+    const version = entry.kind === 'folder' ? undefined : versionOf?.(entry.path);
+    if (version) files[entry.id].version = version;
   }
   const mainId = project.getMainFileId();
   return {

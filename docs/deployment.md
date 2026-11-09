@@ -57,6 +57,9 @@ Runtime architecture (summary)
   `rateLimitExceeded`, `userRateLimitExceeded`, `backendError`, HTTP 429 and 5xx get retried.
   `storageQuotaExceeded` (a full Drive) and other 403s don't.
 - A Drive save writes files before it renames the project folder, so a failed upload never leaves a renamed folder behind.
+- Before overwriting a Drive file, the app makes one `files.get` call for its `version` and `md5Checksum` and compares them with what it saw last.
+  A changed checksum stops the save for that file and asks the user what to keep.
+  No extra scopes or settings are needed for this.
 - Local projects live in IndexedDB (the `latex-editor` database). Old documents in localStorage get moved into one-file projects the first time the app starts.
 
 Networking (STUN/TURN)

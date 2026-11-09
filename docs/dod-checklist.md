@@ -25,6 +25,7 @@ Checklist
 - [ ] Drive save errors: a full Drive shows "Google Drive is full" right away without retries, and a Drive rate limit gets retried.
 - [ ] Drive token expiry: after the hour-long token runs out, autosave gets a new one silently, or shows a notice and switches to saving in the browser.
 - [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
+- [ ] Drive conflicts: a file changed in Drive since the last load or save is never overwritten silently. Saving pauses for that file only, and the conflict dialog's Keep mine, Take theirs, and Save mine as a copy each work.
 - [x] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.

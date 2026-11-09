@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 import { saveProject, type SavedManifest } from '../projectSaver';
 import { ProjectDoc } from '../../project/projectDoc';
 import type { BlobStore } from '../../project/blobStore';
+import { ConflictError } from '../conflicts';
 
 const loadScript = vi.fn(async () => undefined);
 vi.mock('./scriptLoader', () => ({ loadScript: (...args: unknown[]) => loadScript(...(args as [])) }));
@@ -313,7 +314,7 @@ describe('GoogleDriveProvider', () => {
   });
 
   describe('projects as Drive folders', () => {
-    type FakeFile = { id: string; name: string; mimeType: string; parents: string[]; appProperties?: Record<string, string | null>; content?: Uint8Array; trashed?: boolean };
+    type FakeFile = { id: string; name: string; mimeType: string; parents: string[]; appProperties?: Record<string, string | null>; content?: Uint8Array; trashed?: boolean; version?: number };
     const FOLDER = 'application/vnd.google-apps.folder';
 
     const readBlob = async (blob: Blob): Promise<Uint8Array> => {
@@ -326,6 +327,14 @@ describe('GoogleDriveProvider', () => {
       const files = new Map(seed.map((file) => [file.id, file]));
       let nextId = 0;
       const reply = (body: unknown) => ({ ok: true, status: 200, json: async () => body, arrayBuffer: async () => body });
+      // Like Drive, version goes up on every change and the checksum only follows the bytes.
+      const versionOf = (file: FakeFile) => ({
+        version: String(file.version ?? 1),
+        md5Checksum: file.content ? Array.from(file.content).join('.') : undefined,
+      });
+      const bump = (file: FakeFile) => {
+        file.version = (file.version ?? 1) + 1;
+      };
       const fetchMock = vi.fn(async (input: string, init: RequestInit = {}) => {
         const url = new URL(input);
         const method = init.method ?? 'GET';
@@ -339,20 +348,20 @@ describe('GoogleDriveProvider', () => {
             if (parent) return file.parents.includes(parent);
             return file.mimeType === FOLDER && file.appProperties?.latexProject === '1';
           });
-          return reply({ files: list.map(({ id: fid, name, mimeType }) => ({ id: fid, name, mimeType, modifiedTime: '2026-01-01T00:00:00Z' })) });
+          return reply({ files: list.map((file) => ({ id: file.id, name: file.name, mimeType: file.mimeType, modifiedTime: '2026-01-01T00:00:00Z', ...versionOf(file) })) });
         }
         if (method === 'GET' && id) {
           const file = files.get(id);
           if (!file) return { ok: false, status: 404, json: async () => ({}) };
           if (url.searchParams.get('alt') === 'media') return { ok: true, status: 200, arrayBuffer: async () => file.content!.buffer };
-          return reply(file);
+          return reply({ ...file, ...versionOf(file) });
         }
         if (method === 'POST' && url.pathname.includes('/upload/')) {
           const form = init.body as FormData;
           const metadata = JSON.parse(new TextDecoder().decode(await readBlob(form.get('metadata') as Blob)));
           const created: FakeFile = { id: `f${(nextId += 1)}`, name: metadata.name, mimeType: 'text/plain', parents: metadata.parents ?? ['root'], content: await readBlob(form.get('file') as Blob) };
           files.set(created.id, created);
-          return reply({ id: created.id });
+          return reply({ id: created.id, ...versionOf(created) });
         }
         if (method === 'POST') {
           const body = JSON.parse(init.body as string);
@@ -362,9 +371,10 @@ describe('GoogleDriveProvider', () => {
         }
         if (method === 'PATCH' && id) {
           const file = files.get(id)!;
+          bump(file);
           if (url.pathname.includes('/upload/')) {
             file.content = await readBlob(init.body as Blob);
-            return reply({ id });
+            return reply({ id, ...versionOf(file) });
           }
           const add = url.searchParams.get('addParents');
           const remove = url.searchParams.get('removeParents');
@@ -381,7 +391,14 @@ describe('GoogleDriveProvider', () => {
         throw new Error(`Unexpected Drive call ${method} ${input}`);
       });
       vi.stubGlobal('fetch', fetchMock);
-      return { files, fetchMock, find: (name: string) => [...files.values()].find((file) => file.name === name && !file.trashed) };
+      const find = (name: string) => [...files.values()].find((file) => file.name === name && !file.trashed);
+      // Change a file the way someone in the Drive web UI would.
+      const editElsewhere = (name: string, content: string) => {
+        const file = find(name)!;
+        file.content = new TextEncoder().encode(content);
+        bump(file);
+      };
+      return { files, fetchMock, find, editElsewhere };
     }
 
     const bytes = (text: string) => new TextEncoder().encode(text);
@@ -601,6 +618,74 @@ describe('GoogleDriveProvider', () => {
       fakeDrive();
       const provider = connectedProvider();
       await expect(provider.openProject('gone')).rejects.toThrow(/not found or this app does not have access/);
+    });
+
+    describe('conflicts', () => {
+      it('refuses to overwrite a file that changed in Drive, until told to', async () => {
+        const drive = fakeDrive();
+        const provider = connectedProvider();
+        const { id } = await provider.createProject('P');
+        const first = await provider.writeFile(id, 'main.tex', 'mine 1');
+        expect(first?.version).toBeTruthy();
+        expect(provider.fileVersion(id, 'main.tex')).toBe(first?.version);
+
+        drive.editElsewhere('main.tex', 'theirs');
+        const failure = provider.writeFile(id, 'main.tex', 'mine 2');
+        await expect(failure).rejects.toBeInstanceOf(ConflictError);
+        await expect(failure).rejects.toMatchObject({ path: 'main.tex', retryable: false });
+        expect(text(drive.find('main.tex')!.content!)).toBe('theirs');
+
+        // The check is one small metadata call, and the upload never went out.
+        const calls = drive.fetchMock.mock.calls.map(([url, init]) => `${init?.method ?? 'GET'} ${url}`);
+        expect(calls.at(-1)).toMatch(/^GET .*\/files\/f\d+\?fields=version,md5Checksum$/);
+
+        await provider.writeFile(id, 'main.tex', 'mine 2', { force: true });
+        expect(text(drive.find('main.tex')!.content!)).toBe('mine 2');
+        // Once overwritten, normal saves go through again.
+        await provider.writeFile(id, 'main.tex', 'mine 3');
+        expect(text(drive.find('main.tex')!.content!)).toBe('mine 3');
+      });
+
+      it('checks against the version the caller saw, even after a reload', async () => {
+        const drive = fakeDrive([
+          { id: 'p', name: 'P', mimeType: FOLDER, parents: ['root'], appProperties: { latexProject: '1' } },
+          { id: 'm', name: 'main.tex', mimeType: 'text/plain', parents: ['p'], content: bytes('old') },
+        ]);
+        const before = connectedProvider();
+        await before.openProject('p');
+        const seen = before.fileVersion('p', 'main.tex')!;
+        expect(seen).toBeTruthy();
+
+        drive.editElsewhere('main.tex', 'theirs');
+        // A fresh provider sees the new version, but the caller still has the old one.
+        const after = connectedProvider();
+        const conflict = (await after.writeFile('p', 'main.tex', 'mine', { expectedVersion: seen }).catch((error) => error)) as ConflictError;
+        expect(conflict).toBeInstanceOf(ConflictError);
+        expect(text(drive.files.get('m')!.content!)).toBe('theirs');
+        // Taking their version as the new base lets the save through.
+        await expect(after.writeFile('p', 'main.tex', 'mine', { expectedVersion: conflict.remoteVersion })).resolves.toBeTruthy();
+        expect(text(drive.files.get('m')!.content!)).toBe('mine');
+      });
+
+      it('does not call our own rename a conflict', async () => {
+        const drive = fakeDrive();
+        const provider = connectedProvider();
+        const { id } = await provider.createProject('P');
+        await provider.writeFile(id, 'a.tex', 'one');
+        // Renaming bumps the Drive version but leaves the checksum alone.
+        await provider.move(id, 'a.tex', 'b.tex');
+        await provider.writeFile(id, 'b.tex', 'two');
+        expect(text(drive.find('b.tex')!.content!)).toBe('two');
+      });
+
+      it('picks up versions from an old single-file project', async () => {
+        const drive = fakeDrive([{ id: 'old', name: 'essay.tex', mimeType: 'text/plain', parents: ['mine'], content: bytes('text') }]);
+        const provider = connectedProvider();
+        await provider.openProject(`${LEGACY_PREFIX}old`);
+        expect(provider.fileVersion(`${LEGACY_PREFIX}old`, 'essay.tex')).toBeTruthy();
+        drive.editElsewhere('essay.tex', 'theirs');
+        await expect(provider.writeFile(`${LEGACY_PREFIX}old`, 'essay.tex', 'mine')).rejects.toBeInstanceOf(ConflictError);
+      });
     });
   });
 
