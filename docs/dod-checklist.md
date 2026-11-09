@@ -34,7 +34,8 @@ Checklist
 
 Verification guidance
 - Prefer automated tests where possible; accompany with manual QA for session join, realtime sync, and preview rendering.
-- Maintain a runbook for reproducible test scenarios (local, remote, and cross-browser).
+- `npm run test:e2e` runs a Playwright test in `e2e/` that opens a host and a guest in two browser contexts, shares a room, and checks the file tree, an uploaded image, and edits in both directions. It goes through public relays, so its CI job is non-blocking.
+- Maintain a runbook for reproducible test scenarios (local, remote, and cross-browser) in `docs/qa-runbook.md`.
 
 ## Verification log
 

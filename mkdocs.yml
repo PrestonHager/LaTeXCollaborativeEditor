@@ -15,6 +15,7 @@ exclude_docs: |
   dod-checklist.md
   protocol.md
   deployment.md
+  qa-runbook.md
 
 theme:
   name: material
