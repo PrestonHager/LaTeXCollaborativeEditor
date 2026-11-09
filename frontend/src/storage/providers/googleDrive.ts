@@ -24,13 +24,20 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 // Treat the token as expired a minute early so a save doesn't race the expiry.
 const TOKEN_EXPIRY_SLACK_MS = 60_000;
+// Give up on a silent refresh after this long, so a stuck popup can't stall autosave forever.
+const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
 
 export class GoogleDriveProvider implements StorageProvider {
   readonly label = 'Google Drive';
+  // NOTE: we keep an expired token around until a refresh fails, it marks that we were signed in.
   private accessToken = '';
   private tokenExpiresAt = 0;
   private fileRef: DriveFileRef | null = this.readStoredFileRef();
+  // Bump this every time the linked file changes, so a slow save can tell it's stale.
+  private fileRefGeneration = 0;
   private currentStatus = 'Autosave Off';
+  private refreshing: Promise<boolean> | null = null;
+  private sessionLostHandler: (() => void) | null = null;
   private static readonly storageKey = 'drive_active_file_ref';
   private static readonly tokenStorageKey = 'drive_access_token';
 
@@ -47,13 +54,22 @@ export class GoogleDriveProvider implements StorageProvider {
     return this.accessToken.length > 0 && this.tokenExpiresAt - TOKEN_EXPIRY_SLACK_MS > Date.now();
   }
 
+  /** Check if we're signed in, even if the token needs a refresh before the next call. */
+  isSignedIn(): boolean {
+    return this.accessToken.length > 0;
+  }
+
+  /** Run this when the token expired and a silent refresh couldn't get a new one. */
+  onSessionLost(handler: () => void) {
+    this.sessionLostHandler = handler;
+  }
+
   /**
    * Forget the currently linked Drive file, so the next save creates a new one.
    * Call this whenever the editor switches to a different document.
    */
   detachFile() {
-    this.fileRef = null;
-    this.persistFileRef(null);
+    this.linkFile(null);
   }
 
   /**
@@ -95,9 +111,12 @@ export class GoogleDriveProvider implements StorageProvider {
   async save(content: string, fileName: string): Promise<void> {
     this.requireToken();
     if (!this.fileRef) {
+      const generation = this.fileRefGeneration;
       const fileId = await this.createFile(fileName, content);
-      this.fileRef = { id: fileId, name: fileName };
-      this.persistFileRef(this.fileRef);
+      // Only link the new file if nothing was opened or detached while we were creating it.
+      if (generation === this.fileRefGeneration) {
+        this.linkFile({ id: fileId, name: fileName });
+      }
       return;
     }
     await this.updateFile(this.fileRef.id, content);
@@ -113,8 +132,12 @@ export class GoogleDriveProvider implements StorageProvider {
       await this.save(content, newFileName);
       return;
     }
-    await this.renameFile(this.fileRef.id, newFileName);
-    await this.updateFile(this.fileRef.id, content);
+    // Hold on to the file we started with, since the link can change during the rename.
+    const fileId = this.fileRef.id;
+    const generation = this.fileRefGeneration;
+    await this.renameFile(fileId, newFileName);
+    if (generation !== this.fileRefGeneration) return;
+    await this.updateFile(fileId, content);
   }
 
   async openDocument(fileId: string): Promise<{ name: string; content: string }> {
@@ -124,8 +147,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
     const contentRes = await this.driveFetch(`${DRIVE_API}/${fileId}?alt=media`, {}, 'load file content');
     const content = await contentRes.text();
-    this.fileRef = { id: metadata.id, name: metadata.name };
-    this.persistFileRef(this.fileRef);
+    this.linkFile({ id: metadata.id, name: metadata.name });
     return { name: metadata.name, content };
   }
 
@@ -182,9 +204,13 @@ export class GoogleDriveProvider implements StorageProvider {
 
   /**
    * Call the Drive API with our token and turn failures into readable errors.
-   * A 401 means the token died, so we clear it and tell the user to reconnect.
+   * An expired token or a 401 gets one silent refresh, then we give up and ask the user to reconnect.
    */
-  private async driveFetch(url: string, init: RequestInit, action: string): Promise<Response> {
+  private async driveFetch(url: string, init: RequestInit, action: string, isRetry = false): Promise<Response> {
+    // First, swap out a token that's about to expire.
+    if (!this.hasUsableToken() && !(await this.refreshAccessToken())) {
+      throw sessionExpiredError();
+    }
     const headers = { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${this.accessToken}` };
     let res: Response;
     try {
@@ -196,12 +222,14 @@ export class GoogleDriveProvider implements StorageProvider {
 
     const detail = await readGoogleErrorMessage(res);
     if (res.status === 401) {
-      this.clearAccessToken();
-      this.currentStatus = 'Drive: Session expired';
-      throw new StorageError('Drive: Session expired. Use File > Connect Google Drive to sign in again.', {
-        retryable: false,
-        status: 401,
-      });
+      // Google can revoke a token early, so try once more with a fresh one.
+      if (!isRetry) {
+        this.tokenExpiresAt = 0;
+        if (await this.refreshAccessToken()) return this.driveFetch(url, init, action, true);
+      } else {
+        this.endSession();
+      }
+      throw sessionExpiredError(401);
     }
     if (res.status === 404) {
       // NOTE: with the drive.file scope we only see files this app created or the user picked.
@@ -222,11 +250,67 @@ export class GoogleDriveProvider implements StorageProvider {
     });
   }
 
+  // An expired token is fine here, driveFetch refreshes it before the request goes out.
   private requireToken() {
-    if (!this.hasUsableToken()) {
-      this.clearAccessToken();
+    if (!this.isSignedIn()) {
       throw new StorageError('Drive: Not connected. Use File > Connect Google Drive first.', { retryable: false });
     }
+  }
+
+  /** Point at a different Drive file (or none) and mark any save in flight as stale. */
+  private linkFile(fileRef: DriveFileRef | null) {
+    this.fileRef = fileRef;
+    this.fileRefGeneration += 1;
+    this.persistFileRef(fileRef);
+  }
+
+  /** Get a new token without a popup. Concurrent callers share one attempt. */
+  private refreshAccessToken(): Promise<boolean> {
+    if (!this.refreshing) {
+      this.refreshing = this.trySilentRefresh().finally(() => {
+        this.refreshing = null;
+      });
+    }
+    return this.refreshing;
+  }
+
+  /**
+   * Ask GIS for a new token with prompt '' so it skips the consent screen.
+   * This can still fail when the browser blocks the popup outside a click, so we end the session then.
+   */
+  private async trySilentRefresh(): Promise<boolean> {
+    if (!this.isSignedIn()) return false;
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      try {
+        await loadScript(GIS_SCRIPT, 'Google sign-in');
+        const oauth2 = window.google?.accounts?.oauth2;
+        if (oauth2?.initTokenClient) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const timeout = new Promise<TokenResult>((resolve) => {
+            timer = setTimeout(() => resolve({ ok: false, reason: 'Timed out' }), TOKEN_REFRESH_TIMEOUT_MS);
+          });
+          const result = await Promise.race([this.requestAccessToken(oauth2, clientId), timeout]);
+          clearTimeout(timer);
+          if (result.ok) {
+            this.currentStatus = 'Drive: Connected';
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn('Silent Drive token refresh failed', error);
+      }
+    }
+    this.endSession();
+    return false;
+  }
+
+  /** Forget the token and let the app know, so it can fall back to saving locally. */
+  private endSession() {
+    const wasSignedIn = this.isSignedIn();
+    this.clearAccessToken();
+    this.currentStatus = 'Drive: Session expired';
+    if (wasSignedIn) this.sessionLostHandler?.();
   }
 
   private readStoredFileRef(): DriveFileRef | null {
@@ -335,6 +419,13 @@ function describeTokenError(code?: string, message?: string): string {
     default:
       return `Authorization failed (${message || code})`;
   }
+}
+
+function sessionExpiredError(status?: number): StorageError {
+  return new StorageError('Drive: Session expired. Use File > Connect Google Drive to sign in again.', {
+    retryable: false,
+    status,
+  });
 }
 
 /** Pull Google's error message out of a failed response, if there is one. */

@@ -2,6 +2,9 @@
  * Adapt real-world LaTeX for LaTeX.js in the browser. LaTeX.js tries to load many
  * \usepackage{} modules via Node require(), which fails under Vite/ESM; we strip
  * unsupported packages and inject minimal shims so common academic documents still preview.
+ *
+ * Every step keeps the line breaks of whatever it removes, so line N of the adapted source
+ * is still line N of the editor. LaTeX.js error locations can then be used as-is.
  */
 
 const UNSUPPORTED_USEPACKAGES = new Set([
@@ -31,6 +34,11 @@ function findClosingBrace(source: string, openIdx: number): number {
   return -1;
 }
 
+/** Keep only the line breaks of removed text, so later lines don't shift. */
+function keepLineBreaks(removed: string): string {
+  return removed.replace(/[^\n]/g, '');
+}
+
 /** Remove first `\name{...}` with balanced braces. Returns original if not found. */
 function stripMacroGroup(source: string, name: string): string {
   const needle = `\\${name}`;
@@ -41,7 +49,7 @@ function stripMacroGroup(source: string, name: string): string {
   if (source[j] !== '{') return source;
   const close = findClosingBrace(source, j);
   if (close === -1) return source;
-  return source.slice(0, i) + source.slice(close + 1);
+  return source.slice(0, i) + keepLineBreaks(source.slice(i, close + 1)) + source.slice(close + 1);
 }
 
 function stripAllMacroGroups(source: string, name: string): string {
@@ -58,24 +66,19 @@ function stripAllMacroGroups(source: string, name: string): string {
 function stripUnsupportedUsePackages(source: string): string {
   const re = /^\s*\\usepackage(?:\[[^\]]*])?\s*\{\s*([^}\s]+)\s*\}\s*(?:%[^\n]*)?\s*$/gm;
   return source.replace(re, (line, pkg: string) =>
-    UNSUPPORTED_USEPACKAGES.has(pkg.trim()) ? '' : line,
+    UNSUPPORTED_USEPACKAGES.has(pkg.trim()) ? keepLineBreaks(line) : line,
   );
 }
 
-/** Remove single-line preamble commands that break or duplicate stubs. */
+/** Blank out single-line preamble commands that break or duplicate stubs. */
 function stripLinesMatching(source: string, patterns: RegExp[]): string {
   const lines = source.split(/\r?\n/);
-  const out: string[] = [];
-  for (const line of lines) {
-    if (patterns.some((p) => p.test(line))) continue;
-    out.push(line);
-  }
-  return out.join('\n');
+  return lines.map((line) => (patterns.some((p) => p.test(line)) ? '' : line)).join('\n');
 }
 
 /** authblk: \author[1,2]{Name} -> \author{Name} */
 function normalizeAuthblkAuthor(source: string): string {
-  return source.replace(/\\author\s*\[[^\]]*]\s*/g, '\\author ');
+  return source.replace(/\\author\s*\[[^\]]*]\s*/g, (m) => `\\author ${keepLineBreaks(m)}`);
 }
 
 /**
@@ -100,7 +103,8 @@ function replaceAffilCommands(source: string): string {
     const close = findClosingBrace(s, j);
     if (close === -1) break;
     const body = s.slice(j + 1, close);
-    const replacement = `\n\\par {\\small ${body}}\n`;
+    // Use \par on both sides instead of adding new lines.
+    const replacement = `${keepLineBreaks(s.slice(i, j + 1))}\\par {\\small ${body}}\\par `;
     s = s.slice(0, i) + replacement + s.slice(close + 1);
   }
   return s;
@@ -108,14 +112,17 @@ function replaceAffilCommands(source: string): string {
 
 /** float package [H] -> default figure (LaTeX.js has no float package). */
 function normalizeFigurePlacement(source: string): string {
-  return source.replace(/\\begin\s*\{\s*figure\s*\}\s*\[\s*H\s*]/gi, '\\begin{figure}');
+  return source.replace(
+    /\\begin\s*\{\s*figure\s*\}\s*\[\s*H\s*]/gi,
+    (m) => `\\begin{figure}${keepLineBreaks(m)}`,
+  );
 }
 
 /** LaTeX.js has no `figure` environment; use `center` so captions and graphics still typeset. */
 function normalizeFigureEnvironment(source: string): string {
   return source
-    .replace(/\\begin\s*\{\s*figure\s*\}/gi, '\\begin{center}')
-    .replace(/\\end\s*\{\s*figure\s*\}/gi, '\\end{center}');
+    .replace(/\\begin\s*\{\s*figure\s*\}/gi, (m) => `\\begin{center}${keepLineBreaks(m)}`)
+    .replace(/\\end\s*\{\s*figure\s*\}/gi, (m) => `\\end{center}${keepLineBreaks(m)}`);
 }
 
 const LINE_REMOVE_PATTERNS = [
@@ -142,7 +149,7 @@ function stripRenewcommandNomname(source: string): string {
     }
     const end = findClosingBrace(s, j);
     if (end === -1) return s;
-    s = s.slice(0, i) + s.slice(end + 1);
+    s = s.slice(0, i) + keepLineBreaks(s.slice(i, end + 1)) + s.slice(end + 1);
     idx = i;
   }
 }
@@ -166,17 +173,19 @@ function expandNomenclatureCalls(source: string): string {
     const c2 = findClosingBrace(s, k);
     if (c2 === -1) break;
     const first = s.slice(j + 1, c1);
-    s = s.slice(0, i) + first + s.slice(c2 + 1);
+    s = s.slice(0, i) + first + keepLineBreaks(s.slice(i, j) + s.slice(c1, c2 + 1)) + s.slice(c2 + 1);
   }
   return s;
 }
 
 function stripPrintNomenclature(source: string): string {
-  return source.replace(/\\printnomenclature\s*/g, '');
+  return source.replace(/\\printnomenclature\s*/g, keepLineBreaks);
 }
 
 function expandTextCopyright(source: string): string {
-  return source.replace(/\\textcopyright\s*\{\s*\}/g, '©').replace(/\\textcopyright\b/g, '©');
+  return source
+    .replace(/\\textcopyright\s*\{\s*\}/g, (m) => `©${keepLineBreaks(m)}`)
+    .replace(/\\textcopyright\b/g, '©');
 }
 
 /**
@@ -186,25 +195,30 @@ function expandTextCopyright(source: string): string {
 function placeholderIncludeGraphics(source: string): string {
   return source.replace(
     /\\includegraphics(?:\[[^\]]*])?\s*\{[^}]*\}/g,
-    '\\par\\noindent\\textit{Figure image omitted in browser preview.}\\par',
+    (m) => `\\par\\noindent\\textit{Figure image omitted in browser preview.}\\par${keepLineBreaks(m)}`,
   );
 }
 
 /** Outside `figure`, `\\caption` is unavailable in LaTeX.js; turn into bold heading text. */
 function rewriteCaption(source: string): string {
-  return source.replace(/\\caption\s*\{([^}]*)\}/g, '\\par\\noindent\\textbf{$1}\\par');
+  return source.replace(
+    /\\caption(\s*)\{([^}]*)\}/g,
+    (_m, gap: string, text: string) => `\\par\\noindent\\textbf{${text}}\\par${keepLineBreaks(gap)}`,
+  );
 }
 
-/** LaTeX.js has no footnotes; inline parenthetical so layout continues. */
 /** LaTeX.js does not implement vertical spacing primitives used for title-page centering. */
 function stripVspace(source: string): string {
-  return source.replace(/\\vspace\*\s*\{[^}]*\}/g, '').replace(/\\vspace\s*\{[^}]*\}/g, '');
+  return source
+    .replace(/\\vspace\*\s*\{[^}]*\}/g, keepLineBreaks)
+    .replace(/\\vspace\s*\{[^}]*\}/g, keepLineBreaks);
 }
 
 function stripAddContentsLine(source: string): string {
-  return source.replace(/\\addcontentsline\s*\{[^}]*\}\s*\{[^}]*\}\s*\{[^}]*\}\s*/g, '');
+  return source.replace(/\\addcontentsline\s*\{[^}]*\}\s*\{[^}]*\}\s*\{[^}]*\}\s*/g, keepLineBreaks);
 }
 
+/** LaTeX.js has no footnotes; inline parenthetical so layout continues. */
 function inlineFootnotes(source: string): string {
   const needle = '\\footnote';
   let s = source;
@@ -218,7 +232,7 @@ function inlineFootnotes(source: string): string {
     const end = findClosingBrace(s, j);
     if (end === -1) break;
     const inner = s.slice(j + 1, end);
-    s = `${s.slice(0, i)}\\textit{(${inner})}${s.slice(end + 1)}`;
+    s = `${s.slice(0, i)}${keepLineBreaks(s.slice(i, j))}\\textit{(${inner})}${s.slice(end + 1)}`;
   }
   return s;
 }

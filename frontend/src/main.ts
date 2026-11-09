@@ -113,11 +113,13 @@ const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 
 // Tell guests where the host is actually saving, instead of always saying local storage.
 const currentStorageLabel = () => (activeProvider === driveProvider ? 'Saved on host Google Drive' : hostStorageLabel);
 
-/** Show a short message in the header, then clear it after a few seconds. */
-function showNotice(message: string, isError = false) {
+/** Show a short message in the header, then clear it after a few seconds unless it's sticky. */
+function showNotice(message: string, isError = false, sticky = false) {
   appNoticeEl.textContent = message;
   appNoticeEl.classList.toggle('is-error', isError);
   if (noticeTimer) clearTimeout(noticeTimer);
+  noticeTimer = null;
+  if (sticky) return;
   noticeTimer = setTimeout(() => {
     appNoticeEl.textContent = '';
     noticeTimer = null;
@@ -236,6 +238,15 @@ const autosave = new AutosaveController({
   onStatus: (status) => {
     autosaveStatusEl.textContent = status;
   },
+});
+// When Drive can't get a new token, switch to local saves so no edits are lost.
+driveProvider.onSessionLost(() => {
+  if (activeProvider !== driveProvider) return;
+  activeProvider = localAppProvider;
+  persistAppSession();
+  session.broadcastMetadata({ title: documentName, storage: currentStorageLabel() });
+  showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true);
+  void autosave.saveNow();
 });
 if (!isClient) {
   // First, restore the last session so we know which provider to save to.
@@ -436,6 +447,8 @@ const ensureDriveConnected = async () => {
     autosaveStatusEl.textContent = driveProvider.status();
     return false;
   }
+  // Clear any leftover "sign-in expired" notice now that we're back.
+  appNoticeEl.textContent = '';
   autosaveStatusEl.textContent = 'Drive: Connected';
   return true;
 };
@@ -590,7 +603,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'file.saveNow': async () => {
     if (isClient || !saveNowEnabled) return;
     if (!promptForDocumentName()) return;
-    if (activeProvider === driveProvider && !driveProvider.hasUsableToken()) {
+    if (activeProvider === driveProvider && !driveProvider.isSignedIn()) {
       autosaveStatusEl.textContent = 'Drive: Session expired. Use File > Connect Google Drive to sign in again.';
       return;
     }
@@ -908,7 +921,7 @@ if (!isClient) {
       autosave.markDirty();
       return;
     }
-    if (activeProvider === driveProvider && !driveProvider.hasUsableToken()) {
+    if (activeProvider === driveProvider && !driveProvider.isSignedIn()) {
       autosaveStatusEl.textContent = 'Drive: Session expired. Reconnect Drive to rename the file there.';
       return;
     }
