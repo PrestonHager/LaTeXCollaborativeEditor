@@ -10,10 +10,14 @@ type SessionConfig = {
   onRemoteMetadata?: (metadata: { title: string; storage: string }) => void;
   getLocalText: () => string;
   getLocalMetadata?: () => { title: string; storage: string };
+  initialState?: PersistedDocState;
+  onDocReplaced?: (text: string) => void;
 };
 
+export type PersistedDocState = { docId: string; state: Uint8Array };
+
 type SyncMessage =
-  | { kind: 'snapshot'; state: number[]; metadata?: { title: string; storage: string } }
+  | { kind: 'snapshot'; state: number[]; docId?: string; metadata?: { title: string; storage: string } }
   | { kind: 'y-update'; update: number[] }
   | { kind: 'metadata'; metadata: { title: string; storage: string } }
   | { kind: 'sync-request' };
@@ -29,12 +33,17 @@ export class SessionController {
   private readonly sync: YjsTextSync;
   private hasInitialSync: boolean;
   private readonly initialSyncDebounceMs = 300;
+  // The id of the Yjs doc we're editing, so guests can tell a resumed host doc from a brand new one.
+  private docId: string | null;
+  private hostPeerId: string | null = null;
 
   constructor(config: SessionConfig) {
     this.config = config;
     this.hasInitialSync = config.isHost;
+    this.docId = config.isHost ? (config.initialState?.docId ?? crypto.randomUUID()) : null;
     this.sync = new YjsTextSync({
       initialText: config.isHost ? config.getLocalText() : '',
+      initialState: config.isHost ? config.initialState?.state : undefined,
       onRemoteText: (text) => this.config.onRemoteText(text),
       onLocalUpdate: (update) => {
         if (!this.config.isHost && !this.hasInitialSync) return;
@@ -58,12 +67,11 @@ export class SessionController {
       onPeerCount: () => undefined,
       onPeerJoin: (peerId) => {
         if (!this.config.isHost) return;
-        const snapshot: SyncMessage = {
-          kind: 'snapshot',
-          state: Array.from(this.sync.getSnapshot()),
-          metadata: this.config.getLocalMetadata?.(),
-        };
-        this.session.sendMessage(snapshot, peerId);
+        this.session.sendMessage(this.snapshotMessage(), peerId);
+      },
+      onPeerLeave: (peerId) => {
+        // When the host leaves, take the next snapshot from whoever comes back as host.
+        if (peerId === this.hostPeerId) this.hostPeerId = null;
       },
     });
     this.config.onConnectionState('Discovering');
@@ -109,6 +117,11 @@ export class SessionController {
 
   getDoc() {
     return this.sync.getDoc();
+  }
+
+  getPersistedState(): PersistedDocState | null {
+    if (!this.config.isHost || !this.docId) return null;
+    return { docId: this.docId, state: this.sync.getSnapshot() };
   }
 
   updateLocalText(_text: string) {
@@ -163,7 +176,9 @@ export class SessionController {
 
     if (message.kind === 'snapshot') {
       if (this.config.isHost) return;
-      this.sync.applySnapshot(new Uint8Array(message.state));
+      // Only the host sends snapshots, so once we know who that is, ignore them from anyone else.
+      if (this.hostPeerId && peerId !== this.hostPeerId) return;
+      this.applyHostSnapshot(message, peerId);
       this.hasInitialSync = true;
       if (this.syncRequestDebounceTimer) {
         window.clearTimeout(this.syncRequestDebounceTimer);
@@ -189,23 +204,37 @@ export class SessionController {
       return;
     }
 
-    if (message.kind === 'sync-request' && this.config.isHost && peerId) {
-      const snapshot: SyncMessage = {
-        kind: 'snapshot',
-        state: Array.from(this.sync.getSnapshot()),
-        metadata: this.config.getLocalMetadata?.(),
-      };
-      this.session.sendMessage(snapshot, peerId);
-      return;
+    if (message.kind === 'sync-request' && this.config.isHost) {
+      this.session.sendMessage(this.snapshotMessage(), peerId);
     }
+  }
 
-    if (message.kind === 'sync-request' && this.config.isHost && !peerId) {
-      const snapshot: SyncMessage = {
-        kind: 'snapshot',
-        state: Array.from(this.sync.getSnapshot()),
-        metadata: this.config.getLocalMetadata?.(),
-      };
-      this.session.sendMessage(snapshot);
+  private snapshotMessage(): SyncMessage {
+    return {
+      kind: 'snapshot',
+      state: Array.from(this.sync.getSnapshot()),
+      docId: this.docId ?? undefined,
+      metadata: this.config.getLocalMetadata?.(),
+    };
+  }
+
+  private applyHostSnapshot(message: { state: number[]; docId?: string }, peerId?: string) {
+    const update = new Uint8Array(message.state);
+    if (message.docId && message.docId === this.docId) {
+      // Same doc, so merge it, then send back anything the host is missing, like edits made while it was away.
+      const missing = this.sync.applySnapshot(update);
+      // An empty Yjs update is two zero bytes.
+      if (missing.length > 2) {
+        this.session.sendMessage({ kind: 'y-update', update: Array.from(missing) } satisfies SyncMessage, peerId);
+      }
+    } else if (this.sync.hasState()) {
+      // The host is on a different doc now, so start over from its copy instead of mixing the two.
+      this.sync.resetFromSnapshot(update);
+      this.config.onDocReplaced?.(this.sync.getYText().toString());
+    } else {
+      this.sync.applySnapshot(update);
     }
+    this.docId = message.docId ?? null;
+    this.hostPeerId = peerId ?? null;
   }
 }

@@ -9,7 +9,12 @@ export type AppSessionState = {
   editorTheme: ThemeMode;
   previewTheme: ThemeMode;
   updatedAt: number;
+  // The host's Yjs doc, so a reload resumes the same doc its guests have instead of starting a new one.
+  yjs?: PersistedYjsState;
 };
+
+// The state is a base64 encoded Yjs update.
+export type PersistedYjsState = { docId: string; state: string };
 
 const SESSION_KEY = 'latex_editor_app_session_v1';
 
@@ -35,6 +40,10 @@ export function readAppSessionState(): AppSessionState | null {
       editorTheme: validTheme(parsed.editorTheme) ? parsed.editorTheme : 'system',
       previewTheme: validTheme(parsed.previewTheme) ? parsed.previewTheme : 'system',
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
+      yjs:
+        parsed.yjs && typeof parsed.yjs.docId === 'string' && typeof parsed.yjs.state === 'string'
+          ? { docId: parsed.yjs.docId, state: parsed.yjs.state }
+          : undefined,
     };
   } catch {
     return null;
@@ -57,8 +66,37 @@ export function writeAppSessionState(state: WriteAppSessionPayload): boolean {
     localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
     return true;
   } catch (error) {
+    // The Yjs state is the biggest part, so if storage is full try again without it to keep the text safe.
+    if (payload.yjs) {
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify({ ...payload, yjs: undefined }));
+        return true;
+      } catch {
+        // Fall through to the warning below.
+      }
+    }
     // This runs on every keystroke, so a full or blocked storage must never throw into the editor.
     console.warn('Could not save the app session to browser storage', error);
     return false;
+  }
+}
+
+export function encodeYjsState(state: Uint8Array): string {
+  // Build the binary string in chunks, since spreading a big array into fromCharCode can overflow the stack.
+  let binary = '';
+  for (let i = 0; i < state.length; i += 0x8000) {
+    binary += String.fromCharCode(...state.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
+export function decodeYjsState(encoded: string): Uint8Array | null {
+  try {
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
   }
 }

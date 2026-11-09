@@ -1,4 +1,4 @@
-import { readAppSessionState, writeAppSessionState } from './appSession';
+import { decodeYjsState, encodeYjsState, readAppSessionState, writeAppSessionState } from './appSession';
 
 describe('appSession state', () => {
   beforeEach(() => {
@@ -89,5 +89,47 @@ describe('appSession state', () => {
     const ok = writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true });
     expect(ok).toBe(false);
     spy.mockRestore();
+  });
+
+  it('round trips the host Yjs state', () => {
+    const bytes = new Uint8Array([0, 1, 2, 250, 255]);
+    writeAppSessionState({
+      documentName: 'n',
+      content: 'c',
+      providerMode: 'local',
+      saveNowEnabled: true,
+      yjs: { docId: 'doc-1', state: encodeYjsState(bytes) },
+    });
+    const loaded = readAppSessionState();
+    expect(loaded?.yjs?.docId).toBe('doc-1');
+    expect(decodeYjsState(loaded!.yjs!.state)).toEqual(bytes);
+  });
+
+  it('drops a malformed Yjs state and bad base64', () => {
+    localStorage.setItem(
+      'latex_editor_app_session_v1',
+      JSON.stringify({ documentName: 'x', content: 'y', providerMode: 'local', saveNowEnabled: true, yjs: { docId: 1 } }),
+    );
+    expect(readAppSessionState()?.yjs).toBeUndefined();
+    expect(decodeYjsState('not base64!')).toBeNull();
+  });
+
+  it('saves the text without the Yjs state when storage is too full for both', () => {
+    const realSetItem = Storage.prototype.setItem;
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+      if (value.includes('"yjs"')) throw new DOMException('full', 'QuotaExceededError');
+      realSetItem.call(this, key, value);
+    });
+    const ok = writeAppSessionState({
+      documentName: 'n',
+      content: 'kept',
+      providerMode: 'local',
+      saveNowEnabled: true,
+      yjs: { docId: 'doc-1', state: 'AAAA' },
+    });
+    spy.mockRestore();
+    expect(ok).toBe(true);
+    expect(readAppSessionState()?.content).toBe('kept');
+    expect(readAppSessionState()?.yjs).toBeUndefined();
   });
 });

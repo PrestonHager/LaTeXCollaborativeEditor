@@ -14,7 +14,15 @@ import { openGooglePicker } from './storage/providers/googlePicker';
 import { createCollabUndo } from './collab/undo';
 import { latexSourceToPreviewHtml } from './compile/latexJsPreview';
 import type { EditorDiagnostic } from './ui/diagnostics';
-import { readAppSessionState, writeAppSessionState, type ProviderMode, type ThemeMode } from './state/appSession';
+import {
+  readAppSessionState,
+  writeAppSessionState,
+  encodeYjsState,
+  decodeYjsState,
+  type PersistedYjsState,
+  type ProviderMode,
+  type ThemeMode,
+} from './state/appSession';
 import { formatPrimaryChord } from './ui/modifierShortcutLabels';
 import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
@@ -153,6 +161,10 @@ function applyPreviewTheme(theme: ThemeMode) {
   window.dispatchEvent(new CustomEvent('previewthemechange'));
 }
 
+// The session is created further down, so until then keep whatever Yjs state was restored.
+let restoredYjsState: PersistedYjsState | undefined;
+let currentYjsState = (): PersistedYjsState | undefined => restoredYjsState;
+
 const persistAppSession = () => {
   if (isClient) return;
   writeAppSessionState({
@@ -162,6 +174,7 @@ const persistAppSession = () => {
     saveNowEnabled,
     editorTheme,
     previewTheme,
+    yjs: currentYjsState(),
   });
 };
 
@@ -245,6 +258,7 @@ if (!isClient) {
     editorTheme = restored.editorTheme;
     previewTheme = restored.previewTheme;
     titleEl.textContent = documentName;
+    restoredYjsState = restored.yjs;
     if (restored.content) {
       editor.setText(restored.content, false);
     }
@@ -293,10 +307,32 @@ const session = new SessionController({
     title: documentName,
     storage: currentStorageLabel(),
   }),
+  initialState: restoredDocState(),
+  onDocReplaced: (text) => {
+    // The guest got a whole new doc, so unbind, show its text, then bind the editor to it.
+    editor.setCollabExtensions([]);
+    editor.setText(text, false);
+    // The old undo stack points at a doc that's gone, so start a fresh one on the new text.
+    undo.manager.destroy();
+    undo = createCollabUndo(session.getYText());
+    undo.subscribe(() => menuBar.refresh());
+    editor.setCollabExtensions(undo.extensions());
+    menuBar.refresh();
+  },
 });
 // Undo goes through Yjs so it only reverts our own edits, not a peer's.
-const undo = createCollabUndo(session.getYText());
+let undo = createCollabUndo(session.getYText());
 editor.setCollabExtensions(undo.extensions());
+currentYjsState = () => {
+  const persisted = session.getPersistedState();
+  return persisted ? { docId: persisted.docId, state: encodeYjsState(persisted.state) } : undefined;
+};
+
+function restoredDocState() {
+  if (!restoredYjsState) return undefined;
+  const state = decodeYjsState(restoredYjsState.state);
+  return state ? { docId: restoredYjsState.docId, state } : undefined;
+}
 
 let compileTimer: ReturnType<typeof setTimeout> | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
