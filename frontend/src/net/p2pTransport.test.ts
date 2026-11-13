@@ -30,6 +30,7 @@ let current = fakeRoom();
 
 vi.mock('@trystero-p2p/torrent', () => ({
   joinRoom: vi.fn(() => current.room),
+  selfId: 'self-peer-id',
 }));
 
 describe('P2pTransport', () => {
@@ -288,6 +289,16 @@ describe('usesRelay', () => {
 
   it('says not relayed when no pair is picked yet', async () => {
     expect(await usesRelay(statsConnection([]))).toBe(false);
+  });
+});
+
+describe('P2pTransport.getSelfId', () => {
+  it("returns trystero's id for this tab, which peers see in onPeerJoin", () => {
+    const transport = new P2pTransport(
+      { appId: 'a', environment: 'localhost', rendezvous: [], iceServers: [] },
+      { onMessage: vi.fn(), onState: vi.fn(), onPeerCount: vi.fn(), onPeerJoin: vi.fn() },
+    );
+    expect(transport.getSelfId()).toBe('self-peer-id');
   });
 });
 

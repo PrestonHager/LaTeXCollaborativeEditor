@@ -82,6 +82,11 @@ export class PeerSession {
     return this.transport?.getPeerCount() ?? 0;
   }
 
+  /** Our peer id, once the transport has loaded (it loads it if needed). */
+  selfId(): Promise<string> {
+    return this.ensureTransport().then((transport) => transport.getSelfId());
+  }
+
   close() {
     if (this.transport) {
       this.transport.disconnect();

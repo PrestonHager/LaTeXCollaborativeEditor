@@ -36,7 +36,7 @@ import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
 import { createKeymap } from './app/keymap';
 import { describeKeyContext, reservedKeys, watchKeyContext } from './app/reservedKeys';
-import { createSettingsStore } from './state/settings';
+import { cleanDisplayName, createSettingsStore, MAX_DISPLAY_NAME_LENGTH } from './state/settings';
 import { bindSettings, importSettingsFile, resetSettings, settingsFileName } from './app/settingsBinding';
 import { editorKeybinds } from './ui/editor';
 import { detectPlatform } from './ui/modifierShortcutLabels';
@@ -47,6 +47,9 @@ import type { createConflictDialog } from './ui/conflictDialog';
 import { confirmDialog, promptDialog } from './ui/dialogs';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
+import { createPresenceFlow } from './app/presenceFlow';
+import type { PresencePeer } from './collab/presence';
+import { EditorView } from '@codemirror/view';
 import {
   readAppSessionState,
   writeAppSessionState,
@@ -256,12 +259,66 @@ const session: SessionController = new SessionController({
     else fileProgress.set(hash, fraction);
     renderFiles();
   },
+  onPresence: (payload, peerId) => presence.receive(payload, peerId),
+  onPeerJoin: (peerId) => presence.peerJoined(peerId),
+  onPeerLeave: (peerId) => presence.peerLeft(peerId),
 });
 
 let project: ProjectDoc = new ProjectDoc(session.getDoc());
 // Undo goes through Yjs so it only reverts our own edits, not a peer's. It follows the open file.
 let undo = createCollabUndo(new Y.Doc().getText());
 let unbindDoc: (() => void) | null = null;
+// The Y.Text the editor shows, so presence can add remote cursors to it once it starts.
+let boundText: Y.Text | null = null;
+
+// Who's in the room and where their cursors are (issue #22). Only the name and cursor are shared.
+const presence = createPresenceFlow({
+  settings,
+  root: document.getElementById('presence-bar') as HTMLElement,
+  send: (message, peerId) => session.sendPresence(message, peerId),
+  selfId: () => session.selfId(),
+  hasType: (name) => session.getDoc().share.has(name),
+  filePath: (id) => (id ? (project.get(id)?.path ?? null) : null),
+  onFollow: (peer) => followPeer(peer.peerId),
+  onEditName: () => void editDisplayName(),
+  onPeersChange: () => renderFiles(),
+  onLoadError: (error) => lazyLoadFailed('Presence', error, startPresence),
+});
+
+/** Start sharing presence, then add peers' cursors to the open file. */
+function startPresence() {
+  void presence.start().then(() => {
+    if (boundText) editor.setCollabExtensions(undo.extensions(presence.awareness()));
+  });
+}
+
+/** Open the file a peer has open and scroll to their cursor. */
+function followPeer(peerId: string) {
+  const peer: PresencePeer | null = presence.peer(peerId);
+  if (!peer?.file || !project.get(peer.file)) {
+    showNotice(peer ? `${peer.name} has no file open.` : 'That person left the room.');
+    return;
+  }
+  openFile(peer.file);
+  const head = peer.cursor && Y.createAbsolutePositionFromRelativePosition(peer.cursor.head, session.getDoc());
+  if (!head || head.type !== project.getText(peer.file)) return;
+  const view = editor.getView();
+  view.dispatch({ effects: EditorView.scrollIntoView(Math.min(head.index, view.state.doc.length), { y: 'center' }) });
+}
+
+/** Change the name peers see. It's kept in this browser's settings. */
+async function editDisplayName() {
+  const next = await promptDialog({
+    title: 'Your name in shared rooms',
+    message: 'People in the room see this next to your cursor. Nothing else about you is shared.',
+    label: 'Display name',
+    initialValue: presence.name(),
+    confirmLabel: 'Save',
+    validate: (value) => (cleanDisplayName(value) ? (value.length > MAX_DISPLAY_NAME_LENGTH ? `Use ${MAX_DISPLAY_NAME_LENGTH} characters or fewer.` : null) : 'Type a name.'),
+  });
+  const name = next === null ? undefined : cleanDisplayName(next);
+  if (name) settings.set('displayName', name);
+}
 
 const projectName = () => project.getName() || 'Untitled';
 
@@ -504,7 +561,9 @@ function renderFiles() {
     mainId: project.getMainFileId(),
     progress: fileProgress,
     waiting: isClient && project.isEmpty(),
+    viewers: presence.viewers(),
   });
+  presence.refresh();
   showActiveFile();
 }
 
@@ -529,6 +588,7 @@ function openFile(id: string | null) {
   const entry = id ? project.get(id) : undefined;
   const previous = activeFileId;
   activeFileId = entry && entry.kind !== 'folder' ? entry.id : null;
+  presence.setFile(activeFileId);
   if (entry) fileTree.reveal(entry.path);
   if (entry?.kind === 'binary') {
     editorPane.classList.add('is-viewing');
@@ -552,7 +612,8 @@ function bindEditor(text: Y.Text | null) {
   undo.subscribe(() => menuBar.refresh());
   editor.setText(text ? text.toString() : '', false);
   editor.setEditable(Boolean(text));
-  if (text) editor.setCollabExtensions(undo.extensions());
+  boundText = text;
+  if (text) editor.setCollabExtensions(undo.extensions(presence.awareness()));
 }
 
 /** Pick a file to show when the open one is gone: the main file, then any text file. */
@@ -1148,6 +1209,13 @@ const hostRoomId = isClient ? null : readHostRoomId();
 if (roomId) session.join(roomId);
 else if (hostRoomId) session.join(hostRoomId);
 inRoom = Boolean(roomId || hostRoomId);
+if (inRoom) startPresence();
+// Tell peers we're gone, so our cursor doesn't linger until they time us out.
+window.addEventListener('pagehide', () => presence.stop());
+// A page restored from the back-forward cache is still in the room, so share presence again.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted && inRoom) startPresence();
+});
 renderConnection();
 layout.installSplitter();
 layout.applyLayoutMode();
@@ -1163,6 +1231,7 @@ setupShareButton({
     const id = session.ensureRoom();
     if (!isClient) writeHostRoomId(id);
     inRoom = true;
+    startPresence();
     renderConnection();
     return id;
   },

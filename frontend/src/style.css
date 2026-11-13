@@ -146,6 +146,18 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .status-badges .pill { gap: 0.3rem; }
 .muted { color: var(--muted-text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .share-link { color: var(--link-text); text-decoration: underline; }
+/* Who's in the room (issue #22). Avatars are 32px like Basecoat's sm buttons, 44px on touch screens (docs/ui-sizing.md).
+   Every peer colour has 4.5:1 or more against the white initials (collab/presence.ts). */
+.presence-bar { display: inline-flex; align-items: center; gap: 0.25rem; }
+.presence-bar[hidden] { display: none; }
+.presence-avatar { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; padding: 0; border: 2px solid var(--bg); border-radius: 999px; background: var(--peer-color); color: #fff; font: inherit; font-size: 0.75rem; font-weight: 600; line-height: 1; cursor: pointer; }
+.presence-avatar:hover { box-shadow: 0 0 0 2px var(--peer-color); }
+.presence-avatar:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.presence-avatar.is-self { box-shadow: 0 0 0 1px var(--panel-border); }
+.presence-more { display: inline-flex; align-items: center; justify-content: center; min-width: 2rem; height: 2rem; padding: 0 0.35rem; border-radius: 999px; background: var(--surface-3); font-size: 0.75rem; font-weight: 600; }
+@media (pointer: coarse) {
+  .presence-avatar, .presence-more { min-width: 2.75rem; width: 2.75rem; height: 2.75rem; }
+}
 .app-notice { display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; max-width: 45vw; font-size: 13px; color: var(--muted-text); }
 .app-notice [data-notice-text] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-notice.is-error { color: var(--diag-text); }
@@ -335,6 +347,8 @@ label.settings-row { justify-content: flex-start; }
 .file-row-icon { display: inline-flex; color: var(--muted-text); }
 .file-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row-main-badge { margin-left: auto; font-size: 10px; padding: 0 0.35rem; }
+.file-row-peers { display: inline-flex; flex-shrink: 0; gap: 2px; margin-left: 0.25rem; }
+.file-row-peer-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; box-shadow: 0 0 0 1px var(--bg); }
 .file-row-actions { position: absolute; right: 0.25rem; display: none; gap: 0; background: var(--surface-3); border-radius: var(--radius-sm); }
 .file-row:hover .file-row-actions, .file-row:focus-within .file-row-actions { display: inline-flex; }
 .file-row-progress { position: absolute; left: 1.5rem; right: 0.5rem; bottom: 0; height: 2px; }

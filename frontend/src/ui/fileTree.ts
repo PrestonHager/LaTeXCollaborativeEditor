@@ -12,7 +12,29 @@ export type FileTreeState = {
   progress: Map<string, number>;
   /** True for a guest that hasn't got the host's project yet. */
   waiting: boolean;
+  /** Peers who have each file open, by file id. Each gets a dot in their colour. */
+  viewers?: Map<string, { name: string; color: string }[]>;
 };
+
+/** Dots shown per file. More viewers than this still get named in the label. */
+const MAX_DOTS = 3;
+
+/** A dot per peer who has the file open, in their colour, with their names for screen readers and hover. */
+function viewerDots(viewers: { name: string; color: string }[]): HTMLElement {
+  const dots = document.createElement('span');
+  dots.className = 'file-row-peers';
+  const label = `Open by ${viewers.map((viewer) => viewer.name).join(', ')}`;
+  dots.setAttribute('role', 'img');
+  dots.setAttribute('aria-label', label);
+  dots.title = label;
+  for (const viewer of viewers.slice(0, MAX_DOTS)) {
+    const dot = document.createElement('span');
+    dot.className = 'file-row-peer-dot';
+    dot.style.backgroundColor = viewer.color;
+    dots.append(dot);
+  }
+  return dots;
+}
 
 type FileTreeOptions = {
   onOpen: (entry: ProjectEntry) => void;
@@ -88,7 +110,10 @@ export function createFileTree(pane: HTMLElement, options: FileTreeOptions) {
     li.dataset.path = row.path;
     li.dataset.kind = row.folder ? 'folder' : 'file';
     li.style.setProperty('--depth', String(row.depth));
-    li.querySelector('.file-row-name')!.textContent = basename(row.path);
+    const name = li.querySelector('.file-row-name')!;
+    name.textContent = basename(row.path);
+    const viewers = row.entry ? state.viewers?.get(row.entry.id) : undefined;
+    if (viewers?.length) name.after(viewerDots(viewers));
     li.querySelector('.file-row-icon')!.append(rowIcon(row));
     main.title = row.path;
 
