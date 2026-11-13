@@ -44,7 +44,9 @@ export type CommandId =
   | 'help.tour'
   | 'help.reportBug'
   | 'help.requestFeature'
-  | 'help.about';
+  | 'help.about'
+  | 'dev.openTestProject'
+  | 'dev.openChecklist';
 
 export type CommandState = {
   enabled: boolean;

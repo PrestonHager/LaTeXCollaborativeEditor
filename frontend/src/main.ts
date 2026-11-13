@@ -18,7 +18,7 @@ import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
 import { bugReportUrl, featureRequestUrl, type IssueArea } from './ui/issueLinks';
 import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from './ui/statusText';
-import { paletteOnlyCommands, themeSwitchCommands } from './ui/paletteCommands';
+import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from './ui/paletteCommands';
 import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
 import { LocalDownloadStorage } from './storage/localDownload';
@@ -1132,6 +1132,18 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     openExternal(featureRequestUrl());
   },
   'help.about': () => aboutDialog.open(),
+  // These two only show in the palette in dev builds (see devPaletteCommands).
+  'dev.openTestProject': async () => {
+    if (import.meta.env.DEV && !isClient) {
+      if (!window.confirm('Open the regression test project? The current one stays saved where it is.')) return;
+      // Load it lazily, so the test project never ends up in a production bundle.
+      const { regressionProject } = await import('./dev/regressionProject');
+      await switchProject(await regressionProject(blobs), activeProvider, null);
+    }
+  },
+  'dev.openChecklist': () => {
+    if (import.meta.env.DEV) window.open('./regression.html', '_blank', 'noreferrer');
+  },
 };
 
 // The palette's "Switch to ... mode" commands set the app, editor, and preview together.
@@ -1190,6 +1202,7 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'file.renameDrive':
     case 'file.clearLocalDocs':
     case 'file.rename':
+    case 'dev.openTestProject':
       return { enabled: !isClient };
     case 'file.moveDrive':
       return { enabled: !isClient && activeProvider === driveProvider };
@@ -1296,7 +1309,7 @@ function buildPaletteCommands(): PaletteCommand[] {
   const themes = themeSwitchCommands
     .filter(({ theme }) => !(editorTheme === theme && previewTheme === theme))
     .map(({ id, section, label, description }) => ({ id, section, label, description, enabled: true }));
-  const extras = paletteOnlyCommands.map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
+  const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
   return [...fromMenus, ...themes, ...extras];
 }
 commandPalette.setCommands(buildPaletteCommands());

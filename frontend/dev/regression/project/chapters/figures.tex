@@ -1,0 +1,24 @@
+\section{Figures}
+% Expect: this section comes from chapters/figures.tex through \include.
+
+\subsection{Images}
+% Expect: the same four-color image twice.
+% NOTE: the width option is dropped for now, so both come out the same size.
+% The image comes from figures/quadrants.png in the file tree.
+\begin{figure}
+  \centering
+  \includegraphics{figures/quadrants.png}
+  \caption{A project image, full size.}
+\end{figure}
+
+\includegraphics[width=2cm]{figures/quadrants}
+
+\subsection{Pictures}
+% Expect: a box with a line across it and a circle in the middle.
+% A picture compiles on the main thread instead of the worker, since LaTeX.js needs the real DOM to size it.
+\setlength{\unitlength}{1mm}
+\begin{picture}(40,20)
+  \put(0,0){\framebox(40,20){}}
+  \put(0,0){\line(2,1){40}}
+  \put(20,10){\circle{8}}
+\end{picture}

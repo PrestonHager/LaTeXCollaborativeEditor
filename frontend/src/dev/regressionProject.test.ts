@@ -1,0 +1,50 @@
+import { BlobStore } from '../project/blobStore';
+import { REGRESSION_PROJECT_NAME, dataUrlBytes, regressionProject } from './regressionProject';
+
+describe('regressionProject', () => {
+  it('loads every file in dev/regression/project with main.tex as the main file', async () => {
+    const blobs = new BlobStore();
+    const content = await regressionProject(blobs);
+    expect(content.name).toBe(REGRESSION_PROJECT_NAME);
+    expect(content.mainPath).toBe('main.tex');
+    const paths = content.files.map((file) => file.path).sort();
+    expect(paths).toEqual([
+      'chapters/figures.tex',
+      'chapters/math.tex',
+      'chapters/text.tex',
+      'figures/quadrants.png',
+      'main.tex',
+      'refs.bib',
+    ]);
+  });
+
+  it('keeps text as text and puts the image bytes in the blob store', async () => {
+    const blobs = new BlobStore();
+    const content = await regressionProject(blobs);
+    const main = content.files.find((file) => file.path === 'main.tex')!;
+    expect(main.kind).toBe('text');
+    expect(main.text).toContain('\\input{chapters/text}');
+    const image = content.files.find((file) => file.path === 'figures/quadrants.png')!;
+    expect(image.kind).toBe('binary');
+    expect(blobs.has(image.hash!)).toBe(true);
+  });
+
+  it('references only files that exist in the project', async () => {
+    const content = await regressionProject(new BlobStore());
+    const paths = new Set(content.files.map((file) => file.path));
+    const texts = content.files.filter((file) => file.kind === 'text').map((file) => file.text ?? '');
+    // Skip commented-out lines, since main.tex has a deliberately missing \input there.
+    const live = texts.flatMap((text) => text.split('\n').filter((line) => !line.trimStart().startsWith('%')));
+    for (const line of live) {
+      for (const [, name] of line.matchAll(/\\(?:input|include)\{([^}]+)\}/g)) {
+        expect(paths.has(name.endsWith('.tex') ? name : `${name}.tex`)).toBe(true);
+      }
+    }
+  });
+});
+
+describe('dataUrlBytes', () => {
+  it('decodes a base64 data URL', () => {
+    expect(Array.from(dataUrlBytes('data:image/png;base64,AQID'))).toEqual([1, 2, 3]);
+  });
+});

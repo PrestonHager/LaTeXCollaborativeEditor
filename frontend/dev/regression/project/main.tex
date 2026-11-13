@@ -1,0 +1,35 @@
+% Regression test project.
+% Each section lines up with a part of dev/regression/checklist.md.
+% If a section doesn't look like its comment says, that's a regression.
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+\title{Regression Test Project}
+\author{LaTeX Collaborative Editor}
+\date{1 January 2026}
+
+\begin{document}
+
+\maketitle
+
+% Expect: a title, an author line, and the date 1 January 2026.
+
+\input{chapters/text}
+
+\input{chapters/math}
+
+% A commented-out input must be skipped, not loaded or reported as missing.
+% \input{chapters/does-not-exist}
+
+\include{chapters/figures}
+
+\section{Citations}
+% Expect: [1] and [2] in the text, then a References list with both entries.
+Knuth wrote the book on \TeX{} \cite{knuth}, and Lamport wrote one on \LaTeX{} \cite{lamport}.
+Citing the same key again keeps its number \cite{knuth}.
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

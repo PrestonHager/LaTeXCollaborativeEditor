@@ -15,7 +15,7 @@ export function starterProject(name: string, text = STARTER_TEX): ProjectContent
 }
 
 /** Turn loose files (from storage or a zip) into project content, keeping binary bytes in the blob store. */
-async function contentFromFiles(
+export async function contentFromFiles(
   name: string,
   files: { path: string; data: Uint8Array }[],
   folders: string[],
