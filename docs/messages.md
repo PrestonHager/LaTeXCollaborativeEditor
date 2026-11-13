@@ -125,6 +125,7 @@ These show in the header, next to Share.
 | Downloaded, but still waiting on: ... | Some files haven't arrived from a peer, so they're not in the zip. |
 | path hasn't arrived from a peer yet. | You tried to download a file you don't have yet. |
 | Created name from file.zip | A .zip became a new project. |
+| The browser blocked the file picker. Choose Upload .zip again. | The host left the Upload .zip confirm open too long, so the browser stopped the file picker. The next try opens it without asking again. |
 | That .zip has no files in it. / That file is not a .zip archive. / The .zip archive is damaged. | The zip couldn't be read. |
 | Zip64 archives are not supported. / ... uses a compression method this app can't read. | The zip uses a format the app can't unpack. Re-zip it with a normal zip tool. |
 | name already exists. / name already exists here. | That path is taken. |
@@ -157,6 +158,8 @@ More: [Diagnostics](editing-and-preview.md#diagnostics).
 ## Confirm and prompt boxes
 
 - **Start a new project? This clears the project for everyone in the room. The current one stays saved where it is.** From **New Project**.
+- **Open another project? This replaces the project for everyone in the room. The current one stays saved where it is.** From **Open Local Project** or **Open from Google Drive**, while a guest is connected.
+- **Upload a .zip as a new project? This replaces the project for everyone in the room. The current one stays saved where it is.** From **Upload .zip as New Project**, while a guest is connected.
 - **Name this project before saving:** From **Save Now** or **Save to Google Drive** on an unnamed project.
 - **Rename project:** From clicking the title or **Rename Project**.
 - **New file:** and **New folder:** From the Files panel or File menu.

@@ -7,11 +7,11 @@ import { mountAppShell } from '../test/appShell';
 import { MemoryProvider } from '../test/memoryProvider';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { StorageProvider } from '../storage/providers/types';
-import { NEW_PROJECT_CONFIRM } from '../state/guestCommands';
+import { NEW_PROJECT_CONFIRM, replaceProjectConfirm } from '../state/guestCommands';
 import { ProjectState, type DriveLike } from './projectState';
 import { createThemeController } from './theme';
 import { createLayout } from './layout';
-import { createCommands, shortcutCommand, shortcuts, type CommandContext } from './commands';
+import { IMPORT_PICKER_BLOCKED, createCommands, shortcutCommand, shortcuts, type CommandContext } from './commands';
 import { paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 
 class FakeLocal extends MemoryProvider {
@@ -88,6 +88,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
       },
     },
     settingsDialog: { open: vi.fn() },
+    guestCount: vi.fn(() => 0),
     projectName: () => project.getName() || 'Untitled',
     setStatus: vi.fn(),
     showNotice: vi.fn(),
@@ -303,6 +304,100 @@ describe('commands', () => {
       expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Old' })]);
       await run('file.importZip');
       expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('opens and imports without asking when no guest is in the room', async () => {
+      const { app, run } = setup();
+      const confirm = vi.spyOn(window, 'confirm');
+      await run('file.openLocal');
+      await run('file.openDrive');
+      await run('file.importZip');
+      expect(confirm).not.toHaveBeenCalled();
+      expect(app.projectsDialog.open).toHaveBeenCalled();
+      expect(app.openStoredProject).toHaveBeenCalled();
+      expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('asks the host before opening or importing while guests are in the room', async () => {
+      const { app, run, drive } = setup();
+      app.guestCount.mockReturnValue(2);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await run('file.openLocal');
+      await run('file.openDrive');
+      await run('file.importZip');
+      // Cancel stops before any dialog, sign-in, or file picker opens.
+      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')], [replaceProjectConfirm('open')], [replaceProjectConfirm('import')]]);
+      expect(app.projectsDialog.open).not.toHaveBeenCalled();
+      expect(app.ensureDriveConnected).not.toHaveBeenCalled();
+      expect(app.pickFromDrive).not.toHaveBeenCalled();
+      expect(app.openStoredProject).not.toHaveBeenCalled();
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+      expect(app.switchProject).not.toHaveBeenCalled();
+      expect(app.setStatus).not.toHaveBeenCalled();
+      // OK goes ahead as before.
+      confirm.mockReturnValue(true);
+      await run('file.openLocal');
+      await run('file.openDrive');
+      await run('file.importZip');
+      expect(app.projectsDialog.open).toHaveBeenCalled();
+      expect(app.openStoredProject).toHaveBeenCalledWith(drive, 'f1');
+      expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('asks once for Upload .zip in the Open dialog after the host OKs Open', async () => {
+      const { app, run, commands } = setup();
+      app.guestCount.mockReturnValue(1);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      await run('file.openLocal');
+      commands.importZipFromOpenDialog();
+      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')]]);
+      expect(app.zipInput.click).toHaveBeenCalledTimes(1);
+      // The other ways in still ask.
+      await run('file.importZip');
+      expect(confirm).toHaveBeenLastCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).toHaveBeenCalledTimes(2);
+      // A canceled Open doesn't count as a yes.
+      confirm.mockReturnValue(false);
+      await run('file.openLocal');
+      confirm.mockClear();
+      commands.importZipFromOpenDialog();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).toHaveBeenCalledTimes(2);
+    });
+
+    it('asks in the Open dialog when a guest joined after it opened', async () => {
+      const { app, run, commands } = setup();
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await run('file.openLocal');
+      expect(confirm).not.toHaveBeenCalled();
+      app.guestCount.mockReturnValue(1);
+      commands.importZipFromOpenDialog();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+    });
+
+    it('never imports from the Open dialog in a guest tab', () => {
+      const { app, commands } = setup({ isClient: true });
+      commands.importZipFromOpenDialog();
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+    });
+
+    it('says so when a slow confirm used up the click, and skips the confirm on the retry', async () => {
+      const { app, run } = setup();
+      app.guestCount.mockReturnValue(1);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.stubGlobal('navigator', { userActivation: { isActive: false } });
+      await run('file.importZip');
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+      expect(app.showNotice).toHaveBeenCalledWith(IMPORT_PICKER_BLOCKED);
+      // The retry is a fresh click, so the picker opens without asking again.
+      vi.stubGlobal('navigator', { userActivation: { isActive: true } });
+      await run('file.importZip');
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(app.zipInput.click).toHaveBeenCalledTimes(1);
+      // That OK only counts once.
+      await run('file.importZip');
+      expect(confirm).toHaveBeenCalledTimes(2);
     });
 
     it('opens a Drive folder or a single legacy file', async () => {

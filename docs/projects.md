@@ -122,6 +122,8 @@ It's host only, and if you're sharing, it clears the project for everyone in the
 ![The Open a project dialog](assets/screenshots/projects-light.png#only-light)
 ![The Open a project dialog](assets/screenshots/projects-dark.png#only-dark)
 
+These are host only. While a guest is connected, each one asks first, since it replaces the project for everyone in the room.
+
 Before switching, the app saves anything still pending on the current project.
 
 If every file in a `.zip` sits in one folder, that folder becomes the project root.

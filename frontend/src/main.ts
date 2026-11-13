@@ -602,7 +602,8 @@ const projectsDialog = createProjectsDialog(document.getElementById('projects-di
   onPick: (summary) => {
     if (!isClient) void openStoredProject(localAppProvider, summary.id);
   },
-  onImportZip: () => executeCommand('file.importZip'),
+  // The host already OK'd Open to get here, so this doesn't ask again.
+  onImportZip: () => commands.importZipFromOpenDialog(),
 });
 
 async function openStoredProject(provider: StorageProvider, id: string) {
@@ -754,6 +755,8 @@ const commands = createCommands({
   get toolbar() {
     return toolbar;
   },
+  // Only the host's own room counts. A guest never replaces the project.
+  guestCount: () => (isClient || !inRoom ? 0 : peerCount),
   projectName,
   setStatus,
   showNotice,
