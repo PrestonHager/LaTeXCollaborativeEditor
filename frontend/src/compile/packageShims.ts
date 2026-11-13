@@ -31,27 +31,31 @@ const LATEX_SPECIALS: Record<string, string> = {
 };
 export const escapeLatexText = (text: string) => text.replace(/[\\{}&%$#_~^]/g, (char) => LATEX_SPECIALS[char]);
 
-// How far an argument may run. An unclosed { gives up after this many characters instead of
-// scanning to the end of the document for every command, which would be quadratic.
-const MAX_ARGUMENT = 20_000;
+type Matcher = (start: number) => number;
 
-/** Index of the `close` that matches the `open` at `start`, or -1. */
-function matching(source: string, start: number, open: string, close: string): number {
-  let depth = 0;
-  const end = Math.min(source.length, start + MAX_ARGUMENT);
-  for (let i = start; i < end; i += 1) {
-    const ch = source[i];
-    if (ch === '\\') {
-      i += 1;
-      continue;
+/**
+ * Where each { and [ in a source closes, found in one pass, so reading many commands' arguments
+ * stays linear even when braces never close. A backslash skips the next character, so \{ and \[
+ * don't count. The result is -1 for an opener with no match.
+ */
+function matcher(source: string): Matcher {
+  let closes: Map<number, number> | null = null;
+  return (start) => {
+    if (!closes) {
+      closes = new Map();
+      const braces: number[] = [];
+      const brackets: number[] = [];
+      for (let i = 0; i < source.length; i += 1) {
+        const ch = source[i];
+        if (ch === '\\') i += 1;
+        else if (ch === '{') braces.push(i);
+        else if (ch === '[') brackets.push(i);
+        else if (ch === '}' && braces.length) closes.set(braces.pop()!, i);
+        else if (ch === ']' && brackets.length) closes.set(brackets.pop()!, i);
+      }
     }
-    if (ch === open) depth += 1;
-    else if (ch === close) {
-      depth -= 1;
-      if (depth === 0) return i;
-    }
-  }
-  return -1;
+    return closes.get(start) ?? -1;
+  };
 }
 
 const skipSpaces = (source: string, i: number) => {
@@ -65,19 +69,19 @@ type Parsed = { end: number; optional: string[]; groups: string[] };
  * Read a command's arguments from `i` (just past its name): a `*`, then [options] and {groups}
  * until `groups` mandatory ones are read. [options] right after the last group are read too.
  */
-function readArgs(source: string, i: number, groups: number): Parsed | null {
+function readArgs(source: string, i: number, groups: number, matching: Matcher = matcher(source)): Parsed | null {
   const optional: string[] = [];
   const found: string[] = [];
   if (source[i] === '*') i += 1;
   for (;;) {
     const j = skipSpaces(source, i);
     if (source[j] === '[' && found.length < groups) {
-      const close = matching(source, j, '[', ']');
+      const close = matching(j);
       if (close === -1) return null;
       optional.push(source.slice(j + 1, close));
       i = close + 1;
     } else if (source[j] === '{' && found.length < groups) {
-      const close = matching(source, j, '{', '}');
+      const close = matching(j);
       if (close === -1) return null;
       found.push(source.slice(j + 1, close));
       i = close + 1;
@@ -86,7 +90,7 @@ function readArgs(source: string, i: number, groups: number): Parsed | null {
   if (found.length < groups) return null;
   // Trailing [options] only count when they follow right away, like \newtheorem{thm}{Theorem}[chapter].
   while (source[i] === '[') {
-    const close = matching(source, i, '[', ']');
+    const close = matching(i);
     if (close === -1) break;
     optional.push(source.slice(i + 1, close));
     i = close + 1;
@@ -100,10 +104,11 @@ function replaceCommand(source: string, names: string | string[], groups: number
   const pattern = new RegExp(`\\\\(?:${alternatives})(?![A-Za-z@])`, 'g');
   let out = '';
   let last = 0;
+  const matching = matcher(source);
   for (const match of source.matchAll(pattern)) {
     const start = match.index;
     if (start < last) continue;
-    const args = readArgs(source, start + match[0].length, groups);
+    const args = readArgs(source, start + match[0].length, groups, matching);
     if (!args) continue;
     const whole = source.slice(start, args.end);
     out += source.slice(last, start) + replace(args, whole);

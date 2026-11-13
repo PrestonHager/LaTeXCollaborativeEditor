@@ -192,6 +192,7 @@ describe('package stand-ins for the preview', () => {
     ];
     const started = performance.now();
     for (const input of inputs) adaptLatexSource(`\\documentclass{beamer}\n${input}`);
-    expect(performance.now() - started).toBeLessThan(3000);
+    // About 0.2 s here; the bound leaves room for slow CI machines, and quadratic code takes far longer.
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 });
