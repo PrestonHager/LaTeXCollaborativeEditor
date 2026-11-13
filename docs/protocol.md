@@ -29,7 +29,8 @@ Transport behavior
 
 Version handshake
 - When a peer joins, each side sends it `{ kind: 'hello', protocol, appVersion, commit }` on the document channel.
-  - `protocol` is `PROTOCOL_VERSION` from `frontend/src/collab/messages.ts`, now `1`. It changes only when older peers can't handle the new messages.
+  - `protocol` is `PROTOCOL_VERSION` from `frontend/src/collab/messages.ts`, now `2`. It changes only when older peers can't handle the new messages.
+  - Protocol `2` came with the move to Trystero 0.26. Trystero 0.25 changed how actions are framed on the data channel, so a peer on protocol `1` (Trystero 0.24) and a peer on `2` can connect through the trackers but can't read each other's messages, not even `hello`. They don't sync until both reload. Each tab's update prompt notices the new `version.json` on its own, so it doesn't need the hello for that.
   - `appVersion` is the app's SemVer version, like `0.1.0`, and `commit` is the short commit SHA of the build (or `dev`).
 - Each peer compares the hello with its own build: `same-build`, `different-build` (same protocol, another version or commit), or `incompatible-protocol`.
   - It logs anything but `same-build` to the console. `incompatible-protocol` is a warning that says to reload.
@@ -87,9 +88,10 @@ Message validation and limits
   - `{ kind: 'hello', protocol, appVersion, commit? }`: `protocol` is a whole number from 1 to 1,000,000. `appVersion` is 1 to 64 letters, digits, dots, pluses, or dashes. `commit` is 7 to 40 lowercase hex characters, or `dev`.
   - Anything else, or anything with the wrong types, is dropped. Fields we don't know about are stripped.
 - File chunks on the `file-chunk` action:
-  - The data is binary and at most 256 KB per chunk.
+  - The data is binary and at most 256 KB per chunk. Trystero 0.26 hands it over as a `Uint8Array`; `parseChunk` also takes an `ArrayBuffer`.
   - `size` is at most 10 MB, `total` is between 1 and `size` (or 1 for an empty file), and `index` is below `total`.
   - The receiver stops a transfer and asks again once the chunks add up to more than `size`.
+- Trystero 0.26 also caps each received action payload at 256 MiB (its default `maxReceiveBytes`) and refuses bigger transfers before they start. Our own limits above are far below that, so it never comes into play.
 - At most 4 files come in at once. The rest wait in a queue and start as slots free up.
 - At most 4 file requests are served at once, and a repeat request from the same peer for a file already going out is ignored. The peer asks again later.
 - Host-only messages:
@@ -118,7 +120,8 @@ GitHub renders them, and so does MkDocs if this page is ever published.
 
 ### Bootstrap
 
-The transport is trystero over WebTorrent trackers (`VITE_P2P_RENDEZVOUS`, or the defaults in `bootstrapConfig.ts`).
+The transport is trystero 0.26 over WebTorrent trackers (`VITE_P2P_RENDEZVOUS`, or the defaults in `bootstrapConfig.ts`).
+`P2pTransport` uses two actions, `doc-msg` (JSON) and `file-chunk` (binary). In 0.25 and later, `room.makeAction(name, { onMessage })` returns `{ send, onMessage }`, `send(data, { target, metadata })` returns a promise, `onPeerJoin`/`onPeerLeave` are properties you set, and `leave()` returns a promise. `room` is typed with trystero's `Room`, so a future change to that API fails `tsc`.
 The trackers only carry WebRTC offers and answers for the room topic.
 Document data starts after the data channel is open.
 

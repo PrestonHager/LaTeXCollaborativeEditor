@@ -55,7 +55,8 @@ Local development
 Runtime architecture (summary)
 - There is no custom signaling server in this repository.
 - Peers discover each other via configured public rendezvous endpoints.
-- Signaling uses Trystero's torrent strategy (`@trystero-p2p/torrent`), so the rendezvous endpoints are WebTorrent trackers, not Nostr relays.
+- Signaling uses Trystero's torrent strategy (`@trystero-p2p/torrent`, 0.26), so the rendezvous endpoints are WebTorrent trackers, not Nostr relays.
+- Trystero's wire format changed in 0.25, so a deploy that moves between Trystero 0.24 and 0.26 (P2P protocol 1 to 2) splits open sessions: tabs on the old build and on the new one find each other but can't sync. The update prompt polls `version.json` and asks open tabs to reload, and once everyone has reloaded they sync again. Mention it in the changelog for any Trystero bump that changes the wire format.
 - `VITE_P2P_RENDEZVOUS` is the full tracker list, and Trystero only connects to those.
   If it's unset, the app uses `wss://tracker.webtorrent.dev`, `wss://tracker.openwebtorrent.com`, and `wss://tracker.files.fm:7073/announce`.
 - Public trackers come and go. If the console shows `torrent tracker failure` for one, drop it from the list.

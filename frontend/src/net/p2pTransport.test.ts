@@ -2,18 +2,34 @@ import { joinRoom } from '@trystero-p2p/torrent';
 import { P2pTransport, connectionLabel, usesRelay } from './p2pTransport';
 import type { BootstrapConfig } from './bootstrapConfig';
 
-const makeAction = vi.fn();
-const onPeerJoin = vi.fn();
-const onPeerLeave = vi.fn();
-const leave = vi.fn();
+type Handler = ((data: unknown, context: { peerId: string; metadata?: unknown }) => void) | undefined;
+
+// A stand-in for a trystero 0.26 room: makeAction returns { send, onMessage }, peer events are
+// settable properties, and send and leave return promises.
+function fakeRoom(peers: Record<string, unknown> = {}) {
+  const actions: Record<string, { send: ReturnType<typeof vi.fn>; onMessage: Handler }> = {};
+  const room = {
+    makeAction: vi.fn((name: string, config?: { onMessage?: Handler }) => {
+      actions[name] = { send: vi.fn(() => Promise.resolve()), onMessage: config?.onMessage };
+      return actions[name];
+    }),
+    onPeerJoin: null as ((peerId: string) => void) | null,
+    onPeerLeave: null as ((peerId: string) => void) | null,
+    getPeers: () => peers,
+    leave: vi.fn(() => Promise.resolve()),
+  };
+  return {
+    room,
+    actions,
+    join: (peerId: string) => room.onPeerJoin?.(peerId),
+    leave: (peerId: string) => room.onPeerLeave?.(peerId),
+  };
+}
+
+let current = fakeRoom();
 
 vi.mock('@trystero-p2p/torrent', () => ({
-  joinRoom: vi.fn(() => ({
-    makeAction,
-    onPeerJoin,
-    onPeerLeave,
-    leave,
-  })),
+  joinRoom: vi.fn(() => current.room),
 }));
 
 describe('P2pTransport', () => {
@@ -23,37 +39,31 @@ describe('P2pTransport', () => {
     rendezvous: ['wss://tracker.example'],
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
   };
+  const callbacks = () => ({ onMessage: vi.fn(), onState: vi.fn(), onPeerCount: vi.fn(), onPeerJoin: vi.fn() });
 
   beforeEach(() => {
-    // The file-chunk action gets made after doc-msg, so give it a harmless default.
-    makeAction.mockReturnValue([vi.fn(), vi.fn()]);
+    current = fakeRoom();
   });
 
   it('sends and receives binary file chunks on their own action', () => {
-    let binaryReceiver: ((data: ArrayBuffer, peerId: string, metadata: unknown) => void) | undefined;
-    const sendBinary = vi.fn();
-    makeAction.mockImplementation((name: string) =>
-      name === 'file-chunk'
-        ? [sendBinary, (cb: typeof binaryReceiver) => (binaryReceiver = cb)]
-        : [vi.fn(), vi.fn()],
-    );
     const onBinary = vi.fn();
-    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState: vi.fn(), onPeerCount: vi.fn(), onPeerJoin: vi.fn(), onBinary });
+    const transport = new P2pTransport(bootstrap, { ...callbacks(), onBinary });
     // Nothing to send on before joining.
     transport.sendBinary(new Uint8Array([1]), 'peer-1', { hash: 'h' });
     transport.join('room-b');
     const chunk = new Uint8Array([1, 2]);
     transport.sendBinary(chunk, 'peer-1', { hash: 'h' });
-    binaryReceiver?.(chunk.buffer, 'peer-1', { hash: 'h' });
+    // Trystero 0.26 delivers binary as a Uint8Array.
+    current.actions['file-chunk'].onMessage?.(chunk, { peerId: 'peer-1', metadata: { hash: 'h' } });
 
+    const sendBinary = current.actions['file-chunk'].send;
     expect(sendBinary).toHaveBeenCalledTimes(1);
-    expect(sendBinary).toHaveBeenCalledWith(chunk, 'peer-1', { hash: 'h' });
-    expect(onBinary).toHaveBeenCalledWith(chunk.buffer, 'peer-1', { hash: 'h' });
-    makeAction.mockReset();
+    expect(sendBinary).toHaveBeenCalledWith(chunk, { target: 'peer-1', metadata: { hash: 'h' } });
+    expect(onBinary).toHaveBeenCalledWith(chunk, 'peer-1', { hash: 'h' });
   });
 
   it('passes the rendezvous list to trystero as relayConfig urls', () => {
-    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState: vi.fn(), onPeerCount: vi.fn(), onPeerJoin: vi.fn() });
+    const transport = new P2pTransport(bootstrap, callbacks());
     transport.join('room-relays');
 
     expect(joinRoom).toHaveBeenLastCalledWith(
@@ -67,262 +77,170 @@ describe('P2pTransport', () => {
   });
 
   it('joins room, receives, and sends payloads', () => {
-    let receiver: ((value: unknown, peerId?: string) => void) | undefined;
-    let peerJoinHandler: ((peerId: string) => void) | undefined;
-    const send = vi.fn();
-    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
-      peerJoinHandler = cb;
-    });
-    makeAction.mockReturnValueOnce([
-      send,
-      (cb: (value: unknown, peerId?: string) => void) => {
-        receiver = cb;
-      },
-    ]);
-
-    const onMessage = vi.fn();
-    const onPeerJoinEvent = vi.fn();
-    const onState = vi.fn();
-    const transport = new P2pTransport(bootstrap, {
-      onMessage,
-      onState,
-      onPeerCount: vi.fn(),
-      onPeerJoin: onPeerJoinEvent,
-    });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-a');
-    receiver?.('hello', 'peer-1');
-    peerJoinHandler?.('peer-2');
+    current.actions['doc-msg'].onMessage?.('hello', { peerId: 'peer-1' });
+    current.join('peer-2');
     transport.send('outbound');
 
-    expect(onMessage).toHaveBeenCalledWith('hello', 'peer-1');
-    expect(onPeerJoinEvent).toHaveBeenCalledWith('peer-2');
-    expect(send).toHaveBeenCalledWith('outbound');
-    expect(onState).toHaveBeenCalledWith('Waiting for peers');
-    expect(onState).toHaveBeenCalledWith('Connected');
+    expect(cb.onMessage).toHaveBeenCalledWith('hello', 'peer-1');
+    expect(cb.onPeerJoin).toHaveBeenCalledWith('peer-2');
+    // A broadcast has no options, so trystero sends it to everyone.
+    expect(current.actions['doc-msg'].send).toHaveBeenCalledWith('outbound', undefined);
+    expect(cb.onState).toHaveBeenCalledWith('Waiting for peers');
+    expect(cb.onState).toHaveBeenCalledWith('Connected');
+  });
+
+  it('uses the trystero 0.25+ room API: action objects and settable peer handlers', () => {
+    const transport = new P2pTransport(bootstrap, callbacks());
+    transport.join('room-api');
+    expect(current.room.makeAction).toHaveBeenCalledWith('doc-msg', { onMessage: expect.any(Function) });
+    expect(current.room.makeAction).toHaveBeenCalledWith('file-chunk', { onMessage: expect.any(Function) });
+    expect(current.room.onPeerJoin).toEqual(expect.any(Function));
+    expect(current.room.onPeerLeave).toEqual(expect.any(Function));
+  });
+
+  it('swallows send failures, which happen when a peer leaves mid-send', async () => {
+    const transport = new P2pTransport(bootstrap, callbacks());
+    transport.join('room-reject');
+    current.actions['doc-msg'].send.mockReturnValue(Promise.reject(new Error('peer disconnected')));
+    current.actions['file-chunk'].send.mockReturnValue(Promise.reject(new Error('peer disconnected')));
+    current.room.leave.mockReturnValue(Promise.reject(new Error('already left')));
+    transport.send({ kind: 'x' });
+    transport.sendBinary(new Uint8Array([1]), 'peer-1', null);
+    transport.disconnect();
+    // An unhandled rejection would fail the run.
+    await flush();
   });
 
   it('transitions host from waiting to connected when first peer joins', () => {
-    let peerJoinHandler: ((peerId: string) => void) | undefined;
-    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
-      peerJoinHandler = cb;
-    });
-    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
-    const onState = vi.fn();
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState,
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
 
     transport.join('room-host');
-    expect(onState).toHaveBeenCalledWith('Waiting for peers');
-    peerJoinHandler?.('peer-new-client');
+    expect(cb.onState).toHaveBeenCalledWith('Waiting for peers');
+    current.join('peer-new-client');
 
-    expect(onState).toHaveBeenCalledWith('Connected');
+    expect(cb.onState).toHaveBeenCalledWith('Connected');
   });
 
   it('keeps waiting for peers when nobody joins', () => {
     vi.useFakeTimers();
-    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
-    const onState = vi.fn();
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState,
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-b');
     vi.advanceTimersByTime(60_000);
 
-    expect(onState).toHaveBeenCalledTimes(1);
-    expect(onState).toHaveBeenLastCalledWith('Waiting for peers');
+    expect(cb.onState).toHaveBeenCalledTimes(1);
+    expect(cb.onState).toHaveBeenLastCalledWith('Waiting for peers');
     vi.useRealTimers();
   });
 
   it('counts peers and emits Reconnecting when the last one leaves', () => {
-    let leaveHandler: ((peerId: string) => void) | undefined;
-    let joinHandler: ((peerId: string) => void) | undefined;
-    onPeerLeave.mockImplementation((cb: (peerId: string) => void) => {
-      leaveHandler = cb;
-    });
-    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
-      joinHandler = cb;
-    });
-    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
-    const onState = vi.fn();
-    const onPeerCount = vi.fn();
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState,
-      onPeerCount,
-      onPeerJoin: vi.fn(),
-    });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-leave');
-    joinHandler?.('peer-a');
-    joinHandler?.('peer-b');
+    current.join('peer-a');
+    current.join('peer-b');
     expect(transport.getPeerCount()).toBe(2);
-    expect(onPeerCount).toHaveBeenLastCalledWith(2);
+    expect(cb.onPeerCount).toHaveBeenLastCalledWith(2);
 
     // One peer left, so we're still connected to the other.
-    leaveHandler?.('peer-a');
-    expect(onPeerCount).toHaveBeenLastCalledWith(1);
-    expect(onState).toHaveBeenLastCalledWith('Connected');
+    current.leave('peer-a');
+    expect(cb.onPeerCount).toHaveBeenLastCalledWith(1);
+    expect(cb.onState).toHaveBeenLastCalledWith('Connected');
 
-    leaveHandler?.('peer-b');
+    current.leave('peer-b');
     expect(transport.getPeerCount()).toBe(0);
-    expect(onState).toHaveBeenLastCalledWith('Reconnecting');
+    expect(cb.onState).toHaveBeenLastCalledWith('Reconnecting');
   });
 
   it('emits Not sharing and a zero count on disconnect', () => {
-    makeAction.mockReturnValue([vi.fn(), vi.fn()]);
-    const onState = vi.fn();
-    const onPeerCount = vi.fn();
-    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState, onPeerCount, onPeerJoin: vi.fn() });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-off');
     transport.disconnect();
-    expect(onState).toHaveBeenLastCalledWith('Not sharing');
-    expect(onPeerCount).toHaveBeenLastCalledWith(0);
+    expect(cb.onState).toHaveBeenLastCalledWith('Not sharing');
+    expect(cb.onPeerCount).toHaveBeenLastCalledWith(0);
   });
 
   it('shows Relayed only when the peer goes through TURN', async () => {
-    let joinHandler: ((peerId: string) => void) | undefined;
-    let leaveHandler: ((peerId: string) => void) | undefined;
-    const peers: Record<string, unknown> = {
+    current = fakeRoom({
       direct: fakeConnection('host'),
       turn: fakeConnection('relay'),
       broken: { getStats: () => Promise.reject(new Error('closed')) },
-    };
-    vi.mocked(joinRoom).mockReturnValueOnce({
-      makeAction: () => [vi.fn(), vi.fn()],
-      onPeerJoin: (cb: (peerId: string) => void) => (joinHandler = cb),
-      onPeerLeave: (cb: (peerId: string) => void) => (leaveHandler = cb),
-      getPeers: () => peers,
-      leave,
-    } as any);
-    const onState = vi.fn();
-    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState, onPeerCount: vi.fn(), onPeerJoin: vi.fn() });
+    });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-relay');
 
     // A direct peer and one whose stats fail both stay Connected.
-    joinHandler?.('direct');
-    joinHandler?.('broken');
-    joinHandler?.('missing');
+    current.join('direct');
+    current.join('broken');
+    current.join('missing');
     await flush();
-    expect(onState).not.toHaveBeenCalledWith('Relayed');
+    expect(cb.onState).not.toHaveBeenCalledWith('Relayed');
 
-    joinHandler?.('turn');
-    await vi.waitFor(() => expect(onState).toHaveBeenLastCalledWith('Relayed'));
+    current.join('turn');
+    await vi.waitFor(() => expect(cb.onState).toHaveBeenLastCalledWith('Relayed'));
 
     // Once the relayed peer leaves, we're back to a direct connection.
-    leaveHandler?.('turn');
-    expect(onState).toHaveBeenLastCalledWith('Connected');
+    current.leave('turn');
+    expect(cb.onState).toHaveBeenLastCalledWith('Connected');
   });
 
   it('ignores relay results for a peer that already left', async () => {
-    let joinHandler: ((peerId: string) => void) | undefined;
-    let leaveHandler: ((peerId: string) => void) | undefined;
-    vi.mocked(joinRoom).mockReturnValueOnce({
-      makeAction: () => [vi.fn(), vi.fn()],
-      onPeerJoin: (cb: (peerId: string) => void) => (joinHandler = cb),
-      onPeerLeave: (cb: (peerId: string) => void) => (leaveHandler = cb),
-      getPeers: () => ({ turn: fakeConnection('relay') }),
-      leave,
-    } as any);
-    const onState = vi.fn();
-    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState, onPeerCount: vi.fn(), onPeerJoin: vi.fn() });
+    current = fakeRoom({ turn: fakeConnection('relay') });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-gone');
-    joinHandler?.('turn');
-    leaveHandler?.('turn');
+    current.join('turn');
+    current.leave('turn');
     await flush();
-    expect(onState).not.toHaveBeenCalledWith('Relayed');
+    expect(cb.onState).not.toHaveBeenCalledWith('Relayed');
   });
 
-  it('send forwards peer id when provided', () => {
-    const send = vi.fn();
-    makeAction.mockReturnValueOnce([
-      send,
-      (_cb: (value: unknown, peerId?: string) => void) => {},
-    ]);
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState: vi.fn(),
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
+  it('send forwards peer id as the target when provided', () => {
+    const transport = new P2pTransport(bootstrap, callbacks());
     transport.join('room-target');
     transport.send({ a: 1 }, 'peer-z');
-    expect(send).toHaveBeenCalledWith({ a: 1 }, 'peer-z');
+    expect(current.actions['doc-msg'].send).toHaveBeenCalledWith({ a: 1 }, { target: 'peer-z' });
   });
 
   it('does not emit Relayed after a direct peer connects', () => {
     vi.useFakeTimers();
-    let peerJoinHandler: ((peerId: string) => void) | undefined;
-    onPeerJoin.mockImplementation((cb: (peerId: string) => void) => {
-      peerJoinHandler = cb;
-    });
-    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
-    const onState = vi.fn();
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState,
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
+    const cb = callbacks();
+    const transport = new P2pTransport(bootstrap, cb);
     transport.join('room-timers-skip');
-    peerJoinHandler?.('peer-early');
+    current.join('peer-early');
     vi.advanceTimersByTime(10_000);
     vi.advanceTimersByTime(10_000);
-    expect(onState).not.toHaveBeenCalledWith('Relayed');
+    expect(cb.onState).not.toHaveBeenCalledWith('Relayed');
     vi.useRealTimers();
   });
 
   it('send is a no-op before join', () => {
     const joinCalls = vi.mocked(joinRoom).mock.calls.length;
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState: vi.fn(),
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
+    const transport = new P2pTransport(bootstrap, callbacks());
     transport.send('early');
     expect(vi.mocked(joinRoom).mock.calls.length).toBe(joinCalls);
   });
 
-  it('disconnect skips leave when room has no leave handler', () => {
-    vi.mocked(joinRoom).mockReturnValueOnce({
-      makeAction: () => [vi.fn(), vi.fn()],
-      onPeerJoin: vi.fn(),
-      onPeerLeave: vi.fn(),
-    } as any);
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState: vi.fn(),
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
-    transport.join('room-no-leave');
-    // Earlier tests leave rooms too, so only count calls from here.
-    leave.mockClear();
+  it('disconnect before join does not try to leave a room', () => {
+    const transport = new P2pTransport(bootstrap, callbacks());
     transport.disconnect();
-    expect(leave).not.toHaveBeenCalled();
+    expect(current.room.leave).not.toHaveBeenCalled();
   });
 
-  it('disconnect clears timers and leaves the room', () => {
-    vi.useFakeTimers();
-    makeAction.mockReturnValueOnce([vi.fn(), vi.fn()]);
-    const transport = new P2pTransport(bootstrap, {
-      onMessage: vi.fn(),
-      onState: vi.fn(),
-      onPeerCount: vi.fn(),
-      onPeerJoin: vi.fn(),
-    });
+  it('disconnect leaves the room and drops later sends', () => {
+    const transport = new P2pTransport(bootstrap, callbacks());
     transport.join('room-disc');
     transport.disconnect();
-    expect(leave).toHaveBeenCalled();
+    expect(current.room.leave).toHaveBeenCalled();
     // Sends after leaving the room go nowhere.
-    expect(() => transport.send({ kind: 'late' })).not.toThrow();
-    vi.useRealTimers();
+    transport.send({ kind: 'late' });
+    expect(current.actions['doc-msg'].send).not.toHaveBeenCalled();
   });
 });
 

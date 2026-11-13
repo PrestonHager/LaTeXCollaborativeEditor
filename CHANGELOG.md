@@ -10,6 +10,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 - **Update prompt.** When a new version is deployed, a small card offers to reload. It saves your changes first, and won't reload if the save fails. It also shows when a collaborator is on a newer, incompatible version.
 
+### Changed
+
+- **Breaking for open shared sessions:** the peer-to-peer library (Trystero) moved to 0.26, which changes how peers talk to each other. Tabs on the old build and tabs on this build can't sync with each other, so everyone in a session needs to reload. Open tabs see the update prompt and can reload from there. The P2P protocol version is now 2.
+
 ### Fixed
 
 - The "Leave site?" box no longer shows just because you typed in the last 4 seconds. Edits are written to this browser as you leave, and the box only shows when something could really be lost.

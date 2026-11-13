@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { SessionController, comparePeerBuild } from './session';
+import { PROTOCOL_VERSION } from './messages';
 import * as Y from 'yjs';
 import { BlobStore } from '../project/blobStore';
 
@@ -561,7 +562,7 @@ describe('SessionController', () => {
         if (isHost) controller.ensureRoom();
         else controller.join('room');
         callbacks?.onPeerJoin('peer-1');
-        expect(sendMessage).toHaveBeenCalledWith({ kind: 'hello', protocol: 1, appVersion: '0.1.0', commit: 'abc1234' }, 'peer-1');
+        expect(sendMessage).toHaveBeenCalledWith({ kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'abc1234' }, 'peer-1');
       }
     });
 
@@ -569,8 +570,8 @@ describe('SessionController', () => {
       const info = vi.spyOn(console, 'info').mockImplementation(() => {});
       const onPeerVersion = vi.fn();
       const controller = new SessionController({ isHost: true, onConnectionState: vi.fn(), blobs: new BlobStore(), build, onPeerVersion });
-      callbacks?.onMessage({ kind: 'hello', protocol: 1, appVersion: '0.1.0', commit: 'abc1234' }, 'peer-1');
-      const expected = { peerId: 'peer-1', protocol: 1, appVersion: '0.1.0', commit: 'abc1234', compatibility: 'same-build' };
+      callbacks?.onMessage({ kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'abc1234' }, 'peer-1');
+      const expected = { peerId: 'peer-1', protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'abc1234', compatibility: 'same-build' };
       expect(onPeerVersion).toHaveBeenCalledWith(expected);
       expect(controller.getPeerVersions()).toEqual([expected]);
       expect(info).not.toHaveBeenCalled();
@@ -583,9 +584,9 @@ describe('SessionController', () => {
       const onPeerVersion = vi.fn();
       const controller = new SessionController({ isHost: true, onConnectionState: vi.fn(), blobs: new BlobStore(), build, onPeerVersion });
       controller.ensureRoom();
-      callbacks?.onMessage({ kind: 'hello', protocol: 1, appVersion: '0.2.0', commit: 'def5678' }, 'peer-1');
+      callbacks?.onMessage({ kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: '0.2.0', commit: 'def5678' }, 'peer-1');
       expect(info).toHaveBeenCalledWith(expect.stringContaining('0.2.0+def5678'));
-      callbacks?.onMessage({ kind: 'hello', protocol: 2, appVersion: '1.0.0' }, 'peer-2');
+      callbacks?.onMessage({ kind: 'hello', protocol: PROTOCOL_VERSION + 1, appVersion: '1.0.0' }, 'peer-2');
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('Reload to update'));
       expect(controller.getPeerVersions().map((peer) => peer.compatibility)).toEqual(['different-build', 'incompatible-protocol']);
 
@@ -603,7 +604,7 @@ describe('SessionController', () => {
     it('ignores a hello with no peer id', () => {
       const onPeerVersion = vi.fn();
       const controller = new SessionController({ isHost: true, onConnectionState: vi.fn(), blobs: new BlobStore(), build, onPeerVersion });
-      callbacks?.onMessage({ kind: 'hello', protocol: 1, appVersion: '0.1.0' });
+      callbacks?.onMessage({ kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: '0.1.0' });
       expect(onPeerVersion).not.toHaveBeenCalled();
       expect(controller.getPeerVersions()).toEqual([]);
     });
@@ -626,7 +627,7 @@ describe('SessionController', () => {
       new SessionController({ isHost: true, onConnectionState: vi.fn(), blobs: new BlobStore() });
       callbacks?.onPeerJoin('peer-1');
       // Tests run without the Vite define, so the bundled build is "dev".
-      expect(sendMessage).toHaveBeenCalledWith({ kind: 'hello', protocol: 1, appVersion: 'dev', commit: 'dev' }, 'peer-1');
+      expect(sendMessage).toHaveBeenCalledWith({ kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: 'dev', commit: 'dev' }, 'peer-1');
     });
   });
 });
@@ -635,13 +636,13 @@ describe('comparePeerBuild', () => {
   const local = { version: '0.1.0', commit: 'abc1234' };
 
   it('sorts peers into same build, different build and incompatible protocol', () => {
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.1.0', commit: 'abc1234' }, local)).toBe('same-build');
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.1.0' }, local)).toBe('same-build');
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.1.0', commit: 'dev' }, local)).toBe('same-build');
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.1.0', commit: 'def5678' }, { version: '0.1.0', commit: 'dev' })).toBe('same-build');
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.1.0', commit: 'def5678' }, local)).toBe('different-build');
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.2.0', commit: 'abc1234' }, local)).toBe('different-build');
-    expect(comparePeerBuild({ protocol: 2, appVersion: '0.1.0', commit: 'abc1234' }, local)).toBe('incompatible-protocol');
-    expect(comparePeerBuild({ protocol: 1, appVersion: '0.1.0' }, local, 2)).toBe('incompatible-protocol');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'abc1234' }, local)).toBe('same-build');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.1.0' }, local)).toBe('same-build');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'dev' }, local)).toBe('same-build');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'def5678' }, { version: '0.1.0', commit: 'dev' })).toBe('same-build');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.1.0', commit: 'def5678' }, local)).toBe('different-build');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.2.0', commit: 'abc1234' }, local)).toBe('different-build');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION + 1, appVersion: '0.1.0', commit: 'abc1234' }, local)).toBe('incompatible-protocol');
+    expect(comparePeerBuild({ protocol: PROTOCOL_VERSION, appVersion: '0.1.0' }, local, PROTOCOL_VERSION + 1)).toBe('incompatible-protocol');
   });
 });

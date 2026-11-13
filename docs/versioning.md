@@ -79,7 +79,7 @@ The update check fetches it, checks it with `parseVersionInfo`, and compares it 
 
 Each peer sends a `hello` to every peer that joins: `{ kind: 'hello', protocol, appVersion, commit }` (details in `docs/protocol.md`).
 
-- `PROTOCOL_VERSION` in `frontend/src/collab/messages.ts` is the protocol version. It's `1` now.
+- `PROTOCOL_VERSION` in `frontend/src/collab/messages.ts` is the protocol version. It's `2` now. It went from `1` to `2` with Trystero 0.26, whose new action wire format older peers can't read.
 - Bump it only when an older peer would misread or break on the new messages. That's a MAJOR app bump too.
 - Don't bump it for a new optional field or a new message kind. Peers already strip fields they don't know and drop kinds they don't know, so older peers just ignore them. That's how `hello` itself went in without a bump.
 - `SessionController` compares each hello with its own build (`comparePeerBuild`): `same-build`, `different-build` or `incompatible-protocol`. It logs anything that isn't the same build, hands it to `onPeerVersion`, and lists it in `getPeerVersions()`. It never blocks a peer. Peers on builds from before `hello` don't send one, so they just don't show up.

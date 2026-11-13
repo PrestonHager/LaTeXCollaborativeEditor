@@ -130,7 +130,7 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 Use two browser windows, or a normal and a private window, so each has its own storage.
 
 - [ ] Before sharing, the connection badge says Not shared.
-- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Shared, waiting for others.
+- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
 - [ ] Opening the link in the second window joins as a guest, and both badges say Connected with 1 other person.
 - [ ] The guest gets the whole file tree, the text and the image.
 - [ ] Edits show up in the other window within a couple of seconds, both ways.
