@@ -210,6 +210,14 @@ label.settings-row { justify-content: flex-start; }
 .tour-buttons { display: inline-flex; gap: 0.25rem; margin-left: auto; }
 .tour-highlight { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--radius-sm); }
 
+/* "New version" prompt: a small card in the bottom corner, styled like the tour card but out of the way. */
+.update-prompt { position: fixed; z-index: 390; right: 0.75rem; bottom: 2.5rem; width: min(22rem, calc(100vw - 1.5rem)); padding: 0.75rem 1rem; display: grid; gap: 0.35rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
+.update-prompt[hidden] { display: none; }
+.update-prompt-text { margin: 0; font-size: 14px; font-weight: 600; }
+.update-prompt-detail { margin: 0; font-size: 13px; color: var(--muted-text); }
+.update-prompt.is-error .update-prompt-detail { color: var(--diag-text); }
+.update-prompt-buttons { display: flex; justify-content: flex-end; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.25rem; }
+
 /* Workspace: the file tree, then the editor and preview split. */
 .workspace { flex: 1; display: flex; min-height: 0; }
 .file-pane { position: relative; width: 15rem; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--panel-border); background: var(--bg); min-height: 0; }

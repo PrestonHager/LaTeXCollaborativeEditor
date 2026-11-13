@@ -114,19 +114,27 @@ describe('appSession state', () => {
       throw new DOMException('full', 'QuotaExceededError');
     });
     const ok = writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true });
-    expect(ok).toBe(false);
+    expect(ok).toBe('failed');
     spy.mockRestore();
+  });
+
+  it('keeps the pending-save flag only when it is set', () => {
+    writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true, pendingSave: true });
+    expect(readAppSessionState()?.pendingSave).toBe(true);
+    writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true });
+    expect(readAppSessionState()?.pendingSave).toBeUndefined();
   });
 
   it('round trips the host Yjs state', () => {
     const bytes = new Uint8Array([0, 1, 2, 250, 255]);
-    writeAppSessionState({
+    const result = writeAppSessionState({
       documentName: 'n',
       content: 'c',
       providerMode: 'local',
       saveNowEnabled: true,
       yjs: { docId: 'doc-1', state: encodeYjsState(bytes) },
     });
+    expect(result).toBe('full');
     const loaded = readAppSessionState();
     expect(loaded?.yjs?.docId).toBe('doc-1');
     expect(decodeYjsState(loaded!.yjs!.state)).toEqual(bytes);
@@ -155,7 +163,7 @@ describe('appSession state', () => {
       yjs: { docId: 'doc-1', state: 'AAAA' },
     });
     spy.mockRestore();
-    expect(ok).toBe(true);
+    expect(ok).toBe('text-only');
     expect(readAppSessionState()?.content).toBe('kept');
     expect(readAppSessionState()?.yjs).toBeUndefined();
   });

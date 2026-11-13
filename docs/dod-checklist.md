@@ -22,6 +22,7 @@ Checklist
 - [ ] Drive projects: a project saved to Google Drive shows up as a folder with the same file tree.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
 - [ ] Pause Saving: while paused, nothing is written by autosave or Save Now, the status says "Saving paused", leaving the page warns about unsaved edits, and resuming saves them.
+- [ ] Leave and update: closing or reloading right after typing on a project saved in the browser doesn't ask "Leave site?" and keeps the edit; unsaved Drive edits, a failed save, a held conflict or files in flight do ask. A new deploy shows the update card, and Reload to update saves first and never triggers "Leave site?".
 - [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
 - [ ] Drive save errors: a full Drive shows "Google Drive is full" right away without retries, and a Drive rate limit gets retried.
@@ -129,6 +130,6 @@ A box above is only checked when it was actually seen working.
   With the app on Dark, the same preview setting shows a white page, so the dark preview never really applies.
 
 Other things seen
-- Leaving or reloading right after typing shows a "Leave site?" dialog, which is #31.
+- Leaving or reloading right after typing shows a "Leave site?" dialog, which is #31. (Since #121 it only shows when something could be lost.)
 - Each compile with a project image asks the server for `/lcimg1` and gets a 404, before the image is swapped in as a data URL.
 - The console fills with failed Nostr relay connections, which goes with #26.

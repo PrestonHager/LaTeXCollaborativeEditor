@@ -20,7 +20,25 @@ When you're the host, the app autosaves your project.
   The setting is remembered after a reload.
 - If a save fails, it tries again a few times before showing **Save Error** in the autosave pill.
 - A file a guest uploads gets saved once its bytes reach the host.
-- If you try to close the tab before the last save is done, or while a file is waiting on the [conflict dialog](#when-a-file-changed-somewhere-else), the browser asks if you want to leave.
+- When you close or reload the tab, the app first writes the open project to this browser right away. So closing it a second after typing doesn't lose anything, and the next time you open the app it finishes the save.
+- The browser only asks "Leave site?" when something really could be lost:
+  - edits that haven't reached Google Drive yet;
+  - edits made while saving is paused;
+  - a save that failed;
+  - a file waiting on the [conflict dialog](#when-a-file-changed-somewhere-else);
+  - files still uploading or arriving from a peer;
+  - or browser storage too full to hold the project.
+
+### Updating to a new version
+
+When a new version of the app is deployed, a small card in the bottom corner says **A new version of the app is available**.
+It doesn't take focus, so you can keep typing.
+
+- **Reload to update** saves first: the pending autosave runs right away, to this browser or Google Drive, then the page reloads. While saving is paused, it skips the save and keeps your edits in this browser instead.
+- If the save fails, the page doesn't reload. The card says why and offers **Reload anyway**.
+- **Later** hides the card until the next version.
+- If you're sharing, guests are disconnected for a moment and rejoin on their own. A guest who reloads rejoins the room.
+- The card also shows when a collaborator is on a newer version that this one can't fully talk to, or when part of the app can't load because a new version replaced it.
 
 **File > Save Now** (**Ctrl+S**) saves right away.
 

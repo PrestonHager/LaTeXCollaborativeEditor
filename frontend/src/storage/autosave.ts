@@ -18,6 +18,8 @@ export class AutosaveController {
   // We count edits instead of using a dirty flag, so typing during a save isn't marked as saved.
   private revision = 0;
   private savedRevision = 0;
+  // Why the last save failed, until a save goes through again.
+  private saveError: string | null = null;
   private debounceTimer: number | undefined;
   private intervalTimer: number | undefined;
   // Saves run one at a time. Without this the debounce and interval timers could both
@@ -73,6 +75,11 @@ export class AutosaveController {
     return this.enabled && this.revision !== this.savedRevision;
   }
 
+  /** Why the last save failed, or null if it went through (or nothing has saved yet). */
+  lastSaveError(): string | null {
+    return this.saveError;
+  }
+
   /** Save right away, even while paused. Resolves to false if the save failed (the status line has the reason). */
   saveNow(): Promise<boolean> {
     return this.trySave(true);
@@ -99,11 +106,13 @@ export class AutosaveController {
     try {
       const label = await this.withBackoff(() => this.config.save());
       this.savedRevision = Math.max(this.savedRevision, revisionAtStart);
+      this.saveError = null;
       this.config.onStatus(this.revision === revisionAtStart ? (label ? `Saved to ${label}` : 'Saved') : this.paused ? PAUSED_STATUS : 'Saving pending');
       return true;
     } catch (error) {
       console.error('Save failed', error);
-      this.config.onStatus(`Save Error: ${describeError(error)}`);
+      this.saveError = describeError(error);
+      this.config.onStatus(`Save Error: ${this.saveError}`);
       return false;
     }
   }
