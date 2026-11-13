@@ -1,4 +1,4 @@
-import { joinRoom, type DataPayload, type JsonValue, type Room } from '@trystero-p2p/torrent';
+import { joinRoom, selfId, type DataPayload, type JsonValue, type Room } from '@trystero-p2p/torrent';
 import type { BootstrapConfig } from './bootstrapConfig';
 
 export type TransportState = 'Not sharing' | 'Waiting for peers' | 'Connected' | 'Relayed' | 'Reconnecting';
@@ -121,6 +121,11 @@ export class P2pTransport {
 
   getPeerCount() {
     return this.peers.size;
+  }
+
+  /** Our own peer id, the one other peers see in onPeerJoin. Trystero picks it once per page load. */
+  getSelfId(): string {
+    return selfId;
   }
 
   send(payload: unknown, peerId?: string) {

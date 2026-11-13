@@ -35,6 +35,28 @@ You join as a guest.
 - Images come from whoever has them, in 64 KB pieces, with a progress bar on the file.
 - The project name and the host's storage show up in your header.
 
+## Who's in the room
+
+While you're sharing, avatars next to **Share** show who's in the room: yours first, then everyone else's, each in their own colour.
+
+- Hover an avatar to see the person's name and the file they have open.
+- Their cursor shows in the editor as a coloured line with their name on it, and text they select is highlighted in their colour.
+- In the Files panel, a dot in their colour marks the file they have open.
+- Click someone's avatar to follow them: their file opens and the editor scrolls to their cursor.
+- With more than four other people, the rest are in a **+N** chip. Hover it for their names.
+- When someone leaves, they disappear right away. If their connection drops instead, they disappear within 30 seconds.
+
+### Your name
+
+The first time you share or join, you get an anonymous animal name, like "Curious Otter".
+Click your own avatar to change it.
+The name is kept in this browser with your other settings, so you keep it in later rooms. Resetting all settings picks a new animal name.
+
+Everyone gets a colour from a fixed set of eight. It comes from the connection's id, so everyone in the room sees the same colour for you, but it can change when you reload.
+
+Only your name, colour, which file you have open, and where your cursor is go to the room. Nothing else about you is shared.
+People on an older version of the editor still sync with you; they just don't show up in the avatars, and don't see yours.
+
 ## Connection status
 
 The connection badge in the header says who you're editing with.
@@ -53,7 +75,7 @@ If someone can't join, see [P2P connection problems](troubleshooting.md#p2p-conn
 ## What's shared and what isn't
 
 - Browsers find each other through public trackers (WebTorrent trackers by default). The trackers see the room id, but not your document.
-- After that, the document text, file changes, and images go straight between browsers.
+- After that, the document text, file changes, and images go straight between browsers. So do your display name and cursor position (see [Who's in the room](#whos-in-the-room)).
 - There's no server of ours in the middle, and nothing is stored anywhere but the browsers in the room and wherever the host saves.
 
 Treat the link like a key.

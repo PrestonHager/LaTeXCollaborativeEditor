@@ -61,6 +61,9 @@ vi.mock('../net/peerSession', () => ({
     close() {
       close();
     }
+    selfId() {
+      return Promise.resolve('self-id');
+    }
   },
 }));
 
@@ -115,6 +118,28 @@ describe('SessionController', () => {
     const error = new Error('offline');
     callbacks?.onLoadError?.(error);
     expect(onTransportLoadError).toHaveBeenCalledWith(error);
+  });
+
+  it('hands presence messages and peer joins and leaves to the presence callbacks', async () => {
+    const onPresence = vi.fn();
+    const onPeerJoin = vi.fn();
+    const onPeerLeave = vi.fn();
+    const onRemoteChange = vi.fn();
+    const controller = new SessionController({ isHost: false, onConnectionState: vi.fn(), blobs: new BlobStore(), onPresence, onPeerJoin, onPeerLeave, onRemoteChange });
+    const message = { kind: 'awareness', clock: 1, state: null, extra: 'left for presence.ts to strip' };
+    callbacks?.onMessage(message, 'peer-1');
+    expect(onPresence).toHaveBeenCalledWith(message, 'peer-1');
+    // Without a peer id there's nobody to show, so it's dropped.
+    callbacks?.onMessage(message);
+    expect(onPresence).toHaveBeenCalledTimes(1);
+    callbacks?.onPeerJoin('peer-1');
+    expect(onPeerJoin).toHaveBeenCalledWith('peer-1');
+    callbacks?.onPeerLeave?.('peer-1');
+    expect(onPeerLeave).toHaveBeenCalledWith('peer-1');
+    controller.sendPresence({ kind: 'awareness', clock: 2, state: null }, 'peer-2');
+    expect(sendMessage).toHaveBeenLastCalledWith({ kind: 'awareness', clock: 2, state: null }, 'peer-2');
+    await expect(controller.selfId()).resolves.toBe('self-id');
+    expect(onRemoteChange).not.toHaveBeenCalled();
   });
 
   it('creates and joins rooms via peer session', () => {

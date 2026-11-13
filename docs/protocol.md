@@ -41,6 +41,30 @@ Version handshake
 - The hello only has version numbers, never document content, and it goes over WebRTC like every other message, not through the trackers.
 - How the protocol version is bumped and migrated is in `docs/versioning.md`.
 
+Presence (awareness)
+- While sharing, each peer tells the room who it is and where its cursor is (issue #22), so others see avatars next to Share, a dot on the file in the tree, and a caret with a name label in the editor.
+- It's `{ kind: 'awareness', clock, state }` on the same `doc-msg` action as everything else. `state` is `{ name, color, file, cursor }`, or `null` when the peer stops sharing or closes the tab.
+  - `name` is the display name from Settings (an anonymous animal name like "Curious Otter" until the person changes it).
+  - `color` is one of eight fixed colours. Each peer picks it from a hash of its own Trystero peer id, which is the id everyone else sees, so all screens agree.
+  - `file` is the id of the file the peer has open (not its path), or `null`.
+  - `cursor` is `{ anchor, head }`, two Yjs relative positions as JSON (`{ tname, item?, assoc? }`), so the cursor stays on the same character while others type.
+  - `clock` goes up with every message. A receiver ignores a clock that isn't newer than the last one from that peer.
+- Nothing else is shared: no email, account, storage or browser details.
+- Sending:
+  - At most one message every 100 ms. Changes in between are folded into the next one.
+  - A heartbeat every 15 s, even when nothing changed, and one straight to each peer that joins.
+  - `state: null` on `pagehide`.
+  - Never more than 1 KB as JSON. Every field has a cap, so a valid message is well under it.
+- Receiving:
+  - Each peer gets a token bucket of 30 messages, refilled at 15 a second. Messages over that are dropped.
+  - A peer's presence is cleared when Trystero reports it left, when it sends `state: null`, or after 30 s with no message (the same timeout as y-protocols' awareness).
+- `frontend/src/collab/awareness.ts` is a small stand-in for y-protocols' `Awareness`: the local state, the remote states and a `change` event, which is all y-codemirror.next's `yRemoteSelections` needs. It's lighter than adding `y-protocols`, and its messages are JSON we can check field by field instead of a binary update with JSON inside.
+- The sending, checks and the avatar row (`collab/presence.ts`, `ui/presenceBar.ts`) load with sharing, not in the initial bundle.
+- Compatibility, and why `PROTOCOL_VERSION` stays `2`:
+  - Builds from before presence drop `awareness` as an unknown kind on `doc-msg`, like they dropped `hello` (see "Version handshake"), and keep syncing. This build doesn't need presence from anyone either: a peer that never sends it just isn't in the avatars.
+  - So older peers can handle it, and per `docs/versioning.md` that's not a bump.
+  - It deliberately doesn't use a new Trystero action. Trystero 0.26 doesn't drop data for an action name it has no handler for: it queues it, in case a handler is registered later, for up to 2 minutes and 64 messages per peer. With a presence stream on a new action, an old peer's queue would fill in seconds, and Trystero would then refuse that peer's large transfers on every action ("too many pending transfers"), snapshots included. Unknown kinds on `doc-msg` are delivered and dropped by our own check instead.
+
 Document payload channel
 - Document updates are exchanged peer-to-peer as action payloads.
 - Rendezvous metadata does not carry document bodies.
@@ -87,6 +111,14 @@ Message validation and limits
   - `{ kind: 'sync-request' }`: no other fields.
   - `{ kind: 'file-request', hash }`: `hash` is 1 to 128 letters, digits, or dashes.
   - `{ kind: 'hello', protocol, appVersion, commit? }`: `protocol` is a whole number from 1 to 1,000,000. `appVersion` is 1 to 64 letters, digits, dots, pluses, or dashes. `commit` is 7 to 40 lowercase hex characters, or `dev`.
+  - `{ kind: 'awareness', clock, state }`, checked in `frontend/src/collab/presence.ts` (`parseAwarenessMessage`) after the rate limit above:
+    - `clock` is a whole number, 0 or more. `state` is `null` or an object with exactly these fields:
+    - `name`: 1 to 40 characters, already trimmed, single-spaced, with no control characters, line separators or bidi overrides (the same cleaning as the setting, `cleanDisplayName`).
+    - `color`: exactly one of the eight palette colours, lowercase `#rrggbb`. It goes into a `style` attribute, so nothing else is accepted.
+    - `file`: `null`, or 1 to 64 letters, digits or dashes.
+    - `cursor`: `null`, or `{ anchor, head }` when `file` is set. Each position has `tname`, which must be the open file's Y.Text name (`file:<file>`, or `doc` for a project from before multi-file), an optional `item` `{ client, clock }` (client 0 to 2^32 - 1, clock a safe whole number), and an optional `assoc` of -1, 0 or 1. A position with a nested type id (`type`) is dropped.
+    - Before a cursor is used, the receiver checks that its doc already has a root type named `tname`, since resolving a position with an unknown name would create one. If not, the peer is shown without a cursor.
+    - The name is only ever set as text (never HTML), in the avatar, the tooltip, the file tree label and the editor's name label.
   - Anything else, or anything with the wrong types, is dropped. Fields we don't know about are stripped.
 - File chunks on the `file-chunk` action:
   - The data is binary and at most 256 KB per chunk. Trystero 0.26 hands it over as a `Uint8Array`; `parseChunk` also takes an `ArrayBuffer`.
@@ -112,7 +144,7 @@ LaTeX preview channel
 - The preview reads the whole project, starting at the main file. `\input` and `\include` files are inlined, `\includegraphics` images go in as data URLs, and `\bibliography` gets a simple numbered reference list built from the .bib files.
 - PDF and EPS figures can't be shown by LaTeX.js, so the preview puts a note in their place.
 - Assets (CSS/fonts/scripts) may be loaded from public CDNs; document LaTeX content is never sent to a server for preview.
-- User settings (themes, layout, keybinds, see `frontend/src/state/settings.ts`) are never part of any peer message. A room only shares the project; each person, host or guest, keeps their own settings in their browser.
+- User settings (themes, layout, keybinds, see `frontend/src/state/settings.ts`) are never part of any peer message, with one exception: the display name goes out in presence messages while you share. A room otherwise only shares the project; each person, host or guest, keeps their own settings in their browser.
 
 ## Sequence diagrams
 
@@ -151,6 +183,8 @@ sequenceDiagram
     H->>G: doc-msg {kind: hello, protocol, appVersion, commit}
     G->>H: doc-msg {kind: hello, protocol, appVersion, commit}
     Note over H,G: Each side compares the other's build with its own.<br/>A mismatch is logged, never blocked.
+    H->>G: doc-msg {kind: awareness, clock, state} (and every 15 s, and on cursor moves, at most every 100 ms)
+    G->>H: doc-msg {kind: awareness, clock, state}
     opt the last peer leaves
         Note over H,G: Badge: Reconnecting.<br/>Rejoin with backoff 1, 2, 4 ... 20 s.
     end

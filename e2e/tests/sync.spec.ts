@@ -29,8 +29,15 @@ test('host and guest sync files and edits both ways', async ({ browser, guestBro
   const hostContext = await browser.newContext();
   const guestContext = await guestBrowser.newContext();
   // Both are first visits, so mark the first-run tour as seen, or it would sit on top of the app.
-  for (const context of [hostContext, guestContext]) {
-    await context.addInitScript(() => localStorage.setItem('latex-editor.tour-seen', '1'));
+  // Each also gets a display name, which is what peers see in the presence avatars (issue #22).
+  const names = new Map([
+    [hostContext, 'Host Person'],
+    [guestContext, 'Guest Person'],
+  ]);
+  for (const [context, displayName] of names) {
+    await context.addInitScript((name) => {
+      localStorage.setItem('latex-editor.settings', JSON.stringify({ version: 1, values: { tourSeen: true, displayName: name }, updatedAt: {} }));
+    }, displayName);
   }
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
@@ -66,11 +73,19 @@ test('host and guest sync files and edits both ways', async ({ browser, guestBro
     await expect(fileRow(guest, 'main.tex')).toBeVisible();
     await expect(fileRow(guest, 'pixel.png')).toBeVisible();
 
+    // Each side sees the other in the avatars next to Share, and a dot on the file they have open.
+    // The tooltip says who and where. This only needs presence messages, not editor focus.
+    await expect(guest.locator('#presence-bar .presence-avatar:not(.is-self)')).toHaveAttribute('data-tooltip', 'Host Person · in main.tex');
+    await expect(host.locator('#presence-bar .presence-avatar:not(.is-self)')).toHaveAttribute('data-tooltip', /^Guest Person · /);
+    await expect(fileRow(guest, 'main.tex').locator('.file-row-peers')).toHaveAttribute('aria-label', 'Open by Host Person');
+
     // Check that an edit on the host reaches the guest.
     await fileRow(guest, 'main.tex').locator('.file-row-main').click();
     const hostEdit = `% host edit ${stamp}`;
     await typeAtEnd(host, hostEdit);
     await expect(editor(guest)).toContainText(hostEdit);
+    // Typing sent the host's cursor, so its caret shows in the guest's editor with the host's name.
+    await expect(editor(guest).locator('.cm-ySelectionInfo')).toHaveText('Host Person');
 
     // Check that an edit on the guest reaches the host.
     const guestEdit = `% guest edit ${stamp}`;

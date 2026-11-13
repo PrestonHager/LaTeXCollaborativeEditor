@@ -188,6 +188,14 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] With nobody connected, those three open straight away without asking.
 - [ ] With a guest connected, leaving the Upload .zip dialog open for more than 5 seconds and then clicking Choose a .zip (or Tab to it and Enter) still opens the file picker. If the browser ever blocks it, a notice says so and the next Upload .zip opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
+- [ ] Presence: after Share, an avatar with your initials shows left of Share. Hovering it says "You (name) · click to rename". The first time, the name is an animal name like "Curious Otter".
+- [ ] Presence: clicking your avatar opens **Your name in shared rooms**. A blank name is refused; a new name shows on the other window's avatar within a second.
+- [ ] Presence: each window shows the other person's avatar in their colour. Its tooltip names them and the file they have open, and the file tree has a dot in their colour on that file.
+- [ ] Presence: clicking into the editor on one side shows a caret with the name label on the other, in the same colour, and selecting text highlights it there. Moving to another file moves the dot and the caret goes away in the old file.
+- [ ] Presence: clicking the other person's avatar opens their file and scrolls to their cursor. If they have no file open, a notice says so.
+- [ ] Presence: in the light and dark themes the initials, carets and name labels are readable. With a touch screen (or dev tools' touch emulation) the avatars are 44px.
+- [ ] Presence: closing the guest window removes its avatar, dot and caret on the host right away. If the guest's network drops instead, they go within 30 seconds.
+- [ ] Presence: a guest on a build from before presence still syncs with this one (it ignores the presence messages), and just doesn't show up in the avatars.
 - [ ] With both windows on the same build, the console shows no version message. A guest on another build (say `npm run dev` with another version in `package.json`) logs which version each side runs, and still syncs.
 
 ## Network and privacy

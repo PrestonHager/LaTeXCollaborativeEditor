@@ -8,6 +8,7 @@ const transportMocks = vi.hoisted(() => ({
   sendBinary: vi.fn(),
   disconnect: vi.fn(),
   getPeerCount: vi.fn(() => 3),
+  getSelfId: vi.fn(() => 'self-1'),
 }));
 
 vi.mock('./p2pTransport', () => ({
@@ -20,6 +21,7 @@ vi.mock('./p2pTransport', () => ({
     sendBinary = transportMocks.sendBinary;
     disconnect = transportMocks.disconnect;
     getPeerCount = transportMocks.getPeerCount;
+    getSelfId = transportMocks.getSelfId;
   },
 }));
 
@@ -100,6 +102,11 @@ describe('PeerSession', () => {
     session.sendBinary(data, 'peer-1', { hash: 'h' });
     expect(transportMocks.sendBinary).toHaveBeenCalledWith(data, 'peer-1', { hash: 'h' });
     expect(session.getPeerCount()).toBe(3);
+  });
+
+  it('selfId loads the transport and returns its peer id', async () => {
+    const session = new PeerSession(bootstrap, callbacks());
+    await expect(session.selfId()).resolves.toBe('self-1');
   });
 
   it('close disconnects a loaded transport', async () => {

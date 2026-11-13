@@ -27,6 +27,10 @@ export type Metadata = { title: string; storage: string };
 /** Sent once to each peer that joins, so both sides know which build the other runs. */
 export type HelloMessage = { kind: 'hello'; protocol: number; appVersion: string; commit?: string };
 
+/**
+ * Messages on the document channel. `{ kind: 'awareness' }` (presence, issue #22) also goes on it,
+ * but SessionController hands it to collab/presence.ts, which checks it, before this parser runs.
+ */
 export type SyncMessage =
   | { kind: 'snapshot'; state: number[]; docId?: string; metadata?: Metadata }
   | { kind: 'y-update'; update: number[] }

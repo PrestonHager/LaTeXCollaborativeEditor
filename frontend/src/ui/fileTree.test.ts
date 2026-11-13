@@ -138,4 +138,20 @@ describe('file tree', () => {
     drop(t.row('figures/plot.png'), 'figures/plot.png');
     expect(t.options.onMove).toHaveBeenCalledTimes(1);
   });
+
+  it('shows a dot in each peer colour on the file they have open, with their names', () => {
+    const t = setup();
+    const viewers = new Map([
+      ['m', [{ name: 'Ada', color: '#dc2626' }, { name: 'Grace', color: '#2563eb' }, { name: 'Alan', color: '#15803d' }, { name: 'Barbara', color: '#9333ea' }]],
+    ]);
+    t.tree.render(state({ viewers }));
+    const peers = t.row('main.tex').querySelector<HTMLElement>('.file-row-peers')!;
+    expect(peers.getAttribute('aria-label')).toBe('Open by Ada, Grace, Alan, Barbara');
+    // At most three dots, so a busy file doesn't push its name out.
+    const dots = peers.querySelectorAll<HTMLElement>('.file-row-peer-dot');
+    expect(dots).toHaveLength(3);
+    expect(dots[0].style.backgroundColor).toBe('rgb(220, 38, 38)');
+    expect(t.row('chapters/intro.tex').querySelector('.file-row-peers')).toBeNull();
+    expect(t.row('chapters').querySelector('.file-row-peers')).toBeNull();
+  });
 });

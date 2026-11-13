@@ -56,6 +56,13 @@ type SessionConfig = {
   onPeerVersion?: (peer: PeerVersion) => void;
   /** The P2P code couldn't be fetched (see PeerSession). The session keeps retrying the join. */
   onTransportLoadError?: (error: unknown) => void;
+  /**
+   * A `{ kind: 'awareness' }` presence message, still unchecked: collab/presence.ts checks it. It
+   * only loads once you share, so the check isn't in the initial bundle.
+   */
+  onPresence?: (payload: unknown, peerId: string) => void;
+  onPeerJoin?: (peerId: string) => void;
+  onPeerLeave?: (peerId: string) => void;
 };
 
 export type PersistedDocState = { docId: string; state: Uint8Array };
@@ -118,6 +125,7 @@ export class SessionController {
       },
       onPeerJoin: (peerId) => {
         this.sendHello(peerId);
+        this.config.onPeerJoin?.(peerId);
         this.transfer.peerJoined(peerId);
         if (!this.config.isHost) return;
         this.session.sendMessage(this.snapshotMessage(), peerId);
@@ -133,6 +141,7 @@ export class SessionController {
       onPeerLeave: (peerId) => {
         this.transfer.peerLeft(peerId);
         this.peerVersions.delete(peerId);
+        this.config.onPeerLeave?.(peerId);
         // When the host leaves, take the next snapshot from whoever comes back as host.
         if (peerId === this.hostPeerId) this.hostPeerId = null;
       },
@@ -189,6 +198,16 @@ export class SessionController {
     if (!this.config.isHost) return;
     const message: SyncMessage = { kind: 'metadata', metadata };
     this.session.sendMessage(message);
+  }
+
+  /** Send a presence message (collab/presence.ts) to one peer, or everyone. */
+  sendPresence(message: unknown, peerId?: string) {
+    this.session.sendMessage(message, peerId);
+  }
+
+  /** Our peer id, which is what other peers know us by. Loads the transport if it hasn't yet. */
+  selfId(): Promise<string> {
+    return this.session.selfId();
   }
 
   /** What each connected peer said in its hello. Peers on older builds that don't send one are left out. */
@@ -259,6 +278,11 @@ export class SessionController {
   }
 
   private onMessage(payload: unknown, peerId?: string) {
+    // Presence has its own checks and rate limit, in collab/presence.ts.
+    if (payload && typeof payload === 'object' && (payload as { kind?: unknown }).kind === 'awareness') {
+      if (peerId) this.config.onPresence?.(payload, peerId);
+      return;
+    }
     // First check the shape and size, since anyone with the link can send us anything.
     const message = parseSyncMessage(payload);
     if (!message) {

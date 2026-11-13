@@ -1,4 +1,5 @@
 import {
+  cleanDisplayName,
   createSettingsStore,
   defaultSettings,
   LEGACY_KEYBINDS_KEY,
@@ -205,6 +206,20 @@ describe('moving old settings over', () => {
       [LEGACY_SESSION_KEY]: JSON.stringify({ editorTheme: 'purple', previewTheme: 'dark' }),
     });
     expect(readLegacySettings(junk)?.values).toEqual({ previewTheme: 'dark' });
+  });
+
+  it('cleans the display name, and lets it be cleared', () => {
+    const settings = createSettingsStore({ storage: memoryStore(), target: null });
+    expect(settings.get('displayName')).toBe('');
+    expect(settings.set('displayName', '  Ada \u202e Lovelace\n ')).toBe(true);
+    expect(settings.get('displayName')).toBe('Ada Lovelace');
+    expect(settings.set('displayName', '   ')).toBe(false);
+    expect(settings.set('displayName', 7 as never)).toBe(false);
+    expect(settings.set('displayName', '')).toBe(true);
+    expect(cleanDisplayName('x'.repeat(50))).toHaveLength(40);
+    // Characters, not UTF-16 units: an emoji counts once.
+    expect([...cleanDisplayName('😀'.repeat(50))!]).toHaveLength(40);
+    expect(cleanDisplayName(null)).toBeUndefined();
   });
 
   it('cleans up keybind rules', () => {

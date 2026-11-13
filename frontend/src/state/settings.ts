@@ -30,6 +30,11 @@ export type Settings = {
   tourSeen: boolean;
   /** Where the Export dialog saves to: the browser's Download, or Google Drive. */
   exportDestination: ExportDestinationId;
+  /**
+   * The name peers see next to your cursor when you share (issue #22). Empty until the first share,
+   * which fills in an anonymous animal name. It's the only thing about you a room gets.
+   */
+  displayName: string;
 };
 export type ExportDestinationId = 'download' | 'drive';
 export type SettingKey = keyof Settings;
@@ -42,6 +47,7 @@ export const defaultSettings = (): Settings => ({
   keybinds: { rules: [], disabled: [] },
   tourSeen: false,
   exportDestination: 'download',
+  displayName: '',
 });
 
 /** Groups that Reset can act on one at a time. */
@@ -65,7 +71,20 @@ const sanitizers: { [K in SettingKey]: (value: unknown) => Settings[K] | undefin
   keybinds: (value) => sanitizeKeybinds(value),
   tourSeen: (value) => (typeof value === 'boolean' ? value : undefined),
   exportDestination: (value) => (value === 'download' || value === 'drive' ? value : undefined),
+  displayName: (value) => (value === '' ? '' : cleanDisplayName(value)),
 };
+
+/** Longest display name, in characters. Peers drop presence messages with a longer one. */
+export const MAX_DISPLAY_NAME_LENGTH = 40;
+// Control characters, line and paragraph separators, and bidi overrides that could flip text around a name.
+const NAME_JUNK = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
+
+/** Tidy a display name: no control or bidi characters, single spaces, trimmed and capped. Undefined when nothing's left. */
+export function cleanDisplayName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const name = [...value.replace(NAME_JUNK, '').replace(/\s+/g, ' ').trim()].slice(0, MAX_DISPLAY_NAME_LENGTH).join('').trim();
+  return name || undefined;
+}
 
 /** Keep only well-formed keybind rules. Whether a command still exists is checked where it's applied. */
 export function sanitizeKeybinds(value: unknown): KeybindSettings | undefined {
