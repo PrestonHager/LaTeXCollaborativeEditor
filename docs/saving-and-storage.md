@@ -98,7 +98,11 @@ A notice says what was added. Some things are left out, and the notice says so:
 
 - A file outside this project's folder.
 - A Google Doc or Sheet. They have no file to download.
-- A file at a path the project already has. The project's copy is kept, and the next save writes it to Drive.
+
+If the project already has a file at the same path that was never saved to Drive, the app doesn't just pick one:
+
+- Same content on both sides: nothing to do, the file just counts as saved.
+- Different content: saving that file pauses and the [conflict dialog](#when-a-file-changed-somewhere-else) asks which copy to keep. **Keep mine** writes the project's copy over Drive's. **Use Drive's copy** loads Drive's copy into the project. **Save mine as a copy** keeps yours under a new name and loads Drive's.
 
 If the preview says **Not found in the project** while the project is on Drive, it adds a reminder to use **Add Files from Drive**, in case the file is in the Drive folder but not picked yet.
 

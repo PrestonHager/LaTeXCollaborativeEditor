@@ -26,7 +26,7 @@ import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker, pickProjectFiles } from './storage/providers/googlePicker';
-import { DRIVE_MISSING_HINT, addFilesFromDrive, addFromDriveNote } from './app/driveAddFiles';
+import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFilesFromDrive, addFromDriveNote } from './app/driveAddFiles';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
@@ -299,10 +299,10 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
 const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
 
 /** Hold a file that changed in storage under us, and ask the person which copy to keep. */
-function holdConflict(conflict: FileConflict) {
+function holdConflict(conflict: FileConflict, wording?: Parameters<typeof conflictDialog.ask>[2]) {
   if (conflicts.has(conflict.id)) return;
   conflicts.set(conflict.id, conflict);
-  void conflictDialog.ask(conflict.path, projectState.activeProvider.label).then((choice) => resolveConflict(conflict, choice));
+  void conflictDialog.ask(conflict.path, projectState.activeProvider.label, wording).then((choice) => resolveConflict(conflict, choice));
 }
 
 /** Act on the person's pick for a held file, then let saves pick it up again. */
@@ -793,6 +793,7 @@ const commands = createCommands({
       autosave,
       ensureDrivePickerConfig,
       ensureDriveConnected,
+      holdConflict: (conflict) => holdConflict(conflict, DRIVE_PICK_CONFLICT),
       pickFiles: (folderId) => pickProjectFiles({ accessToken: driveProvider.getAccessToken(), apiKey: driveApiKey!, appId: driveAppId, folderId }),
       setStatus,
       showNotice,

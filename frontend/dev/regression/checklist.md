@@ -103,6 +103,7 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 - [ ] Move to Drive Folder moves the project folder.
 - [ ] Add a file to the project folder on drive.google.com (also one in a new subfolder made there). File > Add Files from Drive opens the Picker in the project folder, lets you pick several, and adds them at the same paths. The next save doesn't write them back to Drive.
 - [ ] Picking a Google Doc or a file outside the project folder in Add Files from Drive says it couldn't be added.
+- [ ] Make `notes.tex` in the app (don't save) and a different `notes.tex` in the Drive folder, then pick it with Add Files from Drive. The conflict dialog asks; Keep mine writes the app's copy to Drive, and Use Drive's copy loads Drive's into the editor. Neither happens silently.
 - [ ] With the project on Drive, an `\includegraphics` of a file that isn't in the project says "Not found in the project" plus a hint to use Add Files from Drive.
 - [ ] Renaming the project renames the Drive folder on the next save, with no duplicate left behind.
 - [ ] Deleting a file in the app sends it to the Drive trash.

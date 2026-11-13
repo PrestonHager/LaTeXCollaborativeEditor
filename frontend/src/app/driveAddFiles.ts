@@ -4,6 +4,7 @@ import type { ProjectDoc } from '../project/projectDoc';
 import type { BlobStore } from '../project/blobStore';
 import { textRev, type SavedManifest } from '../storage/projectSaver';
 import { describeError } from '../storage/errors';
+import type { FileConflict } from '../storage/conflicts';
 import { isTextPath } from '../project/paths';
 
 /**
@@ -21,8 +22,11 @@ export type DriveFilesProvider = Pick<StorageProvider, 'openProject' | 'readFile
 export type MergeResult = {
   /** Paths we added to the project. */
   added: string[];
-  /** Paths the project already had a file at that storage didn't know about. We kept the project's copy. */
-  kept: string[];
+  /**
+   * Picked Drive files at a path where the project has its own file that was never saved there.
+   * These go to the conflict dialog, so a later save can't overwrite Drive's copy without asking.
+   */
+  collisions: FileConflict[];
   failed: { path: string; message: string }[];
 };
 
@@ -44,13 +48,38 @@ export async function mergeNewDriveFiles(options: {
 }): Promise<MergeResult> {
   const { provider, projectId, listing, project, blobs, manifest } = options;
   const known = new Set(Object.values(manifest?.files ?? {}).map((file) => file.path));
-  const result: MergeResult = { added: [], kept: [], failed: [] };
+  const result: MergeResult = { added: [], collisions: [], failed: [] };
   // Shallow first, so a folder is there before the files in it.
   const entries = [...listing.entries].sort((a, b) => a.path.split('/').length - b.path.split('/').length || a.path.localeCompare(b.path));
   for (const entry of entries) {
     if (known.has(entry.path)) continue;
-    if (project.findByPath(entry.path)) {
-      if (entry.kind === 'file') result.kept.push(entry.path);
+    const existing = project.findByPath(entry.path);
+    if (existing) {
+      if (entry.kind === 'folder' && existing.kind === 'folder') continue;
+      if (entry.kind === 'file' && existing.kind !== 'folder') {
+        try {
+          // Same bytes on both sides is no conflict, just note that Drive has it.
+          const data = await provider.readFile(projectId, entry.path);
+          const version = provider.fileVersion?.(projectId, entry.path);
+          const same =
+            existing.kind === 'text'
+              ? decoder.decode(data) === project.getText(existing.id).toString()
+              : existing.hash !== undefined && existing.hash === (await blobs.put(data));
+          if (same) {
+            if (manifest) {
+              const rev = existing.kind === 'text' ? textRev(decoder.decode(data)) : existing.hash!;
+              manifest.files[existing.id] = { path: entry.path, kind: existing.kind, rev, ...(version ? { version } : {}) };
+            }
+            continue;
+          }
+        } catch (error) {
+          result.failed.push({ path: entry.path, message: describeError(error) });
+          continue;
+        }
+        result.collisions.push({ id: existing.id, path: entry.path, remoteVersion: provider.fileVersion?.(projectId, entry.path) });
+      } else {
+        result.failed.push({ path: entry.path, message: 'one copy is a file and the other a folder' });
+      }
       continue;
     }
     try {
@@ -87,7 +116,9 @@ export async function mergeNewDriveFiles(options: {
 export function describeAddResult(result: MergeResult, notFound: string[]): { message: string; isError: boolean } {
   const parts: string[] = [];
   parts.push(result.added.length ? `Added ${result.added.length} file(s) from Drive: ${result.added.join(', ')}.` : 'No new files to add from Drive.');
-  if (result.kept.length) parts.push(`Kept the project's own copy of ${result.kept.join(', ')}.`);
+  if (result.collisions.length) {
+    parts.push(`The project already has ${result.collisions.map((item) => item.path).join(', ')}, so saving those is paused until you pick which copy to keep.`);
+  }
   if (notFound.length) {
     parts.push(`Could not add ${notFound.join(', ')}: pick files inside this project's folder, and pick a subfolder too if it was made in Drive. Google Docs and Sheets can't be added.`);
   }
@@ -111,6 +142,8 @@ export type AddFromDriveDeps = {
   autosave: { enqueue(task: () => Promise<void>): Promise<void> };
   ensureDrivePickerConfig(): boolean;
   ensureDriveConnected(): Promise<boolean>;
+  /** Hold a file and ask which copy to keep, like a save conflict. */
+  holdConflict(conflict: FileConflict): void;
   /** Show the multi-select Picker in this Drive folder. */
   pickFiles(folderId: string): Promise<PickerSelection[] | null>;
   setStatus(message: string): void;
@@ -160,12 +193,23 @@ export async function addFilesFromDrive(deps: AddFromDriveDeps): Promise<void> {
     }
     const listing = await provider.openProject(projectId);
     const result = await mergeNewDriveFiles({ provider, projectId, listing, project: deps.getProject(), blobs: deps.blobs, manifest: projectState.manifest });
+    for (const conflict of result.collisions) deps.holdConflict(conflict);
     const notFound = chosen.filter((item) => provider.pathOfDriveId(projectId, item.id) === undefined).map((item) => item.name);
     const { message, isError } = describeAddResult(result, notFound);
     setStatus(result.added.length ? `Drive: Added ${result.added.length} file(s)` : 'Drive: No new files');
     showNotice(message, isError);
   });
 }
+
+/**
+ * How the conflict dialog words a picked Drive file that meets a project file of the same name.
+ * "Keep mine" overwrites Drive's copy, "Use Drive's copy" replaces the project's.
+ */
+export const DRIVE_PICK_CONFLICT = {
+  title: 'Same file name in Drive',
+  reason: "is also in the project's Drive folder, with different content, and this copy was never saved there.",
+  theirs: "Use Drive's copy",
+};
 
 /** Said after "Not found in the project" in the preview diagnostics while the project is on Drive. */
 export const DRIVE_MISSING_HINT = "If they're in the project's Drive folder, use File > Add Files from Drive so the app can see them.";

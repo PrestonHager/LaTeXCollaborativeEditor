@@ -5,6 +5,7 @@ import { starterProject } from '../project/projectIo';
 import { manifestFromProject, saveProject, textRev, type SavedManifest } from '../storage/projectSaver';
 import type { BlobStore } from '../project/blobStore';
 import type { PickerSelection } from '../storage/providers/googlePicker';
+import { takeTheirs } from '../storage/conflictResolution';
 import { addFilesFromDrive, addFromDriveNote, describeAddResult, mergeNewDriveFiles, type AddFromDriveDeps } from './driveAddFiles';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -87,7 +88,7 @@ describe('mergeNewDriveFiles', () => {
     const listing = await drive.openProject(projectId);
     const result = await mergeNewDriveFiles({ provider: drive, projectId, listing, project, blobs, manifest });
     expect(result.added).toEqual(['chapters/intro.tex', 'figs/plot.png']);
-    expect(result.kept).toEqual([]);
+    expect(result.collisions).toEqual([]);
     expect(project.findByPath('figs')?.kind).toBe('folder');
     expect(project.findByPath('figs/plot.png')).toMatchObject({ kind: 'binary', size: 2 });
     expect(stored.size).toBe(1);
@@ -100,20 +101,82 @@ describe('mergeNewDriveFiles', () => {
     expect(drive.calls).toEqual([]);
   });
 
-  it("keeps the project's own copy and leaves alone paths waiting on a save", async () => {
-    const { drive, project, manifest, projectId } = await savedProject();
+  /** notes.tex was added here (never saved) and in Drive with other text, and main.tex was deleted here but not saved yet. */
+  async function collision() {
+    const saved = await savedProject();
+    const { drive, project, manifest, projectId } = saved;
     const { blobs } = fakeBlobs();
-    // Someone added notes.tex here and in Drive. And main.tex was deleted here but not saved yet.
-    project.createTextFile('notes.tex', 'mine');
+    const notesId = project.createTextFile('notes.tex', 'mine');
     project.removePath('main.tex');
     drive.addInDrive(projectId, 'notes.tex', bytes('theirs'));
     drive.pick(['notes.tex']);
+    const result = await mergeNewDriveFiles({ provider: drive, projectId, listing: await drive.openProject(projectId), project, blobs, manifest });
+    return { ...saved, blobs, notesId, result };
+  }
+  const save = (setup: Awaited<ReturnType<typeof collision>>, held: Set<string>, overwrite = new Set<string>()) =>
+    saveProject({ provider: setup.drive, project: setup.project, blobs: setup.blobs as unknown as BlobStore, manifest: setup.manifest, projectId: setup.projectId, held, overwrite });
 
-    const listing = await drive.openProject(projectId);
-    const result = await mergeNewDriveFiles({ provider: drive, projectId, listing, project, blobs, manifest });
-    expect(result).toEqual({ added: [], kept: ['notes.tex'], failed: [] });
+  it('holds a picked file that meets an unsaved project file, so a save cannot overwrite Drive', async () => {
+    const setup = await collision();
+    const { drive, project, projectId, notesId, result } = setup;
+    expect(result).toEqual({ added: [], collisions: [{ id: notesId, path: 'notes.tex', remoteVersion: '1' }], failed: [] });
     expect(project.findByPath('main.tex')).toBeUndefined();
-    expect(project.getText(project.findByPath('notes.tex')!.id).toString()).toBe('mine');
+    expect(project.getText(notesId).toString()).toBe('mine');
+    // While the conflict is open, saves skip the file and Drive keeps its copy.
+    drive.calls.length = 0;
+    await save(setup, new Set([notesId]));
+    expect(drive.calls).not.toContain('write notes.tex');
+    expect(drive.text(projectId, 'notes.tex')).toBe('theirs');
+  });
+
+  it('"Keep mine" writes the project copy over Drive on the next save', async () => {
+    const setup = await collision();
+    const { drive, projectId, notesId } = setup;
+    await save(setup, new Set(), new Set([notesId]));
+    expect(drive.text(projectId, 'notes.tex')).toBe('mine');
+  });
+
+  it('"Use Drive\'s copy" loads Drive into the project, and the next save leaves it alone', async () => {
+    const setup = await collision();
+    const { drive, project, projectId, notesId, result, manifest, blobs } = setup;
+    const kept = await takeTheirs({ provider: drive, projectId, project, blobs: blobs as unknown as BlobStore, conflict: result.collisions[0] });
+    expect(project.getText(notesId).toString()).toBe('theirs');
+    manifest.files[notesId] = kept!;
+    drive.calls.length = 0;
+    await save(setup, new Set());
+    expect(drive.calls).not.toContain('write notes.tex');
+    expect(drive.text(projectId, 'notes.tex')).toBe('theirs');
+  });
+
+  it('records a same-named file with the same content without asking', async () => {
+    const { drive, project, manifest, projectId } = await savedProject();
+    const { blobs } = fakeBlobs();
+    const textId = project.createTextFile('same.tex', 'equal');
+    const hash = await blobs.put(new Uint8Array([5]));
+    const imageId = project.putBinaryFile('same.png', hash, 1);
+    drive.addInDrive(projectId, 'same.tex', bytes('equal'));
+    drive.addInDrive(projectId, 'same.png', new Uint8Array([5]));
+    drive.pick(['same.tex', 'same.png']);
+    const result = await mergeNewDriveFiles({ provider: drive, projectId, listing: await drive.openProject(projectId), project, blobs, manifest });
+    expect(result).toEqual({ added: [], collisions: [], failed: [] });
+    expect(manifest.files[textId]).toEqual({ path: 'same.tex', kind: 'text', rev: textRev('equal'), version: '1' });
+    expect(manifest.files[imageId]).toMatchObject({ path: 'same.png', kind: 'binary', rev: hash });
+  });
+
+  it('reports a file in one place and a folder in the other, and a failed read of a same-named file', async () => {
+    const { drive, project, projectId } = await savedProject();
+    const { blobs } = fakeBlobs();
+    project.createFolder('figs.png');
+    project.createTextFile('b.tex', 'mine');
+    drive.addInDrive(projectId, 'figs.png', new Uint8Array([1]));
+    drive.addInDrive(projectId, 'b.tex', bytes('theirs'));
+    drive.pick(['figs.png', 'b.tex']);
+    vi.spyOn(drive, 'readFile').mockRejectedValueOnce(new Error('offline'));
+    const result = await mergeNewDriveFiles({ provider: drive, projectId, listing: await drive.openProject(projectId), project, blobs, manifest: null });
+    expect(result.failed).toEqual([
+      { path: 'b.tex', message: 'offline' },
+      { path: 'figs.png', message: 'one copy is a file and the other a folder' },
+    ]);
   });
 
   it('reports files it could not read, and works without a manifest', async () => {
@@ -121,20 +184,25 @@ describe('mergeNewDriveFiles', () => {
     const { blobs } = fakeBlobs();
     drive.addInDrive(projectId, 'refs.bib', bytes('@book{a}'));
     drive.pick(['refs.bib']);
-    vi.spyOn(drive, 'readFile').mockRejectedValueOnce(new Error('offline'));
+    const read = drive.readFile.bind(drive);
+    vi.spyOn(drive, 'readFile').mockImplementation(async (id, path) => {
+      if (path === 'refs.bib') throw new Error('offline');
+      return read(id, path);
+    });
     const listing = await drive.openProject(projectId);
+    // With no manifest, main.tex is in both places too, but with the same text, so that's fine.
     const result = await mergeNewDriveFiles({ provider: drive, projectId, listing, project, blobs, manifest: null });
-    expect(result.failed).toEqual([{ path: 'refs.bib', message: 'offline' }]);
+    expect(result).toEqual({ added: [], collisions: [], failed: [{ path: 'refs.bib', message: 'offline' }] });
   });
 });
 
 describe('describeAddResult', () => {
   it('sums up what happened', () => {
-    expect(describeAddResult({ added: ['a.png'], kept: [], failed: [] }, [])).toEqual({ message: 'Added 1 file(s) from Drive: a.png.', isError: false });
-    const mixed = describeAddResult({ added: [], kept: ['b.tex'], failed: [{ path: 'c.bib', message: 'offline' }] }, ['Notes']);
+    expect(describeAddResult({ added: ['a.png'], collisions: [], failed: [] }, [])).toEqual({ message: 'Added 1 file(s) from Drive: a.png.', isError: false });
+    const mixed = describeAddResult({ added: [], collisions: [{ id: 'x', path: 'b.tex' }], failed: [{ path: 'c.bib', message: 'offline' }] }, ['Notes']);
     expect(mixed.isError).toBe(true);
     expect(mixed.message).toContain('No new files to add from Drive.');
-    expect(mixed.message).toContain("Kept the project's own copy of b.tex.");
+    expect(mixed.message).toContain('The project already has b.tex, so saving those is paused until you pick which copy to keep.');
     expect(mixed.message).toContain('Could not add Notes');
     expect(mixed.message).toContain('Failed: c.bib (offline).');
   });
@@ -171,6 +239,7 @@ describe('addFilesFromDrive', () => {
       autosave: { enqueue: vi.fn((task: () => Promise<void>) => task()) },
       ensureDrivePickerConfig: vi.fn(() => true),
       ensureDriveConnected: vi.fn(async () => true),
+      holdConflict: vi.fn(),
       pickFiles: vi.fn(async (_folderId: string): Promise<PickerSelection[] | null> => drive.pick(['figs/plot.png'])),
       setStatus: vi.fn(),
       showNotice: vi.fn(),
@@ -188,6 +257,15 @@ describe('addFilesFromDrive', () => {
     expect(project.findByPath('figs/plot.png')?.kind).toBe('binary');
     expect(deps.setStatus).toHaveBeenLastCalledWith('Drive: Added 1 file(s)');
     expect(deps.showNotice).toHaveBeenCalledWith('Added 1 file(s) from Drive: figs/plot.png.', false);
+  });
+
+  it('sends a same-named unsaved project file to the conflict dialog', async () => {
+    const { deps, project } = await setup();
+    const id = project.createTextFile('figs/plot.png.tex', 'x');
+    project.move(id, 'figs/plot.png');
+    await addFilesFromDrive(deps);
+    expect(deps.holdConflict).toHaveBeenCalledWith({ id: project.findByPath('figs/plot.png')!.id, path: 'figs/plot.png', remoteVersion: '1' });
+    expect(deps.showNotice).toHaveBeenCalledWith(expect.stringContaining('saving those is paused'), false);
   });
 
   it('flags picked files it could not place', async () => {
