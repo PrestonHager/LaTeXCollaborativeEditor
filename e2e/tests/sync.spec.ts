@@ -51,8 +51,9 @@ test('host and guest sync files and edits both ways', async ({ browser }) => {
     // Then the guest opens the link and both sides wait to find each other through the relays.
     await guest.goto(roomUrl);
     await waitForApp(guest);
-    await expect(host.locator('#connection-status')).toHaveText('Connected');
-    await expect(guest.locator('#connection-status')).toHaveText('Connected');
+    // The badge adds the peer count (and says Relayed through TURN), so only match the start of it.
+    await expect(host.locator('#connection-status')).toHaveText(/Connected|Relayed/);
+    await expect(guest.locator('#connection-status')).toHaveText(/Connected|Relayed/);
 
     // The guest should see the whole file tree.
     await expect(fileRow(guest, 'main.tex')).toBeVisible();
