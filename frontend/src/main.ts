@@ -29,6 +29,7 @@ import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
+import { ProjectState, toTexName } from './app/projectState';
 import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -36,13 +37,11 @@ import { createConflictDialog } from './ui/conflictDialog';
 import { createCollabUndo } from './collab/undo';
 import { CompileScheduler, collectImageUrls } from './compile/compileScheduler';
 import {
-  createDocumentId,
   readAppSessionState,
   writeAppSessionState,
   encodeYjsState,
   decodeYjsState,
   type PersistedYjsState,
-  type ProviderMode,
   type ThemeMode,
 } from './state/appSession';
 import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
@@ -102,19 +101,9 @@ const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
 const driveProvider = new GoogleDriveProvider();
 const blobs = new BlobStore();
-let activeProvider: StorageProvider = localAppProvider;
-// The stored project we save to, or null until the first save makes one.
-let projectId: string | null = null;
-// What the last save wrote, so the next one only sends changes.
-let manifest: SavedManifest | null = null;
-// Files that changed in storage under us, by file id. Saves skip them until the person picks a copy.
-const conflicts = new Map<string, FileConflict>();
-// Files the person chose to overwrite anyway.
-const overwrite = new Set<string>();
+const projectState = new ProjectState(localAppProvider, driveProvider);
+const { conflicts, overwrite } = projectState;
 let activeFileId: string | null = null;
-// Only used to match an old single-file Drive link from before projects.
-let documentId = createDocumentId();
-let savingPaused = false;
 const themeState = createThemeController();
 const { applyEditorTheme, applyPreviewTheme } = themeState;
 let hostStorageText = 'Saved on host local storage';
@@ -131,11 +120,6 @@ let lastSavedAt: Date | null = null;
 let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
 let inRoom = isClient;
-
-const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
-const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 'drive' : 'local');
-// Tell guests where the host is actually saving, instead of always saying local storage.
-const currentStorageLabel = () => (activeProvider === driveProvider ? 'Saved on host Google Drive' : 'Saved on host local storage');
 
 /**
  * Show a short message in the header, then clear it after a few seconds unless it's sticky.
@@ -191,27 +175,8 @@ window.addEventListener('unhandledrejection', (event) => {
 const restored = isClient ? null : readAppSessionState();
 let driveRestoreMessage: string | null = null;
 if (restored) {
-  if (restored.documentId) documentId = restored.documentId;
-  // The saved flag kept its old name, so false there means saving is paused.
-  savingPaused = !restored.saveNowEnabled;
-  projectId = restored.projectId ?? null;
-  manifest = restored.manifest ?? null;
+  driveRestoreMessage = projectState.restore(restored);
   activeFileId = restored.activeFileId ?? null;
-  if (restored.providerMode === 'drive') {
-    // Only reuse Drive when the cached token is still good. Calling connect() here would open
-    // a sign-in popup on page load, which browsers block, and saves would silently fail.
-    if (driveProvider.hasUsableToken()) {
-      activeProvider = driveProvider;
-      driveRestoreMessage = 'Drive: Session restored';
-      // Sessions from before projects saved to one Drive file, so keep saving there.
-      if (!projectId) projectId = driveProvider.legacyProjectId(restored.documentId, toTexName(restored.documentName));
-    } else {
-      // The token only lives in this tab's sessionStorage, so a new tab or browser lands here too.
-      driveRestoreMessage = 'Drive needs you to reconnect; saving locally. Use File > Connect Google Drive.';
-      projectId = null;
-      manifest = null;
-    }
-  }
 }
 
 function restoredDocState() {
@@ -236,7 +201,7 @@ const session: SessionController = new SessionController({
     hostStorageText = storage;
     setStatus(storage);
   },
-  getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: currentStorageLabel() }),
+  getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
   onDocReplaced: () => bindProject(),
   onFileProgress: (hash, fraction) => {
@@ -259,16 +224,12 @@ const persistAppSession = () => {
   const persisted = session.getPersistedState();
   writeAppSessionState({
     documentName: projectName(),
-    documentId,
+    ...projectState.sessionFields(),
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
-    providerMode: getProviderMode(),
-    saveNowEnabled: !savingPaused,
     editorTheme: themeState.editorTheme,
     previewTheme: themeState.previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
-    projectId: projectId ?? undefined,
     activeFileId: activeFileId ?? undefined,
-    manifest: manifest ?? undefined,
   });
 };
 
@@ -288,26 +249,22 @@ if (!isClient) {
 
 const autosave = new AutosaveController({
   save: async () => {
-    const provider = activeProvider;
+    const provider = projectState.activeProvider;
     const forced = new Set(overwrite);
     const result = await saveProject({
       provider,
       project,
       blobs,
-      manifest,
-      projectId,
+      manifest: projectState.manifest,
+      projectId: projectState.projectId,
       held: new Set(conflicts.keys()),
       overwrite: forced,
       onStep: (step) => {
         // Keep progress from a save that fails halfway, unless the project changed under us.
-        if (provider !== activeProvider) return;
-        manifest = step;
-        projectId = step.projectId;
+        projectState.recordSave(provider, step);
       },
     });
-    if (provider === activeProvider) {
-      manifest = result.manifest;
-      projectId = result.manifest.projectId;
+    if (projectState.recordSave(provider, result.manifest)) {
       persistAppSession();
       for (const id of forced) overwrite.delete(id);
       for (const conflict of result.conflicts) holdConflict(conflict);
@@ -319,29 +276,25 @@ const autosave = new AutosaveController({
   onStatus: setStatus,
 });
 // Keep saving paused if it was paused in the last session.
-autosave.setPaused(savingPaused);
-const savingStatus = () => (savingPaused ? 'Saving paused' : 'Autosave On');
+autosave.setPaused(projectState.savingPaused);
+const savingStatus = () => (projectState.savingPaused ? 'Saving paused' : 'Autosave On');
 
 // When Drive can't get a new token, switch to local saves so no edits are lost.
 driveProvider.onSessionLost(() => {
   showDriveAccount();
-  if (activeProvider !== driveProvider) return;
+  if (!projectState.isDrive()) return;
   useProvider(localAppProvider, null);
   showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true, {
     topic: 'driveSignIn',
   });
-  if (!savingPaused) void autosave.saveNow();
+  if (!projectState.savingPaused) void autosave.saveNow();
 });
 
 /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
 function useProvider(provider: StorageProvider, id: string | null, loaded: SavedManifest | null = null) {
-  activeProvider = provider;
-  projectId = id;
-  manifest = loaded;
-  conflicts.clear();
-  overwrite.clear();
+  projectState.use(provider, id, loaded);
   persistAppSession();
-  session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
+  session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
 const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
@@ -350,14 +303,14 @@ const conflictDialog = createConflictDialog(document.getElementById('conflict-di
 function holdConflict(conflict: FileConflict) {
   if (conflicts.has(conflict.id)) return;
   conflicts.set(conflict.id, conflict);
-  void conflictDialog.ask(conflict.path, activeProvider.label).then((choice) => resolveConflict(conflict, choice));
+  void conflictDialog.ask(conflict.path, projectState.activeProvider.label).then((choice) => resolveConflict(conflict, choice));
 }
 
 /** Act on the person's pick for a held file, then let saves pick it up again. */
 async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
   // Skip answers for a project we've since switched away from.
-  const provider = activeProvider;
-  const id = projectId;
+  const provider = projectState.activeProvider;
+  const id = projectState.projectId;
   if (conflicts.get(conflict.id) !== conflict || !id) return;
   if (choice === 'mine') {
     overwrite.add(conflict.id);
@@ -370,7 +323,8 @@ async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
     await autosave.enqueue(async () => {
       const resolve = choice === 'copy' ? keepMineAsCopy : takeTheirs;
       const saved = await resolve({ provider, projectId: id, project, blobs, conflict });
-      if (provider !== activeProvider || !manifest) return;
+      const { manifest } = projectState;
+      if (provider !== projectState.activeProvider || !manifest) return;
       if (saved) manifest.files[conflict.id] = saved;
       conflicts.delete(conflict.id);
       persistAppSession();
@@ -600,6 +554,7 @@ async function fetchMissingFiles() {
     if (entry.kind !== 'binary' || !entry.hash || blobs.has(entry.hash) || session.transfer.isTransferring(entry.hash)) continue;
     const hash = entry.hash;
     if (await blobs.get(hash)) continue;
+    const { manifest, projectId, activeProvider } = projectState;
     const saved = manifest && Object.values(manifest.files).find((file) => file.rev === hash);
     if (!isClient && projectId && saved) {
       try {
@@ -679,7 +634,7 @@ async function renameProject() {
   if (!next || !next.trim() || next.trim() === project.getName()) return;
   // The name lives in the shared doc, and the next save renames the stored project too.
   project.setName(next.trim());
-  session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
+  session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
 /** Add uploaded files to the project. Text files become editable text, others go by hash. */
@@ -758,7 +713,7 @@ zipInput.addEventListener('change', () => {
     try {
       const content = await projectFromZip(file.name, new Uint8Array(await file.arrayBuffer()), blobs);
       // The project gets made in storage on the first save.
-      await switchProject(content, activeProvider === driveProvider && driveProvider.isSignedIn() ? driveProvider : localAppProvider, null);
+      await switchProject(content, projectState.isDrive() && driveProvider.isSignedIn() ? driveProvider : localAppProvider, null);
       autosave.markDirty();
       showNotice(`Created ${projectName()} from ${file.name}`);
     } catch (error) {
@@ -841,7 +796,7 @@ const pickFromDrive = async (kind: 'project' | 'folder') => {
 
 /** Start saving to Drive. A project that isn't in Drive yet gets a new folder on the next save. */
 const switchToDrive = () => {
-  if (activeProvider !== driveProvider) useProvider(driveProvider, null);
+  if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
 
 const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
@@ -851,7 +806,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'file.new': async () => {
     if (isClient) return;
     if (!window.confirm(NEW_PROJECT_CONFIRM)) return;
-    await switchProject(starterProject(''), activeProvider, null);
+    await switchProject(starterProject(''), projectState.activeProvider, null);
   },
   'file.openLocal': async () => {
     if (isClient) return;
@@ -910,7 +865,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'file.disconnectDrive': async () => {
     if (isClient || !driveProvider.isSignedIn()) return;
     // First, point saves at this browser, so the next save keeps every edit.
-    if (activeProvider === driveProvider) useProvider(localAppProvider, null);
+    if (projectState.isDrive()) useProvider(localAppProvider, null);
     // Then let a Drive save that's already running finish before the token goes away.
     await autosave.enqueue(() => driveProvider.disconnect());
     showDriveAccount();
@@ -927,14 +882,14 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     // saveNow reports its own failure reason in the status line, so only overwrite it on success.
     if (await autosave.saveNow()) {
       setStatus(`Drive: Saved ${projectName()}`);
-      session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
+      session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
     }
   },
   'file.moveDrive': async () => {
     if (isClient) return;
     if (!ensureDrivePickerConfig()) return;
     if (!(await ensureDriveConnected())) return;
-    if (activeProvider !== driveProvider || !projectId) {
+    if (!projectState.isDrive() || !projectState.projectId) {
       setStatus('Drive: Save the project to Drive first');
       return;
     }
@@ -946,7 +901,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
       return;
     }
     try {
-      await driveProvider.moveProject(projectId, folder.id);
+      await driveProvider.moveProject(projectState.projectId, folder.id);
       setStatus(`Drive: Moved to ${folder.name}`);
     } catch (error) {
       console.error('Drive move failed', error);
@@ -955,9 +910,9 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   },
   'file.renameDrive': () => renameProject(),
   'file.saveNow': async () => {
-    if (isClient || savingPaused) return;
+    if (isClient || projectState.savingPaused) return;
     if (!promptForProjectName()) return;
-    if (activeProvider === driveProvider && !driveProvider.isSignedIn()) {
+    if (projectState.isDrive() && !driveProvider.isSignedIn()) {
       setStatus('Drive: Session expired. Use File > Connect Google Drive to sign in again.');
       return;
     }
@@ -974,7 +929,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     }
     if (!window.confirm(`Delete all ${count} project(s) saved in this browser? This cannot be undone.`)) return;
     await localAppProvider.clear();
-    if (activeProvider === localAppProvider) useProvider(localAppProvider, null);
+    if (projectState.activeProvider === localAppProvider) useProvider(localAppProvider, null);
     setStatus('Local projects cleared');
   },
   'edit.undo': () => undo.undo(),
@@ -1007,7 +962,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'view.darkMode': () => setAllThemes('dark'),
   'view.lightMode': () => setAllThemes('light'),
   'view.systemTheme': () => setAllThemes('system'),
-  'view.togglePauseSaving': () => setSavingPaused(!savingPaused),
+  'view.togglePauseSaving': () => setSavingPaused(!projectState.savingPaused),
   'view.focusEditor': () => editor.focus(),
   'app.openSettings': () => settingsDialog.open(),
   'file.rename': () => renameProject(),
@@ -1070,7 +1025,7 @@ function setAllThemes(theme: ThemeMode) {
 
 function setSavingPaused(paused: boolean) {
   if (isClient) return;
-  savingPaused = paused;
+  projectState.savingPaused = paused;
   // Autosave sets the status line, and resuming saves whatever changed while paused.
   autosave.setPaused(paused);
   menuBar.refresh();
@@ -1120,7 +1075,7 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'dev.openTestProject':
       return { enabled: !isClient };
     case 'file.moveDrive':
-      return { enabled: !isClient && activeProvider === driveProvider };
+      return { enabled: !isClient && projectState.isDrive() };
     case 'file.disconnectDrive':
       return { enabled: !isClient && driveProvider.isSignedIn() };
     case 'file.newFile':
@@ -1131,13 +1086,13 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'file.downloadFile':
       return { enabled: Boolean(activeFileId) };
     case 'file.saveNow':
-      return { enabled: !isClient && !savingPaused };
+      return { enabled: !isClient && !projectState.savingPaused };
     case 'edit.undo':
       return { enabled: undo.canUndo() };
     case 'edit.redo':
       return { enabled: undo.canRedo() };
     case 'view.togglePauseSaving':
-      return { enabled: !isClient, checked: savingPaused };
+      return { enabled: !isClient, checked: projectState.savingPaused };
     case 'view.layoutSplit':
       return { enabled: true, checked: layout.mode === 'split' };
     case 'view.layoutEditorOnly':
@@ -1162,7 +1117,7 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
   getState: () => ({
     editorTheme: themeState.editorTheme,
     previewTheme: themeState.previewTheme,
-    savingPaused,
+    savingPaused: projectState.savingPaused,
     canChangeSaving: !isClient,
     driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
   }),
@@ -1215,7 +1170,7 @@ function buildPaletteCommands(): PaletteCommand[] {
       id: entry.commandId,
       section: entry.section,
       // The menu shows a checkmark for this one, but the palette has to say which way it goes.
-      label: entry.commandId === 'view.togglePauseSaving' && savingPaused ? 'Resume Saving' : entry.label,
+      label: entry.commandId === 'view.togglePauseSaving' && projectState.savingPaused ? 'Resume Saving' : entry.label,
       shortcut: entry.shortcut,
       description: entry.description,
       enabled: getCommandState(entry.commandId).enabled,
@@ -1273,10 +1228,10 @@ if (!isClient) {
   void localAppProvider
     .connect()
     .then(async () => {
-      if (!projectId && activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
+      if (!projectState.projectId && projectState.activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
         const mainId = project.getMainFileId();
         const mainPath = mainId ? project.get(mainId)?.path : undefined;
-        if (mainPath) projectId = await localAppProvider.findLegacyProject(mainPath);
+        if (mainPath) projectState.projectId = await localAppProvider.findLegacyProject(mainPath);
       }
       autosave.enable();
       setStatus(driveRestoreMessage ?? savingStatus());
