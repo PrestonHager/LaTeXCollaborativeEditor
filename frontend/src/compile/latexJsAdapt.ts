@@ -218,6 +218,20 @@ function stripVspace(source: string): string {
     .replace(/\\vspace\s*\{[^}]*\}/g, keepLineBreaks);
 }
 
+/** What a page break becomes in the source, so markPageBreaks (latexJsPreview.ts) can find it in the output. */
+export const PAGE_BREAK_TOKEN = 'lcpagebreak';
+
+/**
+ * LaTeX.js ignores \newpage and friends. When one sits on a line of its own, put a marker
+ * paragraph there instead, which becomes a page break when the preview is printed.
+ */
+function markPageBreakLines(source: string): string {
+  return source.replace(
+    /^([ \t]*)\\(?:newpage|clearpage|cleardoublepage|pagebreak(?:\[[0-4]\])?)[ \t]*(%.*)?$/gm,
+    (_whole, indent: string, comment: string | undefined) => `${indent}\\par\\texttt{${PAGE_BREAK_TOKEN}}\\par${comment ?? ''}`,
+  );
+}
+
 function stripAddContentsLine(source: string): string {
   return source.replace(/\\addcontentsline\s*\{[^}]*\}\s*\{[^}]*\}\s*\{[^}]*\}\s*/g, keepLineBreaks);
 }
@@ -407,6 +421,8 @@ const REWRITES: Rewrite[] = [
   { note: 'Showed footnotes inline in parentheses.', apply: inlineFootnotes },
   { note: 'Removed \\vspace.', apply: stripVspace },
   { note: 'Removed \\addcontentsline.', apply: stripAddContentsLine },
+  // A page break shows nothing on screen, so there's nothing to note.
+  { note: null, apply: markPageBreakLines },
 ];
 
 export type AdaptedSource = {

@@ -104,6 +104,7 @@ Rewritten:
 - `\nomenclature{symbol}{meaning}` shows just the symbol.
 - authblk's `\author[...]{...}` drops the option, and `\affil{...}` becomes a small line of text.
 - `\textcopyright` becomes ©.
+- `\newpage`, `\clearpage`, `\cleardoublepage` and `\pagebreak` on a line of their own become a page break when you [export a PDF](#pdf-export). On screen they show nothing, since the preview has no pages. One in the middle of a line is ignored.
 
 Comments, `\verb`, and the `verbatim`, `verbatim*`, `Verbatim`, `lstlisting`, `minted`, and `comment` environments are left alone.
 Anything not listed here goes to LaTeX.js as is, and if it doesn't know a command, the error shows up in the diagnostics.
@@ -158,6 +159,26 @@ If there are no problems, the footer is empty.
 ![A preview error in the footer and the editor](assets/screenshots/diagnostics-dark.png#only-dark)
 
 For help fixing errors, see [Preview errors](troubleshooting.md#preview-errors).
+
+## PDF export
+
+**File > Export…** and then **PDF** makes a PDF from the preview.
+It opens your browser's print dialog. Choose **Save as PDF** (or **Microsoft Print to PDF**) as the printer, then save.
+
+It's a preview-quality PDF, so expect it to look like the preview, not like a TeX build:
+
+- Fonts, math and spacing come from LaTeX.js and the browser, so line and page breaks fall in different places than in LaTeX.
+- Pages break where the browser runs out of room, plus at `\newpage`, `\clearpage` and `\pagebreak` lines. Headings try not to end a page, and images and tables try not to split.
+- The paper size is A4 or US Letter, with 2 cm side margins and 2.5 cm top and bottom ones. `geometry` settings don't apply.
+- There are no page numbers, headers or footers. If your browser adds its own date and URL, turn off **Headers and footers** in the print dialog.
+- Links in the text work in the PDF. There are no PDF bookmarks.
+- Anything the preview can't show, like a PDF figure, is missing from the PDF too.
+
+The PDF is made in a hidden frame that can't run scripts, so nothing in the document runs while it prints.
+A full PDF from a real TeX engine, with bookmarks and metadata, needs an in-browser TeX compiler, which is planned.
+For a file to send to a journal, export **Flattened .tex** or **Project .zip** and build it with LaTeX.
+
+The same export menu has an **HTML** format: the preview as a standalone web page. See [Export](saving-and-storage.md#export).
 
 ## Layout
 

@@ -63,7 +63,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     localAppProvider: local,
     driveProvider: drive,
     blobs: { get: vi.fn(async () => undefined) } as unknown as BlobStore,
-    localDownload: { download: vi.fn() },
+    exportDialog: { open: vi.fn(), runNow: vi.fn(async () => true) },
     autosave: {
       enable: vi.fn(),
       markDirty: vi.fn(),
@@ -479,19 +479,22 @@ describe('commands', () => {
       expect(app.uploadDialog.open).toHaveBeenCalledWith('chapters');
     });
 
-    it('downloads the project and the open file', async () => {
-      const { app, run, project } = setup();
+    it('downloads the project and the open file, and opens the Export dialog', async () => {
+      const { app, run } = setup();
       await run('file.download');
-      // Zipping takes a few turns of the event loop, so wait for it.
-      await vi.waitFor(() => expect(app.localDownload.download).toHaveBeenCalled());
-      expect(app.localDownload.download).toHaveBeenCalledWith('Paper.zip', expect.any(Uint8Array), 'application/zip');
-      expect(app.showNotice).toHaveBeenCalledWith('Downloaded Paper.zip', false);
-      project.putBinaryFile('fig.png', 'missing', 3);
-      await run('file.download');
-      await vi.waitFor(() => expect(app.showNotice).toHaveBeenCalledTimes(2));
-      expect(app.showNotice).toHaveBeenLastCalledWith('Downloaded, but still waiting on: fig.png', true);
+      // Download Project .zip is the zip exporter with no dialog.
+      await vi.waitFor(() => expect(app.exportDialog.runNow).toHaveBeenCalledWith('zip'));
+      expect(app.exportDialog.open).not.toHaveBeenCalled();
+      await run('file.export');
+      expect(app.exportDialog.open).toHaveBeenCalledTimes(1);
       await run('file.downloadFile');
       expect(app.downloadFile).toHaveBeenCalledWith('main.tex');
+    });
+
+    it('lets guests export, since it only reads the project', () => {
+      const { commands } = setup({ isClient: true });
+      expect(commands.getCommandState('file.export').enabled).toBe(true);
+      expect(commands.getCommandState('file.download').enabled).toBe(true);
     });
 
     it('connects and saves to Drive', async () => {
@@ -739,8 +742,10 @@ describe('commands', () => {
     it('matches keybinds exactly, so Ctrl+Shift+S is not Ctrl+S', () => {
       const { commands, app } = setup();
       commands.handleKeydown(key('S', { shiftKey: true }));
-      expect(app.localDownload.download).not.toHaveBeenCalled();
+      expect(app.exportDialog.runNow).toHaveBeenCalledWith('zip');
       expect(app.autosave.saveNow).not.toHaveBeenCalled();
+      commands.handleKeydown(key('E', { shiftKey: true }));
+      expect(app.exportDialog.open).toHaveBeenCalledTimes(1);
       const shiftC = key('C', { shiftKey: true });
       commands.handleKeydown(shiftC);
       expect(shiftC.defaultPrevented).toBe(false);
@@ -808,7 +813,7 @@ describe('commands', () => {
         // Ctrl+] indents in the editor, so the rule giving it to Download doesn't fire there.
         press({ key: ']', code: 'BracketRight', keyCode: 221, ctrlKey: true });
         expect(editor.getText()).toBe('  x');
-        expect(app.localDownload.download).not.toHaveBeenCalled();
+        expect(app.exportDialog.runNow).not.toHaveBeenCalled();
         // Plain typing never reaches a command.
         for (const key of ['a', 'K', ' ']) expect(press({ key }).defaultPrevented, key).toBe(false);
         press({ key: 'Enter', keyCode: 13 });
@@ -819,7 +824,7 @@ describe('commands', () => {
         expect(app.compile.compileNow).toHaveBeenCalledTimes(1);
         // Outside the editor, the rule gets Ctrl+].
         window.dispatchEvent(new KeyboardEvent('keydown', { key: ']', code: 'BracketRight', ctrlKey: true, cancelable: true }));
-        await vi.waitFor(() => expect(app.localDownload.download).toHaveBeenCalled());
+        await vi.waitFor(() => expect(app.exportDialog.runNow).toHaveBeenCalled());
       } finally {
         window.removeEventListener('keydown', commands.handleKeydown);
         container.remove();

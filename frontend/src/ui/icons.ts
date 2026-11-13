@@ -8,6 +8,9 @@ import {
   File,
   FileArchive,
   FileDown,
+  FileCode,
+  FileOutput,
+  Printer,
   FileImage,
   FileText,
   Folder,
@@ -91,6 +94,7 @@ const commandIcons: Record<CommandId, IconNode> = {
   'file.upload': Upload,
   'file.importZip': FileArchive,
   'file.downloadFile': FileDown,
+  'file.export': FileOutput,
   'edit.undo': Undo2,
   'edit.redo': Redo2,
   'edit.cut': Scissors,
@@ -144,6 +148,15 @@ const staticIcons = {
 
 /** Icons for file tree rows, picked by kind. */
 export const fileIcons = { File, FileImage, FileText, Folder, FolderOpen };
+
+/** Icons for the Export dialog's formats, by the name an exporter gives (see src/export/types.ts). */
+export const exportIcons: Record<string, IconNode> = {
+  'file-archive': FileArchive,
+  'file-code': FileCode,
+  'file-down': FileDown,
+  'file-text': FileText,
+  printer: Printer,
+};
 
 /** Icons for the keybind list in Settings. */
 export const keybindIcons = { Plus, X, TriangleAlert };

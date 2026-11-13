@@ -1,11 +1,12 @@
 import { HtmlGenerator, parse } from 'latex.js';
-import { adaptLatexSource } from './latexJsAdapt';
+import { PAGE_BREAK_TOKEN, adaptLatexSource } from './latexJsAdapt';
 import { expandProjectSource, type ProjectDiagnostic } from './projectSource';
 import { addKatexFontFallbacks } from './katexFonts';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
-/** LaTeX.js static assets (CSS, fonts, JS) — same version as the `latex.js` npm dependency. */
-export const LATEX_JS_ASSET_BASE = 'https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/';
+import { LATEX_JS_ASSET_BASE } from './latexJsAssets';
+
+export { LATEX_JS_ASSET_BASE };
 
 const URL_ATTRIBUTES = ['href', 'src', 'xlink:href', 'action', 'formaction'];
 const DANGEROUS_URL_SCHEMES = ['javascript:', 'vbscript:', 'data:'];
@@ -43,6 +44,25 @@ export function unlinkMissingRefs(doc: Document): void {
   }
 }
 
+/** Class of the empty block a \newpage becomes. It takes no space on screen and breaks the page in print. */
+export const PAGE_BREAK_CLASS = 'lc-page-break';
+
+/**
+ * Swap the marker paragraphs the adapter puts in for \newpage, \clearpage and \pagebreak
+ * for an empty block that starts a new page when the document is printed.
+ */
+export function markPageBreaks(doc: Document): void {
+  for (const span of Array.from(doc.querySelectorAll('span'))) {
+    if (span.className !== 'tt' || span.textContent !== PAGE_BREAK_TOKEN) continue;
+    const paragraph = span.parentElement;
+    const target = paragraph && paragraph.tagName.toLowerCase() === 'p' && paragraph.textContent === PAGE_BREAK_TOKEN ? paragraph : span;
+    const block = doc.createElement('div');
+    block.className = PAGE_BREAK_CLASS;
+    block.setAttribute('style', 'break-after:page;');
+    target.replaceWith(block);
+  }
+}
+
 /**
  * Typeset editor LaTeX into a full HTML document (LaTeX.js), using the raw `source` only.
  */
@@ -65,6 +85,7 @@ function typeset(source: string): { doc: Document | null; errors: EditorDiagnost
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
     unlinkMissingRefs(doc);
+    markPageBreaks(doc);
     addKatexFontFallbacks(doc);
     return { doc, errors: [], changes: adapted.changes };
   } catch (err) {

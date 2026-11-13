@@ -15,6 +15,7 @@ export const helpLinks = {
   autosave: 'saving-and-storage/#autosave-and-save-now',
   drive: 'saving-and-storage/#google-drive',
   localStorage: 'saving-and-storage/#local-storage-browser',
+  exporting: 'saving-and-storage/#export',
   projects: 'projects/',
   fileTree: 'projects/#file-tree',
   uploading: 'projects/#uploading-files',

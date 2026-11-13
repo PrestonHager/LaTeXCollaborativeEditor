@@ -21,6 +21,7 @@ export type CommandId =
   | 'file.upload'
   | 'file.importZip'
   | 'file.downloadFile'
+  | 'file.export'
   | 'share.copyLink'
   | 'edit.undo'
   | 'edit.redo'

@@ -1,7 +1,21 @@
-import { expandProjectSource } from './projectSource';
+import { expandProjectSource, flattenInputs } from './projectSource';
 import { projectToPreviewHtml } from './latexJsPreview';
 
 const files = (entries: Record<string, string>) => new Map(Object.entries(entries));
+
+describe('flattenInputs', () => {
+  it('splices inputs in without adding paragraph breaks, and leaves loops and missing files as written', () => {
+    const texts = files({
+      'main.tex': 'A \\input{sub/b} C\n\\input{loop}\n% \\input{sub/b}\n\\input{nope}',
+      'sub/b.tex': 'B1\nB2\n',
+      'loop.tex': 'L \\input{loop}',
+    });
+    expect(flattenInputs('main.tex', texts)).toEqual({
+      source: 'A B1\nB2 C\nL \\input{loop}\n% \\input{sub/b}\n\\input{nope}',
+      missing: ['nope'],
+    });
+  });
+});
 
 describe('expandProjectSource', () => {
   it('inlines \\input and \\include files and maps lines back to their files', () => {

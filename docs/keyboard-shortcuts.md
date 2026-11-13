@@ -23,6 +23,7 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 | **Open Local Project** (host only) | **Ctrl+O** | **⌘O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⇧⌘O** |
 | **Download Project .zip** | **Ctrl+Shift+S** | **⇧⌘S** |
+| **Export…** | **Ctrl+Shift+E** | **⇧⌘E** |
 | **Save Now** (host only, unless saving is paused) | **Ctrl+S** | **⌘S** |
 
 ## Edit

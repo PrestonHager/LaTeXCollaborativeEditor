@@ -140,6 +140,7 @@ Turning the CSP off (rollback)
 Domain and security
 - The domain (e.g., latex.prestonhager.com) must be served over HTTPS to enable P2P APIs.
 - `getBootstrapConfig` treats `localhost`, `*.localhost`, `127.x.x.x` and `[::1]` as local and everything else as production.
+- File > Export… needs no server. Under the CSP, HTML export with Work offline fetches the LaTeX.js styles and fonts from `https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/` (`connect-src`), downloads use `blob:` URLs, and the PDF export prints from a `srcdoc` frame with no scripts.
 
 Documentation
 - The user docs are MkDocs Material, built from `docs/` by `mkdocs.yml`. Run `mkdocs build --strict` before a PR, it fails on broken links and missing images.

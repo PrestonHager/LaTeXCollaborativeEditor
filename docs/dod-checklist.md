@@ -18,6 +18,7 @@ Checklist
 - [ ] Project images: an uploaded image used with `\includegraphics` shows up in the preview, and `\input` and `\bibliography` resolve against the file tree.
 - [ ] Project sync: a second peer joining the room sees the full file tree and gets uploaded images over WebRTC, with progress, and files over 10 MB are refused.
 - [ ] Export: the project can be downloaded as a .zip (empty folders included), and a .zip can be uploaded as a new project.
+- [ ] Export dialog: File > Export… lists the formats from the exporter registry (`frontend/src/export/registry.ts`) with progress and cancel. Project .zip, single file, flattened `.tex`, HTML (offline, with styles and fonts inlined), and a preview-quality PDF through the browser's print dialog all work in the browser with no server. The PDF prints from a hidden frame sandboxed with `allow-same-origin allow-modals` and no `allow-scripts`; the HTML export only fetches the LaTeX.js CDN assets. Exports download; saving them to a storage provider is still to do.
 - [ ] Migration: documents saved before projects (local docs, a linked Drive file, and saved sessions) still open as one-file projects.
 - [ ] Drive projects: a project saved to Google Drive shows up as a folder with the same file tree.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
@@ -102,6 +103,10 @@ A box above is only checked when it was actually seen working.
   The image was too small to see a progress bar.
 - Export: needs the owner.
   Downloading a .zip wasn't tried here. `zip.test.ts` and `projectIo.test.ts` cover the code.
+- Export dialog: partly verified with Playwright against `vite preview` (Chromium).
+  A project with an empty folder, `\input` and `\newpage` exported to `.zip`, and uploading that zip gave the same files and folders; exporting again gave an identical zip.
+  Flattened `.tex` had the chapter in place and comments removed. HTML with Work offline inlined the styles and fonts (the CDN was served from `node_modules` in the test, since the sandbox blocks it).
+  The PDF's print document rendered to two A4 pages, split at the `\newpage`. The real print dialog and Save as PDF weren't driven, since headless Chromium has none.
 - Migration: needs the owner.
   It needs real data saved by an older version.
 - Drive projects: needs the owner (Google sign-in).
