@@ -33,6 +33,7 @@ import {
   type ThemeMode,
 } from './state/appSession';
 import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
+import { NEW_PROJECT_CONFIRM, canRunCommand } from './state/guestCommands';
 import { describeError } from './storage/errors';
 import { BlobStore } from './project/blobStore';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
@@ -660,8 +661,10 @@ const uploadDialog = createUploadDialog(document.getElementById('upload-dialog')
 });
 
 const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
-  onPick: (summary) => void openStoredProject(localAppProvider, summary.id),
-  onImportZip: () => zipInput.click(),
+  onPick: (summary) => {
+    if (!isClient) void openStoredProject(localAppProvider, summary.id);
+  },
+  onImportZip: () => executeCommand('file.importZip'),
 });
 
 async function openStoredProject(provider: StorageProvider, id: string) {
@@ -681,7 +684,8 @@ async function openStoredProject(provider: StorageProvider, id: string) {
 zipInput.addEventListener('change', () => {
   const file = zipInput.files?.[0];
   zipInput.value = '';
-  if (!file) return;
+  // Importing replaces the shared project, so guests can't do it.
+  if (!file || isClient) return;
   void (async () => {
     showLoading('Reading .zip...');
     try {
@@ -778,7 +782,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   },
   'file.new': async () => {
     if (isClient) return;
-    if (!window.confirm('Start a new project? The current one stays saved where it is.')) return;
+    if (!window.confirm(NEW_PROJECT_CONFIRM)) return;
     await switchProject(starterProject(''), activeProvider, null);
   },
   'file.openLocal': async () => {
@@ -995,6 +999,8 @@ function executeCommand(commandId: CommandId) {
     console.error(`Command ${commandId} failed`, error);
     showNotice(describeError(error), true);
   };
+  // Guests can't run commands that replace the shared project, however they get triggered.
+  if (!canRunCommand(commandId, isClient)) return;
   try {
     const result = commandRegistry[commandId]();
     if (result instanceof Promise) {

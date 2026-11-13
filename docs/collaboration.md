@@ -37,6 +37,18 @@ In practical terms: treat the collaboration link like a **live session key**. On
 
 The **host** is the tab that started the room (no `room` in the URL before sharing). Guests follow the host’s document title and storage context message. For saving to Drive or local lists, the **host** performs those actions; guests edit the shared buffer.
 
+## What guests can and can't do
+
+Guests can create, rename, move, upload, and delete individual files and folders, like any collaborator.
+Those changes show up for everyone in the room.
+
+Guests can't replace the whole project.
+**New Project**, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** are turned off in a guest tab.
+If you're a guest and want your own project, open the editor in a new tab without the `room` link.
+
+When the host picks **New Project**, the confirm says it clears the project for everyone in the room.
+Opening or importing another project as the host also swaps it out for every guest.
+
 ## Related topics
 
 - [Getting started](getting-started.md) — host vs guest  
