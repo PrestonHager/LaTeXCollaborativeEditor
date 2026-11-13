@@ -2,7 +2,7 @@ import type { ProjectListing, ProjectSummary, StorageProvider, WriteOptions, Wri
 import { StorageError } from '../errors';
 import { ConflictError } from '../conflicts';
 import { loadScript } from './scriptLoader';
-import { basename, dirname, isInside, mimeType, replacePrefix } from '../../project/paths';
+import { basename, dirname, isInside, joinPath, mimeType, replacePrefix } from '../../project/paths';
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -21,10 +21,11 @@ type DriveItem = { id: string; name: string; mimeType?: string; parents?: string
  * What we know about an open project's files: path to Drive id.
  * An old single-file project has no root folder yet, just the file and the folder it sits in.
  */
+type IndexItem = { id: string; folder: boolean; version?: string };
 type ProjectIndex = {
   rootId: string;
   // A file's version is from our last load or save of it, see versionToken.
-  paths: Map<string, { id: string; folder: boolean; version?: string }>;
+  paths: Map<string, IndexItem>;
   legacy?: { fileId: string; parentId: string | null; name: string };
 };
 
@@ -86,6 +87,9 @@ export class GoogleDriveProvider implements StorageProvider {
   private readonly indexes = new Map<string, ProjectIndex>();
   // Old single-file project ids that have since become real folders.
   private readonly aliases = new Map<string, string>();
+  // What remove() put in the Drive trash this visit, by Drive id, so an undone delete untrashes the
+  // same file instead of making a copy. Paths inside a trashed folder are kept relative to it.
+  private readonly trashed = new Map<string, { projectId: string; parentId?: string; item: IndexItem; inside: [string, IndexItem][] }>();
   // NOTE: the token lives in sessionStorage, so it survives a reload but not a new tab or a closed browser.
   private static readonly tokenStorageKey = 'drive_session_token';
 
@@ -380,10 +384,11 @@ export class GoogleDriveProvider implements StorageProvider {
     }
   }
 
-  async remove(projectId: string, path: string): Promise<void> {
+  async remove(projectId: string, path: string): Promise<string | void> {
     let index = await this.ensureIndex(projectId);
     if (index.legacy) index = await this.upgradeLegacy(projectId, index);
     const item = index.paths.get(path);
+    const parentId = dirname(path) ? index.paths.get(dirname(path))?.id : index.rootId;
     if (item) {
       // Move it to the Drive trash instead of deleting it for good.
       await this.driveFetch(
@@ -392,9 +397,53 @@ export class GoogleDriveProvider implements StorageProvider {
         `delete ${path}`,
       );
     }
-    for (const key of [...index.paths.keys()]) {
-      if (key === path || isInside(key, path)) index.paths.delete(key);
+    const inside: [string, IndexItem][] = [];
+    for (const [key, value] of [...index.paths]) {
+      if (key !== path && !isInside(key, path)) continue;
+      if (key !== path) inside.push([key.slice(path.length + 1), value]);
+      index.paths.delete(key);
     }
+    if (!item) return;
+    this.trashed.set(item.id, { projectId, parentId, item, inside });
+    return item.id;
+  }
+
+  /** Untrash what remove() trashed, at path. Drive brings a folder's contents back with it. */
+  async restore(projectId: string, path: string, token: string): Promise<boolean> {
+    const record = this.trashed.get(token);
+    if (!record || record.projectId !== projectId) return false;
+    let index = await this.ensureIndex(projectId);
+    if (index.legacy) index = await this.upgradeLegacy(projectId, index);
+    // Something else is at that path now, so the caller writes a new file instead.
+    if (index.paths.has(path)) return false;
+    const parentId = await this.ensureFolder(index, dirname(path));
+    const url = new URL(`${DRIVE_API}/${token}`);
+    url.searchParams.set('fields', VERSION_FIELDS);
+    if (parentId !== record.parentId) {
+      if (!record.parentId) return false;
+      url.searchParams.set('addParents', parentId);
+      url.searchParams.set('removeParents', record.parentId);
+    }
+    let res: Response;
+    try {
+      res = await this.driveFetch(
+        url.toString(),
+        { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: false, name: basename(path) }) },
+        `restore ${path}`,
+      );
+    } catch (error) {
+      // Deleted for good, like after emptying the trash.
+      if (error instanceof StorageError && error.status === 404) {
+        this.trashed.delete(token);
+        return false;
+      }
+      throw error;
+    }
+    const version = record.item.folder ? undefined : versionToken(await readJson(res));
+    index.paths.set(path, { ...record.item, ...(version ? { version } : {}) });
+    for (const [relative, value] of record.inside) index.paths.set(joinPath(path, relative), value);
+    this.trashed.delete(token);
+    return true;
   }
 
   async renameProject(projectId: string, name: string): Promise<void> {

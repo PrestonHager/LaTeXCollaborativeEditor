@@ -39,6 +39,8 @@ type BlobListener = (hash: string) => void;
 export class BlobStore {
   private readonly memory = new Map<string, Uint8Array>();
   private readonly listeners = new Set<BlobListener>();
+  // How many undo steps still need each blob, so deleted binary files can come back (fileHistory.ts).
+  private readonly pins = new Map<string, number>();
 
   has(hash: string) {
     return this.memory.has(hash);
@@ -85,6 +87,29 @@ export class BlobStore {
       }
     }
     return hash;
+  }
+
+  /** Keep these bytes in memory until release, even when no file uses them. */
+  retain(hash: string) {
+    this.pins.set(hash, (this.pins.get(hash) ?? 0) + 1);
+  }
+
+  release(hash: string) {
+    const count = (this.pins.get(hash) ?? 0) - 1;
+    if (count > 0) this.pins.set(hash, count);
+    else this.pins.delete(hash);
+  }
+
+  isRetained(hash: string) {
+    return this.pins.has(hash);
+  }
+
+  /**
+   * Drop bytes from memory once nothing needs them. Retained ones stay. The browser storage copy
+   * stays too: it's a cache shared by every project, and get() can still read it.
+   */
+  forget(hash: string) {
+    if (!this.pins.has(hash)) this.memory.delete(hash);
   }
 
   /** Run the callback whenever new content arrives, like a file from a peer. */

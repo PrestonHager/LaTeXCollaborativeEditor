@@ -162,6 +162,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .app-notice [data-notice-text] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-notice.is-error { color: var(--diag-text); }
 .app-notice a { flex-shrink: 0; color: var(--link-text); }
+.app-notice [data-notice-action] { flex-shrink: 0; }
 /* Hidden until it gets focus, so keyboard users can jump past the menus. */
 .skip-link { position: absolute; left: 0.5rem; top: -3rem; z-index: 500; }
 .skip-link:focus { top: 0.5rem; }

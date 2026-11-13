@@ -10,7 +10,25 @@ The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
 - Undo and redo only undo your own typing, not a collaborator's.
 - Each file has its own undo history, and it starts over when you switch files.
-- File operations like delete and rename can't be undone.
+- File operations have a history of their own. See [Undoing file operations](#undoing-file-operations).
+
+### Undoing file operations
+
+Creating, renaming, moving, deleting and uploading files and folders, and **Add Files from Drive**, can be undone.
+This history is apart from the editor's, like the Explorer in VS Code:
+
+- With focus in the editor, **Ctrl+Z** (**⌘Z** on a Mac) undoes typing in the open file, as always.
+- With focus in the **Files** panel, **Ctrl+Z** undoes your last file operation, and **Ctrl+Shift+Z** or **Ctrl+Y** redoes it.
+- **Edit > Undo** and **Redo** follow the same rule. While the Files panel has focus or was the last thing you used, they say what they'll do, like **Undo Delete chapter.tex**.
+- After a delete, rename or move, the notice at the top says what happened and has an **Undo** button, so you don't have to find the Files panel first.
+
+What it covers:
+
+- Only your own file operations, never a collaborator's. If someone else renamed or deleted the same file since, that part of your undo is skipped and a notice says so.
+- Undoing a delete brings the file back with its text, including edits a collaborator made to it before the delete reached them. Deleted images and PDFs come back too: the app keeps their bytes for as long as the operation can be undone.
+- If someone made a new file at the same path since, yours comes back next to it as `name (restored).ext`, and theirs stays as it was. A folder someone made again just merges with yours, and only files that clash get the `(restored)` name.
+- The history keeps your last 50 file operations, and it starts over when you open, import or start another project.
+- In a project saved to Google Drive, undoing a delete takes the same Drive file out of the trash on the next save, instead of making a copy. After a reload, or once the Drive trash is emptied, the next save writes it as a new file. Undoing **Add Files from Drive** moves those files to the Drive trash, and Redo takes them back out.
 
 The bar above the editor shows the open file's path, and a **main** badge if it's the main file.
 Images and PDFs open in a viewer instead of the editor. See [Projects and files](projects.md#viewing-images-and-pdfs).

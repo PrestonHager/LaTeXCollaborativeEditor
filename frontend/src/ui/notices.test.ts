@@ -74,4 +74,23 @@ describe('createNotice', () => {
     notice.clear();
     expect(notice.text()).toBe('');
   });
+
+  it('shows an action button that runs once and clears the notice', () => {
+    vi.useFakeTimers();
+    const { root, notice } = setup();
+    const button = root.querySelector<HTMLButtonElement>('[data-notice-action]')!;
+    const run = vi.fn();
+    notice.show('Deleted a.tex', { action: { label: 'Undo', run } });
+    expect(button.hidden).toBe(false);
+    expect(button.textContent).toBe('Undo');
+    vi.advanceTimersByTime(1000);
+    expect(notice.text()).toBe('Deleted a.tex');
+    button.click();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(notice.text()).toBe('');
+    expect(button.hidden).toBe(true);
+    // A later notice without one hides it.
+    notice.show('Saved');
+    expect(button.hidden).toBe(true);
+  });
 });

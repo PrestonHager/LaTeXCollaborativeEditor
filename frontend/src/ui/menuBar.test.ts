@@ -61,6 +61,22 @@ describe('createMenuBar', () => {
     menuBar.destroy();
   });
 
+  it('shows a label for right now, then its own label again', () => {
+    const container = document.createElement('div');
+    let label: string | undefined = 'Undo Delete a.tex';
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'Edit', items: [{ commandId: 'edit.undo', label: 'Undo' }] }]), {
+      getCommandState: () => ({ enabled: true, label }),
+      onCommand: () => undefined,
+    });
+    const text = () => container.querySelector('.menu-item-label')!.textContent;
+    expect(text()).toBe('Undo Delete a.tex');
+    label = undefined;
+    menuBar.refresh();
+    expect(text()).toBe('Undo');
+    expect(menuBar.entries()[0].label).toBe('Undo');
+    menuBar.destroy();
+  });
+
   it('supports keyboard navigation between triggers and menu items', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

@@ -47,9 +47,8 @@ If you joined someone else's room and haven't connected yet, it says "Waiting fo
 - You can't move a folder into itself, and you can't take a name that's already in use. The app tells you if you try.
 - Click the trash can to delete a file or folder. The app asks first, since collaborators lose it too.
 
-There's no undo for file operations.
-**Edit > Undo** only covers typing in the editor.
-If you delete a file by mistake, get it back from a downloaded `.zip` or your last Drive copy.
+You can undo all of these, and new files, folders and uploads too: click **Undo** in the notice, or press **Ctrl+Z** with focus in the Files panel.
+See [Undoing file operations](editing-and-preview.md#undoing-file-operations).
 
 ## Uploading files
 

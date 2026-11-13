@@ -55,6 +55,8 @@ export type CommandId =
 export type CommandState = {
   enabled: boolean;
   checked?: boolean;
+  /** A label for right now, like "Undo Delete chapter.tex". Leave it out for the menu's own label. */
+  label?: string;
 };
 
 /** A menu entry as read from the HTML, so the command palette can list the same commands. */
@@ -255,6 +257,11 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
         button.disabled = !state.enabled;
         button.setAttribute('aria-disabled', state.enabled ? 'false' : 'true');
         button.classList.toggle('is-checked', Boolean(state.checked));
+        const label = button.querySelector<HTMLElement>('.menu-item-label');
+        if (label) {
+          label.dataset.label ??= label.textContent ?? '';
+          label.textContent = state.label ?? label.dataset.label;
+        }
         // Checkbox items are marked in the HTML, we only flip their state.
         if (button.getAttribute('role') === 'menuitemcheckbox') {
           button.setAttribute('aria-checked', state.checked ? 'true' : 'false');

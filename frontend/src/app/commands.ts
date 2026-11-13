@@ -13,7 +13,7 @@ import { describeError } from '../storage/errors';
 import type { BlobStore } from '../project/blobStore';
 import type { ProjectContent, ProjectDoc } from '../project/projectDoc';
 import { starterProject } from '../project/projectIo';
-import { isTextPath, joinPath } from '../project/paths';
+import { basename, isTextPath, joinPath } from '../project/paths';
 import type { ProjectState } from './projectState';
 import type { ThemeController } from './theme';
 import type { Layout } from './layout';
@@ -74,7 +74,12 @@ export type CommandContext = {
   shareButtonEl: HTMLElement;
   // These get swapped out or made later, so we read them each time we need them.
   readonly project: ProjectDoc;
-  readonly undo: { undo(): void; redo(): void; canUndo(): boolean; canRedo(): boolean };
+  /**
+   * What Edit > Undo and Redo act on right now: the open file's text, or the file tree's history
+   * when the tree has focus or was used last (main.ts routes it). The file history names its steps,
+   * like "Delete chapter.tex", so the menu can say what Undo will do.
+   */
+  readonly undo: { undo(): void; redo(): void; canUndo(): boolean; canRedo(): boolean; undoLabel?(): string | null; redoLabel?(): string | null };
   readonly activeFileId: string | null;
   readonly menuBar: { refresh(): void; entries(): MenuEntry[] };
   readonly commandPalette: { toggle(): void; isOpen(): boolean; setCommands(commands: PaletteCommand[]): void };
@@ -92,7 +97,8 @@ export type CommandContext = {
    */
   loadFailed?(feature: string, error: unknown): void;
   persistAppSession(): void;
-  runFileOp(op: () => void): void;
+  /** Run a file op. A label makes it one step in the file history, and `done` shows a notice with Undo. */
+  runFileOp(op: () => void, label?: string, done?: string): void;
   openFile(id: string | null): void;
   downloadFile(path: string): Promise<void>;
   switchProject(content: ProjectContent, provider: StorageProvider, id: string | null): Promise<void>;
@@ -296,7 +302,7 @@ export function createCommands(app: CommandContext) {
         suggest: (value) => suggestFreeName(value, pathFor, taken),
       });
       if (name === null) return;
-      runFileOp(() => openFile(app.project.createTextFile(pathFor(name))));
+      runFileOp(() => openFile(app.project.createTextFile(pathFor(name))), `New File ${basename(pathFor(name))}`);
     },
     'file.newFolder': async () => {
       const folder = fileTree.currentFolder();
@@ -311,7 +317,7 @@ export function createCommands(app: CommandContext) {
         validate: (value) => pathProblem(value && pathFor(value), taken),
         suggest: (value) => suggestFreeName(value, pathFor, taken),
       });
-      if (name !== null) runFileOp(() => app.project.createFolder(pathFor(name)));
+      if (name !== null) runFileOp(() => app.project.createFolder(pathFor(name)), `New Folder ${basename(pathFor(name))}`);
     },
     'file.upload': () => uploadDialog.open(fileTree.currentFolder()),
     // The Project .zip exporter with no dialog. It reports how it went in the notice line.
@@ -572,10 +578,14 @@ export function createCommands(app: CommandContext) {
         return { enabled: Boolean(app.activeFileId) };
       case 'file.saveNow':
         return { enabled: !isClient && !projectState.savingPaused };
-      case 'edit.undo':
-        return { enabled: app.undo.canUndo() };
-      case 'edit.redo':
-        return { enabled: app.undo.canRedo() };
+      case 'edit.undo': {
+        const label = app.undo.undoLabel?.();
+        return { enabled: app.undo.canUndo(), ...(label ? { label: `Undo ${label}` } : {}) };
+      }
+      case 'edit.redo': {
+        const label = app.undo.redoLabel?.();
+        return { enabled: app.undo.canRedo(), ...(label ? { label: `Redo ${label}` } : {}) };
+      }
       case 'view.togglePauseSaving':
         return { enabled: !isClient, checked: projectState.savingPaused };
       case 'view.layoutSplit':
@@ -594,15 +604,18 @@ export function createCommands(app: CommandContext) {
     const fromMenus = app.menuBar
       .entries()
       .filter((entry) => entry.inPalette)
-      .map((entry) => ({
-        id: entry.commandId,
-        section: entry.section,
-        // The menu shows a checkmark for this one, but the palette has to say which way it goes.
-        label: entry.commandId === 'view.togglePauseSaving' && projectState.savingPaused ? 'Resume Saving' : entry.label,
-        shortcut: app.keymap.labelFor(entry.commandId),
-        description: entry.description,
-        enabled: getCommandState(entry.commandId).enabled,
-      }));
+      .map((entry) => {
+        const state = getCommandState(entry.commandId);
+        return {
+          id: entry.commandId,
+          section: entry.section,
+          // The menu shows a checkmark for this one, but the palette has to say which way it goes.
+          label: entry.commandId === 'view.togglePauseSaving' && projectState.savingPaused ? 'Resume Saving' : (state.label ?? entry.label),
+          shortcut: app.keymap.labelFor(entry.commandId),
+          description: entry.description,
+          enabled: state.enabled,
+        };
+      });
     // Skip the theme switch for the theme that's already in use.
     const themes = themeSwitchCommands
       .filter(({ theme }) => !(themeState.editorTheme === theme && themeState.previewTheme === theme))

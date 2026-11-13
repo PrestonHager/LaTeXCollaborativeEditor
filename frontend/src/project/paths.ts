@@ -127,3 +127,19 @@ export function uniquePath(path: string, taken: Set<string>): string {
     if (!taken.has(candidate)) return candidate;
   }
 }
+
+/**
+ * Name for something an undo brings back when its old path is taken: "a (restored).tex", then
+ * "a (restored 2).tex". Folders keep dots in their name, since they have no extension.
+ */
+export function restoredPath(path: string, taken: (path: string) => boolean, folder = false): string {
+  const dir = dirname(path);
+  const name = basename(path);
+  const dot = folder ? -1 : name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : '';
+  for (let n = 1; ; n += 1) {
+    const candidate = joinPath(dir, `${stem} (restored${n > 1 ? ` ${n}` : ''})${ext}`);
+    if (!taken(candidate)) return candidate;
+  }
+}

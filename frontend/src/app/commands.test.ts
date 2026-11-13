@@ -709,6 +709,18 @@ describe('commands', () => {
       expect(app.persistAppSession).toHaveBeenCalledTimes(5);
     });
 
+    it('names the file op Undo and Redo will do, in the menu state and the palette', () => {
+      mountAppShell();
+      const menuBar = createMenuBar(document.getElementById('menu-bar')!, { getCommandState: () => ({ enabled: true }), onCommand: () => undefined });
+      const t = setup({ entries: menuBar.entries() });
+      expect(t.commands.getCommandState('edit.undo').label).toBeUndefined();
+      Object.assign(t.undo, { undoLabel: () => 'Delete chapter.tex', redoLabel: () => 'Rename a.tex' });
+      expect(t.commands.getCommandState('edit.undo').label).toBe('Undo Delete chapter.tex');
+      expect(t.commands.getCommandState('edit.redo').label).toBe('Redo Rename a.tex');
+      t.commands.refreshCommands();
+      expect(t.palette().find((command) => command.id === 'edit.undo')?.label).toBe('Undo Delete chapter.tex');
+    });
+
     it('pauses and resumes saving for hosts only', async () => {
       mountAppShell();
       const menuBar = createMenuBar(document.getElementById('menu-bar')!, { getCommandState: () => ({ enabled: true }), onCommand: () => undefined });

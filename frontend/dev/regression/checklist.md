@@ -88,6 +88,12 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Rename a file from its pencil in the Files panel. The **Rename** dialog selects the name without its extension. The preview still finds it if you update the `\input`.
 - [ ] Move a file into another folder by typing `folder/name.tex` in the Rename dialog.
 - [ ] Delete a file from its trash can. The dialog's **Delete file** button is red and focus starts on Cancel, so Enter keeps the file. Clicking Delete file removes it.
+- [ ] Delete a file from its trash can. The notice says "Deleted name" with an **Undo** button. Clicking it brings the file back with its text, and the notice says "Undid Delete name.".
+- [ ] Upload an image, delete it, and undo: it shows in the viewer again and `\includegraphics` still finds it.
+- [ ] Rename a file, move one by dragging, delete a folder with files in it, make a new file and a new folder. Click a row in the Files panel, then press Ctrl+Z once per change: each undoes in reverse order, and Ctrl+Shift+Z (and Ctrl+Y) redoes them.
+- [ ] With focus in the Files panel, Edit > Undo says what it'll undo, like **Undo Delete chapter.tex**, and Redo the same. Click in the editor and they say plain **Undo** and **Redo** again, and Ctrl+Z undoes typing only, never a file change.
+- [ ] In a shared room, rename or delete a file on one side, then undo it: the other side follows. Undo never removes a file the other person made. Delete a file, have the other person make a new file with that name, then undo: yours comes back as `name (restored).ext` next to theirs.
+- [ ] On a project saved to Google Drive, delete a file, wait for the save, then undo: after the next save the same file is back in the Drive folder (not a copy), and it's gone from the Drive trash.
 - [ ] Every one of these dialogs closes on Escape and on a click outside the box, gives focus back to the button that opened it (or a row in the Files panel after a rename or delete), and looks right in light and dark mode and in a narrow window.
 - [ ] No browser `prompt`/`confirm` box shows anywhere, except the browser's own "Leave site?" box.
 - [ ] Set main file on another `.tex` file. The preview compiles from that file instead.

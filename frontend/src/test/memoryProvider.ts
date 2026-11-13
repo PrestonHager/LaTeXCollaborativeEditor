@@ -90,10 +90,38 @@ export class MemoryProvider implements StorageProvider {
     this.calls.push(`move ${from} ${to}`);
   }
 
+  /** What remove() trashed, by token, like the Drive trash. Paths are relative to what was removed. */
+  readonly trash = new Map<string, { projectId: string; items: [string, Uint8Array | null, number | undefined][] }>();
+  /** Set to false to act like a provider without a trash (or after the trash is emptied). */
+  restorable = true;
+
   async remove(projectId: string, path: string) {
-    const files = this.get(projectId).files;
-    for (const key of [...files.keys()]) if (key === path || isInside(key, path)) files.delete(key);
+    const { files, versions } = this.get(projectId);
+    const items: [string, Uint8Array | null, number | undefined][] = [];
+    for (const [key, data] of [...files]) {
+      if (key !== path && !isInside(key, path)) continue;
+      items.push([key.slice(path.length), data, versions.get(key)]);
+      files.delete(key);
+      versions.delete(key);
+    }
     this.calls.push(`remove ${path}`);
+    if (!items.length) return;
+    const token = `t${(this.nextId += 1)}`;
+    this.trash.set(token, { projectId, items });
+    return token;
+  }
+
+  async restore(projectId: string, path: string, token: string) {
+    const trashed = this.trash.get(token);
+    const { files, versions } = this.get(projectId);
+    if (!this.restorable || !trashed || trashed.projectId !== projectId || files.has(path)) return false;
+    this.trash.delete(token);
+    for (const [relative, data, version] of trashed.items) {
+      files.set(path + relative, data);
+      if (version !== undefined) versions.set(path + relative, version);
+    }
+    this.calls.push(`restore ${path}`);
+    return true;
   }
 
   async renameProject(projectId: string, name: string) {
