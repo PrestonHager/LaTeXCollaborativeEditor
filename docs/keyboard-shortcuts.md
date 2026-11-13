@@ -62,7 +62,7 @@ It lists every command, with its keybinds next to it.
 - **Search** by command name, menu, what it does, or key, like "save" or "Ctrl+S".
 - **Reset to defaults** removes every keybind you added and turns the built-in ones back on.
 
-Your keybinds are saved in this browser only, apart from your projects.
+Your keybinds are saved in this browser, apart from your projects, along with your other [settings](saving-and-storage.md#your-settings). Your other open tabs pick up a change right away, and **Settings > Export settings** lets you take them to another browser.
 They're stored with a "main modifier" instead of Ctrl or ⌘, so a keybind you add on Windows shows as ⌘ on a Mac.
 
 The menus, toolbar tooltips, command palette, and tour all show your keybinds as soon as you add them.

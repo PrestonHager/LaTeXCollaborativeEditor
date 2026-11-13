@@ -144,15 +144,21 @@ Changes apply right away, so there's no save button.
 - **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
 - **Google Drive**: who's signed in, like "Signed in as you@example.com", or "Not connected".
 - **Keyboard shortcuts**: every command with its keybinds. See [Changing shortcuts](keyboard-shortcuts.md#changing-shortcuts).
+- **Your settings**:
+  - **Export settings** downloads your themes, layout and shortcuts as a `.json` file.
+  - **Import settings** loads such a file. Settings it doesn't know, or values that don't fit, are skipped, and the dialog says which.
+  - **Reset to defaults** resets all settings, or just themes, layout, keyboard shortcuts, or the tour (so it shows again). Click it twice: the first click turns it red and says **Click again to reset**.
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
-Guests can change themes and shortcuts, but the saving options are turned off since the host decides how the project is saved.
+Your settings are saved in this browser and shared with its other open tabs, for guests as well as hosts. They're never sent to people in your room. See [Your settings](saving-and-storage.md#your-settings).
+
+Guests can change themes, layout and shortcuts, but the saving options are turned off since the host decides how the project is saved.
 
 ## Themes
 
 - **Toggle Editor Theme** cycles dark, light, and system for the app and the editor. System follows your computer's light or dark setting.
 - **Toggle Preview Theme** does the same for the preview only, so you can mix, like a dark editor with a light preview.
-- As the host, your theme choices are remembered in this browser. Guests' choices only last until they close the tab.
+- Your theme choices are remembered in this browser, whether you're the host or a guest, and your other open tabs switch too.
 
 ## Layout modes
 
@@ -163,6 +169,7 @@ Under **View**:
 - **Preview Only**: hides the editor.
 
 The active layout has a check mark in the menu.
+The layout and the splitter position are remembered in this browser, like your other [settings](saving-and-storage.md#your-settings).
 
 ## Header status pills
 

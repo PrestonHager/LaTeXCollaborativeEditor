@@ -1,38 +1,10 @@
-import { createTour, fillShortcuts, hasSeenTour, markTourSeen, placeTourCard, TOUR_SEEN_KEY } from './tour';
+import { createTour, fillShortcuts, placeTourCard } from './tour';
 import { mountAppShell } from '../test/appShell';
 
-const memoryStore = () => {
-  const data = new Map<string, string>();
-  return {
-    getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => void data.set(key, value),
-  };
+const memorySeen = () => {
+  let seen = false;
+  return { has: () => seen, mark: () => void (seen = true) };
 };
-
-const brokenStore = {
-  getItem: () => {
-    throw new Error('SecurityError');
-  },
-  setItem: () => {
-    throw new Error('QuotaExceededError');
-  },
-};
-
-describe('tour state', () => {
-  it('remembers that the tour was shown', () => {
-    const store = memoryStore();
-    expect(hasSeenTour(store)).toBe(false);
-    markTourSeen(store);
-    expect(store.getItem(TOUR_SEEN_KEY)).toBe('1');
-    expect(hasSeenTour(store)).toBe(true);
-  });
-
-  it("treats storage that throws as seen, so it doesn't pop up every visit", () => {
-    expect(hasSeenTour(brokenStore)).toBe(true);
-    expect(() => markTourSeen(brokenStore)).not.toThrow();
-    expect(hasSeenTour(undefined)).toBe(false);
-  });
-});
 
 describe('placeTourCard', () => {
   const card = { width: 352, height: 205 };
@@ -87,17 +59,17 @@ describe('placeTourCard', () => {
 });
 
 describe('createTour', () => {
-  const setup = (store = memoryStore()) => {
+  const setup = (seen = memorySeen()) => {
     mountAppShell();
     const card = document.getElementById('tour')!;
     const onClose = vi.fn();
-    const tour = createTour(card, document.getElementById('tour-steps')!, { store, onClose });
+    const tour = createTour(card, document.getElementById('tour-steps')!, { seen, onClose });
     const q = <T extends HTMLElement>(selector: string) => card.querySelector<T>(selector)!;
-    return { card, tour, store, onClose, q };
+    return { card, tour, seen, onClose, q };
   };
 
   it('walks through the steps and only shows once', () => {
-    const { card, tour, store, onClose, q } = setup();
+    const { card, tour, seen, onClose, q } = setup();
     expect(card.hidden).toBe(true);
     expect(tour.stepCount()).toBeGreaterThanOrEqual(5);
 
@@ -121,7 +93,7 @@ describe('createTour', () => {
     q<HTMLButtonElement>('[data-tour-next]').click();
     expect(tour.isOpen()).toBe(false);
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(hasSeenTour(store)).toBe(true);
+    expect(seen.has()).toBe(true);
     expect(tour.startIfNew()).toBe(false);
     // Each step checks layout styles, which jsdom is slow at, so give this one more time.
   }, 30_000);
@@ -169,7 +141,7 @@ describe('fillShortcuts', () => {
   it('fills the first tour step from the shortcut table', () => {
     mountAppShell();
     const card = document.getElementById('tour')!;
-    const tour = createTour(card, document.getElementById('tour-steps')!, { store: memoryStore(), shortcutLabel: () => 'Ctrl+P' });
+    const tour = createTour(card, document.getElementById('tour-steps')!, { seen: memorySeen(), shortcutLabel: () => 'Ctrl+P' });
     tour.start();
     const body = card.querySelector('[data-tour-body]')!.textContent!;
     expect(body).toContain('Use Ctrl+P to search them all.');

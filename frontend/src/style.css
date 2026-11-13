@@ -192,13 +192,18 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .command-palette-empty { color: var(--muted-text); padding: 1.5rem 0.65rem; font-size: 13px; text-align: center; }
 
 /* Settings dialog. Basecoat handles the box, we lay out the rows. */
-.settings-dialog-body { display: grid; gap: 1rem; }
+/* The body scrolls when the dialog is taller than the window, so the footer stays in view. Padding keeps focus rings unclipped. */
+.settings-dialog-body { display: grid; gap: 1rem; min-height: 0; overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 label.settings-row { justify-content: flex-start; }
 .settings-dialog footer { justify-content: space-between; align-items: center; }
 .settings-keybinds { display: grid; gap: 0.5rem; min-width: 0; }
 .settings-keybinds h3 { margin: 0; }
-.settings-hint { margin: 0; font-size: 0.8125rem; white-space: normal; overflow: visible; text-overflow: clip; }
+.settings-data { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; min-width: 0; }
+.settings-data h3 { margin: 0; }
+.settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+#settings-storage-note { color: var(--destructive, inherit); }
+.settings-hint { margin: 0; max-width: none; font-size: 0.8125rem; white-space: normal; overflow: visible; text-overflow: clip; }
 .keybind-search { width: 100%; height: 2rem; padding: 0 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: 0.875rem; }
 .keybind-search:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 .keybind-list { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }

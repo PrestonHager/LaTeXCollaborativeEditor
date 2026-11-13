@@ -118,4 +118,71 @@ describe('App integration behavior', () => {
     dialog.refresh();
     expect(label.textContent).toBe('Signed in as me@example.com');
   });
+
+  it('exports, imports and resets settings from the dialog', async () => {
+    vi.useFakeTimers();
+    mountAppShell();
+    const onExportSettings = vi.fn();
+    const onImportSettings = vi.fn(async (file: File) => `Imported ${file.name}`);
+    const onResetSettings = vi.fn(() => 'Reset done.');
+    let settingsPersistent = true;
+    const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+      getState: () => ({ editorTheme: 'system', previewTheme: 'system', savingPaused: false, canChangeSaving: false, settingsPersistent }),
+      onEditorTheme: () => undefined,
+      onPreviewTheme: () => undefined,
+      onSavingPaused: () => undefined,
+      onClearLocalDocs: () => undefined,
+      onExportSettings,
+      onImportSettings,
+      onResetSettings,
+    });
+    const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const status = byId('settings-data-status');
+    dialog.open();
+    expect(byId('settings-storage-note').hidden).toBe(true);
+
+    // Guests get these too: settings are their own.
+    expect(byId<HTMLButtonElement>('settings-export').disabled).toBe(false);
+    byId<HTMLButtonElement>('settings-export').click();
+    expect(onExportSettings).toHaveBeenCalled();
+    expect(status.textContent).toBe('Settings downloaded.');
+
+    const input = byId<HTMLInputElement>('settings-import-file');
+    const pick = vi.spyOn(input, 'click').mockImplementation(() => undefined);
+    byId<HTMLButtonElement>('settings-import').click();
+    expect(pick).toHaveBeenCalled();
+    const file = new File(['{}'], 'mine.json', { type: 'application/json' });
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(status.textContent).toBe('Imported mine.json'));
+    onImportSettings.mockRejectedValueOnce(new Error('nope'));
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(status.textContent).toBe('Could not read that file.'));
+    Object.defineProperty(input, 'files', { configurable: true, value: [] });
+    input.dispatchEvent(new Event('change'));
+    expect(onImportSettings).toHaveBeenCalledTimes(2);
+
+    // Reset takes a second click, and lets go after a while.
+    const reset = byId<HTMLButtonElement>('settings-reset');
+    const scope = byId<HTMLSelectElement>('settings-reset-scope');
+    reset.click();
+    expect(reset.textContent).toBe('Click again to reset');
+    expect(onResetSettings).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(6000);
+    expect(reset.textContent).toBe('Reset to defaults');
+    reset.click();
+    scope.value = 'keybinds';
+    scope.dispatchEvent(new Event('change'));
+    expect(reset.dataset.armed).toBeUndefined();
+    reset.click();
+    reset.click();
+    expect(onResetSettings).toHaveBeenCalledWith('keybinds');
+    expect(status.textContent).toBe('Reset done.');
+
+    settingsPersistent = false;
+    dialog.refresh();
+    expect(byId('settings-storage-note').hidden).toBe(false);
+    dialog.close();
+    vi.useRealTimers();
+  });
 });

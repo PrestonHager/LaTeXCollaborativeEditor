@@ -21,8 +21,6 @@ const session = (overrides: Partial<AppSessionState> = {}): AppSessionState => (
   content: '',
   providerMode: 'local',
   saveNowEnabled: false,
-  editorTheme: 'system',
-  previewTheme: 'system',
   updatedAt: 0,
   ...overrides,
 });

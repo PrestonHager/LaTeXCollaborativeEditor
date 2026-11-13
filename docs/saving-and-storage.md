@@ -60,6 +60,20 @@ Local data is per browser and per site.
 It doesn't follow you to another browser or device, and clearing site data deletes it.
 Download a `.zip` now and then if browser storage is your only copy.
 
+## Your settings
+
+Your settings are kept apart from your projects: the app and preview themes, the layout (split, editor only or preview only, and where the splitter sits), your keyboard shortcuts, and whether you've seen the tour.
+
+- They're saved in this browser's `localStorage` under one key, `latex-editor.settings`, with a version number so later versions can move them forward.
+- Guests save their own settings too. Settings are never sent to people in your room: a room only shares the project.
+- Change a setting in one tab and your other open tabs of the app pick it up right away.
+- **Settings > Export settings** downloads them as a `.json` file. **Import settings** loads one, in another browser or on another device. Anything in the file that isn't a known setting with a valid value is skipped, and the dialog says what it skipped.
+- **Settings > Reset to defaults** resets all settings, or just one part: themes, layout, keyboard shortcuts, or the tour. It asks for a second click first.
+- If browser storage is blocked, settings still work but only last until you close the tab. Settings says so, and you can export them to keep a copy.
+- Settings saved by older versions (shortcuts, the tour flag, and themes kept with the open project) move over the first time you open this version, so nothing is lost.
+
+Settings don't sync through Google Drive yet. To move them to another device, export them and import the file there.
+
 ## Download and upload a .zip
 
 - **File > Download Project .zip** (**Ctrl+Shift+S**) saves the whole project to your computer.

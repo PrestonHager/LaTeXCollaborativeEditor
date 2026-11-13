@@ -11,8 +11,6 @@ describe('appSession state', () => {
       content: 'hello',
       providerMode: 'drive',
       saveNowEnabled: false,
-      editorTheme: 'system',
-      previewTheme: 'system',
     });
 
     const loaded = readAppSessionState();
@@ -60,7 +58,7 @@ describe('appSession state', () => {
     expect(readAppSessionState()).toBeNull();
   });
 
-  it('falls back to system themes when stored theme values are invalid', () => {
+  it('ignores the theme fields older builds stored here, since themes are settings now', () => {
     localStorage.setItem(
       'latex_editor_app_session_v1',
       JSON.stringify({
@@ -74,8 +72,8 @@ describe('appSession state', () => {
       }),
     );
     const loaded = readAppSessionState();
-    expect(loaded?.editorTheme).toBe('system');
-    expect(loaded?.previewTheme).toBe('system');
+    expect(loaded).not.toHaveProperty('editorTheme');
+    expect(loaded).not.toHaveProperty('previewTheme');
     expect(loaded?.updatedAt).toBe(42);
   });
 
@@ -96,7 +94,7 @@ describe('appSession state', () => {
     nowSpy.mockRestore();
   });
 
-  it('writeAppSessionState fills default themes when omitted', () => {
+  it('writeAppSessionState leaves themes out of the session', () => {
     writeAppSessionState({
       documentName: 'n',
       content: 'c',
@@ -104,8 +102,8 @@ describe('appSession state', () => {
       saveNowEnabled: false,
     });
     const raw = JSON.parse(localStorage.getItem('latex_editor_app_session_v1')!);
-    expect(raw.editorTheme).toBe('system');
-    expect(raw.previewTheme).toBe('system');
+    expect(raw).not.toHaveProperty('editorTheme');
+    expect(raw).not.toHaveProperty('previewTheme');
   });
 
   it('writeAppSessionState returns false instead of throwing when storage is full', () => {

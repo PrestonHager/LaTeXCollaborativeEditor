@@ -3,14 +3,15 @@ import type { SavedManifest } from '../storage/projectSaver';
 export type ProviderMode = 'local' | 'drive';
 export type ThemeMode = 'dark' | 'light' | 'system';
 
+// Themes used to live in this session blob too. They're settings now (see settings.ts), which
+// reads them from here once and moves them over.
+
 export type AppSessionState = {
   documentName: string;
   content: string;
   providerMode: ProviderMode;
   // False when saving is paused. It keeps its old name so saved sessions still load.
   saveNowEnabled: boolean;
-  editorTheme: ThemeMode;
-  previewTheme: ThemeMode;
   updatedAt: number;
   // Stable id for the open document, so a linked Drive file survives a rename.
   documentId?: string;
@@ -42,14 +43,11 @@ export function readAppSessionState(): AppSessionState | null {
     ) {
       return null;
     }
-    const validTheme = (t: unknown): t is ThemeMode => t === 'dark' || t === 'light' || t === 'system';
     return {
       documentName: parsed.documentName,
       content: parsed.content,
       providerMode: parsed.providerMode,
       saveNowEnabled: parsed.saveNowEnabled,
-      editorTheme: validTheme(parsed.editorTheme) ? parsed.editorTheme : 'system',
-      previewTheme: validTheme(parsed.previewTheme) ? parsed.previewTheme : 'system',
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
       documentId: typeof parsed.documentId === 'string' && parsed.documentId ? parsed.documentId : undefined,
       yjs:
@@ -77,10 +75,7 @@ function isManifest(value: unknown): value is SavedManifest {
   );
 }
 
-export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt' | 'editorTheme' | 'previewTheme'> & {
-  editorTheme?: ThemeMode;
-  previewTheme?: ThemeMode;
-};
+export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt'>;
 
 /** Make a new id for a document. Falls back to a random string where crypto.randomUUID is missing. */
 export function createDocumentId(): string {
@@ -97,8 +92,6 @@ export type SessionWriteResult = 'full' | 'text-only' | 'failed';
 export function writeAppSessionState(state: WriteAppSessionPayload): SessionWriteResult {
   const payload: AppSessionState = {
     ...state,
-    editorTheme: state.editorTheme ?? 'system',
-    previewTheme: state.previewTheme ?? 'system',
     updatedAt: Date.now(),
   };
   try {

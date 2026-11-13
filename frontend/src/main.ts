@@ -36,7 +36,9 @@ import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
-import { createKeymap, readKeybindSettings, writeKeybindSettings } from './app/keymap';
+import { createKeymap } from './app/keymap';
+import { createSettingsStore } from './state/settings';
+import { bindSettings, importSettingsFile, resetSettings, settingsFileName } from './app/settingsBinding';
 import { createKeybindSettings } from './ui/keybindSettings';
 import { editorKeybinds } from './ui/editor';
 import { detectPlatform } from './ui/modifierShortcutLabels';
@@ -89,7 +91,9 @@ const appNoticeEl = document.getElementById('app-notice') as HTMLElement;
 const activeFileNameEl = document.getElementById('active-file-name') as HTMLElement;
 const activeFileMainEl = document.getElementById('active-file-main') as HTMLElement;
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
-const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
+// The person's own settings (themes, layout, keybinds). Kept apart from the session, never sent to peers.
+const settings = createSettingsStore();
+const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange: ({ mode, splitRatio }) => settings.update({ layoutMode: mode, splitRatio }) });
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
@@ -194,8 +198,8 @@ function restoredDocState() {
   return state ? { docId: restored.yjs.docId, state } : undefined;
 }
 
-applyEditorTheme(restored?.editorTheme ?? 'system');
-applyPreviewTheme(restored?.previewTheme ?? 'system');
+applyEditorTheme(settings.get('editorTheme'));
+applyPreviewTheme(settings.get('previewTheme'));
 themeState.watchSystemTheme();
 
 // Set up at the end of this file. Peers only say hello once the page is running, so it's ready by then.
@@ -241,8 +245,6 @@ const persistAppSession = (pendingSave = false): SessionWriteResult => {
     documentName: projectName(),
     ...projectState.sessionFields(),
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
-    editorTheme: themeState.editorTheme,
-    previewTheme: themeState.previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
     activeFileId: activeFileId ?? undefined,
     pendingSave: pendingSave || undefined,
@@ -837,17 +839,25 @@ const commands = createCommands({
 });
 const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, listCommands, handleKeydown, setSavingPaused } = commands;
 
-// Some browsers throw just for touching localStorage when site data is blocked.
-const browserStore = (() => {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-})();
-
-// Keybinds from Settings live in this browser, apart from the project and the app session.
-keymap.setSettings(readKeybindSettings(browserStore, (id) => id in commands.commandRegistry));
+// Saved themes, layout and keybinds go on screen now, and changes from other tabs, imports and resets follow.
+bindSettings({
+  settings,
+  themeState,
+  layout,
+  keymap,
+  isCommand: (id) => id in commands.commandRegistry,
+  onApplied: (changed) => {
+    if (changed.includes('keybinds')) {
+      menuBar.refreshShortcuts();
+      toolbar.refreshShortcuts();
+    }
+    refreshCommands();
+    if (settingsDialog.isOpen()) {
+      settingsDialog.refresh();
+      keybindSettings.refresh();
+    }
+  },
+});
 
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
@@ -866,15 +876,14 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
     savingPaused: projectState.savingPaused,
     canChangeSaving: !isClient,
     driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
+    settingsPersistent: settings.isPersistent(),
   }),
   onEditorTheme: (theme) => {
     applyEditorTheme(theme);
-    persistAppSession();
     refreshCommands();
   },
   onPreviewTheme: (theme) => {
     applyPreviewTheme(theme);
-    persistAppSession();
     refreshCommands();
   },
   onSavingPaused: (paused) => {
@@ -883,6 +892,9 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
   },
   onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
   onOpen: () => keybindSettings.refresh(),
+  onExportSettings: () => localDownload.download(settingsFileName(), settings.exportJson(), 'application/json'),
+  onImportSettings: (file) => importSettingsFile(settings, file),
+  onResetSettings: (scope) => resetSettings(settings, scope),
 });
 
 const keybindSettings = createKeybindSettings(document.getElementById('settings-keybinds')!, {
@@ -890,8 +902,8 @@ const keybindSettings = createKeybindSettings(document.getElementById('settings-
   builtins: shortcuts,
   commands: listCommands,
   editorKeybinds: editorKeybinds(detectPlatform()),
-  onChange: (settings) => {
-    writeKeybindSettings(browserStore, settings);
+  onChange: (next) => {
+    settings.set('keybinds', next);
     // A changed keybind shows up everywhere right away.
     menuBar.refreshShortcuts();
     toolbar.refreshShortcuts();
@@ -910,7 +922,8 @@ renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorEleme
 
 const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
   shortcutLabel,
-  store: browserStore,
+  // With storage blocked, count the tour as seen so it doesn't pop up on every visit.
+  seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
 });
 
 // The empty states have their own buttons for the next step, like New file.
