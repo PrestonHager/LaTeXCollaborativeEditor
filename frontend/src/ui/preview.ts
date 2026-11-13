@@ -158,6 +158,32 @@ export function parsePreviewMessage(event: Pick<MessageEvent, 'source' | 'data'>
   return null;
 }
 
+/** With no user activation API, open at most one preview link this often. */
+export const LINK_OPEN_MIN_INTERVAL_MS = 1500;
+
+type UserActivationLike = { isActive: boolean } | undefined;
+
+/**
+ * Decides whether a link-open request from the preview frame may go ahead. A click inside the
+ * frame also activates the app (HTML spec: activation reaches ancestor frames), so we require
+ * transient user activation. That stops script in the frame from opening tabs without a click.
+ * Browsers without navigator.userActivation get a rate limit instead.
+ */
+export function createLinkOpenGate(
+  getActivation: () => UserActivationLike = () => (navigator as Navigator & { userActivation?: UserActivationLike }).userActivation,
+  now: () => number = () => Date.now(),
+): () => boolean {
+  let lastOpen = -Infinity;
+  return () => {
+    const activation = getActivation();
+    if (activation) return activation.isActive;
+    const t = now();
+    if (t - lastOpen < LINK_OPEN_MIN_INTERVAL_MS) return false;
+    lastOpen = t;
+    return true;
+  };
+}
+
 export function createPreviewPane(container: HTMLElement, initialTheme: PreviewDisplayTheme = 'light') {
   const root = document.createElement('div');
   root.className = 'preview';
@@ -198,12 +224,21 @@ export function createPreviewPane(container: HTMLElement, initialTheme: PreviewD
 
   // The last scroll position the frame reported, so a new render starts there.
   let scrollY = 0;
+  const mayOpenLink = createLinkOpenGate();
   window.addEventListener('message', (event) => {
     const message = parsePreviewMessage(event, frame.contentWindow);
-    if (!message) return;
-    if (message.kind === 'scroll') scrollY = message.y;
-    // noopener: the new tab gets no handle back to the app.
-    else window.open(message.url, '_blank', 'noopener,noreferrer');
+    if (!message) {
+      if (frame.contentWindow && event.source === frame.contentWindow) console.debug('Preview: dropped a message from the frame', event.data);
+      return;
+    }
+    if (message.kind === 'scroll') {
+      scrollY = message.y;
+    } else if (!mayOpenLink()) {
+      console.debug('Preview: dropped a link open with no recent click', message.url);
+    } else {
+      // noopener: the new tab gets no handle back to the app.
+      window.open(message.url, '_blank', 'noopener,noreferrer');
+    }
   });
 
   return {

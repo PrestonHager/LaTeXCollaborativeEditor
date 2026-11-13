@@ -1,5 +1,7 @@
 import {
+  createLinkOpenGate,
   createPreviewPane,
+  LINK_OPEN_MIN_INTERVAL_MS,
   parsePreviewMessage,
   PREVIEW_COLORS,
   PREVIEW_LINK_SCRIPT_ID,
@@ -167,6 +169,38 @@ describe('safeExternalUrl', () => {
   });
 });
 
+describe('createLinkOpenGate', () => {
+  it('follows user activation when the browser has it', () => {
+    let isActive = false;
+    const gate = createLinkOpenGate(() => ({ isActive }));
+    expect(gate()).toBe(false);
+    isActive = true;
+    expect(gate()).toBe(true);
+    expect(gate()).toBe(true);
+  });
+
+  it('falls back to at most one open per interval without it', () => {
+    let t = 10_000;
+    const gate = createLinkOpenGate(() => undefined, () => t);
+    expect(gate()).toBe(true);
+    t += LINK_OPEN_MIN_INTERVAL_MS - 1;
+    expect(gate()).toBe(false);
+    t += 1;
+    expect(gate()).toBe(true);
+    expect(gate()).toBe(false);
+  });
+
+  it('reads navigator.userActivation by default', () => {
+    Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: false } });
+    try {
+      expect(createLinkOpenGate()()).toBe(false);
+    } finally {
+      delete (navigator as unknown as Record<string, unknown>).userActivation;
+    }
+    expect(createLinkOpenGate()()).toBe(true);
+  });
+});
+
 describe('parsePreviewMessage', () => {
   const frameWindow = {} as Window;
   const open = (url: unknown) => ({ type: PREVIEW_MESSAGE_OPEN_LINK, url });
@@ -239,6 +273,47 @@ describe('preview link handling in the pane', () => {
     postFromFrame(frame, { type: PREVIEW_MESSAGE_OPEN_LINK, url: 'javascript:alert(1)' });
     postFromFrame(frame, { type: PREVIEW_MESSAGE_OPEN_LINK, url: 'data:text/html,hi' });
     expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  describe('with navigator.userActivation', () => {
+    let isActive = false;
+    beforeEach(() => {
+      Object.defineProperty(navigator, 'userActivation', { configurable: true, get: () => ({ isActive }) });
+    });
+    afterEach(() => {
+      delete (navigator as unknown as Record<string, unknown>).userActivation;
+    });
+
+    it('does not open a link with no user activation, and logs it', () => {
+      isActive = false;
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+      const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+      createPreviewPane(document.body);
+      const frame = document.querySelector('iframe')!;
+      postFromFrame(frame, { type: PREVIEW_MESSAGE_OPEN_LINK, url: 'https://example.com/' });
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(debug).toHaveBeenCalled();
+    });
+
+    it('opens a link while the user activation is active, every time', () => {
+      isActive = true;
+      const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+      createPreviewPane(document.body);
+      const frame = document.querySelector('iframe')!;
+      postFromFrame(frame, { type: PREVIEW_MESSAGE_OPEN_LINK, url: 'https://example.com/a' });
+      postFromFrame(frame, { type: PREVIEW_MESSAGE_OPEN_LINK, url: 'https://example.com/b' });
+      expect(openSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('logs and drops a bad message from the frame, but ignores other windows quietly', () => {
+    const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+    createPreviewPane(document.body);
+    const frame = document.querySelector('iframe')!;
+    postFromFrame(frame, { type: 'whatever' }, window);
+    expect(debug).not.toHaveBeenCalled();
+    postFromFrame(frame, { type: PREVIEW_MESSAGE_OPEN_LINK, url: 'javascript:alert(1)' });
+    expect(debug).toHaveBeenCalledTimes(1);
   });
 
   it('starts the next render at the last scroll position the frame reported', async () => {

@@ -66,7 +66,7 @@ When the preview updates, it keeps your scroll position instead of jumping back 
 How it works: the editor adds a small script of its own to the preview frame.
 Clicks on in-page links scroll inside the frame.
 Clicks on other links never load anything in the frame.
-The frame asks the editor to open the link, and the editor checks that the request came from the preview frame and that the address is `http`, `https` or `mailto` before opening it.
+The frame asks the editor to open the link. The editor checks that the request came from the preview frame, that the address is `http`, `https` or `mailto`, and that you just clicked (the browser's user activation). Without a click, nothing opens. Browsers without user activation tracking open at most one link every 1.5 seconds.
 The frame itself still can't open windows or reach the app.
 
 For what doesn't work, like PDF figures and BibTeX styles, see [What's supported](whats-supported.md).
