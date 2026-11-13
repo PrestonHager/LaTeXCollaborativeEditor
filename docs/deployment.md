@@ -59,6 +59,8 @@ Runtime architecture (summary)
 - The app still only asks for the `drive.file` scope. That's enough for every file and folder the app makes.
   It is not enough for files someone adds to a project folder from Drive itself.
   Picking a folder in the Picker only grants the folder, not the files already in it, so those files stay hidden until they're picked.
+  **File > Add Files from Drive** opens the Picker on the project folder (`DocsView.setParent`) with multi-select on and folders selectable.
+  After the pick it lists the folder again and adds the new files at their Drive paths, so it needs `VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID` like the other Picker commands.
   We kept `drive.file` instead of asking for full Drive access, which needs a Google security review.
 - An old single `.tex` file from before projects opens as a one-file project and keeps saving to that file.
   When you add a second file, the app makes a project folder next to it and moves the file in.

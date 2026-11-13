@@ -38,6 +38,7 @@
                 <button type="button" class="menu-item" role="menuitem" data-command="file.disconnectDrive" data-description="Sign out of Google Drive in this tab. Edits save in this browser after that."><span class="menu-item-label">Disconnect Google Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveToDrive" data-description="Save the project to Google Drive now."><span class="menu-item-label">Save to Google Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.moveDrive" data-description="Move the project's Drive folder somewhere else in Drive."><span class="menu-item-label">Move to Drive Folder</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.addFromDrive" data-description="Pick files in the project's Drive folder that were added from Drive itself, so they show up here."><span class="menu-item-label">Add Files from Drive</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.renameDrive" data-description="Change the project name, here and in storage."><span class="menu-item-label">Rename Project</span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveNow" data-description="Save right away instead of waiting for autosave."><span class="menu-item-label">Save Now</span><span class="menu-item-shortcut" data-shortcut data-chord="S"></span></button>
@@ -332,6 +333,10 @@
           </label>
           <input id="upload-input" type="file" multiple hidden />
           <ul id="upload-results" class="upload-results" aria-live="polite"></ul>
+          <div class="upload-from-drive">
+            <p id="upload-from-drive-note" class="upload-from-drive-note"></p>
+            <button id="upload-from-drive" type="button" class="btn" data-variant="outline" data-size="sm" aria-describedby="upload-from-drive-note"><i data-lucide="hard-drive"></i>Add Files from Drive</button>
+          </div>
         </section>
         <footer>
           <a class="btn" data-variant="link" data-size="sm" data-help="uploading">Help with uploads</a>
@@ -385,7 +390,7 @@
       <div>
         <header>
           <h2 id="conflict-dialog-title">File changed somewhere else</h2>
-          <p id="conflict-dialog-description"><strong id="conflict-dialog-path"></strong> changed in <span id="conflict-dialog-storage">storage</span> since it was last saved here. Saving for this file is paused until you pick which copy to keep.</p>
+          <p id="conflict-dialog-description"><strong id="conflict-dialog-path"></strong> <span id="conflict-dialog-changed">changed in <span id="conflict-dialog-storage">storage</span> since it was last saved here.</span><span id="conflict-dialog-reason" hidden></span> Saving for this file is paused until you pick which copy to keep.</p>
         </header>
         <footer>
           <button id="conflict-copy" type="button" class="btn" data-variant="outline">Save mine as a copy</button>

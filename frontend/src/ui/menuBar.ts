@@ -13,6 +13,7 @@ export type CommandId =
   | 'file.disconnectDrive'
   | 'file.saveToDrive'
   | 'file.moveDrive'
+  | 'file.addFromDrive'
   | 'file.renameDrive'
   | 'file.saveNow'
   | 'file.clearLocalDocs'

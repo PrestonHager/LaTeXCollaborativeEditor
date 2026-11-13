@@ -26,6 +26,8 @@ type PreviewCompileOptions = {
   onEmpty?: (empty: boolean) => void;
   onCompiled?: () => void;
   onCompileError?: () => void;
+  /** Extra words after "Not found in the project", like where to look for the missing files. */
+  missingHint?: () => string;
 };
 
 export type DiagnosticsTopic = 'diagnostics' | 'previewErrors';
@@ -44,6 +46,7 @@ export function createPreviewCompile({
   onEmpty,
   onCompiled,
   onCompileError,
+  missingHint,
 }: PreviewCompileOptions) {
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -112,7 +115,8 @@ export function createPreviewCompile({
         const first = errors[0];
         setDiagnostics(`${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`);
       } else {
-        setDiagnostics(missing.length ? `Not found in the project: ${missing.join(', ')}` : '');
+        const hint = missing.length ? missingHint?.() : '';
+        setDiagnostics(missing.length ? `Not found in the project: ${missing.join(', ')}${hint ? `. ${hint}` : ''}` : '');
       }
     } catch (error) {
       if (seq !== compileSequence) return;

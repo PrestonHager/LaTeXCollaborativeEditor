@@ -25,7 +25,8 @@ import { GoogleDriveProvider } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
-import { openGooglePicker } from './storage/providers/googlePicker';
+import { openGooglePicker, pickProjectFiles } from './storage/providers/googlePicker';
+import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFilesFromDrive, addFromDriveNote } from './app/driveAddFiles';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
@@ -298,10 +299,10 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
 const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
 
 /** Hold a file that changed in storage under us, and ask the person which copy to keep. */
-function holdConflict(conflict: FileConflict) {
+function holdConflict(conflict: FileConflict, wording?: Parameters<typeof conflictDialog.ask>[2]) {
   if (conflicts.has(conflict.id)) return;
   conflicts.set(conflict.id, conflict);
-  void conflictDialog.ask(conflict.path, projectState.activeProvider.label).then((choice) => resolveConflict(conflict, choice));
+  void conflictDialog.ask(conflict.path, projectState.activeProvider.label, wording).then((choice) => resolveConflict(conflict, choice));
 }
 
 /** Act on the person's pick for a held file, then let saves pick it up again. */
@@ -353,6 +354,8 @@ const compile = createPreviewCompile({
   onEmpty: (empty) => {
     previewEmptyEl.hidden = !empty || (isClient && project.isEmpty());
   },
+  // With drive.file we can't see files added to the folder from Drive, so point at the fix.
+  missingHint: () => (!isClient && projectState.isDrive() ? DRIVE_MISSING_HINT : ''),
   onCompiled: () => {
     if (noticeKind !== 'compile') return;
     notice.clear();
@@ -598,6 +601,10 @@ async function uploadFiles(files: File[], folder: string) {
 const uploadDialog = createUploadDialog(document.getElementById('upload-dialog') as HTMLDialogElement, {
   getFolders: () => project.folderPaths(),
   upload: uploadFile,
+  fromDrive: {
+    state: () => ({ enabled: getCommandState('file.addFromDrive').enabled, note: addFromDriveNote({ isClient, isDrive: projectState.isDrive() }) }),
+    run: () => executeCommand('file.addFromDrive'),
+  },
 });
 
 const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
@@ -776,6 +783,21 @@ const commands = createCommands({
   ensureDriveConnected,
   pickFromDrive,
   showDriveAccount,
+  addFilesFromDrive: () =>
+    addFilesFromDrive({
+      isClient,
+      projectState,
+      provider: driveProvider,
+      getProject: () => project,
+      blobs,
+      autosave,
+      ensureDrivePickerConfig,
+      ensureDriveConnected,
+      holdConflict: (conflict) => holdConflict(conflict, DRIVE_PICK_CONFLICT),
+      pickFiles: (folderId) => pickProjectFiles({ accessToken: driveProvider.getAccessToken(), apiKey: driveApiKey!, appId: driveAppId, folderId }),
+      setStatus,
+      showNotice,
+    }),
   openDocs: (topic) => openExternal(docsUrl(docsBase, topic)),
   openBugForm: () => openExternal(makeBugUrl()),
   openSecurityReport: () => openExternal(SECURITY_REPORT_URL),

@@ -13,9 +13,16 @@ export function createConflictDialog(dialog: HTMLDialogElement) {
   };
   const pathEl = find('#conflict-dialog-path');
   const storageEl = find('#conflict-dialog-storage');
+  const changedEl = find('#conflict-dialog-changed');
+  const reasonEl = find('#conflict-dialog-reason');
+  const theirsButton = find<HTMLButtonElement>('#conflict-theirs');
+  const theirsLabel = theirsButton.textContent ?? '';
+  // The title is optional so small test markup still works.
+  const titleEl = dialog.querySelector<HTMLElement>('#conflict-dialog-title');
+  const defaultTitle = titleEl?.textContent ?? '';
   const buttons: [HTMLButtonElement, ConflictChoice][] = [
     [find<HTMLButtonElement>('#conflict-mine'), 'mine'],
-    [find<HTMLButtonElement>('#conflict-theirs'), 'theirs'],
+    [theirsButton, 'theirs'],
     [find<HTMLButtonElement>('#conflict-copy'), 'copy'],
   ];
   let answer: ((choice: ConflictChoice) => void) | null = null;
@@ -42,12 +49,21 @@ export function createConflictDialog(dialog: HTMLDialogElement) {
   // Escape would close it with no answer and leave the file stuck, so make them pick.
   dialog.addEventListener('cancel', (event) => event.preventDefault());
 
-  const ask = (path: string, storage: string): Promise<ConflictChoice> => {
+  /**
+   * Pass a reason to say why in place of "changed in storage", and a label for the theirs button,
+   * like when a file picked from Drive meets a project file of the same name.
+   */
+  const ask = (path: string, storage: string, wording: { title?: string; reason?: string; theirs?: string } = {}): Promise<ConflictChoice> => {
     const run = queue.then(
       () =>
         new Promise<ConflictChoice>((resolve) => {
           pathEl.textContent = path;
           storageEl.textContent = storage;
+          changedEl.hidden = Boolean(wording.reason);
+          reasonEl.hidden = !wording.reason;
+          reasonEl.textContent = wording.reason ?? '';
+          theirsButton.textContent = wording.theirs ?? theirsLabel;
+          if (titleEl) titleEl.textContent = wording.title ?? defaultTitle;
           answer = resolve;
           open();
         }),

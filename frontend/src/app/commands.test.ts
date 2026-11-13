@@ -106,6 +106,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
     ensureDriveConnected: vi.fn(async () => true),
     pickFromDrive: vi.fn(async () => ({ id: 'f1', name: 'Folder', isFolder: true }) as never),
     showDriveAccount: vi.fn(),
+    addFilesFromDrive: vi.fn(async () => {}),
     toolbar: { refresh: vi.fn() },
     openDocs: vi.fn(),
     openBugForm: vi.fn(),
@@ -208,8 +209,10 @@ describe('commands', () => {
     it('follows the provider, open file, undo stack, and layout', () => {
       const { commands, app, projectState, drive, layout } = setup();
       expect(commands.getCommandState('file.moveDrive').enabled).toBe(false);
+      expect(commands.getCommandState('file.addFromDrive').enabled).toBe(false);
       projectState.use(drive, 'folder');
       expect(commands.getCommandState('file.moveDrive').enabled).toBe(true);
+      expect(commands.getCommandState('file.addFromDrive').enabled).toBe(true);
       expect(commands.getCommandState('file.downloadFile').enabled).toBe(true);
       app.activeFileId = null;
       expect(commands.getCommandState('file.downloadFile').enabled).toBe(false);
@@ -256,9 +259,10 @@ describe('commands', () => {
 
     it('skips host-only commands for guests', async () => {
       const { app, run } = setup({ isClient: true });
-      for (const id of ['file.new', 'file.openLocal', 'file.openDrive', 'file.importZip', 'file.connectDrive', 'file.saveToDrive', 'file.moveDrive', 'file.saveNow', 'file.clearLocalDocs'] as CommandId[]) {
+      for (const id of ['file.new', 'file.openLocal', 'file.openDrive', 'file.importZip', 'file.connectDrive', 'file.saveToDrive', 'file.moveDrive', 'file.addFromDrive', 'file.saveNow', 'file.clearLocalDocs'] as CommandId[]) {
         await run(id);
       }
+      expect(app.addFilesFromDrive).not.toHaveBeenCalled();
       expect(app.switchProject).not.toHaveBeenCalled();
       expect(app.projectsDialog.open).not.toHaveBeenCalled();
       expect(app.zipInput.click).not.toHaveBeenCalled();
@@ -466,6 +470,17 @@ describe('commands', () => {
       app.promptForProjectName.mockReturnValueOnce(false);
       await run('file.saveToDrive');
       expect(app.autosave.saveNow).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs Add Files from Drive for the host, and keeps it off for guests on Drive', async () => {
+      const { app, run, commands, projectState, drive } = setup();
+      projectState.use(drive, 'p1');
+      await run('file.addFromDrive');
+      expect(app.addFilesFromDrive).toHaveBeenCalledTimes(1);
+      const guest = setup({ isClient: true });
+      guest.projectState.use(guest.drive, 'p1');
+      expect(guest.commands.getCommandState('file.addFromDrive').enabled).toBe(false);
+      expect(commands.getCommandState('file.addFromDrive').enabled).toBe(true);
     });
 
     it('moves a Drive project only once it is on Drive', async () => {

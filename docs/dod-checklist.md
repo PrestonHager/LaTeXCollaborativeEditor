@@ -29,6 +29,7 @@ Checklist
 - [ ] Drive sign-out: File > Disconnect Google Drive revokes the token and switches saving to the browser without losing edits, and Settings shows who's signed in.
 - [ ] Drive token storage: the token is only in `sessionStorage`, never in `localStorage`, and a reload in the same tab stays signed in.
 - [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
+- [ ] Drive add files: a file put in a project folder from drive.google.com (also in a subfolder made there) comes into the project at the same path with File > Add Files from Drive, and the next save doesn't write it back. Guests see the command turned off. A picked file that meets an unsaved project file of the same name goes through the conflict dialog, never a silent overwrite.
 - [ ] Drive conflicts: a file changed in Drive since the last load or save is never overwritten silently. Saving pauses for that file only, and the conflict dialog's Keep mine, Take theirs, and Save mine as a copy each work.
 - [x] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.
@@ -106,6 +107,7 @@ A box above is only checked when it was actually seen working.
 - Storage errors: needs the owner (Google sign-in, and filling browser storage).
 - Drive token expiry: needs the owner (an hour-long Drive session).
 - Renames: needs the owner (Google sign-in for the Drive half).
+- Drive add files: needs the owner (Google sign-in and the real Picker). `driveAddFiles.test.ts`, `googlePicker.test.ts`, and `googleDrive.test.ts` cover it with fakes.
 - Networking: verified on production.
   Peers found each other through public Nostr relays used by Trystero, with no server from this repo.
   The configured WebTorrent trackers aren't the ones being used, which is #26.
