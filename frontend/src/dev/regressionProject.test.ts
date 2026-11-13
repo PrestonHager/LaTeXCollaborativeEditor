@@ -15,6 +15,7 @@ describe('regressionProject', () => {
       'chapters/figures.tex',
       'chapters/hello.py',
       'chapters/math.tex',
+      'chapters/packages.tex',
       'chapters/text.tex',
       'figures/chart.pdf',
       'figures/quadrants.png',

@@ -236,12 +236,12 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 /* Settings dialog (dialog-lg). Basecoat handles the box, we lay out the rows. The body scrolls like every dialog's. */
 .settings-dialog-body { display: grid; gap: 1rem; }
 /*
- * Wide windows: two columns. Appearance, saving, Drive and "Your settings" on the left; keyboard
+ * Wide windows: two columns. Appearance, saving, Drive, profile and "Your settings" on the left; keyboard
  * shortcuts on the right, since that list is the tall part. The last row (1fr) takes up the
  * extra height of the shortcuts column, so the left rows stay packed at the top.
  */
 @media (min-width: 64rem) {
-  .settings-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: repeat(5, auto) 1fr; column-gap: 2rem; align-content: start; }
+  .settings-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: repeat(6, auto) 1fr; column-gap: 2rem; align-content: start; }
   .settings-dialog-body > * { grid-column: 1; }
   .settings-dialog-body > .settings-keybinds { grid-column: 2; grid-row: 1 / -1; align-content: start; padding-left: 2rem; border-left: 1px solid var(--border); }
   .settings-dialog-body .keybind-list { max-height: 22rem; }

@@ -56,7 +56,8 @@ export const PAGE_BREAK_CLASS = 'lc-page-break';
  */
 export function markPageBreaks(doc: Document): void {
   for (const span of Array.from(doc.querySelectorAll('span'))) {
-    if (span.className !== 'tt' || span.textContent !== PAGE_BREAK_TOKEN) continue;
+    // After a list LaTeX.js adds "continue" to the class, so check for tt among the classes.
+    if (!span.classList.contains('tt') || span.textContent !== PAGE_BREAK_TOKEN) continue;
     const paragraph = span.parentElement;
     const target = paragraph && paragraph.tagName.toLowerCase() === 'p' && paragraph.textContent === PAGE_BREAK_TOKEN ? paragraph : span;
     const block = doc.createElement('div');

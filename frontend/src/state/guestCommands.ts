@@ -4,6 +4,7 @@ import type { CommandId } from '../ui/menuBar';
 // A guest running one would wipe the project for everyone in the room, so only the host gets them.
 export const HOST_ONLY_COMMANDS: ReadonlySet<CommandId> = new Set<CommandId>([
   'file.new',
+  'file.saveAsTemplate',
   'file.openLocal',
   'file.openDrive',
   'file.importZip',

@@ -3,8 +3,10 @@ import { commandIcon } from './icons';
 export type CommandId =
   | 'app.commandPalette'
   | 'app.openSettings'
+  | 'app.editProfile'
   | 'file.new'
   | 'file.rename'
+  | 'file.saveAsTemplate'
   | 'file.openLocal'
   | 'file.openDrive'
   | 'file.download'

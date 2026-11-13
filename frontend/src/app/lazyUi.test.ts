@@ -1,4 +1,4 @@
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './lazyUi';
+import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './lazyUi';
 import { mountAppShell } from '../test/appShell';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -204,5 +204,30 @@ describe('lazyAboutDialog', () => {
     about.open();
     await settle();
     expect(onError).toHaveBeenCalledWith('About', error, expect.any(Function));
+  });
+});
+
+describe('lazyTemplates', () => {
+  it('loads the template dialogs once and runs each one', async () => {
+    const instance = { openNew: vi.fn(async () => {}), saveAsTemplate: vi.fn(async () => {}), editProfile: vi.fn(async () => {}) };
+    const createTemplatesUi = vi.fn(() => instance);
+    const load = vi.fn(async () => ({ createTemplatesUi }) as never);
+    const options = {} as never;
+    const templates = lazyTemplates(options, { load });
+    await templates.openNew();
+    await templates.saveAsTemplate();
+    await templates.editProfile();
+    templates.preload();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(createTemplatesUi).toHaveBeenCalledWith(options);
+    expect(instance.openNew).toHaveBeenCalled();
+    expect(instance.saveAsTemplate).toHaveBeenCalled();
+    expect(instance.editProfile).toHaveBeenCalled();
+  });
+
+  it('rejects when the code cannot load, so New Project can fall back', async () => {
+    const error = new TypeError('Failed to fetch dynamically imported module');
+    const templates = lazyTemplates({} as never, { load: () => Promise.reject(error) });
+    await expect(templates.openNew()).rejects.toBe(error);
   });
 });

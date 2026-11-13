@@ -6,7 +6,9 @@ import { isInside, normalizePath, replacePrefix } from '../../project/paths';
 // Where single documents lived before projects. They get moved into IndexedDB on first use.
 export const LEGACY_STORAGE_KEY = 'latex_editor_docs';
 
-type ProjectRow = { id: string; name: string; mainPath: string | null; updatedAt: number; legacyFileName?: string };
+// A template (#74) is a project row marked template: true. It lives next to the projects, opens and
+// saves like one, and stays out of the project list.
+type ProjectRow = { id: string; name: string; mainPath: string | null; updatedAt: number; legacyFileName?: string; template?: boolean };
 type FileRow = { projectId: string; path: string; kind: 'file' | 'folder'; data?: Uint8Array };
 
 const encoder = new TextEncoder();
@@ -105,14 +107,34 @@ export class LocalAppStorageProvider implements StorageProvider {
 
   async listProjects(): Promise<ProjectSummary[]> {
     await this.migrateLegacyDocs();
-    const projects = await this.allProjects();
-    return projects
-      .map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))
-      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    return this.summaries(false);
   }
 
-  async createProject(name: string): Promise<ProjectSummary> {
-    const row: ProjectRow = { id: newProjectId(), name, mainPath: null, updatedAt: Date.now() };
+  /** The templates saved in this browser. */
+  listTemplates(): Promise<ProjectSummary[]> {
+    return this.summaries(true);
+  }
+
+  /** Make an empty template. Its files are written with writeFile, like a project's. */
+  createTemplate(name: string): Promise<ProjectSummary> {
+    return this.createProject(name, true);
+  }
+
+  /** Delete a template and its files. Only templates: a project id is refused. */
+  async deleteTemplate(templateId: string): Promise<void> {
+    try {
+      await withTransaction([PROJECTS_STORE, FILES_STORE], 'readwrite', async (tx) => {
+        const row = await requestToPromise(tx.objectStore(PROJECTS_STORE).get(templateId) as IDBRequest<ProjectRow | undefined>);
+        if (!row?.template) throw new StorageError('That template no longer exists.', { retryable: false });
+        await this.deleteRows(tx, [templateId]);
+      });
+    } catch (error) {
+      throw wrapError(error, 'delete the template');
+    }
+  }
+
+  async createProject(name: string, template = false): Promise<ProjectSummary> {
+    const row: ProjectRow = { id: newProjectId(), name, mainPath: null, updatedAt: Date.now(), ...(template ? { template } : {}) };
     try {
       await withTransaction([PROJECTS_STORE], 'readwrite', (tx) => {
         tx.objectStore(PROJECTS_STORE).put(row);
@@ -202,17 +224,38 @@ export class LocalAppStorageProvider implements StorageProvider {
     });
   }
 
-  /** Delete every local project. */
+  /** Delete every local project. Templates stay. */
   async clear(): Promise<void> {
     try {
-      await withTransaction([PROJECTS_STORE, FILES_STORE], 'readwrite', (tx) => {
-        tx.objectStore(PROJECTS_STORE).clear();
-        tx.objectStore(FILES_STORE).clear();
+      await withTransaction([PROJECTS_STORE, FILES_STORE], 'readwrite', async (tx) => {
+        const rows = await requestToPromise(tx.objectStore(PROJECTS_STORE).getAll() as IDBRequest<ProjectRow[]>);
+        await this.deleteRows(
+          tx,
+          rows.filter((row) => !row.template).map((row) => row.id),
+        );
       });
     } catch (error) {
       throw wrapError(error, 'clear local projects');
     }
     this.currentStatus = 'Local projects cleared';
+  }
+
+  private async summaries(templates: boolean): Promise<ProjectSummary[]> {
+    const rows = await this.allProjects();
+    return rows
+      .filter((row) => Boolean(row.template) === templates)
+      .map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))
+      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  }
+
+  /** Delete project rows and every file in them, inside a transaction on both stores. */
+  private async deleteRows(tx: IDBTransaction, ids: string[]): Promise<void> {
+    const files = tx.objectStore(FILES_STORE);
+    for (const id of ids) {
+      const keys = await requestToPromise(files.index('byProject').getAllKeys(id));
+      for (const key of keys) files.delete(key);
+      tx.objectStore(PROJECTS_STORE).delete(id);
+    }
   }
 
   private allProjects(): Promise<ProjectRow[]> {

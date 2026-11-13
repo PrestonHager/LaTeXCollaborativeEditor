@@ -33,6 +33,24 @@ For a diagram of how these fit together, see [How the app fits together](how-it-
 ## First edits
 
 A new tab starts with a starter project: one `main.tex` with a small LaTeX skeleton.
+To start from a template instead, use **File > New Project** (**Ctrl+Shift+N**, or **Alt+Shift+N** in a browser tab):
+
+![The New project picker with the Technical report template chosen](assets/screenshots/templates-picker-light.png#only-light)
+![The New project picker with the Technical report template chosen](assets/screenshots/templates-picker-dark.png#only-dark)
+
+Pick a template on the left: an empty project, a blank article, a technical report, a letter, Beamer slides or a thesis. The right side asks for what the template needs, like the title, already filled in from your profile (**Edit > Profile…**). Press **Create project**. More in [Templates](saving-and-storage.md#templates).
+
+The preview runs LaTeX.js, which can't do everything a real TeX can. For the built-in templates it approximates these, and lists them under the info button above the preview:
+
+- Tables show as a note ("A table goes here"), and table floats show in place.
+- `equation` and `align` show without numbers, so a reference to an equation shows `??`. Theorems and proofs show as bold and italic headings, without numbers.
+- `\cref` shows as a plain reference with a name guessed from the label prefix (`sec:`, `fig:`, `tab:`, `eq:`, `ch:` and so on), like "section 1". Figures and tables are numbered like sections.
+- siunitx quantities show as plain text, like 9.81 m/s².
+- Beamer slides show as pages, one per frame, with the frame title in bold and no theme or overlays.
+- Packages the preview can't load (`geometry`, `fontspec`) and setup commands (`\sisetup`, `\newtheorem`, `\usetheme` and the like) are skipped, so fonts, margins and paper size don't change the preview.
+
+Compile with pdfLaTeX or LuaLaTeX (and biber, for the report and thesis) to see the real thing.
+
 
 1. Type in the editor. The preview updates after a short pause.
 2. Click **Untitled** at the top left and give the project a name. Now it autosaves to this browser.

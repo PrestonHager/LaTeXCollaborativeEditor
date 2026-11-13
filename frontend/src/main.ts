@@ -15,7 +15,7 @@ import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
 import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle } from './app/lazy';
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -839,6 +839,28 @@ const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dial
   onImportZip: () => commands.importZipFromOpenDialog(),
 }, lazyLoadFailed);
 
+// File > New Project's template picker, Save as Template and the profile (#74). They load on first use.
+const templates = lazyTemplates({
+  settings,
+  local: localAppProvider,
+  drive: driveProvider,
+  blobs,
+  getProject: () => project,
+  isDriveProject: () => projectState.isDrive(),
+  guestCount: () => (isClient || !inRoom ? 0 : peerCount),
+  createProject: async (content) => {
+    await switchProject(content, projectState.activeProvider, null);
+    // A named project gets saved right away, like an imported .zip. Unnamed ones wait for a name.
+    if (content.name) autosave.markDirty();
+  },
+  editTemplate: (provider, id) => openStoredProject(provider, id),
+  download: (name, data, type) => localDownload.download(name, data, type),
+  notify: (message, isError) => showNotice(message, isError),
+  confirmDialog,
+  promptDialog,
+  locale: navigator.language,
+});
+
 async function openStoredProject(provider: StorageProvider, id: string) {
   showLoading(`Opening ${provider === driveProvider ? 'from Google Drive' : 'project'}...`);
   try {
@@ -981,6 +1003,7 @@ const commands = createCommands({
   fileTree,
   projectsDialog,
   uploadDialog,
+  templates,
   zipInput,
   shareButtonEl,
   get project() {
@@ -1109,6 +1132,7 @@ const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettin
     refreshCommands();
   },
   onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
+  onEditProfile: () => executeCommand('app.editProfile'),
   onOpen: () => keybindSettings.refresh(),
   onExportSettings: () => localDownload.download(settingsFileName(), settings.exportJson(), 'application/json'),
   onImportSettings: (file) => importSettingsFile(settings, file),
@@ -1158,6 +1182,7 @@ const preloadDialogs = () => {
   tour.preload();
   aboutDialog.preload();
   conflictDialog.preload();
+  templates.preload();
 };
 preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
 preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);

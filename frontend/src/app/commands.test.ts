@@ -78,6 +78,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     fileTree: { currentFolder: vi.fn(() => '') },
     projectsDialog: { open: vi.fn() },
     uploadDialog: { open: vi.fn() },
+    templates: { openNew: vi.fn(async () => {}), saveAsTemplate: vi.fn(async () => {}), editProfile: vi.fn(async () => {}) },
     zipInput: { click: vi.fn() } as unknown as HTMLInputElement,
     shareButtonEl: { click: vi.fn() } as unknown as HTMLElement,
     project,
@@ -347,8 +348,42 @@ describe('commands', () => {
       expect(app.menuBar.refresh).not.toHaveBeenCalled();
     });
 
-    it('starts a new project only after confirming', async () => {
+    it('opens the template picker for New Project, which does its own asking', async () => {
+      const { app, run } = setup();
+      await run('file.new');
+      expect(app.templates.openNew).toHaveBeenCalledTimes(1);
+      expect(app.confirmDialog).not.toHaveBeenCalled();
+      expect(app.switchProject).not.toHaveBeenCalled();
+    });
+
+    it('opens Save as Template and the profile through the template dialogs', async () => {
+      const { app, run } = setup();
+      await run('file.saveAsTemplate');
+      await run('app.editProfile');
+      expect(app.templates.saveAsTemplate).toHaveBeenCalledTimes(1);
+      expect(app.templates.editProfile).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets guests edit their own profile but not save the host\'s project as a template', async () => {
+      const { app, run, commands } = setup({ isClient: true });
+      await run('file.saveAsTemplate');
+      await run('app.editProfile');
+      expect(app.templates.saveAsTemplate).not.toHaveBeenCalled();
+      expect(app.templates.editProfile).toHaveBeenCalledTimes(1);
+      expect(commands.getCommandState('file.saveAsTemplate').enabled).toBe(false);
+    });
+
+    it('reports a picker error that is not a load failure', async () => {
+      const { app, run } = setup();
+      app.templates.openNew.mockRejectedValueOnce(new Error('Broken'));
+      await run('file.new');
+      expect(app.showNotice).toHaveBeenCalledWith('Broken', true);
+      expect(app.switchProject).not.toHaveBeenCalled();
+    });
+
+    it('falls back to an empty project, after confirming, when the template picker cannot load', async () => {
       const { app, run, local } = setup();
+      app.templates.openNew.mockRejectedValue(new OfflineError());
       const confirm = app.confirmDialog.mockResolvedValue(false);
       await run('file.new');
       // With nobody in the room it isn't a destructive action, so the button isn't red.
@@ -807,7 +842,7 @@ describe('commands', () => {
       const newProject = key('N', { shiftKey: true });
       commands.handleKeydown(newProject);
       expect(newProject.defaultPrevented).toBe(true);
-      await vi.waitFor(() => expect(app.confirmDialog).toHaveBeenCalledWith(expect.objectContaining({ title: 'Replace the whole project?' })));
+      await vi.waitFor(() => expect(app.templates.openNew).toHaveBeenCalled());
     });
 
     it('runs Compile Now on Ctrl+Enter', () => {

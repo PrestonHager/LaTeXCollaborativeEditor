@@ -257,4 +257,10 @@ describe('projectToPreviewHtml', () => {
     expect(result.html).toBeNull();
     expect(result.errors[0].path).toBeTruthy();
   });
+
+  it('ignores a commented-out \\includegraphics, so it is never reported missing', () => {
+    const out = expandProjectSource('main.tex', new Map([['main.tex', '% \\includegraphics{gone.png}\nText 50\\% % \\includegraphics{also-gone}\n\\includegraphics{real}']]), []);
+    expect(out.missing).toEqual(['real']);
+  });
 });
+
