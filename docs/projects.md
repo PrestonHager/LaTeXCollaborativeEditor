@@ -30,12 +30,14 @@ If you joined someone else's room and haven't connected yet, it says "Waiting fo
 
 ## New files and folders
 
-**New file** asks for a name and suggests `chapter.tex`.
+**New file** (**Ctrl+N**) asks for a name and suggests `chapter.tex`.
 **New folder** suggests `figures`.
 
 - They go into the current folder: the folder you last clicked, or the folder of the file you last clicked.
 - New files are always text. If the name doesn't end in a text extension like `.tex`, `.bib`, or `.sty`, the app adds `.tex`.
-- If the name is taken, you get a notice like "chapter.tex already exists here."
+- If the suggested name is taken, the box starts with the next free one, like `chapter (2).tex` or `figures (2)`, and says "chapter.tex already exists, so here's chapter (2).tex instead." until you type.
+- If you type a name that's taken, it says so under the box with a **Use chapter (2).tex** button. Pressing Enter fills in that name, and a second Enter creates it.
+- Renaming works the same way when you type a name that's taken.
 
 ## Rename, move, and delete
 
@@ -114,7 +116,8 @@ The name is shared with everyone in the room, and the next save renames the stor
 
 ## New project
 
-**File > New Project** (**Ctrl+N**) starts a fresh project with a starter `main.tex`, after you confirm.
+**File > New Project** (**Ctrl+Shift+N**) starts a fresh project with a starter `main.tex`, after you confirm.
+The confirm is titled **Replace the whole project?**, so pressing it by mistake when you meant **New File** is easy to spot and cancel.
 The project you were on stays saved where it was.
 It's host only, and if you're sharing, it clears the project for everyone in the room, so the confirm says so.
 

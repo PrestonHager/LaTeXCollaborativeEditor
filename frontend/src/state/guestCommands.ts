@@ -26,7 +26,8 @@ export const canRunCommand = (commandId: CommandId, isGuest: boolean): boolean =
 export type ReplaceAction = 'new' | 'open' | 'import';
 
 const REPLACE_QUESTIONS: Record<ReplaceAction, string> = {
-  new: 'Start a new project?',
+  // Says the whole project, since people press New meaning New File.
+  new: 'Replace the whole project?',
   open: 'Open another project?',
   import: 'Upload a .zip as a new project?',
 };
@@ -37,9 +38,14 @@ const REPLACE_BUTTONS: Record<ReplaceAction, string> = {
   import: 'Choose a .zip',
 };
 
+// New Project asks even with nobody in the room, so a misclick meant for New File is easy to back out of.
+const NEW_PROJECT_MESSAGE = (forRoom: string) =>
+  `New Project closes every file and folder here${forRoom} and starts a new project with only main.tex. ` +
+  'This project stays saved where it is. To add one file instead, cancel and use File > New File.';
+
 /** What the replace dialog says under its title. It has to say it hits everyone in the room. */
 const replaceProjectMessage = (action: ReplaceAction): string =>
-  `This ${action === 'new' ? 'clears' : 'replaces'} the project for everyone in the room. The current one stays saved where it is.`;
+  action === 'new' ? NEW_PROJECT_MESSAGE(' for everyone in the room') : 'This replaces the project for everyone in the room. The current one stays saved where it is.';
 
 /**
  * The wording for the host's replace dialog: a title, the message, and a button that names the action.
@@ -49,7 +55,7 @@ const replaceProjectMessage = (action: ReplaceAction): string =>
 export const replaceProjectDialog = (action: ReplaceAction, withGuests = true) => ({
   title: REPLACE_QUESTIONS[action],
   // With nobody in the room there's no one else to warn.
-  message: withGuests ? replaceProjectMessage(action) : 'The current project stays saved where it is.',
+  message: withGuests ? replaceProjectMessage(action) : action === 'new' ? NEW_PROJECT_MESSAGE('') : 'The current project stays saved where it is.',
   confirmLabel: REPLACE_BUTTONS[action],
   destructive: withGuests,
 });

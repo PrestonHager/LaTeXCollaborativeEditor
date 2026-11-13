@@ -4,6 +4,7 @@ import {
   createKeymap,
   emptyKeybindSettings,
   keepKnownCommands,
+  migrateKeybinds,
   pickWinner,
   toggleBinding,
   type KeybindSettings,
@@ -19,14 +20,18 @@ describe('createKeymap', () => {
     expect(keymap.commandFor('Mod+C')).toMatchObject({ id: 'edit.copy', keybind: 'Mod+C', native: true });
     expect(keymap.commandFor('Mod+Shift+C')).toBeNull();
     expect(keymap.keybindsFor('edit.redo')).toEqual(['Mod+Shift+Z', 'Mod+Y']);
-    expect(keymap.keybindsFor('file.newFile')).toEqual([]);
+    expect(keymap.keybindsFor('file.newFile')).toEqual(['Mod+N']);
+    expect(keymap.keybindsFor('file.new')).toEqual(['Mod+Shift+N']);
+    expect(keymap.keybindsFor('file.newFolder')).toEqual([]);
   });
 
   it('labels the main keybind for the platform', () => {
     expect(createKeymap(shortcuts, () => 'other').labelFor('edit.redo')).toBe('Ctrl+Shift+Z');
     expect(createKeymap(shortcuts, () => 'mac').labelFor('edit.redo')).toBe('⇧⌘Z');
     expect(createKeymap(shortcuts, () => 'mac').labelFor('view.compileNow')).toBe('⌘↩');
-    expect(createKeymap(shortcuts, () => 'other').labelFor('file.newFile')).toBeUndefined();
+    expect(createKeymap(shortcuts, () => 'other').labelFor('file.newFile')).toBe('Ctrl+N');
+    expect(createKeymap(shortcuts, () => 'mac').labelFor('file.new')).toBe('⇧⌘N');
+    expect(createKeymap(shortcuts, () => 'other').labelFor('file.newFolder')).toBeUndefined();
   });
 
   it('gives a key to the first built-in that lists it, and skips bad keybinds', () => {
@@ -45,11 +50,11 @@ describe('createKeymap', () => {
   });
 
   it('adds rules after the built-ins, and a rule beats a built-in for the same key', () => {
-    const keymap = withSettings({ rules: [{ id: 'view.compileNow', keybind: 'Alt+K' }, { id: 'file.newFile', keybind: 'Mod+S' }], disabled: [] });
+    const keymap = withSettings({ rules: [{ id: 'view.compileNow', keybind: 'Alt+K' }, { id: 'file.newFolder', keybind: 'Mod+S' }], disabled: [] });
     expect(keymap.keybindsFor('view.compileNow')).toEqual(['Mod+Enter', 'Alt+K']);
-    expect(keymap.commandFor('Mod+S')?.id).toBe('file.newFile');
+    expect(keymap.commandFor('Mod+S')?.id).toBe('file.newFolder');
     expect(keymap.keybindsFor('file.saveNow')).toEqual([]);
-    expect(keymap.labelFor('file.newFile')).toBe('Ctrl+S');
+    expect(keymap.labelFor('file.newFolder')).toBe('Ctrl+S');
   });
 
   it('lets the last rule win when two rules want a key', () => {
@@ -74,15 +79,15 @@ describe('createKeymap', () => {
   });
 
   it('reads the same settings for each platform', () => {
-    const settings = { rules: [{ id: 'file.newFile' as const, keybind: 'Mod+Alt+N' }], disabled: [] };
-    expect(withSettings(settings, 'mac').labelFor('file.newFile')).toBe('⌥⌘N');
-    expect(withSettings(settings, 'other').labelFor('file.newFile')).toBe('Ctrl+Alt+N');
+    const settings = { rules: [{ id: 'file.newFolder' as const, keybind: 'Mod+Alt+N' }], disabled: [] };
+    expect(withSettings(settings, 'mac').labelFor('file.newFolder')).toBe('⌥⌘N');
+    expect(withSettings(settings, 'other').labelFor('file.newFolder')).toBe('Ctrl+Alt+N');
   });
 
   it('swaps in new settings', () => {
     const keymap = createKeymap(shortcuts, () => 'other');
-    keymap.setSettings({ rules: [{ id: 'file.newFile', keybind: 'Alt+N' }], disabled: [] });
-    expect(keymap.labelFor('file.newFile')).toBe('Alt+N');
+    keymap.setSettings({ rules: [{ id: 'file.newFolder', keybind: 'Alt+N' }], disabled: [] });
+    expect(keymap.labelFor('file.newFolder')).toBe('Alt+N');
     // settings() hands out a copy.
     keymap.settings().rules.pop();
     expect(keymap.settings().rules).toHaveLength(1);
@@ -135,5 +140,57 @@ describe('keepKnownCommands', () => {
     const settings = { rules: [{ id: 'file.newFile' as const, keybind: 'Alt+N' }, { id: 'gone.command' as never, keybind: 'Alt+G' }], disabled: ['ok'] };
     expect(keepKnownCommands(settings, (id) => id !== 'gone.command')).toEqual({ rules: [{ id: 'file.newFile', keybind: 'Alt+N' }], disabled: ['ok'] });
     expect(keepKnownCommands(emptyKeybindSettings(), () => true)).toEqual(emptyKeybindSettings());
+  });
+});
+
+describe('migrating saved keybinds', () => {
+  const settings = (rules: KeybindSettings['rules'], disabled: string[] = []): KeybindSettings => ({ rules, disabled });
+
+  it('leaves settings alone when nothing moved', () => {
+    const saved = settings([{ id: 'file.newFolder', keybind: 'Alt+F' }], ['edit.redo Mod+Y']);
+    expect(migrateKeybinds(saved, shortcuts)).toEqual(saved);
+    expect(migrateKeybinds(emptyKeybindSettings(), shortcuts)).toEqual(emptyKeybindSettings());
+  });
+
+  it('keeps Ctrl+N off for someone who turned it off when it was New Project', () => {
+    const keymap = withSettings(settings([], ['file.new Mod+N']));
+    expect(keymap.settings()).toEqual(settings([], ['file.newFile Mod+N']));
+    expect(keymap.commandFor('Mod+N')).toBeNull();
+    // New Project still gets its new key.
+    expect(keymap.keybindsFor('file.new')).toEqual(['Mod+Shift+N']);
+  });
+
+  it('keeps Ctrl+N on the command someone gave it to', () => {
+    // They picked Compile Now for Ctrl+N, which turned it off for New Project.
+    const keymap = withSettings(settings([{ id: 'view.compileNow', keybind: 'Mod+N' }], ['file.new Mod+N']));
+    expect(keymap.settings()).toEqual(settings([{ id: 'view.compileNow', keybind: 'Mod+N' }]));
+    expect(keymap.commandFor('Mod+N')?.id).toBe('view.compileNow');
+  });
+
+  it('swaps a rule that is now built in for the built-in one', () => {
+    // They gave Ctrl+N to New File themselves. Now it's the default, so the rule goes.
+    const keymap = withSettings(settings([{ id: 'file.newFile', keybind: 'Mod+N' }], ['file.new Mod+N']));
+    expect(keymap.settings()).toEqual(emptyKeybindSettings());
+    expect(keymap.commandFor('Mod+N')?.id).toBe('file.newFile');
+    expect(keymap.bindings().filter((b) => b.id === 'file.newFile')).toHaveLength(1);
+    // One that had lost its key to another command stays off, as a built-in.
+    const lost = migrateKeybinds(settings([{ id: 'file.new', keybind: 'Mod+Shift+N', off: true }, { id: 'view.compileNow', keybind: 'Mod+Shift+N' }]), shortcuts);
+    expect(lost).toEqual(settings([{ id: 'view.compileNow', keybind: 'Mod+Shift+N' }], ['file.new Mod+Shift+N']));
+    // An odd saved mix, an on rule and its built-in off, ends up on.
+    expect(migrateKeybinds(settings([{ id: 'file.newFile', keybind: 'Mod+N' }], ['file.newFile Mod+N']), shortcuts)).toEqual(emptyKeybindSettings());
+  });
+
+  it('lets a rule someone added keep a key a new default wants', () => {
+    const keymap = withSettings(settings([{ id: 'view.compileNow', keybind: 'Mod+Shift+N' }]));
+    expect(keymap.commandFor('Mod+Shift+N')?.id).toBe('view.compileNow');
+    expect(keymap.settings().rules).toEqual([{ id: 'view.compileNow', keybind: 'Mod+Shift+N' }]);
+  });
+
+  it('runs on every load without changing its own output, and skips moves that do not apply', () => {
+    const once = migrateKeybinds(settings([], ['file.new Mod+N']), shortcuts);
+    expect(migrateKeybinds(once, shortcuts)).toEqual(once);
+    // With the old key still built in, a turned-off key means what it says.
+    const old = [{ id: 'file.new' as const, keybind: 'Mod+N' }];
+    expect(migrateKeybinds(settings([], ['file.new Mod+N']), old)).toEqual(settings([], ['file.new Mod+N']));
   });
 });

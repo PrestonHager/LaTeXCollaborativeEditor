@@ -1,4 +1,7 @@
 import { returnFocusOnClose } from './focusReturn';
+import { baseNameRange, type NameSuggestion } from './nameChecks';
+
+export { baseNameRange };
 
 /**
  * In-app stand-ins for window.confirm, window.prompt and window.alert (#133).
@@ -32,19 +35,17 @@ export type PromptOptions = {
    * Off selects everything, for names that aren't paths.
    */
   selectBaseName?: boolean;
+  /**
+   * For a name that's taken, a free one to offer instead (see suggestFreeName in nameChecks.ts).
+   * A taken name on open gets swapped for the free one, with a note saying so.
+   * A taken name typed in gets a "Use ..." button, and Enter swaps it in rather than failing.
+   */
+  suggest?: (value: string) => NameSuggestion | null;
 };
 
 export type NoticeOptions = { title: string; message: string; closeLabel?: string };
 
 let nextId = 0;
-
-/** Where the base name sits in a path: after the last "/", before the extension. */
-export function baseNameRange(value: string): [number, number] {
-  const start = value.lastIndexOf('/') + 1;
-  const dot = value.lastIndexOf('.');
-  // A leading dot (".latexmkrc") is part of the name, not an extension.
-  return [start, dot > start ? dot : value.length];
-}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}): HTMLElementTagNameMap[K] {
   return Object.assign(document.createElement(tag), props);
@@ -166,19 +167,51 @@ export function promptDialog(options: PromptOptions): Promise<string | null> {
   footer.append(cancel, ok);
 
   const problem = () => options.validate?.(input.value.trim()) ?? null;
-  const showProblem = (message: string | null) => {
-    error.textContent = message ?? '';
+  const suggestion = (message: string | null) => (message && options.suggest?.(input.value.trim())) || null;
+  const selectName = () => {
+    const [start, end] = options.selectBaseName === false ? [0, input.value.length] : baseNameRange(input.value);
+    input.setSelectionRange(start, end);
+  };
+  /** Show what's wrong under the box, with a button for a free name when there is one. */
+  const showProblem = (message: string | null, offer: NameSuggestion | null = null) => {
+    error.replaceChildren(message ?? '');
     error.hidden = !message;
     if (message) input.setAttribute('aria-invalid', 'true');
     else input.removeAttribute('aria-invalid');
+    if (!offer) return;
+    const use = button(`Use ${offer.value}`, 'link');
+    use.dataset.size = 'sm';
+    use.classList.add('app-dialog-suggest');
+    use.addEventListener('click', () => useSuggestion(offer));
+    error.append(' ', use);
+  };
+  /**
+   * Put the free name in the box with its base name selected, and keep saying why until they type.
+   * The box is fine now, so it isn't marked invalid.
+   */
+  const useSuggestion = (offer: NameSuggestion) => {
+    input.value = offer.value;
+    showProblem(offer.message);
+    input.removeAttribute('aria-invalid');
+    input.focus();
+    selectName();
   };
 
   return run<string | null>(null, (finish) => {
     // Say what's wrong as they type, once they've started. An empty box on open isn't an error yet.
-    input.addEventListener('input', () => showProblem(problem()));
+    input.addEventListener('input', () => {
+      const message = problem();
+      showProblem(message, suggestion(message));
+    });
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const message = problem();
+      const offer = suggestion(message);
+      // Enter on a taken name fills in the free one, and a second Enter takes it.
+      if (offer) {
+        useSuggestion(offer);
+        return;
+      }
       showProblem(message);
       if (message) {
         input.focus();
@@ -187,9 +220,13 @@ export function promptDialog(options: PromptOptions): Promise<string | null> {
       finish(input.value.trim());
     });
     cancel.addEventListener('click', () => finish(null));
-    input.focus();
-    const [start, end] = options.selectBaseName === false ? [0, input.value.length] : baseNameRange(input.value);
-    input.setSelectionRange(start, end);
+    // A default name that's already taken, like a second chapter.tex, starts as the next free one.
+    const offer = input.value.trim() ? suggestion(problem()) : null;
+    if (offer) useSuggestion(offer);
+    else {
+      input.focus();
+      selectName();
+    }
   });
 }
 

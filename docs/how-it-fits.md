@@ -78,7 +78,7 @@ flowchart TD
     B -- no --> D[Starter project<br/>with main.tex]
     C --> E[Edit]
     D --> E
-    N([File > New Project<br/>or Ctrl+N, host only]) --> F{Confirm?<br/>clears it for the room}
+    N([File > New Project<br/>or Ctrl+Shift+N, host only]) --> F{Confirm?<br/>clears it for the room}
     F -- no --> E
     F -- yes --> G[Save what's pending<br/>on the old project]
     G --> D

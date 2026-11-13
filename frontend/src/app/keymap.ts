@@ -27,13 +27,61 @@ export function keepKnownCommands(settings: KeybindSettings, isCommand: (id: str
 }
 
 /**
+ * Built-in keys that moved from one command to another. Turning one off is stored under the command
+ * that had it, so migrateKeybinds carries that over to the command that has it now.
+ */
+export const MOVED_BUILTINS: readonly { keybind: string; from: CommandId; to: CommandId }[] = [
+  // New File took Ctrl+N from New Project, which moved to Ctrl+Shift+N.
+  { keybind: 'Mod+N', from: 'file.new', to: 'file.newFile' },
+];
+
+/**
+ * Bring saved keybind settings up to date with this build's built-in keybinds, so changed defaults
+ * keep what the person chose. It only changes what can't happen any more, so it's safe to run on every load.
+ * - A key they turned off for a command that no longer has it stays off for the command that has it now,
+ *   unless a keybind they added already takes that key.
+ * - A keybind they added that's now built in is dropped, and a built-in one is used in its place
+ *   (turned off, if theirs had lost its key to another command).
+ */
+export function migrateKeybinds(settings: KeybindSettings, builtins: readonly Shortcut[], moved = MOVED_BUILTINS): KeybindSettings {
+  const disabled = settings.disabled.slice();
+  const ruleTakes = (keybind: string) => settings.rules.some((rule) => !rule.off && rule.keybind === keybind);
+  const turnOff = (key: string) => {
+    if (!disabled.includes(key)) disabled.push(key);
+  };
+  for (const move of moved) {
+    const old = builtinKey({ id: move.from, keybind: move.keybind });
+    const index = disabled.indexOf(old);
+    // Still built in for the old command, so the stored key still means what it says.
+    if (index === -1 || builtins.some((shortcut) => builtinKey(shortcut) === old)) continue;
+    disabled.splice(index, 1);
+    if (!ruleTakes(move.keybind)) turnOff(builtinKey({ id: move.to, keybind: move.keybind }));
+  }
+  const rules = settings.rules.filter((rule) => {
+    const builtin = builtins.find((shortcut) => shortcut.id === rule.id && shortcut.keybind === rule.keybind);
+    if (!builtin) return true;
+    if (rule.off) turnOff(builtinKey(builtin));
+    return false;
+  });
+  // A key their own rule took for this command needs the built-in one on, not left off by the step above.
+  for (const rule of settings.rules) {
+    if (!rule.off && builtins.some((shortcut) => shortcut.id === rule.id && shortcut.keybind === rule.keybind)) {
+      const key = builtinKey(rule);
+      const index = disabled.indexOf(key);
+      if (index !== -1) disabled.splice(index, 1);
+    }
+  }
+  return { rules, disabled };
+}
+
+/**
  * The one table every shortcut label and key press reads from: menus, toolbar tooltips,
  * the palette, the tour, Settings, and the keydown handler.
  * Built-in keybinds come first, then the rules from Settings. When two commands want the
  * same key, the last rule wins, and with no rule the first built-in does.
  */
 export function createKeymap(builtins: readonly Shortcut[], platform: () => Platform = detectPlatform, initial: KeybindSettings = emptyKeybindSettings()) {
-  let settings = initial;
+  let settings = migrateKeybinds(initial, builtins);
   let bindings: Binding[] = [];
   let byKey = new Map<string, Binding>();
   let byCommand = new Map<CommandId, string[]>();
@@ -82,7 +130,7 @@ export function createKeymap(builtins: readonly Shortcut[], platform: () => Plat
     claimants: (keybind: string): Binding[] => bindings.filter((binding) => !binding.off && binding.keybind === keybind),
     settings: (): KeybindSettings => ({ rules: settings.rules.map((rule) => ({ ...rule })), disabled: settings.disabled.slice() }),
     setSettings(next: KeybindSettings) {
-      settings = next;
+      settings = migrateKeybinds(next, builtins);
       rebuild();
     },
   };

@@ -227,7 +227,7 @@ If someone changed the file in the meantime (in the Drive web UI, on another dev
 
 ## New project
 
-**File > New Project** (**Ctrl+N**) starts a fresh project with a starter `main.tex`, after you confirm.
+**File > New Project** (**Ctrl+Shift+N**) starts a fresh project with a starter `main.tex`, after you confirm.
 The project you were on stays saved where it was.
 New projects save to wherever you were saving before, browser or Drive.
 If you're sharing, the new project replaces the old one for everyone in the room.

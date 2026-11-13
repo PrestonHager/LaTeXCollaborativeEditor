@@ -73,6 +73,8 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 ## Projects and files
 
 - [ ] New File opens an in-app **New file** dialog with `chapter` selected in `chapter.tex`. Create file makes it in the selected folder, and it opens in the editor.
+- [ ] Open New File again in the same folder. The box says `chapter (2).tex` with `chapter (2)` selected, and the red line says `chapter.tex already exists, so here's chapter (2).tex instead.` until you type. Enter creates `chapter (2).tex`. New Folder twice does the same with `figures (2)`.
+- [ ] In the New file dialog, type `chapter` while `chapter.tex` exists. The line says `chapter.tex already exists.` with an underlined **Use chapter (2).tex** button. Clicking it, or pressing Enter, puts `chapter (2).tex` in the box. Rename a file to another file's name and it offers the same.
 - [ ] In the New file dialog, typing `main` says `main.tex already exists.` under the box, `a:b` says the `:` isn't allowed, and an empty box says Enter a name. Enter does nothing until the name is fine.
 - [ ] New Folder opens a **New folder** dialog, and Create folder makes the folder.
 - [ ] Rename a file from its pencil in the Files panel. The **Rename** dialog selects the name without its extension. The preview still finds it if you update the `\input`.
@@ -90,9 +92,12 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Add an empty folder (like `figures/`), download the .zip, and upload it as a new project: the empty folder is still in the file tree.
 - [ ] Upload .zip as New Project opens that zip as a project, with the right main file.
 - [ ] Rename Project (or clicking the title) opens a **Rename project** dialog. A name over 200 characters shows an error under the box. Rename project changes the name in the header.
-- [ ] New Project (Ctrl+N) asks first in a **Start a new project?** dialog, then opens a starter `main.tex`.
+- [ ] New Project (Ctrl+Shift+N, or the File menu) asks first in a **Replace the whole project?** dialog that says every file and folder closes and points to File > New File, even with nobody connected. Start new project opens a starter `main.tex`.
+- [ ] The File menu and palette show Ctrl+N on New File, Ctrl+Shift+N on New Project, and no key on New Folder.
+- [ ] In a normal Chrome, Edge or Firefox tab, Ctrl+N and Ctrl+Shift+N may open a browser window instead. That's the browser, not a bug. In an installed-app window (or Chrome's `--app=` window) Ctrl+N opens the New file dialog and Ctrl+Shift+N the New Project dialog, with no new window.
+- [ ] With keybinds saved by the previous version that turned Ctrl+N off for New Project, Settings shows Ctrl+N crossed out on New File, Ctrl+N does nothing in the app, and New Project has Ctrl+Shift+N. A keybind you added on Ctrl+Shift+N still wins over New Project.
 - [ ] Clear Local Projects asks in a **Delete all local projects?** dialog with a red **Delete N projects** button, focus on Cancel.
-- [ ] Pressing Ctrl+N while a dialog is open doesn't open a second one.
+- [ ] Pressing Ctrl+N or Ctrl+Shift+N while a dialog is open doesn't open a second one.
 
 ## Export
 

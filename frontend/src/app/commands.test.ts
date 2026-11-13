@@ -172,7 +172,9 @@ describe('commands', () => {
       expect(label('edit.redo')).toBe('Ctrl+Shift+Z');
       expect(label('view.compileNow')).toBe('Ctrl+Enter');
       expect(label('app.commandPalette')).toBe('Ctrl+P');
-      expect(label('file.newFile')).toBe('');
+      expect(label('file.new')).toBe('Ctrl+Shift+N');
+      expect(label('file.newFile')).toBe('Ctrl+N');
+      expect(label('file.newFolder')).toBe('');
       // No keybind lives in the HTML any more.
       expect(document.querySelector('[data-chord]')).toBeNull();
     });
@@ -312,7 +314,7 @@ describe('commands', () => {
       await run('file.new');
       // With nobody in the room it isn't a destructive action, so the button isn't red.
       expect(confirm).toHaveBeenCalledWith(replaceProjectDialog('new', false));
-      expect(confirm.mock.calls[0][0]).toMatchObject({ title: 'Start a new project?', confirmLabel: 'Start new project', destructive: false });
+      expect(confirm.mock.calls[0][0]).toMatchObject({ title: 'Replace the whole project?', confirmLabel: 'Start new project', destructive: false });
       expect(app.switchProject).not.toHaveBeenCalled();
       app.guestCount.mockReturnValue(1);
       await run('file.new');
@@ -460,12 +462,17 @@ describe('commands', () => {
       expect(fileAsk.validate?.('')).toBe('Enter a name.');
       expect(fileAsk.validate?.('a:b')).toBe("Names can't contain :.");
       expect(fileAsk.validate?.('notes.md')).toBeNull();
+      // A taken name gets the next free one, with the folder and the .tex it would get.
+      expect(fileAsk.suggest?.('intro')).toEqual({ value: 'intro (2)', message: "chapters/intro.tex already exists, so here's chapters/intro (2).tex instead." });
+      expect(fileAsk.suggest?.('notes.md')).toBeNull();
+      expect(fileAsk.suggest?.('a:b')).toBeNull();
       prompt.mockResolvedValue('figures');
       await run('file.newFolder');
       expect(project.findByPath('chapters/figures')?.kind).toBe('folder');
       const folderAsk = prompt.mock.calls[1][0];
       expect(folderAsk).toMatchObject({ title: 'New folder', confirmLabel: 'Create folder' });
       expect(folderAsk.validate?.('figures')).toBe('chapters/figures already exists.');
+      expect(folderAsk.suggest?.('figures')?.value).toBe('figures (2)');
       // Cancel adds nothing.
       prompt.mockResolvedValue(null);
       await run('file.newFile');
@@ -749,6 +756,19 @@ describe('commands', () => {
       const shiftC = key('C', { shiftKey: true });
       commands.handleKeydown(shiftC);
       expect(shiftC.defaultPrevented).toBe(false);
+    });
+
+    it('runs New File on Ctrl+N and New Project on Ctrl+Shift+N', async () => {
+      const { commands, app } = setup();
+      const newFile = key('n');
+      commands.handleKeydown(newFile);
+      expect(newFile.defaultPrevented).toBe(true);
+      expect(app.promptDialog).toHaveBeenCalledWith(expect.objectContaining({ title: 'New file' }));
+      expect(app.confirmDialog).not.toHaveBeenCalled();
+      const newProject = key('N', { shiftKey: true });
+      commands.handleKeydown(newProject);
+      expect(newProject.defaultPrevented).toBe(true);
+      await vi.waitFor(() => expect(app.confirmDialog).toHaveBeenCalledWith(expect.objectContaining({ title: 'Replace the whole project?' })));
     });
 
     it('runs Compile Now on Ctrl+Enter', () => {

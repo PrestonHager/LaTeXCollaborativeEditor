@@ -5,7 +5,7 @@ import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '..
 import type { ThemeMode } from '../state/appSession';
 import { canRunCommand, replaceProjectDialog, type ReplaceAction } from '../state/guestCommands';
 import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
-import { pathProblem } from '../ui/nameChecks';
+import { pathProblem, suggestFreeName } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
 import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
@@ -118,7 +118,10 @@ export type CommandContext = {
 export const shortcuts: Shortcut[] = [
   { id: 'app.commandPalette', keybind: 'Mod+P' },
   { id: 'app.openSettings', keybind: 'Mod+,' },
-  { id: 'file.new', keybind: 'Mod+N' },
+  // New File gets the key people reach for. New Project replaces everything, so it takes Shift too.
+  // Browsers may keep both for a new window in a normal tab. They reach the page in an installed-app window.
+  { id: 'file.new', keybind: 'Mod+Shift+N' },
+  { id: 'file.newFile', keybind: 'Mod+N' },
   { id: 'file.openLocal', keybind: 'Mod+O' },
   { id: 'file.openDrive', keybind: 'Mod+Shift+O' },
   { id: 'file.download', keybind: 'Mod+Shift+S' },
@@ -250,28 +253,34 @@ export function createCommands(app: CommandContext) {
       const folder = fileTree.currentFolder();
       // New files are text, so give them a text extension if they don't have one.
       const pathFor = (name: string) => joinPath(folder, isTextPath(name) ? name : `${name}.tex`);
+      const taken = (path: string) => app.project.hasPath(path);
       const name = await promptDialog({
         title: 'New file',
         message: `${folder ? `Adds it to ${folder}/.` : 'Adds it to the top of the project.'} Names without a text extension get .tex.`,
         label: 'File name',
         initialValue: 'chapter.tex',
         confirmLabel: 'Create file',
-        validate: (value) => pathProblem(value && pathFor(value), (path) => app.project.hasPath(path)),
+        validate: (value) => pathProblem(value && pathFor(value), taken),
+        // A second chapter.tex starts as chapter (2).tex.
+        suggest: (value) => suggestFreeName(value, pathFor, taken),
       });
       if (name === null) return;
       runFileOp(() => openFile(app.project.createTextFile(pathFor(name))));
     },
     'file.newFolder': async () => {
       const folder = fileTree.currentFolder();
+      const pathFor = (name: string) => joinPath(folder, name);
+      const taken = (path: string) => app.project.hasPath(path);
       const name = await promptDialog({
         title: 'New folder',
         message: folder ? `Adds it to ${folder}/.` : 'Adds it to the top of the project.',
         label: 'Folder name',
         initialValue: 'figures',
         confirmLabel: 'Create folder',
-        validate: (value) => pathProblem(value && joinPath(folder, value), (path) => app.project.hasPath(path)),
+        validate: (value) => pathProblem(value && pathFor(value), taken),
+        suggest: (value) => suggestFreeName(value, pathFor, taken),
       });
-      if (name !== null) runFileOp(() => app.project.createFolder(joinPath(folder, name)));
+      if (name !== null) runFileOp(() => app.project.createFolder(pathFor(name)));
     },
     'file.upload': () => uploadDialog.open(fileTree.currentFolder()),
     // The Project .zip exporter with no dialog. It reports how it went in the notice line.

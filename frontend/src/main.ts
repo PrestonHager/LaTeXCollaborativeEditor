@@ -50,7 +50,7 @@ import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
 import { createConflictDialog } from './ui/conflictDialog';
 import { confirmDialog, promptDialog } from './ui/dialogs';
-import { pathProblem, projectNameProblem } from './ui/nameChecks';
+import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import {
   readAppSessionState,
@@ -410,6 +410,7 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
       initialValue: path,
       confirmLabel: 'Rename',
       validate: (value) => pathProblem(value, (taken) => project.hasPath(taken), path),
+      suggest: (value) => suggestFreeName(value, (typed) => typed, (taken) => project.hasPath(taken), path),
     });
     if (next !== null && next !== path) runFileOp(() => project.movePath(path, next));
     refocusFileTree(normalizePath(next ?? path) ?? path);

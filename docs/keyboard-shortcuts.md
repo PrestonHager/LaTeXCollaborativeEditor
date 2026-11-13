@@ -19,12 +19,23 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| **New Project** (after you confirm, host only) | **Ctrl+N** | **⌘N** |
+| **New File** | **Ctrl+N** | **⌘N** |
+| **New Project** (after you confirm, host only) | **Ctrl+Shift+N** | **⇧⌘N** |
 | **Open Local Project** (host only) | **Ctrl+O** | **⌘O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⇧⌘O** |
 | **Download Project .zip** | **Ctrl+Shift+S** | **⇧⌘S** |
 | **Export…** | **Ctrl+Shift+E** | **⇧⌘E** |
 | **Save Now** (host only, unless saving is paused) | **Ctrl+S** | **⌘S** |
+
+### New File and New Project in a browser tab
+
+**Ctrl+N** used to be **New Project**. It's **New File** now, and **New Project** moved to **Ctrl+Shift+N**, since it replaces the whole project.
+
+In a normal browser tab, Chrome, Edge, and Firefox usually keep **Ctrl+N** (new window) and **Ctrl+Shift+N** (new private window) for themselves, so the editor never sees them and a new window opens instead.
+They do reach the editor when it runs in its own app window, which Chrome and Edge can make for any site: use **Create shortcut** with **Open as window** ticked, or **Install this site as an app**.
+If they don't work for you, use **File > New File** or the **New file** button in the Files panel, or give them other keys in **Settings > Keyboard shortcuts**.
+
+If you had turned **Ctrl+N** off, it stays off, now for **New File**. Keybinds you added keep working, even on these keys.
 
 ## Edit
 
@@ -78,7 +89,7 @@ Press **Use it here** or **Give it to ...** to pick, and the other command's key
 
 - While you type in the editor, its own keys come first, like **Ctrl+]** to indent or **Ctrl+Z** to undo.
   If you give one of those to a command, Settings warns you, and the command only runs when the editor doesn't have focus.
-- Some keys belong to the browser, like **Ctrl+W** (close tab), **Ctrl+T** (new tab), and **Ctrl+Shift+C** (inspector), and pages can't take them.
+- Some keys belong to the browser, like **Ctrl+W** (close tab), **Ctrl+T** (new tab), **Ctrl+N** (new window), and **Ctrl+Shift+C** (inspector), and pages can't take them in a normal tab.
   Settings warns you about those too.
 
 ## Menus and the palette
@@ -102,7 +113,7 @@ Press **Use it here** or **Give it to ...** to pick, and the other command's key
 These don't have shortcuts.
 Use the menus or the command palette.
 
-- New File, New Folder, Upload Files, Download Current File, and Upload .zip as New Project.
+- New Folder, Upload Files, Download Current File, and Upload .zip as New Project.
 - Connect Google Drive, Disconnect Google Drive, Save to Google Drive, Move to Drive Folder, Rename Project, and Clear Local Projects.
 - The theme toggles, the layout modes, and Pause Saving.
 - The **Help** menu items: Keyboard Shortcuts, Show Tour, Report a Bug, Report a Security Issue, Request a Feature, and About.
