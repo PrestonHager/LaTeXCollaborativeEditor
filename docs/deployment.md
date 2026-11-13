@@ -9,12 +9,13 @@ Frontend deployment (GitHub Pages)
   - `VITE_STUN_URL`
   - `VITE_TURN_URL` (optional)
   - `VITE_TURN_USERNAME` (optional)
-  - `VITE_TURN_CREDENTIAL` (optional)
+  - `VITE_TURN_CREDENTIAL` (optional; public once built, see "TURN credentials are public" below)
   - `VITE_GOOGLE_CLIENT_ID`
   - `VITE_GOOGLE_API_KEY`
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
-- The Pages workflow reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID` and `VITE_DOCS_BASE_URL` from variables (repository or **Production** environment).
+  - `VITE_DISABLE_CSP` (optional; `1` ships without the Content Security Policy, see "Turning the CSP off" below)
+- The Pages workflow reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (repository or **Production** environment).
   The rendezvous and TURN values aren't passed to the build yet, so production uses the defaults in `bootstrapConfig.ts`.
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
@@ -92,9 +93,52 @@ Networking (STUN/TURN)
 - Start with a public STUN server such as `stun:stun.l.google.com:19302`.
 - Add TURN as needed for restrictive NAT environments.
 
+TURN credentials are public
+- `VITE_TURN_USERNAME` and `VITE_TURN_CREDENTIAL` are built into the JavaScript bundle, like every `VITE_` value.
+  The app is static, so there's nowhere to hide them: anyone can open the site, read them, and relay their own traffic through your TURN server on your bill.
+  Treat them as public, not as secrets. Keeping them in GitHub secrets only keeps them out of the repo, not out of the bundle.
+- Don't put long-lived TURN credentials (a coturn `static-auth-secret` user, or a provider's account password) in these variables.
+- Use short-lived credentials instead:
+  - A hosted TURN service that issues time-limited credentials (Cloudflare, Twilio, Metered and Xirsys all do). Prefer one that can also limit use to the site's origin or cap usage.
+  - Or coturn's TURN REST API (`use-auth-secret`), where the username carries an expiry time. Without a server of our own, that means building with a credential that expires, and rebuilding and redeploying before it does.
+- Rotate the credential on a schedule and right away if usage spikes. Rotating means updating the variables and redeploying, since the old bundle keeps the old values.
+- Set a bandwidth or quota limit on the TURN account, so abuse costs a capped amount.
+- A fetch-at-runtime credential endpoint would fix this properly, but it needs a server, which this repository deliberately doesn't have.
+- `SECURITY.md` lists this as a known issue ([#24](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues/24)), so reports of it are out of scope.
+
+Content Security Policy
+- `frontend/index.html` sets a Content-Security-Policy in a `<meta http-equiv>` tag, since GitHub Pages can't send response headers.
+  It only allows the app itself, LaTeX.js on jsDelivr (pinned to `latex.js@0.12.6`), Google sign-in, the Picker and the Drive API, and the WebTorrent trackers.
+  `src/security/cspPolicy.test.ts` fails if a URL in `src/` isn't allowed, so a new CDN, API or tracker needs a matching change to the policy.
+  It also fails on any host in the policy that isn't used in `src/` or listed in `GOOGLE_RUNTIME_SOURCES` there.
+- Google's scripts load more at runtime than our code names, so these are allowed up front (`GOOGLE_RUNTIME_SOURCES`): `www.gstatic.com` and `ssl.gstatic.com` for scripts and styles, `*.gstatic.com` and `*.googleusercontent.com` for images, `drive.google.com` and `content.googleapis.com` for frames, and `content.googleapis.com` for connections.
+- `privacy.html` and `tos.html` have their own much tighter policy (`default-src 'none'`, only the inline body style and the favicon), since they're static.
+- The sandboxed preview iframe uses `srcdoc`, so it inherits the same policy. That's why `style-src` has `'unsafe-inline'` (our theme and KaTeX font `<style>` tags, and LaTeX.js's `style` attributes), `img-src` has `data:` (project images), and `base-uri` allows the LaTeX.js CDN path (its `<base>` tag).
+  `script-src` has no `'unsafe-inline'` or `'unsafe-eval'`, so a peer's document can't run inline script in the preview, and an injected `<img>` to another host is blocked, so it can't ping a tracker either.
+  The one inline script we add to the preview, `PREVIEW_LINK_SCRIPT` in `src/ui/preview.ts`, is allowed by its `sha256-` hash in `script-src`. It's a fixed string (the scroll position goes in a `data-scroll` attribute), so if you edit it, `cspPolicy.test.ts` fails and prints the new hash to put in `index.html`.
+- `frame-src` and `img-src` allow `blob:` for the PDF and image viewer, and `object-src` allows `blob:` too, because Chrome's PDF viewer in that iframe counts as a plugin.
+- `connect-src` lists the default trackers. If `VITE_P2P_RENDEZVOUS` lists others, the `csp` plugin in `vite.config.ts` adds their origins at build time.
+  STUN and TURN aren't covered by CSP, so `VITE_STUN_URL` and `VITE_TURN_URL` need no change.
+- A meta tag can't set `frame-ancestors`, `report-uri`/`report-to` or `sandbox`; browsers ignore them there.
+  So the CSP doesn't stop other sites from framing the app (clickjacking), and GitHub Pages can't send `X-Frame-Options` either.
+  If the site moves behind a host or proxy that can set headers (Cloudflare, Netlify, a custom server), send the same policy as a header and add `frame-ancestors 'none'`.
+- `upgrade-insecure-requests` is left out on purpose: it would break `npm run dev` and `vite preview` on `http://localhost`.
+- After changing the policy, check the browser console on the live site for "violates the following Content Security Policy directive" while signing in to Google, opening the Picker, sharing a room and compiling.
+
+Turning the CSP off (rollback)
+- If the CSP breaks something in production, set the repository (or **Production** environment) variable `VITE_DISABLE_CSP` to `1` and rerun the Pages workflow.
+  The `csp` plugin in `vite.config.ts` then leaves the CSP meta tag out of every page. Nothing else changes. Locally, `VITE_DISABLE_CSP=1 npm run build` does the same.
+- Then find what was blocked, with the CSP still on (`npm run dev`, `npm run preview`, or the live site before the rollback):
+  1. Open DevTools > Console and do the thing that broke (for example sign in to Google or open the Picker).
+  2. Look for errors like `Loading the script 'https://host/path' violates the following Content Security Policy directive: "script-src ..."`. The URL is what was blocked, and the directive name (`script-src`, `connect-src`, `frame-src`, `img-src`, `style-src`, `font-src`) is where it goes.
+     The **Issues** tab groups the same reports under "Content Security Policy".
+  3. Add that origin (`https://host`, or a path prefix ending in `/` if only one path is needed) to that directive in `frontend/index.html`. Don't add whole schemes like `https:` or `*`.
+  4. If no URL in `src/` names it (a host Google loads by itself), add it to `GOOGLE_RUNTIME_SOURCES` in `src/security/cspPolicy.test.ts` too, then run `npm run test:run`.
+- After the fix is deployed, delete `VITE_DISABLE_CSP` (or set it to anything but `1`) and rerun the workflow to turn the CSP back on.
+
 Domain and security
 - The domain (e.g., latex.prestonhager.com) must be served over HTTPS to enable P2P APIs.
-- Keep CORS and CSP policies permissive enough for rendezvous and TURN endpoints while minimizing exposure.
+- `getBootstrapConfig` treats `localhost`, `*.localhost`, `127.x.x.x` and `[::1]` as local and everything else as production.
 
 Documentation
 - The user docs are MkDocs Material, built from `docs/` by `mkdocs.yml`. Run `mkdocs build --strict` before a PR, it fails on broken links and missing images.

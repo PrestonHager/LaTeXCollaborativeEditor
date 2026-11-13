@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { resolveBuildInfo, versionJsonPlugin } from './scripts/build-info.mjs';
+import { addConnectSources, removeCspMeta } from './src/security/csp';
 
 // The version, commit and build time go in the About dialog, the footer, the bug report form,
 // the P2P hello message and dist/version.json. package.json is the source of truth (docs/versioning.md).
@@ -14,9 +15,32 @@ const buildInfo = resolveBuildInfo({ version });
 // regression.html is dev-only and stays off this list (scripts/check-build-pages.mjs checks both).
 const BUILD_PAGES = ['index.html', 'privacy.html', 'tos.html'] as const;
 
+/**
+ * Build-time tweaks to the CSP <meta> tags in the pages.
+ * - VITE_DISABLE_CSP=1 drops the tag from every page, as a rollback switch (docs/deployment.md).
+ * - The CSP in index.html allows the default trackers. If VITE_P2P_RENDEZVOUS lists others,
+ *   add them to connect-src too, or the browser would block them.
+ */
+function cspPlugin(): Plugin {
+  let disabled = false;
+  let urls: string[] = [];
+  return {
+    name: 'csp',
+    configResolved(config) {
+      disabled = String(config.env.VITE_DISABLE_CSP ?? '') === '1';
+      const rendezvous = String(config.env.VITE_P2P_RENDEZVOUS ?? '');
+      urls = rendezvous.split(',').map((url) => url.trim()).filter(Boolean);
+    },
+    transformIndexHtml(html) {
+      if (disabled) return removeCspMeta(html);
+      return urls.length ? addConnectSources(html, urls) : html;
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [tailwindcss(), versionJsonPlugin(buildInfo)],
+  plugins: [tailwindcss(), versionJsonPlugin(buildInfo), cspPlugin()],
   build: {
     // scripts/check-bundle-size.mjs reads dist/.vite/manifest.json to find the initial-load graph.
     manifest: true,

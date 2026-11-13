@@ -8,6 +8,7 @@ Rendezvous and session bootstrap
 - Peers join the same P2P topic/room via public rendezvous/bootstrap endpoints.
 - Those endpoints are WebTorrent trackers, used through Trystero's torrent strategy.
   The list comes from `VITE_P2P_RENDEZVOUS` and is passed to Trystero as `relayConfig.urls`, so Trystero never falls back to its own relay list.
+  The page's Content Security Policy only lets it open WebSockets to these trackers. The build adds any custom `VITE_P2P_RENDEZVOUS` trackers to `connect-src` (see `docs/deployment.md`).
 - Trackers only see the hashed room topic and WebRTC offers and answers, never document content.
 - No repository-owned signaling server is required.
 - The host's room id is kept in the tab's sessionStorage after Share, so reloading the host tab rejoins the same room and guest links keep working.
@@ -17,6 +18,7 @@ Rendezvous and session bootstrap
 Transport behavior
 - The app uses a transport layer over a third-party rendezvous infrastructure (WebRTC-like semantics).
 - ICE configuration starts with STUN, with optional TURN fallback for restricted NATs.
+  TURN credentials are built into the static bundle, so they're public; use short-lived ones (see `docs/deployment.md`).
 - UI surfaces connection states, with the number of connected peers next to them:
   - Not sharing: not in a room.
   - Waiting for peers: in a room, nobody else has joined yet.

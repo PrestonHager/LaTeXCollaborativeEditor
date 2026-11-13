@@ -148,6 +148,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] The console shows no relay or tracker errors on load.
 - [ ] In the Network tab, the only tracker connections are the ones in `VITE_P2P_RENDEZVOUS`, or the defaults.
 - [ ] Tracker traffic only has the room id, never document text.
+- [ ] The console shows no Content Security Policy errors ("violates the following Content Security Policy directive") while you load the test project, open each dialog, share a room, connect Google Drive and open the Drive Picker. The preview still has its LaTeX fonts.
 
 ## Interface
 

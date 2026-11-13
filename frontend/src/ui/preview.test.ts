@@ -10,7 +10,8 @@ import {
   PREVIEW_SANDBOX,
   PREVIEW_THEME_STYLE_ID,
   previewDocument,
-  previewLinkScript,
+  PREVIEW_LINK_SCRIPT,
+  previewScrollPosition,
   previewThemeCss,
   safeExternalUrl,
   withPreviewTheme,
@@ -320,13 +321,13 @@ describe('preview link handling in the pane', () => {
     const pane = createPreviewPane(document.body);
     const frame = document.querySelector('iframe')!;
     await pane.renderHtml('<p>hi</p>');
-    expect(frame.srcdoc).toContain('var y=0,');
+    expect(frame.srcdoc).toContain('data-scroll="0"');
     postFromFrame(frame, { type: PREVIEW_MESSAGE_SCROLL, y: 345.6 });
     await pane.renderHtml('<p>hi again</p>');
     expect(frame.srcdoc).toBe(previewDocument('<p>hi again</p>', 'light', 345.6));
-    expect(frame.srcdoc).toContain('var y=346,');
+    expect(frame.srcdoc).toContain('data-scroll="346"');
     pane.setTheme('dark');
-    expect(frame.srcdoc).toContain('var y=346,');
+    expect(frame.srcdoc).toContain('data-scroll="346"');
   });
 });
 
@@ -339,22 +340,24 @@ describe('preview link script', () => {
     expect(script.parentElement).toBe(doc.head);
     expect(doc.head.lastElementChild).toBe(script);
     expect(script.previousElementSibling?.id).toBe(PREVIEW_THEME_STYLE_ID);
-    expect(script.textContent).toBe(previewLinkScript(10));
-    expect(previewLinkScript(10)).not.toContain('</');
+    expect(script.textContent).toBe(PREVIEW_LINK_SCRIPT);
+    expect(script.getAttribute('data-scroll')).toBe('10');
+    expect(PREVIEW_LINK_SCRIPT).not.toContain('</');
   });
 
   it('only puts a whole, non-negative number in for the scroll position', () => {
-    expect(previewLinkScript(12.4)).toContain('var y=12,');
-    expect(previewLinkScript(-5)).toContain('var y=0,');
-    expect(previewLinkScript(Number.NaN)).toContain('var y=0,');
-    expect(previewLinkScript(Infinity)).toContain('var y=0,');
+    expect(previewScrollPosition(12.4)).toBe(12);
+    expect(previewScrollPosition(-5)).toBe(0);
+    expect(previewScrollPosition(Number.NaN)).toBe(0);
+    expect(previewScrollPosition(Infinity)).toBe(0);
+    expect(previewDocument('<p>x</p>', 'light', 12.4)).toContain('data-scroll="12"');
   });
 
   describe('running in a page', () => {
     // The script adds listeners to this test document, so it runs once for the whole block.
     let postMessage: ReturnType<typeof vi.spyOn>;
     beforeAll(() => {
-      new Function(previewLinkScript(0))();
+      new Function(PREVIEW_LINK_SCRIPT)();
     });
     beforeEach(() => {
       postMessage = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
