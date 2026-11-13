@@ -82,8 +82,11 @@ const EXTERNAL_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
 const MAX_EXTERNAL_URL_LENGTH = 4096;
 
 /**
- * The script we put in the preview document. It's a fixed string from our own code. The only
- * value in it is the scroll position, a number we checked. Nothing comes from the document.
+ * The script we put in the preview document. It's a fixed string from our own code, so the
+ * Content Security Policy in index.html can allow it by its hash (the srcdoc frame inherits that
+ * policy, which has no 'unsafe-inline' for scripts). Change it and that hash must change too;
+ * src/security/cspPolicy.test.ts prints the new one. Nothing in it comes from the document.
+ * The scroll position comes from the script tag's data-scroll attribute, not the script text.
  *
  * - Links to `#id` (\ref, \hyperref and so on) scroll inside the frame. LaTeX.js sets <base> to
  *   its CDN, so if the browser followed them, the frame would load the CDN's page instead.
@@ -92,25 +95,27 @@ const MAX_EXTERNAL_URL_LENGTH = 4096;
  *   can't open a tab itself.
  * - It reports the scroll position, so the next render starts where the reader was.
  */
-export function previewLinkScript(scrollY: number): string {
-  const y = Number.isFinite(scrollY) && scrollY > 0 ? Math.round(scrollY) : 0;
-  return (
-    '(function(){' +
-    `var y=${y},P=parent,O=${JSON.stringify(PREVIEW_MESSAGE_OPEN_LINK)},S=${JSON.stringify(PREVIEW_MESSAGE_SCROLL)};` +
-    'function link(e){var t=e.target;while(t&&t.nodeType!==1)t=t.parentNode;return t&&t.closest?t.closest("a[href]"):null}' +
-    'function find(h){var id=h.slice(1);try{id=decodeURIComponent(id)}catch(x){}' +
-    'return id?document.getElementById(id)||document.getElementsByName(id)[0]||null:null}' +
-    'function go(e){if(e.defaultPrevented||(e.type==="auxclick"&&e.button!==1))return;var a=link(e);if(!a)return;' +
-    'var h=a.getAttribute("href")||"";e.preventDefault();' +
-    'if(h.charAt(0)==="#"){var t=find(h);if(t)t.scrollIntoView({block:"start"});return}' +
-    'P.postMessage({type:O,url:h},"*")}' +
-    'document.addEventListener("click",go);document.addEventListener("auxclick",go);' +
-    'var q=0;addEventListener("scroll",function(){if(q)return;q=1;requestAnimationFrame(function(){q=0;' +
-    'P.postMessage({type:S,y:scrollY},"*")})});' +
-    'function back(){if(y)scrollTo(0,y)}' +
-    'document.addEventListener("DOMContentLoaded",back);addEventListener("load",back)' +
-    '})();'
-  );
+export const PREVIEW_LINK_SCRIPT =
+  '(function(){' +
+  'var c=document.currentScript,y=Math.max(0,Math.round(+(c&&c.getAttribute("data-scroll"))||0)),P=parent,' +
+  `O=${JSON.stringify(PREVIEW_MESSAGE_OPEN_LINK)},S=${JSON.stringify(PREVIEW_MESSAGE_SCROLL)};` +
+  'function link(e){var t=e.target;while(t&&t.nodeType!==1)t=t.parentNode;return t&&t.closest?t.closest("a[href]"):null}' +
+  'function find(h){var id=h.slice(1);try{id=decodeURIComponent(id)}catch(x){}' +
+  'return id?document.getElementById(id)||document.getElementsByName(id)[0]||null:null}' +
+  'function go(e){if(e.defaultPrevented||(e.type==="auxclick"&&e.button!==1))return;var a=link(e);if(!a)return;' +
+  'var h=a.getAttribute("href")||"";e.preventDefault();' +
+  'if(h.charAt(0)==="#"){var t=find(h);if(t)t.scrollIntoView({block:"start"});return}' +
+  'P.postMessage({type:O,url:h},"*")}' +
+  'document.addEventListener("click",go);document.addEventListener("auxclick",go);' +
+  'var q=0;addEventListener("scroll",function(){if(q)return;q=1;requestAnimationFrame(function(){q=0;' +
+  'P.postMessage({type:S,y:scrollY},"*")})});' +
+  'function back(){if(y)scrollTo(0,y)}' +
+  'document.addEventListener("DOMContentLoaded",back);addEventListener("load",back)' +
+  '})();';
+
+/** A scroll position as a whole, non-negative number, for the script's data-scroll attribute. */
+export function previewScrollPosition(scrollY: number): number {
+  return Number.isFinite(scrollY) && scrollY > 0 ? Math.round(scrollY) : 0;
 }
 
 /**
@@ -118,7 +123,7 @@ export function previewLinkScript(scrollY: number): string {
  * <head>, after LaTeX.js's own styles.
  */
 export function previewDocument(html: string, theme: PreviewDisplayTheme, scrollY = 0): string {
-  const script = `<script id="${PREVIEW_LINK_SCRIPT_ID}">${previewLinkScript(scrollY)}</script>`;
+  const script = `<script id="${PREVIEW_LINK_SCRIPT_ID}" data-scroll="${previewScrollPosition(scrollY)}">${PREVIEW_LINK_SCRIPT}</script>`;
   return insertAtHeadEnd(withPreviewTheme(html, theme), script);
 }
 

@@ -32,6 +32,8 @@ jobs:
           VITE_DOCS_BASE_URL: ${{ vars.VITE_DOCS_BASE_URL }}
           VITE_P2P_APP_ID: ${{ vars.VITE_P2P_APP_ID }}
           VITE_STUN_URL: ${{ vars.VITE_STUN_URL }}
+          # Rollback switch: set the VITE_DISABLE_CSP variable to 1 to ship without the CSP meta tags.
+          VITE_DISABLE_CSP: ${{ vars.VITE_DISABLE_CSP }}
         run: |
           npm ci
           npm run build

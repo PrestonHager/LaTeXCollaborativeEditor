@@ -138,3 +138,11 @@ export function addConnectSources(html: string, urls: string[]): string {
   directives['connect-src'] = connect;
   return html.replace(CSP_META, (tag) => tag.replace(policy, serializeCsp(directives)));
 }
+
+/**
+ * Remove the CSP <meta> tag from a page. The build does this when VITE_DISABLE_CSP=1,
+ * as a rollback switch if the policy blocks something in production.
+ */
+export function removeCspMeta(html: string): string {
+  return html.replace(new RegExp(`[ \\t]*${CSP_META.source}[ \\t]*\\r?\\n?`, 'i'), '');
+}

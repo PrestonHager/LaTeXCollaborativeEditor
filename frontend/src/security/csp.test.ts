@@ -1,4 +1,25 @@
-import { addConnectSources, cspAllows, cspFromHtml, parseCsp, serializeCsp, sourceMatchesUrl } from './csp';
+import indexHtml from '../../index.html?raw';
+import privacyHtml from '../../privacy.html?raw';
+import { addConnectSources, cspAllows, cspFromHtml, parseCsp, removeCspMeta, serializeCsp, sourceMatchesUrl } from './csp';
+
+describe('removeCspMeta', () => {
+  it.each([
+    ['index.html', indexHtml],
+    ['privacy.html', privacyHtml],
+  ])('drops the CSP tag from %s and keeps the rest', (_name, html) => {
+    expect(cspFromHtml(html)).not.toBeNull();
+    const out = removeCspMeta(html);
+    expect(cspFromHtml(out)).toBeNull();
+    expect(out).not.toContain('http-equiv="Content-Security-Policy"');
+    expect(out).toContain('<meta name="viewport"');
+    expect(out).toContain('<title>');
+    expect(out.length).toBeLessThan(html.length);
+  });
+
+  it('leaves pages without a CSP alone', () => {
+    expect(removeCspMeta('<html><head></head></html>')).toBe('<html><head></head></html>');
+  });
+});
 
 const page = (policy: string) =>
   `<html><head><meta http-equiv="Content-Security-Policy" content="${policy}" /><title>x</title></head></html>`;

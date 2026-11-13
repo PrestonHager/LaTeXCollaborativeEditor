@@ -1,7 +1,10 @@
 import indexHtml from '../../index.html?raw';
-import { cspAllows, cspFromHtml, parseCsp } from './csp';
+import privacyHtml from '../../privacy.html?raw';
+import tosHtml from '../../tos.html?raw';
+import { cspAllows, cspFromHtml, parseCsp, sourceMatchesUrl } from './csp';
 import { LATEX_JS_ASSET_BASE } from '../compile/latexJsPreview';
 import { getBootstrapConfig } from '../net/bootstrapConfig';
+import { PREVIEW_LINK_SCRIPT } from '../ui/preview';
 
 const APP_ORIGIN = 'https://latex.prestonhager.com';
 const policy = cspFromHtml(indexHtml);
@@ -26,6 +29,21 @@ const NOT_FETCHED: Record<string, string> = {
 };
 
 const FETCH_DIRECTIVES = ['script-src', 'style-src', 'connect-src', 'frame-src', 'img-src', 'font-src'];
+
+/**
+ * Hosts in the policy that no URL in src/ names, because Google's own scripts load them at
+ * runtime: Google Identity Services (gsi/client) pulls its stylesheet and iframes, and the gapi
+ * loader and Picker pull scripts, styles, images and frames from gstatic, googleusercontent,
+ * drive.google.com and content.googleapis.com. We can't test those against real Google from CI,
+ * so they're allowed up front to avoid breaking Drive in production. Keep anything else out.
+ */
+const GOOGLE_RUNTIME_SOURCES: Record<string, string[]> = {
+  'script-src': ['https://www.gstatic.com', 'https://ssl.gstatic.com'],
+  'style-src': ['https://accounts.google.com/gsi/style', 'https://www.gstatic.com', 'https://ssl.gstatic.com'],
+  'img-src': ['https://*.gstatic.com', 'https://*.googleusercontent.com'],
+  'frame-src': ['https://accounts.google.com/gsi/', 'https://docs.google.com', 'https://drive.google.com', 'https://content.googleapis.com'],
+  'connect-src': ['https://accounts.google.com/gsi/', 'https://content.googleapis.com'],
+};
 
 function externalUrls(): Map<string, string> {
   const found = new Map<string, string>();
@@ -134,5 +152,64 @@ describe('Content-Security-Policy in index.html', () => {
   it('still lists every URL it exempts, so the exemptions stay current', () => {
     const urls = externalUrls();
     for (const url of Object.keys(NOT_FETCHED)) expect(urls.has(url), url).toBe(true);
+  });
+
+  it("allows the preview's link script by its hash, and no other inline script", async () => {
+    const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(PREVIEW_LINK_SCRIPT)));
+    const hash = `'sha256-${btoa(String.fromCharCode(...digest))}'`;
+    // If this fails after editing PREVIEW_LINK_SCRIPT, put this hash in script-src in index.html.
+    expect(csp['script-src'], `script-src needs ${hash}`).toContain(hash);
+    expect(csp['script-src'].filter((source) => source.startsWith("'sha"))).toEqual([hash]);
+  });
+
+  it('pre-allows the hosts Google loads at runtime', () => {
+    for (const [directive, list] of Object.entries(GOOGLE_RUNTIME_SOURCES)) {
+      for (const source of list) expect(csp[directive], `${directive} ${source}`).toContain(source);
+    }
+    expect(cspAllows(csp, 'img-src', 'https://lh3.googleusercontent.com/a/photo', APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'img-src', 'https://ssl.gstatic.com/docs/picker/images/x.png', APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'script-src', 'https://www.gstatic.com/_/js/k=x', APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'frame-src', 'https://drive.google.com/picker', APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'connect-src', 'https://content.googleapis.com/drive/v3/files', APP_ORIGIN)).toBe(true);
+    // Still tight: no wildcard script hosts, and no googleusercontent outside images.
+    expect(cspAllows(csp, 'script-src', 'https://evil.gstatic.com/x.js', APP_ORIGIN)).toBe(false);
+    expect(cspAllows(csp, 'script-src', 'https://lh3.googleusercontent.com/x.js', APP_ORIGIN)).toBe(false);
+    expect(cspAllows(csp, 'connect-src', 'https://lh3.googleusercontent.com/x', APP_ORIGIN)).toBe(false);
+  });
+
+  it('has no external host that is neither used in src/ nor a listed Google runtime host', () => {
+    const urls = [...externalUrls().keys()];
+    const unexplained: string[] = [];
+    for (const directive of [...FETCH_DIRECTIVES, 'base-uri']) {
+      for (const source of csp[directive] ?? []) {
+        if (source.startsWith("'") || /^[a-z]+:$/.test(source)) continue;
+        if (GOOGLE_RUNTIME_SOURCES[directive]?.includes(source)) continue;
+        if (urls.some((url) => sourceMatchesUrl(source, url))) continue;
+        unexplained.push(`${directive} ${source}`);
+      }
+    }
+    expect(unexplained).toEqual([]);
+  });
+});
+
+describe.each([
+  ['privacy.html', privacyHtml],
+  ['tos.html', tosHtml],
+])('Content-Security-Policy in %s', (_name, html) => {
+  const pageCsp = parseCsp(cspFromHtml(html) ?? '');
+
+  it('is a tight policy for a static page', () => {
+    expect(pageCsp['default-src']).toEqual(["'none'"]);
+    expect(pageCsp['style-src']).toEqual(["'unsafe-inline'"]);
+    expect(pageCsp['img-src']).toEqual(["'self'"]);
+    expect(pageCsp['base-uri']).toEqual(["'none'"]);
+    expect(pageCsp['form-action']).toEqual(["'none'"]);
+    expect(pageCsp['script-src']).toBeUndefined();
+  });
+
+  it('has no scripts or external resources for the policy to block', () => {
+    expect(html).not.toMatch(/<script/i);
+    expect(html).not.toMatch(/<link[^>]+href=["']https?:/i);
+    expect(html).not.toMatch(/<img/i);
   });
 });
