@@ -7,6 +7,19 @@ type YjsSyncConfig = {
   onLocalUpdate: (update: Uint8Array) => void;
 };
 
+/**
+ * Check that bytes from a peer decode as a Yjs update before we apply them.
+ * Applying garbage throws partway through, which could leave the doc half changed.
+ */
+export function isWellFormedUpdate(update: Uint8Array): boolean {
+  try {
+    Y.decodeUpdate(update);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Keeps one Yjs doc (the whole project) and tells us which updates to send to peers. */
 export class YjsDocSync {
   private doc = new Y.Doc();

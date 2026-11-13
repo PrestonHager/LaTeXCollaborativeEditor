@@ -6,7 +6,9 @@ import {
   isInside,
   isPdf,
   isPreviewableImage,
+  isSafePath,
   isTextPath,
+  MAX_PATH_LENGTH,
   joinPath,
   mimeType,
   normalizePath,
@@ -20,6 +22,22 @@ describe('project paths', () => {
     expect(normalizePath('/a//./b/')).toBe('a/b');
     expect(normalizePath('../secret')).toBeNull();
     expect(normalizePath('  / ')).toBeNull();
+    expect(normalizePath('a/'.repeat(MAX_PATH_LENGTH))).toBeNull();
+  });
+
+  it('only trusts peer paths that are already clean and relative', () => {
+    expect(isSafePath('figures/plot.png')).toBe(true);
+    expect(isSafePath('../secret.tex')).toBe(false);
+    expect(isSafePath('a/../../b.tex')).toBe(false);
+    expect(isSafePath('/etc/passwd')).toBe(false);
+    expect(isSafePath('C:/Windows/x.tex')).toBe(false);
+    expect(isSafePath('c:x.tex')).toBe(false);
+    expect(isSafePath('a\\b.tex')).toBe(false);
+    expect(isSafePath('a//b.tex')).toBe(false);
+    expect(isSafePath('')).toBe(false);
+    expect(isSafePath(42)).toBe(false);
+    expect(isSafePath('x'.repeat(MAX_PATH_LENGTH))).toBe(true);
+    expect(isSafePath('x'.repeat(MAX_PATH_LENGTH + 1))).toBe(false);
   });
 
   it('splits and joins paths', () => {

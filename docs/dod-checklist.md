@@ -27,6 +27,7 @@ Checklist
 - [x] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.
+- [ ] Message validation: malformed or oversized peer messages, file chunks, and unsafe file paths are dropped, snapshots and metadata are only taken from the host, and only a few files transfer at once (see `docs/protocol.md`).
 - [x] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
 - [x] Bundle size: `npm run build` reports the gzipped JS and CSS under the budget in `scripts/check-bundle-size.mjs`, or the PR explains why it went over.
