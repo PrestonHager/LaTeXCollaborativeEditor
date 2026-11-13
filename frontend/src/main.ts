@@ -754,6 +754,8 @@ const commands = createCommands({
   get toolbar() {
     return toolbar;
   },
+  // Only the host's own room counts. A guest never replaces the project.
+  guestCount: () => (isClient || !inRoom ? 0 : peerCount),
   projectName,
   setStatus,
   showNotice,

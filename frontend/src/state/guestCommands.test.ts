@@ -1,4 +1,4 @@
-import { HOST_ONLY_COMMANDS, NEW_PROJECT_CONFIRM, canRunCommand } from './guestCommands';
+import { HOST_ONLY_COMMANDS, NEW_PROJECT_CONFIRM, canRunCommand, replaceProjectConfirm } from './guestCommands';
 import type { CommandId } from '../ui/menuBar';
 
 describe('guest commands', () => {
@@ -23,5 +23,11 @@ describe('guest commands', () => {
 
   it('warns the host that New Project clears it for everyone in the room', () => {
     expect(NEW_PROJECT_CONFIRM).toContain('clears the project for everyone in the room');
+  });
+
+  it('warns the host that Open and Import replace it for everyone in the room', () => {
+    expect(replaceProjectConfirm('open')).toMatch(/^Open another project\? This replaces the project for everyone in the room\./);
+    expect(replaceProjectConfirm('import')).toMatch(/^Upload a \.zip as a new project\? This replaces the project for everyone in the room\./);
+    expect(replaceProjectConfirm('new')).toBe(NEW_PROJECT_CONFIRM);
   });
 });
