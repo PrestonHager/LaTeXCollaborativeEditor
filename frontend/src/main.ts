@@ -30,12 +30,12 @@ import { openGooglePicker } from './storage/providers/googlePicker';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
-import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
+import { createPreviewCompile } from './app/previewCompile';
+import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
 import { createConflictDialog } from './ui/conflictDialog';
 import { createCollabUndo } from './collab/undo';
-import { CompileScheduler, collectImageUrls } from './compile/compileScheduler';
 import {
   readAppSessionState,
   writeAppSessionState,
@@ -82,8 +82,6 @@ const zipInput = document.getElementById('zip-input') as HTMLInputElement;
 const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
-const COMPILE_DEBOUNCE_MS = 500;
-const COMPILE_MIN_INTERVAL_MS = 900;
 
 const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev';
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
@@ -338,120 +336,40 @@ async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
   }
 }
 
-let compileTimer: ReturnType<typeof setTimeout> | null = null;
-let throttleTimer: ReturnType<typeof setTimeout> | null = null;
-let lastCompiledKey: string | null = null;
-let lastCompileStartedAt = 0;
-let compileSequence = 0;
-const compiler = new CompileScheduler();
-const imageUrls = new Map<string, string>();
-
-/** A data: URL for an image file, if we have its bytes. Cached by content hash. */
-const imageUrl = (path: string): string | null => {
-  const entry = project.findByPath(path);
-  if (!entry?.hash) return null;
-  const cached = imageUrls.get(entry.hash);
-  if (cached) return cached;
-  const bytes = blobs.peek(entry.hash);
-  if (!bytes) return null;
-  const url = `data:${mimeType(path)};base64,${encodeYjsState(bytes)}`;
-  imageUrls.set(entry.hash, url);
-  return url;
-};
-
-/** Show diagnostics in the footer, with a "Learn more" link while there's something to explain. */
-function setDiagnostics(text: string, topic: 'diagnostics' | 'previewErrors' = 'diagnostics') {
-  diagnosticsEl.textContent = text;
-  diagnosticsHelpEl.hidden = !text;
-  diagnosticsHelpEl.href = docsUrl(docsBase, topic);
-}
-
-const runCompile = async () => {
-  const mainId = project.getMainFileId();
-  const main = mainId ? project.get(mainId) : undefined;
+const compile = createPreviewCompile({
+  getProject: () => project,
+  getActiveFileId: () => activeFileId,
+  blobs,
+  preview,
+  editor,
+  compileStatusEl,
+  diagnosticsEl,
+  // Show a "Learn more" link next to the diagnostics while there's something to explain.
+  onDiagnostics: (text, topic) => {
+    diagnosticsHelpEl.hidden = !text;
+    diagnosticsHelpEl.href = docsUrl(docsBase, topic);
+  },
   // With no main file there's nothing to compile, so say how to pick one instead of showing a blank page.
-  previewEmptyEl.hidden = Boolean(main) || (isClient && project.isEmpty());
-  if (!main) {
-    compileStatusEl.textContent = project.isEmpty() ? 'Idle' : 'No main file';
-    setDiagnostics('');
-    return;
-  }
-  const texts = project.textFiles();
-  const binaries = project.entries().filter((entry) => entry.kind === 'binary');
-  // Skip the compile when nothing it reads has changed.
-  const key = [
-    main.path,
-    ...[...texts].map(([path, text]) => `${path}:${textRev(text)}`),
-    ...binaries.map((entry) => `${entry.path}:${entry.hash}:${entry.hash && blobs.has(entry.hash) ? 1 : 0}`),
-  ].join('|');
-  if (key === lastCompiledKey) {
-    compileStatusEl.textContent = 'Compiled';
-    return;
-  }
-  const seq = ++compileSequence;
-  lastCompileStartedAt = Date.now();
-  compileStatusEl.textContent = 'Compiling';
-  preview.setLoading(true);
-  try {
-    const binaryPaths = binaries.map((entry) => entry.path);
-    const result = await compiler.compile({ mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) });
-    if (!result || seq !== compileSequence) return;
-    const { html, errors, missing } = result;
-    if (html) await preview.renderHtml(html);
-    const activePath = activeFileId ? project.get(activeFileId)?.path : undefined;
-    editor.setDiagnostics(errors.filter((error) => error.path === activePath));
-    lastCompiledKey = key;
-    compileStatusEl.textContent = 'Compiled';
-    if (noticeKind === 'compile') {
-      notice.clear();
-      noticeKind = null;
-    }
-    if (errors.length) {
-      const first = errors[0];
-      setDiagnostics(`${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`);
-    } else {
-      setDiagnostics(missing.length ? `Not found in the project: ${missing.join(', ')}` : '');
-    }
-  } catch (error) {
-    if (seq !== compileSequence) return;
-    editor.setDiagnostics([{ line: 1, severity: 'error', message: String(error) }]);
-    compileStatusEl.textContent = 'Compile Error';
-    setDiagnostics(String(error), 'previewErrors');
-    // Only say so once per broken streak, not on every keystroke.
-    if (noticeKind !== 'compile') {
-      showNotice("The preview couldn't be built.", true, true, {
-        topic: 'previewErrors',
-        report: 'preview',
-        summary: 'The preview failed to compile.',
-      });
-      noticeKind = 'compile';
-    }
-  } finally {
-    if (seq === compileSequence) preview.setLoading(false);
-  }
-};
-
-const requestCompile = () => {
-  const elapsed = Date.now() - lastCompileStartedAt;
-  if (elapsed >= COMPILE_MIN_INTERVAL_MS) {
-    void runCompile();
-    return;
-  }
-  if (throttleTimer) clearTimeout(throttleTimer);
-  throttleTimer = setTimeout(() => {
-    throttleTimer = null;
-    void runCompile();
-  }, COMPILE_MIN_INTERVAL_MS - elapsed);
-};
-
-const scheduleCompile = () => {
-  if (compileTimer) clearTimeout(compileTimer);
-  compileStatusEl.textContent = 'Waiting';
-  compileTimer = setTimeout(() => {
-    compileTimer = null;
-    requestCompile();
-  }, COMPILE_DEBOUNCE_MS);
-};
+  onEmpty: (empty) => {
+    previewEmptyEl.hidden = !empty || (isClient && project.isEmpty());
+  },
+  onCompiled: () => {
+    if (noticeKind !== 'compile') return;
+    notice.clear();
+    noticeKind = null;
+  },
+  // Only say so once per broken streak, not on every keystroke.
+  onCompileError: () => {
+    if (noticeKind === 'compile') return;
+    showNotice("The preview couldn't be built.", true, true, {
+      topic: 'previewErrors',
+      report: 'preview',
+      summary: 'The preview failed to compile.',
+    });
+    noticeKind = 'compile';
+  },
+});
+const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
   onOpen: (entry) => openFile(entry.id),
@@ -523,7 +441,7 @@ function openFile(id: string | null) {
     if (previous !== activeFileId || !entry) bindEditor(entry ? project.getText(entry.id) : null);
   }
   renderFiles();
-  lastCompiledKey = null;
+  compile.invalidate();
   scheduleCompile();
   persistAppSession();
   refreshCommands();
@@ -598,7 +516,7 @@ function bindProject() {
 
 blobs.onAdded(() => {
   renderFiles();
-  lastCompiledKey = null;
+  compile.invalidate();
   scheduleCompile();
   // A file a peer just sent may still need saving.
   if (!isClient && project.getName()) autosave.markDirty();
@@ -967,14 +885,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'app.openSettings': () => settingsDialog.open(),
   'file.rename': () => renameProject(),
   'share.copyLink': () => shareButtonEl.click(),
-  'view.compileNow': () => {
-    if (compileTimer) {
-      clearTimeout(compileTimer);
-      compileTimer = null;
-    }
-    lastCompiledKey = null;
-    requestCompile();
-  },
+  'view.compileNow': () => compile.compileNow(),
   'view.layoutSplit': () => {
     layout.setMode('split');
     menuBar.refresh();
