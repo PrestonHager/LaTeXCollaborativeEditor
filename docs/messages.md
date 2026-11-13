@@ -9,7 +9,7 @@ The app shows messages in a few places:
 - The **notice** text in the header, next to Share. Most notices clear after about 8 seconds. Errors are red.
 - The **loading bar** under the header, while something big is happening.
 - The **footer**, for preview diagnostics.
-- Browser **confirm and prompt** boxes, when the app needs a yes or a name.
+- **Confirm and name dialogs**, when the app needs a yes or a name.
 
 ![The status pills and notice area](assets/screenshots/status-light.png#only-light)
 ![The status pills and notice area](assets/screenshots/status-dark.png#only-dark)
@@ -116,7 +116,7 @@ These show in the header, next to Share.
 | Google Drive sign-in expired, so edits are saving in this browser... | Your Drive sign-in ran out mid-session. Nothing is lost. Reconnect from the File menu. This one stays until you reconnect. |
 | Disconnected Google Drive. Edits now save in this browser. | **File > Disconnect Google Drive** finished. |
 | Google Drive picker is not set up on this site (VITE_GOOGLE_API_KEY is missing). | Drive picking can't work on this copy of the site. |
-| Save canceled: the project needs a name first. | You canceled the name prompt. |
+| Save canceled: the project needs a name first. | You canceled the **Name this project** dialog. |
 | Uploaded N file(s) | All uploads worked. |
 | name: too big (the limit is 10 MB) | That upload was over 10 MB. |
 | name: that name is not allowed | The file name was empty or tried to leave the project. |
@@ -125,7 +125,7 @@ These show in the header, next to Share.
 | Downloaded, but still waiting on: ... | Some files haven't arrived from a peer, so they're not in the zip. |
 | path hasn't arrived from a peer yet. | You tried to download a file you don't have yet. |
 | Created name from file.zip | A .zip became a new project. |
-| The browser blocked the file picker. Choose Upload .zip again. | The host left the Upload .zip confirm open too long, so the browser stopped the file picker. The next try opens it without asking again. |
+| The browser blocked the file picker. Choose Upload .zip again. | The browser didn't count the click on **Choose a .zip** as recent enough to open a file picker. This is rare. The next try opens it without asking again. |
 | That .zip has no files in it. / That file is not a .zip archive. / The .zip archive is damaged. | The zip couldn't be read. |
 | Zip64 archives are not supported. / ... uses a compression method this app can't read. | The zip uses a format the app can't unpack. Re-zip it with a normal zip tool. |
 | name already exists. / name already exists here. | That path is taken. |
@@ -168,18 +168,37 @@ This card shows in the bottom corner. It never takes focus from the editor.
 
 More: [Diagnostics](editing-and-preview.md#diagnostics).
 
-## Confirm and prompt boxes
+## Confirm and name dialogs
 
-- **Start a new project? This clears the project for everyone in the room. The current one stays saved where it is.** From **New Project**.
-- **Open another project? This replaces the project for everyone in the room. The current one stays saved where it is.** From **Open Local Project** or **Open from Google Drive**, while a guest is connected.
-- **Upload a .zip as a new project? This replaces the project for everyone in the room. The current one stays saved where it is.** From **Upload .zip as New Project**, while a guest is connected.
-- **Name this project before saving:** From **Save Now** or **Save to Google Drive** on an unnamed project.
-- **Rename project:** From clicking the title or **Rename Project**.
-- **New file:** and **New folder:** From the Files panel or File menu.
-- **Rename or move (use / for folders):** From the pencil on a file row.
-- **Delete path? Collaborators lose it too.** From the trash can on a file row.
-- **Delete all N project(s) saved in this browser? This cannot be undone.** From **Clear Local Projects**.
-- **Start a new link? Anyone using the old link will be disconnected.** From **New link**.
+These open in the app, in your theme. The button says what it does, so there's no plain OK.
+**Enter** picks the focused button, or submits a name. **Escape**, **Cancel**, or a click outside the box cancels, and focus goes back to where you were.
+Buttons for things you can't easily undo are red, and focus starts on **Cancel**, so Enter alone does nothing risky.
+
+| Title | Buttons | From |
+| --- | --- | --- |
+| Start a new project? | Cancel, **Start new project** | **New Project**. Red while a guest is connected, and it says it clears the project for everyone in the room. |
+| Open another project? | Cancel, **Choose a project** | **Open Local Project** or **Open from Google Drive**, while a guest is connected. Says it replaces the project for everyone in the room. |
+| Upload a .zip as a new project? | Cancel, **Choose a .zip** | **Upload .zip as New Project**, while a guest is connected. |
+| Name this project | Cancel, **Save project** | **Save Now** or **Save to Google Drive** on an unnamed project. |
+| Rename project | Cancel, **Rename project** | Clicking the title, or **Rename Project**. |
+| New file / New folder | Cancel, **Create file** / **Create folder** | The Files panel or File menu. Files without a text extension get `.tex`. |
+| Rename *name* | Cancel, **Rename** | The pencil on a file row. Type a path with `/` to move it into a folder. |
+| Delete *name*? | Cancel, **Delete file** / **Delete folder** | The trash can on a file row. Collaborators lose it too. |
+| Delete all local projects? | Cancel, **Delete N projects** | **Clear Local Projects**. This cannot be undone. |
+| Start a new link? | Keep current link, **Start new link** | **New link**. Anyone using the old link is disconnected. |
+| Reset keyboard shortcuts? | Cancel, **Reset shortcuts** | **Reset to defaults** in Settings > Keyboard shortcuts. |
+
+The name dialogs select the name without its extension, so you can type over it, and say what's wrong under the box as you type:
+
+| Message | What it means |
+| --- | --- |
+| Enter a name. | The box is empty. |
+| Names can't contain *character*. | File names can't use a backslash, a control character, a vertical bar, or any of `:` `*` `?` `"` `<` `>`. |
+| Names can't use ".." to leave the project. | Paths stay inside the project. |
+| Keep the path to 512 characters or fewer. | The whole path is too long. |
+| *path* already exists. | A file or folder already has that path. |
+| A folder cannot be moved inside itself. | You tried to move a folder into one of its own subfolders. |
+| Keep the name to 200 characters or fewer (it has N). | Project names are limited to 200 characters. |
 - The browser's own "Leave site?" box shows only when something could be lost: edits not yet in Google Drive, edits made while saving is paused, a failed save, a file waiting on the conflict dialog, files still uploading or arriving, or browser storage too full to keep the project. Edits saved to this browser are written right away when you leave, so they don't ask. See [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 
 ## Conflict dialog

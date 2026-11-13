@@ -7,7 +7,8 @@ import { mountAppShell } from '../test/appShell';
 import { MemoryProvider } from '../test/memoryProvider';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { StorageProvider } from '../storage/providers/types';
-import { NEW_PROJECT_CONFIRM, replaceProjectConfirm } from '../state/guestCommands';
+import { replaceProjectDialog } from '../state/guestCommands';
+import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
 import { ProjectState, type DriveLike } from './projectState';
 import { createThemeController } from './theme';
 import { createLayout } from './layout';
@@ -104,7 +105,10 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     openStoredProject: vi.fn(async () => {}),
     useProvider: vi.fn((provider: StorageProvider, id: string | null) => projectState.use(provider, id)),
     switchToDrive: vi.fn(() => projectState.use(drive, null)),
-    promptForProjectName: vi.fn(() => true),
+    promptForProjectName: vi.fn(async () => true),
+    // The in-app dialogs answer yes, and the name prompt cancels, unless a test says otherwise.
+    confirmDialog: vi.fn(async (_options: ConfirmOptions) => true),
+    promptDialog: vi.fn(async (_options: PromptOptions): Promise<string | null> => null),
     renameProject: vi.fn(async () => {}),
     ensureDrivePickerConfig: vi.fn(() => true),
     ensureDriveConnected: vi.fn(async () => true),
@@ -123,10 +127,15 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
   // Run a command and let its promise settle.
   const run = async (id: CommandId) => {
     commands.executeCommand(id);
-    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    await settle();
   };
   return { app, commands, run, local, drive, projectState, themeState, layout, project, undo, palette: () => palette };
 }
+
+/** Let pending promises (like a dialog's answer) settle. */
+const settle = async () => {
+  for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+};
 
 const key = (k: string, extra: Partial<KeyboardEventInit> = {}) => new KeyboardEvent('keydown', { key: k, ctrlKey: true, cancelable: true, ...extra });
 
@@ -299,11 +308,17 @@ describe('commands', () => {
 
     it('starts a new project only after confirming', async () => {
       const { app, run, local } = setup();
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const confirm = app.confirmDialog.mockResolvedValue(false);
       await run('file.new');
-      expect(confirm).toHaveBeenCalledWith(NEW_PROJECT_CONFIRM);
+      // With nobody in the room it isn't a destructive action, so the button isn't red.
+      expect(confirm).toHaveBeenCalledWith(replaceProjectDialog('new', false));
+      expect(confirm.mock.calls[0][0]).toMatchObject({ title: 'Start a new project?', confirmLabel: 'Start new project', destructive: false });
       expect(app.switchProject).not.toHaveBeenCalled();
-      confirm.mockReturnValue(true);
+      app.guestCount.mockReturnValue(1);
+      await run('file.new');
+      expect(confirm).toHaveBeenLastCalledWith(replaceProjectDialog('new', true));
+      expect(app.switchProject).not.toHaveBeenCalled();
+      confirm.mockResolvedValue(true);
       await run('file.new');
       expect(app.switchProject).toHaveBeenCalledWith(expect.objectContaining({ mainPath: 'main.tex' }), local, null);
     });
@@ -319,7 +334,7 @@ describe('commands', () => {
 
     it('opens and imports without asking when no guest is in the room', async () => {
       const { app, run } = setup();
-      const confirm = vi.spyOn(window, 'confirm');
+      const confirm = app.confirmDialog;
       await run('file.openLocal');
       await run('file.openDrive');
       await run('file.importZip');
@@ -332,12 +347,13 @@ describe('commands', () => {
     it('asks the host before opening or importing while guests are in the room', async () => {
       const { app, run, drive } = setup();
       app.guestCount.mockReturnValue(2);
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const confirm = app.confirmDialog.mockResolvedValue(false);
       await run('file.openLocal');
       await run('file.openDrive');
       await run('file.importZip');
       // Cancel stops before any dialog, sign-in, or file picker opens.
-      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')], [replaceProjectConfirm('open')], [replaceProjectConfirm('import')]]);
+      expect(confirm.mock.calls).toEqual([[replaceProjectDialog('open')], [replaceProjectDialog('open')], [replaceProjectDialog('import')]]);
+      expect(confirm.mock.calls[2][0]).toMatchObject({ confirmLabel: 'Choose a .zip', destructive: true });
       expect(app.projectsDialog.open).not.toHaveBeenCalled();
       expect(app.ensureDriveConnected).not.toHaveBeenCalled();
       expect(app.pickFromDrive).not.toHaveBeenCalled();
@@ -346,7 +362,7 @@ describe('commands', () => {
       expect(app.switchProject).not.toHaveBeenCalled();
       expect(app.setStatus).not.toHaveBeenCalled();
       // OK goes ahead as before.
-      confirm.mockReturnValue(true);
+      confirm.mockResolvedValue(true);
       await run('file.openLocal');
       await run('file.openDrive');
       await run('file.importZip');
@@ -358,32 +374,35 @@ describe('commands', () => {
     it('asks once for Upload .zip in the Open dialog after the host OKs Open', async () => {
       const { app, run, commands } = setup();
       app.guestCount.mockReturnValue(1);
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const confirm = app.confirmDialog.mockResolvedValue(true);
       await run('file.openLocal');
       commands.importZipFromOpenDialog();
-      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')]]);
+      // No dialog in between, so the picker opens inside the same click.
       expect(app.zipInput.click).toHaveBeenCalledTimes(1);
+      expect(confirm.mock.calls).toEqual([[replaceProjectDialog('open')]]);
       // The other ways in still ask.
       await run('file.importZip');
-      expect(confirm).toHaveBeenLastCalledWith(replaceProjectConfirm('import'));
+      expect(confirm).toHaveBeenLastCalledWith(replaceProjectDialog('import'));
       expect(app.zipInput.click).toHaveBeenCalledTimes(2);
       // A canceled Open doesn't count as a yes.
-      confirm.mockReturnValue(false);
+      confirm.mockResolvedValue(false);
       await run('file.openLocal');
       confirm.mockClear();
       commands.importZipFromOpenDialog();
-      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      await settle();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectDialog('import'));
       expect(app.zipInput.click).toHaveBeenCalledTimes(2);
     });
 
     it('asks in the Open dialog when a guest joined after it opened', async () => {
       const { app, run, commands } = setup();
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const confirm = app.confirmDialog.mockResolvedValue(false);
       await run('file.openLocal');
       expect(confirm).not.toHaveBeenCalled();
       app.guestCount.mockReturnValue(1);
       commands.importZipFromOpenDialog();
-      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      await settle();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectDialog('import'));
       expect(app.zipInput.click).not.toHaveBeenCalled();
     });
 
@@ -393,10 +412,10 @@ describe('commands', () => {
       expect(app.zipInput.click).not.toHaveBeenCalled();
     });
 
-    it('says so when a slow confirm used up the click, and skips the confirm on the retry', async () => {
+    it('says so when the browser no longer counts the click, and skips the confirm on the retry', async () => {
       const { app, run } = setup();
       app.guestCount.mockReturnValue(1);
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const confirm = app.confirmDialog.mockResolvedValue(true);
       vi.stubGlobal('navigator', { userActivation: { isActive: false } });
       await run('file.importZip');
       expect(app.zipInput.click).not.toHaveBeenCalled();
@@ -430,14 +449,30 @@ describe('commands', () => {
     it('adds files and folders in the current folder', async () => {
       const { app, run, project } = setup();
       app.fileTree.currentFolder.mockReturnValue('chapters');
-      const prompt = vi.spyOn(window, 'prompt').mockReturnValue('intro');
+      const prompt = app.promptDialog.mockResolvedValue('intro');
       await run('file.newFile');
       expect(project.findByPath('chapters/intro.tex')).toBeDefined();
       expect(app.openFile).toHaveBeenCalled();
-      prompt.mockReturnValue('figures');
+      const fileAsk = prompt.mock.calls[0][0];
+      expect(fileAsk).toMatchObject({ title: 'New file', label: 'File name', initialValue: 'chapter.tex', confirmLabel: 'Create file' });
+      // The name is checked inline, with the .tex it would get.
+      expect(fileAsk.validate?.('intro')).toBe('chapters/intro.tex already exists.');
+      expect(fileAsk.validate?.('')).toBe('Enter a name.');
+      expect(fileAsk.validate?.('a:b')).toBe("Names can't contain :.");
+      expect(fileAsk.validate?.('notes.md')).toBeNull();
+      prompt.mockResolvedValue('figures');
       await run('file.newFolder');
       expect(project.findByPath('chapters/figures')?.kind).toBe('folder');
-      prompt.mockReturnValue('  ');
+      const folderAsk = prompt.mock.calls[1][0];
+      expect(folderAsk).toMatchObject({ title: 'New folder', confirmLabel: 'Create folder' });
+      expect(folderAsk.validate?.('figures')).toBe('chapters/figures already exists.');
+      // Cancel adds nothing.
+      prompt.mockResolvedValue(null);
+      await run('file.newFile');
+      await run('file.newFolder');
+      expect(app.openFile).toHaveBeenCalledTimes(1);
+      // A name taken between the check and the click still shows the error, not a crash.
+      prompt.mockResolvedValue('intro');
       await run('file.newFile');
       expect(app.openFile).toHaveBeenCalledTimes(1);
       await run('file.upload');
@@ -474,7 +509,7 @@ describe('commands', () => {
       expect(app.session.broadcastMetadata).toHaveBeenCalledWith({ title: 'Paper', storage: 'Saved on host Google Drive' });
       app.ensureDriveConnected.mockResolvedValueOnce(false);
       await run('file.connectDrive');
-      app.promptForProjectName.mockReturnValueOnce(false);
+      app.promptForProjectName.mockResolvedValueOnce(false);
       await run('file.saveToDrive');
       expect(app.autosave.saveNow).toHaveBeenCalledTimes(1);
     });
@@ -525,10 +560,11 @@ describe('commands', () => {
       await run('file.clearLocalDocs');
       expect(app.setStatus).toHaveBeenLastCalledWith('No local projects to clear');
       await local.createProject('Old');
-      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const confirm = app.confirmDialog.mockResolvedValue(false);
       await run('file.clearLocalDocs');
       expect(local.clear).not.toHaveBeenCalled();
-      confirm.mockReturnValue(true);
+      expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Delete all local projects?', confirmLabel: 'Delete 1 project', destructive: true }));
+      confirm.mockResolvedValue(true);
       await run('file.clearLocalDocs');
       expect(local.clear).toHaveBeenCalled();
       expect(app.useProvider).toHaveBeenCalledWith(local, null);

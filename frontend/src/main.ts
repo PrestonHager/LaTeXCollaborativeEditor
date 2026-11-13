@@ -47,6 +47,8 @@ import { manifestFromProject, saveProject, type SavedManifest } from './storage/
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
 import { createConflictDialog } from './ui/conflictDialog';
+import { confirmDialog, promptDialog } from './ui/dialogs';
+import { pathProblem, projectNameProblem } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import {
   readAppSessionState,
@@ -397,13 +399,30 @@ const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
   onOpen: (entry) => openFile(entry.id),
-  onRename: (path) => runFileOp(() => {
-    const next = window.prompt('Rename or move (use / for folders):', path);
-    if (next && next.trim() && next.trim() !== path) project.movePath(path, next.trim());
-  }),
-  onDelete: (path) => runFileOp(() => {
-    if (window.confirm(`Delete ${path}? Collaborators lose it too.`)) project.removePath(path);
-  }),
+  onRename: async (path) => {
+    const isFolder = project.folderPaths().includes(path);
+    const next = await promptDialog({
+      title: `Rename ${basename(path)}`,
+      message: `Type a new name, or a path with / to move it${isFolder ? ' and everything in it' : ''} into a folder.`,
+      label: isFolder ? 'Folder name or path' : 'File name or path',
+      initialValue: path,
+      confirmLabel: 'Rename',
+      validate: (value) => pathProblem(value, (taken) => project.hasPath(taken), path),
+    });
+    if (next !== null && next !== path) runFileOp(() => project.movePath(path, next));
+    refocusFileTree(normalizePath(next ?? path) ?? path);
+  },
+  onDelete: async (path) => {
+    const isFolder = project.folderPaths().includes(path);
+    const ok = await confirmDialog({
+      title: `Delete ${basename(path)}?`,
+      message: `This removes ${path}${isFolder ? ' and everything in it' : ''} from the project for you and everyone in the room.`,
+      confirmLabel: isFolder ? 'Delete folder' : 'Delete file',
+      destructive: true,
+    });
+    if (ok) runFileOp(() => project.removePath(path));
+    refocusFileTree();
+  },
   onSetMain: (entry) => project.setMainFile(entry.id),
   onMove: (path, folder) => runFileOp(() => project.movePath(path, joinPath(folder, basename(path)))),
   onUpload: (files, folder) => void uploadFiles(files, folder),
@@ -413,6 +432,21 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
 const fileViewer = createFileViewer(document.getElementById('file-viewer')!, {
   onDownload: (path) => void downloadFile(path),
 });
+
+/**
+ * A rename or delete redraws the file tree, which drops the button the dialog gave focus back to.
+ * Put focus on the renamed row, or the first row, so keyboard users don't land at the top of the page.
+ */
+function refocusFileTree(path?: string) {
+  // The tree redraws in a microtask after the change, so look once that's done.
+  setTimeout(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const pane = document.getElementById('file-pane');
+    const row = path ? pane?.querySelector<HTMLElement>(`li[data-path="${CSS.escape(path)}"] .file-row-main`) : null;
+    (row ?? pane?.querySelector<HTMLElement>('.file-row-main'))?.focus();
+  }, 0);
+}
 
 /** Run a file tree change and show its error, like a name that's taken. */
 function runFileOp(op: () => void) {
@@ -560,22 +594,37 @@ async function switchProject(content: ProjectContent, provider: StorageProvider,
 }
 
 /** Ask for a project name before the first save, since storage needs one. */
-const promptForProjectName = (): boolean => {
+async function promptForProjectName(): Promise<boolean> {
   if (project.getName()) return true;
-  const next = window.prompt('Name this project before saving:', '');
-  if (!next || !next.trim()) {
+  const next = await promptDialog({
+    title: 'Name this project',
+    message: 'Storage needs a name before the first save.',
+    label: 'Project name',
+    confirmLabel: 'Save project',
+    selectBaseName: false,
+    validate: projectNameProblem,
+  });
+  if (next === null) {
     showNotice('Save canceled: the project needs a name first.');
     return false;
   }
-  project.setName(next.trim());
+  project.setName(next);
   return true;
-};
+}
 
 async function renameProject() {
-  const next = window.prompt('Rename project:', project.getName());
-  if (!next || !next.trim() || next.trim() === project.getName()) return;
+  const next = await promptDialog({
+    title: 'Rename project',
+    message: 'Everyone in the room sees the new name, and the next save renames the stored project.',
+    label: 'Project name',
+    initialValue: project.getName(),
+    confirmLabel: 'Rename project',
+    selectBaseName: false,
+    validate: projectNameProblem,
+  });
+  if (next === null || next === project.getName()) return;
   // The name lives in the shared doc, and the next save renames the stored project too.
-  project.setName(next.trim());
+  project.setName(next);
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
@@ -811,6 +860,8 @@ const commands = createCommands({
   switchToDrive,
   promptForProjectName,
   renameProject,
+  confirmDialog,
+  promptDialog,
   ensureDrivePickerConfig,
   ensureDriveConnected,
   pickFromDrive,
@@ -1000,7 +1051,14 @@ setupShareButton({
     renderConnection();
     return id;
   },
-  confirmNewLink: () => window.confirm('Start a new link? Anyone using the old link will be disconnected.'),
+  confirmNewLink: () =>
+    confirmDialog({
+      title: 'Start a new link?',
+      message: 'Anyone using the old link will be disconnected, and the new link replaces it.',
+      confirmLabel: 'Start new link',
+      cancelLabel: 'Keep current link',
+      destructive: true,
+    }),
 });
 
 // Guests can't rename the host's project, so the title is just a label for them.

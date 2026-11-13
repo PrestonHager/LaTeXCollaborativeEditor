@@ -3,7 +3,9 @@ import type { PaletteCommand } from '../ui/commandPalette';
 import type { KeybindCommand } from '../ui/keybindSettings';
 import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 import type { ThemeMode } from '../state/appSession';
-import { NEW_PROJECT_CONFIRM, canRunCommand, replaceProjectConfirm, type ReplaceAction } from '../state/guestCommands';
+import { canRunCommand, replaceProjectDialog, type ReplaceAction } from '../state/guestCommands';
+import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
+import { pathProblem } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
 import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
@@ -85,7 +87,11 @@ export type CommandContext = {
   openStoredProject(provider: StorageProvider, id: string): Promise<void>;
   useProvider(provider: StorageProvider, id: string | null): void;
   switchToDrive(): void;
-  promptForProjectName(): boolean;
+  /** Ask for a name before the first save. False when they canceled. */
+  promptForProjectName(): Promise<boolean>;
+  /** The in-app dialogs from ui/dialogs.ts. Tests swap in their own answers. */
+  confirmDialog(options: ConfirmOptions): Promise<boolean>;
+  promptDialog(options: PromptOptions): Promise<string | null>;
   renameProject(): Promise<void>;
   ensureDrivePickerConfig(): boolean;
   ensureDriveConnected(): Promise<boolean>;
@@ -167,6 +173,8 @@ export function createCommands(app: CommandContext) {
     ensureDriveConnected,
     pickFromDrive,
     showDriveAccount,
+    confirmDialog,
+    promptDialog,
   } = app;
   const { applyEditorTheme, applyPreviewTheme } = themeState;
 
@@ -174,22 +182,25 @@ export function createCommands(app: CommandContext) {
    * Ask the host before it swaps out the project while guests are in the room.
    * Ask before any picker or dialog opens, so Cancel leaves everything as it was.
    */
-  const confirmReplace = (action: ReplaceAction) => guestCount() === 0 || window.confirm(replaceProjectConfirm(action));
+  const confirmReplace = async (action: ReplaceAction) => guestCount() === 0 || confirmDialog(replaceProjectDialog(action));
   // When the browser blocked the zip picker after an OK, this is when that OK happened.
   let importConfirmedAt = 0;
   // Whether the host OK'd the confirm for the Open a project dialog that's showing now.
   // Its Upload .zip button replaces the project too, but the host already said yes, so it doesn't ask again.
   let openDialogConfirmed = false;
 
-  /** Pick a .zip to open as a new project. Pass alreadyConfirmed when the host just OK'd replacing the project. */
-  function importZip(alreadyConfirmed: boolean) {
+  /**
+   * Pick a .zip to open as a new project. Pass alreadyConfirmed when the host just OK'd replacing the project.
+   * With nobody to ask, the picker opens before the first await, so it's still inside the click that asked for it.
+   */
+  async function importZip(alreadyConfirmed: boolean) {
     if (isClient) return;
     const confirmedRecently = Date.now() - importConfirmedAt < IMPORT_CONFIRM_KEEP_MS;
     importConfirmedAt = 0;
     if (guestCount() > 0 && !alreadyConfirmed && !confirmedRecently) {
-      if (!window.confirm(replaceProjectConfirm('import'))) return;
-      // Browsers only open a file picker for a few seconds after a click, and a confirm left open longer uses that up.
-      // Then click() would do nothing, so say so and skip the confirm on the next try.
+      if (!(await confirmDialog(replaceProjectDialog('import')))) return;
+      // Browsers only open a file picker for a few seconds after a click. The dialog's button counts as a fresh one,
+      // but if the browser says the click is used up anyway, click() would do nothing, so say so and skip the confirm next time.
       if (navigator.userActivation?.isActive === false) {
         importConfirmedAt = Date.now();
         showNotice(IMPORT_PICKER_BLOCKED);
@@ -205,7 +216,7 @@ export function createCommands(app: CommandContext) {
     },
     'file.new': async () => {
       if (isClient) return;
-      if (!window.confirm(NEW_PROJECT_CONFIRM)) return;
+      if (!(await confirmDialog(replaceProjectDialog('new', guestCount() > 0)))) return;
       await switchProject(starterProject(''), projectState.activeProvider, null);
     },
     'file.openLocal': async () => {
@@ -213,14 +224,14 @@ export function createCommands(app: CommandContext) {
       // Only an OK on a real confirm counts. With nobody connected there's nothing to carry over.
       const asked = guestCount() > 0;
       openDialogConfirmed = false;
-      if (!confirmReplace('open')) return;
+      if (!(await confirmReplace('open'))) return;
       openDialogConfirmed = asked;
       projectsDialog.open(await localAppProvider.listProjects());
     },
     'file.openDrive': async () => {
       if (isClient) return;
       if (!ensureDrivePickerConfig()) return;
-      if (!confirmReplace('open')) return;
+      if (!(await confirmReplace('open'))) return;
       if (!(await ensureDriveConnected())) return;
       setStatus('Drive: Opening picker...');
       const picked = await pickFromDrive('project');
@@ -233,20 +244,33 @@ export function createCommands(app: CommandContext) {
       await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
     },
     'file.importZip': () => importZip(false),
-    'file.newFile': () => runFileOp(() => {
+    'file.newFile': async () => {
       const folder = fileTree.currentFolder();
-      const name = window.prompt(`New file${folder ? ` in ${folder}/` : ''}:`, 'chapter.tex');
-      if (!name || !name.trim()) return;
       // New files are text, so give them a text extension if they don't have one.
-      const path = joinPath(folder, isTextPath(name.trim()) ? name.trim() : `${name.trim()}.tex`);
-      const id = app.project.createTextFile(path);
-      openFile(id);
-    }),
-    'file.newFolder': () => runFileOp(() => {
+      const pathFor = (name: string) => joinPath(folder, isTextPath(name) ? name : `${name}.tex`);
+      const name = await promptDialog({
+        title: 'New file',
+        message: `${folder ? `Adds it to ${folder}/.` : 'Adds it to the top of the project.'} Names without a text extension get .tex.`,
+        label: 'File name',
+        initialValue: 'chapter.tex',
+        confirmLabel: 'Create file',
+        validate: (value) => pathProblem(value && pathFor(value), (path) => app.project.hasPath(path)),
+      });
+      if (name === null) return;
+      runFileOp(() => openFile(app.project.createTextFile(pathFor(name))));
+    },
+    'file.newFolder': async () => {
       const folder = fileTree.currentFolder();
-      const name = window.prompt(`New folder${folder ? ` in ${folder}/` : ''}:`, 'figures');
-      if (name && name.trim()) app.project.createFolder(joinPath(folder, name.trim()));
-    }),
+      const name = await promptDialog({
+        title: 'New folder',
+        message: folder ? `Adds it to ${folder}/.` : 'Adds it to the top of the project.',
+        label: 'Folder name',
+        initialValue: 'figures',
+        confirmLabel: 'Create folder',
+        validate: (value) => pathProblem(value && joinPath(folder, value), (path) => app.project.hasPath(path)),
+      });
+      if (name !== null) runFileOp(() => app.project.createFolder(joinPath(folder, name)));
+    },
     'file.upload': () => uploadDialog.open(fileTree.currentFolder()),
     'file.download': async () => {
       const { zip, skipped } = await projectToZip(app.project, blobs);
@@ -277,7 +301,7 @@ export function createCommands(app: CommandContext) {
     },
     'file.saveToDrive': async () => {
       if (isClient) return;
-      if (!promptForProjectName()) return;
+      if (!(await promptForProjectName())) return;
       if (!(await ensureDriveConnected())) return;
       switchToDrive();
       autosave.enable();
@@ -315,7 +339,7 @@ export function createCommands(app: CommandContext) {
     'file.renameDrive': () => renameProject(),
     'file.saveNow': async () => {
       if (isClient || projectState.savingPaused) return;
-      if (!promptForProjectName()) return;
+      if (!(await promptForProjectName())) return;
       if (projectState.isDrive() && !driveProvider.isSignedIn()) {
         setStatus('Drive: Session expired. Use File > Connect Google Drive to sign in again.');
         return;
@@ -331,7 +355,13 @@ export function createCommands(app: CommandContext) {
         setStatus('No local projects to clear');
         return;
       }
-      if (!window.confirm(`Delete all ${count} project(s) saved in this browser? This cannot be undone.`)) return;
+      const deleteAll = await confirmDialog({
+        title: 'Delete all local projects?',
+        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in this browser. Projects on Google Drive stay. This cannot be undone.`,
+        confirmLabel: count === 1 ? 'Delete 1 project' : `Delete ${count} projects`,
+        destructive: true,
+      });
+      if (!deleteAll) return;
       await localAppProvider.clear();
       if (projectState.activeProvider === localAppProvider) useProvider(localAppProvider, null);
       setStatus('Local projects cleared');
@@ -404,7 +434,12 @@ export function createCommands(app: CommandContext) {
     // These two only show in the palette in dev builds (see devPaletteCommands).
     'dev.openTestProject': async () => {
       if (import.meta.env.DEV && !isClient) {
-        if (!window.confirm('Open the regression test project? The current one stays saved where it is.')) return;
+        const open = await confirmDialog({
+          title: 'Open the regression test project?',
+          message: 'The current project stays saved where it is.',
+          confirmLabel: 'Open test project',
+        });
+        if (!open) return;
         // Load it lazily, so the test project never ends up in a production bundle.
         const { regressionProject } = await import('../dev/regressionProject');
         await switchProject(await regressionProject(blobs), projectState.activeProvider, null);
@@ -565,7 +600,7 @@ export function createCommands(app: CommandContext) {
    */
   function importZipFromOpenDialog() {
     if (!canRunCommand('file.importZip', isClient)) return;
-    importZip(openDialogConfirmed);
+    void importZip(openDialogConfirmed).catch((error: unknown) => showNotice(describeError(error), true)).finally(refreshCommands);
     refreshCommands();
   }
 
