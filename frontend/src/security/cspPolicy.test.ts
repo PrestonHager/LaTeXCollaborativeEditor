@@ -105,6 +105,12 @@ describe('Content-Security-Policy in index.html', () => {
     expect(csp['frame-src']).toContain('blob:');
   });
 
+  it('lets HTML export fetch the LaTeX.js styles and fonts to inline them, and nothing else on jsDelivr', () => {
+    expect(cspAllows(csp, 'connect-src', `${LATEX_JS_ASSET_BASE}css/katex.css`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'connect-src', `${LATEX_JS_ASSET_BASE}fonts/Serif/cmunrm.woff`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'connect-src', 'https://cdn.jsdelivr.net/npm/some-other-package/x.css', APP_ORIGIN)).toBe(false);
+  });
+
   it('only allows the LaTeX.js package from jsDelivr, not every npm package', () => {
     expect(cspAllows(csp, 'script-src', 'https://cdn.jsdelivr.net/npm/some-other-package/index.js', APP_ORIGIN)).toBe(false);
     expect(cspAllows(csp, 'script-src', 'https://cdn.jsdelivr.net/npm/latex.js@0.0.1/dist/js/base.js', APP_ORIGIN)).toBe(false);

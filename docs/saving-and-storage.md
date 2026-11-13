@@ -78,9 +78,42 @@ Settings don't sync through Google Drive yet. To move them to another device, ex
 
 - **File > Download Project .zip** (**Ctrl+Shift+S**) saves the whole project to your computer.
 - **File > Download Current File** saves just the open file.
+- **File > Export…** has more formats, like PDF and a flattened `.tex`. See [Export](#export).
 - **File > Upload .zip as New Project** makes a new project from a `.zip`, like one from Overleaf.
 
 More in [Projects and files](projects.md#downloading).
+
+## Export
+
+**File > Export…** (**Ctrl+Shift+E**, or the toolbar button) saves the project in another format.
+Guests can export too, since it only reads the project.
+
+![The Export dialog with PDF picked](assets/screenshots/export-light.png#only-light)
+![The Export dialog with PDF picked](assets/screenshots/export-dark.png#only-dark)
+
+1. Pick a format. One that can't run right now is grayed out and says why, like "The project has no main .tex file".
+2. Set its options, if it has any.
+3. Press **Export**. A bar shows how far along it is, and **Cancel export** stops it.
+
+The formats:
+
+| Format | What you get | Options |
+| --- | --- | --- |
+| **Project .zip** | Every file and folder, empty folders included. The same as **Download Project .zip**. | None |
+| **PDF** (preview quality) | Opens the print dialog with the preview. Choose **Save as PDF** as the printer. | Paper size: A4 or US Letter |
+| **HTML** (preview quality) | The preview as one `.html` file, with its images inside. | **Work offline**: put the styles and fonts in the file too (about 5 MB) |
+| **Flattened .tex** | The main file with every `\input` and `\include` put in place, as one `.tex`. Journals and arXiv often ask for this. | **Remove comments**: leave out `%` comments |
+| **Single file** | One file from the project, as it is. | Which file. It starts on the open one. |
+
+Things to know:
+
+- Everything happens in your browser. Nothing is sent to a server.
+  The one network request is for **HTML** with **Work offline**: it downloads the preview's own styles and fonts from the same CDN the preview uses. If that fails, you still get the file, and it loads them from the internet when it opens.
+- An image or file that hasn't finished arriving from a peer is left out, and the notice after the export lists it. The Export dialog warns about it before you start.
+- **PDF** and **HTML** come from the preview, so they look like the preview, not like a TeX PDF. See [what to expect from the PDF](editing-and-preview.md#pdf-export).
+- If the document has an error, **PDF** and **HTML** stop and show it in the dialog, instead of making a broken file.
+- **Flattened .tex** keeps an `\input` it can't find as it was, and says which ones. An `\include` gets `\clearpage` before and after it, like LaTeX does.
+- Exports download to your computer. Saving one into Google Drive isn't there yet.
 
 ## Google Drive
 

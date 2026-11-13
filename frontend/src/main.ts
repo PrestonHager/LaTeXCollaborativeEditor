@@ -9,6 +9,8 @@ import { renderStaticIcons } from './ui/icons';
 import { createSettingsDialog } from './ui/settingsDialog';
 import { createFileTree } from './ui/fileTree';
 import { createUploadDialog } from './ui/uploadDialog';
+import { createExportDialog } from './ui/exportDialog';
+import { createBrowserExportServices } from './export/browserServices';
 import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
@@ -683,6 +685,14 @@ const uploadDialog = createUploadDialog(document.getElementById('upload-dialog')
   },
 });
 
+// File > Export. The formats come from the exporter registry in src/export/registry.ts.
+const exportDialog = createExportDialog(document.getElementById('export-dialog') as HTMLDialogElement, {
+  getSource: () => ({ project, blobs, name: projectName(), activePath: (activeFileId && project.get(activeFileId)?.path) || null }),
+  services: createBrowserExportServices(),
+  destination: { id: 'download', label: 'Download', save: (file) => localDownload.download(file.name, file.data, file.data.type) },
+  notify: (message, isError) => showNotice(message, isError),
+});
+
 const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
   onPick: (summary) => {
     if (!isClient) void openStoredProject(localAppProvider, summary.id);
@@ -815,7 +825,7 @@ const commands = createCommands({
   localAppProvider,
   driveProvider,
   blobs,
-  localDownload,
+  exportDialog,
   autosave,
   session,
   editor,

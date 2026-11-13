@@ -65,7 +65,10 @@ export async function projectFromZip(fileName: string, bytes: Uint8Array, blobs:
  * out, and their paths are returned so the caller can say so. Empty folders are kept as
  * directory entries, so the folder tree comes back the same when the zip is imported.
  */
-export async function projectToZip(project: ProjectDoc, blobs: BlobStore): Promise<{ zip: Uint8Array; skipped: string[] }> {
+export async function projectToZip(
+  project: Pick<ProjectDoc, 'entries' | 'getText' | 'folderPaths'>,
+  blobs: Pick<BlobStore, 'get'>,
+): Promise<{ zip: Uint8Array; skipped: string[] }> {
   const entries: ZipEntry[] = [];
   const skipped: string[] = [];
   for (const entry of project.entries()) {

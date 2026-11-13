@@ -14,6 +14,7 @@ const DOCS_CONTRACT = [
   'saving-and-storage/#autosave-and-save-now',
   'saving-and-storage/#google-drive',
   'saving-and-storage/#local-storage-browser',
+  'saving-and-storage/#export',
   'projects/',
   'projects/#file-tree',
   'projects/#uploading-files',
@@ -56,6 +57,7 @@ describe('help links table', () => {
     expect(topicIn('#preview-pane')).toContain('preview');
     expect(topicIn('.footer')).toContain('diagnostics');
     expect(topicIn('#settings-dialog')).toContain('settings');
+    expect(topicIn('#export-dialog')).toContain('exporting');
   });
 
   it('gives every icon-only help link a label and a tooltip', () => {

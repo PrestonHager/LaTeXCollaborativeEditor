@@ -256,3 +256,46 @@ export function expandProjectSource(mainPath: string, texts: Map<string, string>
   source = replaceBibliography(source, map, texts, missing, diagnostics);
   return { source, lineMap: map, images, missing: [...missing], diagnostics };
 }
+
+/**
+ * Splice \input and \include files into one source the way TeX reads them: no extra blank
+ * lines (which would start a new paragraph), and \clearpage around an \include. Inputs that
+ * can't be inlined stay as written.
+ */
+function flattenFile(path: string, texts: Map<string, string>, missing: Set<string>, stack: string[]): string {
+  const rootDir = stack.length ? dirname(stack[0]) : dirname(path);
+  const pattern = /\\(input|include)\s*\{([^}]+)\}/;
+  return (texts.get(path) ?? '')
+    .split('\n')
+    .map((line) => {
+      let out = '';
+      let rest = line;
+      for (;;) {
+        const match = pattern.exec(rest.slice(0, commentStart(rest)));
+        if (!match) break;
+        out += rest.slice(0, match.index);
+        rest = rest.slice(match.index + match[0].length);
+        const target = resolveFile(match[2].trim(), rootDir, (p) => texts.has(p), ['', '.tex']);
+        if (!target || target === path || stack.includes(target) || stack.length >= MAX_INPUT_DEPTH) {
+          if (!target) missing.add(match[2].trim());
+          out += match[0];
+          continue;
+        }
+        // The file's last line break and the one after \input{} read as one space, so keep only one.
+        const inner = flattenFile(target, texts, missing, [...stack, path]).replace(/\n$/, '');
+        out += match[1] === 'include' ? `\\clearpage\n${inner}\n\\clearpage ` : inner;
+      }
+      return out + rest;
+    })
+    .join('\n');
+}
+
+/**
+ * One .tex file with every \input and \include inlined, for journals and arXiv.
+ * Inputs that aren't in the project stay as they are, and are listed in `missing`.
+ */
+export function flattenInputs(mainPath: string, texts: Map<string, string>): { source: string; missing: string[] } {
+  const missing = new Set<string>();
+  const source = flattenFile(mainPath, texts, missing, []);
+  return { source, missing: [...missing] };
+}

@@ -12,7 +12,7 @@ import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
 import { describeError } from '../storage/errors';
 import type { BlobStore } from '../project/blobStore';
 import type { ProjectContent, ProjectDoc } from '../project/projectDoc';
-import { projectToZip, starterProject } from '../project/projectIo';
+import { starterProject } from '../project/projectIo';
 import { isTextPath, joinPath } from '../project/paths';
 import type { ProjectState } from './projectState';
 import type { ThemeController } from './theme';
@@ -43,7 +43,8 @@ export type CommandContext = {
     disconnect(): Promise<void>;
   };
   blobs: BlobStore;
-  localDownload: { download(fileName: string, data: string | Uint8Array, type?: string): void };
+  /** File > Export and the quick downloads, which all go through the exporter registry (src/export). */
+  exportDialog: { open(exporterId?: string): void; runNow(exporterId: string): Promise<boolean> };
   autosave: {
     enable(): void;
     markDirty(): void;
@@ -121,6 +122,7 @@ export const shortcuts: Shortcut[] = [
   { id: 'file.openLocal', keybind: 'Mod+O' },
   { id: 'file.openDrive', keybind: 'Mod+Shift+O' },
   { id: 'file.download', keybind: 'Mod+Shift+S' },
+  { id: 'file.export', keybind: 'Mod+Shift+E' },
   { id: 'file.saveNow', keybind: 'Mod+S' },
   { id: 'edit.undo', keybind: 'Mod+Z' },
   { id: 'edit.redo', keybind: 'Mod+Shift+Z' },
@@ -146,7 +148,7 @@ export function createCommands(app: CommandContext) {
     localAppProvider,
     driveProvider,
     blobs,
-    localDownload,
+    exportDialog,
     autosave,
     session,
     editor,
@@ -272,11 +274,11 @@ export function createCommands(app: CommandContext) {
       if (name !== null) runFileOp(() => app.project.createFolder(joinPath(folder, name)));
     },
     'file.upload': () => uploadDialog.open(fileTree.currentFolder()),
+    // The Project .zip exporter with no dialog. It reports how it went in the notice line.
     'file.download': async () => {
-      const { zip, skipped } = await projectToZip(app.project, blobs);
-      localDownload.download(`${projectName()}.zip`, zip, 'application/zip');
-      showNotice(skipped.length ? `Downloaded, but still waiting on: ${skipped.join(', ')}` : `Downloaded ${projectName()}.zip`, skipped.length > 0);
+      await exportDialog.runNow('zip');
     },
+    'file.export': () => exportDialog.open(),
     'file.downloadFile': async () => {
       const entry = app.activeFileId ? app.project.get(app.activeFileId) : undefined;
       if (entry) await downloadFile(entry.path);

@@ -9,6 +9,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 ### Added
 
 - **Update prompt.** When a new version is deployed, a small card offers to reload. It saves your changes first, and won't reload if the save fails. It also shows when a collaborator is on a newer, incompatible version.
+- **Export dialog.** File > Export… (Ctrl+Shift+E, also on the toolbar and in the palette) saves the project as a `.zip`, a preview-quality PDF through the browser's print dialog, a standalone HTML file that works offline, a flattened `.tex` with every `\input` and `\include` in place, or a single file. It shows progress, can be canceled, and runs entirely in the browser. Formats come from a registry, so new ones are easy to add.
+- `\newpage`, `\clearpage` and `\pagebreak` on their own line now break the page when the preview is printed or exported as PDF.
 
 ### Changed
 

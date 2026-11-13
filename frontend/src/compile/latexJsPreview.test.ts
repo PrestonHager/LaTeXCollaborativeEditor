@@ -1,6 +1,23 @@
-import { isDangerousUrl, latexSourceToPreviewHtml, projectToPreviewHtml, LATEX_JS_ASSET_BASE } from './latexJsPreview';
+import { isDangerousUrl, latexSourceToPreviewHtml, projectToPreviewHtml, LATEX_JS_ASSET_BASE, PAGE_BREAK_CLASS } from './latexJsPreview';
 
 describe('latexSourceToPreviewHtml', () => {
+  it('turns \\newpage, \\clearpage and \\pagebreak on their own line into print page breaks', () => {
+    const { html, errors, changes } = latexSourceToPreviewHtml(
+      '\\documentclass{article}\\begin{document}\nA\n\\newpage\nB\n  \\clearpage % next\n\\begin{itemize}\\item a\n\\pagebreak[4]\n\\item b\\end{itemize}\nC \\newpage D\n% \\newpage\n\\end{document}',
+    );
+    expect(errors).toEqual([]);
+    expect(changes).toEqual([]);
+    const doc = new DOMParser().parseFromString(html!, 'text/html');
+    const breaks = Array.from(doc.querySelectorAll(`.${PAGE_BREAK_CLASS}`));
+    expect(breaks).toHaveLength(3);
+    expect(breaks[0].getAttribute('style')).toContain('break-after:page');
+    expect(breaks[0].previousElementSibling?.textContent).toBe('A');
+    expect(breaks[2].closest('li')).not.toBeNull();
+    // Mid-line ones and commented-out ones aren't touched, and the marker never shows.
+    expect(doc.body.textContent).not.toContain('lcpagebreak');
+    expect(doc.body.textContent).toContain('C D');
+  });
+
   it('returns HTML for minimal valid LaTeX', () => {
     const { html, errors } = latexSourceToPreviewHtml(
       '\\documentclass{article}\\begin{document}Hi\\end{document}',
