@@ -44,8 +44,9 @@ jobs:
   e2e-sync:
     name: e2e-sync (${{ matrix.project }})
     runs-on: ubuntu-latest
-    # Peers meet through public relays we don't run, so a relay outage can fail this job.
-    # Keep it non-blocking and check the report when it goes red.
+    # Peers meet through a WebTorrent tracker the test starts on localhost (e2e/tracker/server.mjs),
+    # not the public ones, so this job no longer depends on third-party uptime (issue #167).
+    # It stays non-blocking until it has a track record; check the report when it goes red.
     continue-on-error: true
     timeout-minutes: 20
     # One job per Playwright project, so each browser reports on its own.

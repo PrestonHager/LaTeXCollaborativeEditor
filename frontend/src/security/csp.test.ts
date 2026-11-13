@@ -117,6 +117,14 @@ describe('addConnectSources', () => {
     expect(out).toContain('<title>x</title>');
   });
 
+  it('adds a local ws:// tracker with its port, as the e2e build does, and nothing wider', () => {
+    const directives = parseCsp(cspFromHtml(addConnectSources(html, ['ws://127.0.0.1:4185']))!);
+    expect(directives['connect-src']).toEqual(["'self'", 'wss://t1.example', 'ws://127.0.0.1:4185']);
+    expect(cspAllows(directives, 'connect-src', 'ws://127.0.0.1:4185/')).toBe(true);
+    expect(cspAllows(directives, 'connect-src', 'ws://127.0.0.1:4186/')).toBe(false);
+    expect(cspAllows(directives, 'connect-src', 'ws://localhost:4185/')).toBe(false);
+  });
+
   it('starts from default-src when connect-src is missing', () => {
     const out = addConnectSources(page("default-src 'self'"), ['wss://t.example']);
     expect(parseCsp(cspFromHtml(out)!)['connect-src']).toEqual(["'self'", 'wss://t.example']);
