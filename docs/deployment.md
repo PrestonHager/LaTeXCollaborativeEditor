@@ -24,7 +24,19 @@ Frontend deployment (GitHub Pages)
 - The build bakes in the version from `frontend/package.json`, the short commit SHA (`git rev-parse --short HEAD`, else `$GITHUB_SHA`, else `dev`) and the build time, and writes them to `dist/version.json`.
   The page check fails the build if `version.json` is missing, malformed, or doesn't match `package.json`.
   The Pages workflow's checkout has the git history it needs, so no extra setup is needed. See `docs/versioning.md`.
-- `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). If the gzipped JS and CSS go over the budget, it prints a warning (a GitHub annotation in CI) but doesn't fail the build.
+- `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). It splits the build in two:
+  - **Initial load**: `index.html` plus everything it loads before the editor is usable (the entry script, its static imports and modulepreloads, and the linked CSS).
+    The script finds these from `dist/index.html` and the Vite manifest (`dist/.vite/manifest.json`, turned on with `build.manifest` in `vite.config.ts`).
+    The budget is **250 kB gzipped**, and going over it fails the build.
+  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js`. They load on demand and in parallel from the GitHub Pages CDN, so there's no total cap.
+    Each one warns above 1 MB gzipped and fails the build above 5 MB.
+    The build also fails if a lazy chunk ended up in the initial load, either because a module that's imported dynamically is also imported statically, or because initial code statically imports a chunk outside the initial graph.
+  - Where 250 kB comes from: the goal is an editor you can type in within a few hundred milliseconds.
+    Assume 10 Mbps (typical broadband or fast 4G, about 1.25 MB/s) and about 300 ms in total.
+    Take off about 100 ms for latency and for parsing and running the script, which leaves about 200 ms of transfer, or 250 kB at 1.25 MB/s.
+    GitHub Pages serves gzip, so gzip size is what goes over the wire.
+  - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
+  - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
 - Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
@@ -50,7 +62,7 @@ Runtime architecture (summary)
 - Every peer checks the messages it gets and drops bad ones, since anyone with the room link can join. The limits are in `docs/protocol.md`. Nothing about this needs a server or any config.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 - The compile runs in a module worker, built to its own `dist/assets/compile.worker-*.js` file.
-  It's a plain static file, so static hosting still works, and it counts toward the bundle size budget.
+  It's a plain static file, so static hosting still works. It's a lazy chunk, so it has the per-chunk limit but doesn't count toward the initial-load budget.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.
   Older builds kept it in `localStorage` as `drive_access_token`; the app deletes that key on load.

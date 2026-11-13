@@ -39,7 +39,8 @@ Checklist
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
 - [ ] Legal pages: `npm run build` passes its page check, and the Privacy and ToS links in the footer and About dialog open `privacy.html` and `tos.html` on the deployed site, not a 404.
 - [ ] Versioning: the About dialog and footer show the version and commit, the bug form prefills `App version: X.Y.Z+sha`, `npm run build` fails without a valid `dist/version.json`, peers exchange `hello` with their versions (an older peer without it still syncs), and a `vX.Y.Z` tag makes a GitHub release from `CHANGELOG.md` (see `docs/versioning.md`).
-- [x] Bundle size: `npm run build` reports the gzipped JS and CSS under the budget in `scripts/check-bundle-size.mjs`, or the PR explains why it went over.
+- [x] Bundle size: `npm run build` passes the bundle check in `scripts/check-bundle-size.mjs`: the initial load (index.html, entry JS and CSS) is under 250 kB gzipped, no lazy chunk is over 5 MB, and no lazy chunk is in the initial load. Lazy chunks over 1 MB are explained in the PR.
+- [x] Load time: `npm run test:load-time` shows the editor interactive in under a second at 10 Mbps with a 50 ms round trip.
 - [ ] Docs: every menu item, dialog, shortcut, palette command, and status message has a docs section, and `mkdocs build --strict` passes.
 - [ ] Docs diagrams: the UI map, user flows, and state diagrams in `how-it-fits.md` and the sequence diagrams in `protocol.md` render and match the code.
 - [ ] Screenshots: `npm run screenshots` regenerates every docs screenshot, in light and dark, with one command.
@@ -121,8 +122,11 @@ A box above is only checked when it was actually seen working.
 - Deployment: verified.
   The last three Pages runs passed, the latest on `5cf418c`, and the custom domain serves over HTTPS with a valid certificate.
   `/docs/` returns the MkDocs site.
-- Bundle size: verified locally.
-  `npm run build` reported 364.9 kB gzip out of the 400 kB budget.
+- Bundle size: verified locally after the budget split (#127).
+  `npm run build` reported an initial load of 211.8 kB gzip out of the 250 kB budget (index.html 7.1 kB, entry JS 190.7 kB, CSS 13.9 kB).
+  The only lazy chunk is the compile worker, 187.4 kB gzip, about 200 ms at 10 Mbps.
+- Load time: verified locally with `npm run test:load-time`.
+  At 10 Mbps and a 50 ms round trip the editor was interactive in a median of 451 ms (235 ms unthrottled, 967 ms with 4x CPU slowdown).
 - UI: failed.
   Menus, the command palette (Ctrl+P) and the settings dialog all open above the editor and preview, and the menus and palette work by keyboard.
   With the app theme on Light and the preview theme on Match system while the OS is dark, the preview turns dark but the LaTeX text stays black, so it's unreadable.

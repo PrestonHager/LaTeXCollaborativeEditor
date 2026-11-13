@@ -18,6 +18,8 @@ export default defineConfig({
   base: './',
   plugins: [tailwindcss(), versionJsonPlugin(buildInfo)],
   build: {
+    // scripts/check-bundle-size.mjs reads dist/.vite/manifest.json to find the initial-load graph.
+    manifest: true,
     rolldownOptions: {
       input: Object.fromEntries(
         BUILD_PAGES.map((page) => [page.replace(/\.html$/, ''), fileURLToPath(new URL(`./${page}`, import.meta.url))]),
