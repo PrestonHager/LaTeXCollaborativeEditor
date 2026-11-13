@@ -30,6 +30,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Links: the repository link and the example.com link are clickable.
 - [ ] Links: the javascript and data links show as plain text with no `href` (inspect them in dev tools).
 - [ ] References: `\ref` in the Text section shows 1.5, not `??`.
+- [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list doesn't mention `\vspace` or `\addcontentsline`.
 - [ ] Math: inline math, the integral and the sum are typeset, with limits above and below the sum.
 - [ ] Math: Greek letters, symbols and the matrix render.
 - [ ] Math: `\infty`, `\neq`, `\notin` and the other symbols in the "Computer Modern lacks" line use a serif math font, and the `\neq`-style slashes cross their symbol.
@@ -45,6 +46,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] The footer says Compiled, with no diagnostics.
 - [ ] The preview shows "Preview is approximate: N changes made for LaTeX.js", and its list includes showing figures in place and footnotes inline.
 - [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
+- [ ] Code in `verbatim`, `lstlisting`, `minted` or `comment` blocks, and in environments the document defines with `\lstnewenvironment`, `\DefineVerbatimEnvironment`, `\newminted` or a `\newenvironment` around one of those, is left alone, even when `\begin` or `\end` is in the middle of a line. LaTeX.js has none of these except `comment`, so the unit tests in `src/compile/latexJsAdapt.test.ts` cover them.
 
 Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio` (a height relative to `\textheight` is ignored).
 

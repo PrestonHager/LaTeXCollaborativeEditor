@@ -1,4 +1,4 @@
-import { adaptLatexSource, adaptLatexSourceForLatexJs } from './latexJsAdapt';
+import { adaptLatexSource, adaptLatexSourceForLatexJs, findVerbatimEnvironments } from './latexJsAdapt';
 import { latexSourceToPreviewHtml } from './latexJsPreview';
 // A made-up paper that uses every package and command the adapter handles.
 import academicPaperTex from './__fixtures__/academic-paper.tex?raw';
@@ -243,5 +243,126 @@ describe('adaptLatexSource protected text', () => {
     const { source } = adaptLatexSource(src);
     expect(source.split('\n')).toHaveLength(src.split('\n').length);
     expect(source).toBe(doc('\\begin{verbatim}', '% not a comment', '\\end{verbatim}', '', '', '', 'End.'));
+  });
+});
+
+describe('findVerbatimEnvironments', () => {
+  it('always knows the built-in verbatim-like environments', () => {
+    const found = findVerbatimEnvironments('');
+    for (const env of ['verbatim', 'verbatim*', 'Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'comment']) {
+      expect(found.has(env)).toBe(true);
+    }
+    expect(found.has('itemize')).toBe(false);
+  });
+
+  it('picks up \\lstnewenvironment, fancyvrb and tcolorbox definitions', () => {
+    const found = findVerbatimEnvironments(
+      [
+        '\\lstnewenvironment{pycode}[1][]{\\lstset{language=Python,#1}}{}',
+        '\\DefineVerbatimEnvironment{ console }{Verbatim}{frame=single}',
+        '\\CustomVerbatimEnvironment{shell}{Verbatim}{}',
+        '\\newtcblisting{boxcode}{listing only}',
+      ].join('\n'),
+    );
+    for (const env of ['pycode', 'console', 'shell', 'boxcode']) expect(found.has(env)).toBe(true);
+  });
+
+  it('picks up \\newminted with and without a custom name', () => {
+    const found = findVerbatimEnvironments('\\newminted{python}{linenos}\n\\newminted[jscode]{javascript}{}');
+    expect(found.has('pythoncode')).toBe(true);
+    expect(found.has('pythoncode*')).toBe(true);
+    expect(found.has('jscode')).toBe(true);
+    expect(found.has('javascriptcode')).toBe(false);
+  });
+
+  it('picks up \\newenvironment wrappers around verbatim environments', () => {
+    const found = findVerbatimEnvironments(
+      [
+        '\\newenvironment{plain}{\\verbatim}{\\endverbatim}',
+        '\\newenvironment*{boxed}[1][x]{\\VerbatimEnvironment\\begin{Verbatim}[label=#1]}{\\end{Verbatim}}',
+        '\\renewenvironment{listing}{\\lstlisting}{\\endlstlisting}',
+        // A wrapper around a wrapper, defined before the one it wraps.
+        '\\newenvironment{outer}{\\begin{inner}}{\\end{inner}}',
+        '\\lstnewenvironment{inner}{}{}',
+        '\\newenvironment{note}{\\begin{quote}\\verbatimfont}{\\end{quote}}',
+      ].join('\n'),
+    );
+    for (const env of ['plain', 'boxed', 'listing', 'outer', 'inner']) expect(found.has(env)).toBe(true);
+    expect(found.has('note')).toBe(false);
+  });
+
+  it('ignores commented-out definitions', () => {
+    const found = findVerbatimEnvironments('% \\lstnewenvironment{gone}{}{}\n50\\% \\lstnewenvironment{kept}{}{}');
+    expect(found.has('gone')).toBe(false);
+    expect(found.has('kept')).toBe(true);
+  });
+
+  it('skips a \\newenvironment whose begin code never closes', () => {
+    expect(findVerbatimEnvironments('\\newenvironment{broken}{\\verbatim').has('broken')).toBe(false);
+  });
+});
+
+describe('adaptLatexSource user-defined verbatim environments', () => {
+  const body = ['\\footnote{x} \\vspace{1em} \\caption{c}', '\\usepackage{geometry}'];
+
+  it.each([
+    ['\\lstnewenvironment{pycode}{}{}', 'pycode'],
+    ['\\DefineVerbatimEnvironment{console}{Verbatim}{}', 'console'],
+    ['\\newminted{python}{}', 'pythoncode'],
+    ['\\newminted[jscode]{javascript}{}', 'jscode'],
+    ['\\newenvironment{plain}{\\verbatim}{\\endverbatim}', 'plain'],
+    ['\\newenvironment{boxed}{\\VerbatimEnvironment\\begin{Verbatim}}{\\end{Verbatim}}', 'boxed'],
+    ['', 'BVerbatim'],
+    ['', 'minted'],
+  ])('leaves the body of %s (%s) alone', (definition, env) => {
+    const src = doc(definition, `\\begin{${env}}`, ...body, `\\end{${env}}\\vspace{1em}`);
+    const { source, changes } = adaptLatexSource(src);
+    expect(source).toBe(doc(definition, `\\begin{${env}}`, ...body, `\\end{${env}}`));
+    expect(changes).toEqual(['Removed \\vspace.']);
+  });
+
+  it('still rewrites the body of an environment that only looks like code', () => {
+    const src = doc('\\newenvironment{code}{\\begin{quote}}{\\end{quote}}', '\\begin{code}', '\\vspace{1em}x', '\\end{code}');
+    expect(adaptLatexSource(src).source).toBe(doc('\\newenvironment{code}{\\begin{quote}}{\\end{quote}}', '\\begin{code}', 'x', '\\end{code}'));
+  });
+
+  it('still rewrites a body when the definition is commented out', () => {
+    const src = doc('% \\lstnewenvironment{pycode}{}{}', '\\begin{pycode}', '\\vspace{1em}x', '\\end{pycode}');
+    expect(adaptLatexSource(src).source).toBe(doc('% \\lstnewenvironment{pycode}{}{}', '\\begin{pycode}', 'x', '\\end{pycode}'));
+  });
+
+  it('handles a begin and end in the middle of a line', () => {
+    const src = doc(
+      '\\lstnewenvironment{pycode}{}{}',
+      'Before\\vspace{1em} \\begin{pycode}\\footnote{a}',
+      '\\vspace{2em}',
+      'x = 1\\end{pycode} after\\footnote{b}',
+      'A \\begin {verbatim}\\caption{k}\\end{verbatim} B',
+    );
+    expect(adaptLatexSource(src).source).toBe(
+      doc(
+        '\\lstnewenvironment{pycode}{}{}',
+        'Before \\begin{pycode}\\footnote{a}',
+        '\\vspace{2em}',
+        'x = 1\\end{pycode} after\\textit{(b)}',
+        'A \\begin {verbatim}\\caption{k}\\end{verbatim} B',
+      ),
+    );
+  });
+
+  it('only ends the block at its own \\end', () => {
+    const src = doc('\\begin{pythoncode}', '\\end{verbatim}\\vspace{1em}', '\\end{pythoncode}', '\\newminted{python}{}');
+    expect(adaptLatexSource(src).source).toBe(src);
+  });
+
+  it('keeps \\verb inline text alone next to a custom block', () => {
+    const src = doc(
+      '\\lstnewenvironment{pycode}{}{}',
+      'Use \\verb!\\footnote{x}! and \\verb|\\vspace{1em}|.',
+      '\\begin{pycode}',
+      '\\verb|\\caption{x}|',
+      '\\end{pycode}',
+    );
+    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [] });
   });
 });

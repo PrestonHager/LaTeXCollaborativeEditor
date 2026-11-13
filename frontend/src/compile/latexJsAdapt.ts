@@ -242,7 +242,77 @@ function inlineFootnotes(source: string): string {
 }
 
 // Environments whose body LaTeX reads as plain text, so the rewrites must leave them alone.
-const VERBATIM_ENVIRONMENTS = new Set(['verbatim', 'verbatim*', 'Verbatim', 'lstlisting', 'minted', 'comment']);
+const VERBATIM_ENVIRONMENTS = [
+  'verbatim',
+  'verbatim*',
+  'Verbatim',
+  'Verbatim*',
+  'BVerbatim',
+  'BVerbatim*',
+  'LVerbatim',
+  'LVerbatim*',
+  'lstlisting',
+  'minted',
+  'comment',
+];
+
+// Commands whose first {argument} names a new verbatim-like environment
+// (listings, fancyvrb and tcolorbox).
+const VERBATIM_DEFINERS =
+  /\\(?:lstnewenvironment|DefineVerbatimEnvironment|CustomVerbatimEnvironment|newtcblisting|renewtcblisting|DeclareTCBListing|NewTCBListing)\s*\{([^{}]+)\}/g;
+
+// minted: \newminted{lang}{opts} makes `langcode` and `langcode*`, or `name` when given as [name].
+const NEWMINTED = /\\newminted\s*(?:\[([^\]]+)]\s*)?\{([^{}]+)\}/g;
+
+// \newenvironment{name}[n][default]{begin code}: the start, up to the { of the begin code.
+const NEWENVIRONMENT = /\\(?:re)?newenvironment\s*\*?\s*\{([^{}]+)\}\s*(?:\[[^\]]*]\s*){0,2}\{/g;
+
+// Begin code that starts a verbatim reader directly, like `\verbatim` or fancyvrb's `\VerbatimEnvironment`.
+const VERBATIM_STARTERS = /\\(?:verbatim|Verbatim|BVerbatim|LVerbatim|VerbatimEnvironment|lstlisting|minted|comment)(?![a-zA-Z@])/;
+
+/** Drop comments, so a commented-out definition doesn't count. `\%` is kept. */
+function stripComments(source: string): string {
+  return source.replace(/(^|[^\\])((?:\\\\)*)%[^\n]*/g, '$1$2');
+}
+
+/**
+ * Find every environment whose body LaTeX reads as plain text: the built-in ones, plus any
+ * the source defines with \lstnewenvironment, \DefineVerbatimEnvironment, \newminted, or a
+ * \newenvironment whose begin code starts a verbatim environment.
+ */
+export function findVerbatimEnvironments(source: string): Set<string> {
+  const text = stripComments(source);
+  const found = new Set(VERBATIM_ENVIRONMENTS);
+  for (const m of text.matchAll(VERBATIM_DEFINERS)) found.add(m[1].trim());
+  for (const m of text.matchAll(NEWMINTED)) {
+    if (m[1]) {
+      found.add(m[1].trim());
+    } else {
+      found.add(`${m[2].trim()}code`);
+      found.add(`${m[2].trim()}code*`);
+    }
+  }
+
+  // A \newenvironment can wrap another one, so repeat until nothing new turns up.
+  const wrappers = [...text.matchAll(NEWENVIRONMENT)].flatMap((m) => {
+    const open = m.index + m[0].length - 1;
+    const close = findClosingBrace(text, open);
+    return close === -1 ? [] : [{ name: m[1].trim(), begin: text.slice(open + 1, close) }];
+  });
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const { name, begin } of wrappers) {
+      if (found.has(name)) continue;
+      const inner = [...begin.matchAll(/\\begin\s*\{([^{}]*)\}/g)].some((b) => found.has(b[1].trim()));
+      if (inner || VERBATIM_STARTERS.test(begin)) {
+        found.add(name);
+        grew = true;
+      }
+    }
+  }
+  return found;
+}
 
 // Private-use characters mark a hidden piece of text. Real documents don't use them.
 const MASK_OPEN = '';
@@ -254,6 +324,7 @@ const MASK_PATTERN = /(\d+)/g;
  * rewrites can't touch them. Tokens never hold a line break, so line numbers stay put.
  */
 function maskProtectedText(source: string): { masked: string; unmask: (text: string) => string } {
+  const verbatimEnvironments = findVerbatimEnvironments(source);
   const saved: string[] = [];
   const hide = (text: string) => {
     if (!text) return '';
@@ -290,7 +361,7 @@ function maskProtectedText(source: string): { masked: string; unmask: (text: str
         continue;
       }
       const begin = /^\\begin\s*\{([^}]*)\}/.exec(rest);
-      if (begin && VERBATIM_ENVIRONMENTS.has(begin[1].trim())) {
+      if (begin && verbatimEnvironments.has(begin[1].trim())) {
         out += begin[0];
         i += begin[0].length;
         environment = begin[1].trim();
