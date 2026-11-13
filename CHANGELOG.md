@@ -26,6 +26,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 - **Undo file operations.** Creating, renaming, moving, deleting and uploading files and folders, and Add Files from Drive, can be undone and redone. Press Ctrl+Z in the Files panel, use Edit > Undo (it says what it'll undo, like "Undo Delete chapter.tex"), or click **Undo** in the notice after a delete, rename or move. Typing keeps its own undo in the editor. Only your own changes are undone, a file someone else has typed in since is never removed, deleted images come back too, and a file that comes back where someone made a new one is named "name (restored)". In Drive, the same file comes out of the trash instead of a copy being made.
 
+- **Desktop app (experimental).** A first native build for Windows, macOS and Linux, made with Tauri around the same app as the website. It isn't signed or published yet: maintainers can build it from the **Desktop app** workflow. In the app, Ctrl+N, Ctrl+W and the other keys browsers keep for tabs work like in an installed web app. Google Drive sign-in and joining shared rooms on Linux don't work in it yet.
+
 ### Changed
 
 - **File > New Project** opens the template picker instead of a confirm box. **Empty project** is still first, and the picker warns when it would replace the project for people in your room.

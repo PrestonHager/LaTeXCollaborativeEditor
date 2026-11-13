@@ -18,6 +18,7 @@ exclude_docs: |
   versioning.md
   qa-runbook.md
   ui-sizing.md
+  desktop.md
   assets/ui-sizing/
 
 theme:

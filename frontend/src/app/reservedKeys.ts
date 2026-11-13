@@ -1,4 +1,5 @@
 import { detectPlatform, normalizeKeybind, type Platform } from '../ui/modifierShortcutLabels';
+import { isDesktopShell } from './desktopShell';
 
 /**
  * Keys a browser or the OS keeps for itself, so a page never gets the keydown and preventDefault can't stop them.
@@ -32,6 +33,11 @@ export type KeyContext = {
    * Chromium hands its reserved keys to the page there (checked); other browsers aren't known to.
    */
   appWindow: boolean;
+  /**
+   * In the native desktop app (desktop/, docs/desktop.md). It's always its own window with no browser around it, so only
+   * the OS keeps keys. Its webview's user agent can look like Safari (WebKitGTK on Linux), so the browser isn't trusted here.
+   */
+  desktop?: boolean;
 };
 
 /**
@@ -192,6 +198,9 @@ export function detectAppWindow(win: Pick<Window, 'matchMedia'> | undefined = gl
   });
 }
 
+/** The desktop app's webview counts as no browser: only the OS entries apply in its window. */
+const DESKTOP_BROWSER = { browser: 'other', browserName: 'The desktop app' } as const;
+
 /** A context that assumes the most: a Chromium-like browser in a tab, so every fallback is shown. */
 export const FALLBACK_KEY_CONTEXT: KeyContext = { browser: 'other', browserName: 'Your browser', os: 'other', platform: 'other', appWindow: false };
 
@@ -202,6 +211,7 @@ export const FALLBACK_KEY_CONTEXT: KeyContext = { browser: 'other', browserName:
 export function detectKeyContext(win: (Pick<Window, 'matchMedia'> & { navigator?: Navigator }) | undefined = globalThis.window): KeyContext {
   try {
     const nav = win?.navigator;
+    if (isDesktopShell(win)) return { ...DESKTOP_BROWSER, os: detectOs(nav), platform: detectPlatform(nav), appWindow: true, desktop: true };
     return { ...detectBrowser(nav), os: detectOs(nav), platform: detectPlatform(nav), appWindow: detectAppWindow(win) };
   } catch {
     return { ...FALLBACK_KEY_CONTEXT, platform: detectPlatform() };
@@ -267,7 +277,8 @@ export function watchKeyContext(onChange: (context: KeyContext) => void, win: Wi
   };
 }
 
-/** Say what kind of window this is, for Settings: "Chrome in a browser tab" or "Chrome in its own window". */
+/** Say what kind of window this is, for Settings: "Chrome in a browser tab", "Chrome in its own window" or "the desktop app". */
 export function describeKeyContext(context: KeyContext): string {
+  if (context.desktop) return 'the desktop app';
   return `${context.browserName} ${context.appWindow ? 'in its own window' : 'in a browser tab'}`;
 }

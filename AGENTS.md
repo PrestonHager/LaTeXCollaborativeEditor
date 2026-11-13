@@ -3,6 +3,7 @@
 ## Scope ownership
 - `frontend/`: browser UI, networking, storage, and worker integrations.
 - `docs/`: protocol, deployment, and validation checklists.
+- `desktop/`: the Tauri desktop shell around the frontend build (`src-tauri/`, Rust) and its desktop-only settings. Plan and rules in `docs/desktop.md`; keep frontend changes for it to `frontend/src/app/desktopShell.ts` and lazy chunks.
 - `frontend/dev/regression/`: the dev-only regression checklist and test LaTeX project. Never import it from production code paths.
 
 ## Guardrails
@@ -14,6 +15,7 @@
 
 ## Validation commands
 - Root: `npm test`, `npm run test:coverage` (frontend coverage), `npm run test:load-time` (optional, throttled load time; see `docs/qa-runbook.md`)
+- In `desktop/`: `npm run check` (version, CSP and permissions settings); `cargo check` in `desktop/src-tauri/` (on Linux it needs the WebKitGTK 4.1 dev packages, see `docs/desktop.md`)
 - In `frontend/`: `npm run build` (fails if the initial load is over the 225 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches)
 
 ## Required docs updates

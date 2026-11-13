@@ -12,6 +12,14 @@ updates:
     directory: /tools/screenshots
     schedule:
       interval: weekly
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /desktop/src-tauri
+    schedule:
+      interval: weekly
   - package-ecosystem: github-actions
     directory: /
     schedule:
