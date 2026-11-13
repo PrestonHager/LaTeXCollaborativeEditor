@@ -45,6 +45,12 @@
   --editor-gutter-active-bg: #1e2430;
   --editor-line-number: #8b95a8;
   --editor-line-number-active: #d1d5db;
+  /* Syntax token colors (src/ui/syntaxHighlight.ts): dark defaults, so the "system" editor theme on a dark OS still gets colors. */
+  --editor-keyword: #7ab8ff;
+  --editor-string: #9ddf7d;
+  --editor-number: #f4ba6e;
+  --editor-comment: #8b949e;
+  --editor-operator: #d2d8e0;
 }
 
 .dark {
@@ -295,12 +301,7 @@ label.settings-row { justify-content: flex-start; }
   color: var(--editor-line-number-active) !important;
 }
 .cm-content, .cm-line { color: var(--editor-text); }
-.cm-keyword { color: var(--editor-keyword); }
-.cm-atom, .cm-meta { color: var(--editor-keyword); }
-.cm-string { color: var(--editor-string); }
-.cm-number { color: var(--editor-number); }
-.cm-comment { color: var(--editor-comment); }
-.cm-operator, .cm-punctuation { color: var(--editor-operator); }
+/* Syntax token colors are set in src/ui/syntaxHighlight.ts from the --editor-* variables above. */
 .cm-error-line { background: rgba(239, 68, 68, 0.18); }
 .cm-warning-line { background: rgba(234, 179, 8, 0.15); }
 .cm-info-line { background: rgba(59, 130, 246, 0.12); }

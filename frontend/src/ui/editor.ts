@@ -9,6 +9,7 @@ import { lintGutter } from '@codemirror/lint';
 import type { Extension } from '@codemirror/state';
 import type { EditorDiagnostic } from './diagnostics';
 import { diagnosticsExtensions, setEditorDiagnostics } from './diagnostics';
+import { latexSyntaxHighlighting } from './syntaxHighlight';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
@@ -35,6 +36,7 @@ export function createEditorPane(container: HTMLElement) {
       closeBrackets(),
       lintGutter(),
       StreamLanguage.define(stex),
+      latexSyntaxHighlighting,
       diagnosticsExtensions,
       collabCompartment.of([]),
       editableCompartment.of([

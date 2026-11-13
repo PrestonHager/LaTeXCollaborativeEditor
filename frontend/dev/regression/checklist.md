@@ -9,6 +9,8 @@ Then run **Open regression checklist** to get this page with checkboxes.
 ## Editor
 
 - [ ] Line numbers show next to every line of `main.tex`.
+- [ ] LaTeX is colored in `main.tex`: commands like `\section`, arguments like `{document}`, `$` math, brackets and `%` comments each have their own color.
+- [ ] Switching Settings > App and editor theme between Light and Dark recolors the syntax right away, and both stay readable.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts.

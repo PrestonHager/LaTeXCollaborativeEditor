@@ -33,6 +33,7 @@
     "@codemirror/search": "^6.7.0",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.1",
+    "@lezer/highlight": "^1.2.5",
     "@trystero-p2p/torrent": "^0.24.0",
     "basecoat-css": "^1.1.0",
     "diff-match-patch": "^1.0.5",
