@@ -56,6 +56,11 @@ If **Connect** or **Open** fails, check the status message in the header (for ex
 
 - **Connect** opens a Google sign-in popup. If your browser blocks it, the status line tells you; allow popups for the site and try again.
 - Google sign-ins last about an hour. When the session expires, saves stop and the status line asks you to use **Connect Google Drive** again. After a page reload with an expired session, the app saves to this browser until you reconnect.
+- If your Google Drive is full, the status line says "Google Drive is full" and the app stops retrying.
+  Free up space in Drive, or download a .zip so you don't lose work.
+- If Google is limiting requests, the app waits a moment and tries again on its own.
+- A save writes your files first and renames the project folder last.
+  If a save fails partway, whatever finished stays saved, and the next save picks up the rest.
 - Moving a project between this browser and Drive saves a new copy there. The old copy stays where it was.
 - The app can only see files it made or that you picked. If you add a file to the project folder in Drive itself, the app won't see it yet. Upload it from the editor instead.
 - Opening an old single `.tex` file keeps saving to that file. Once you add a second file, the app makes a project folder next to the file and moves the file into it.

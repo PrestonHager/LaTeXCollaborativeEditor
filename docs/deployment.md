@@ -53,6 +53,10 @@ Runtime architecture (summary)
   We kept `drive.file` instead of asking for full Drive access, which needs a Google security review.
 - An old single `.tex` file from before projects opens as a one-file project and keeps saving to that file.
   When you add a second file, the app makes a project folder next to it and moves the file in.
+- Drive errors are sorted by Google's error `reason`, not the message text.
+  `rateLimitExceeded`, `userRateLimitExceeded`, `backendError`, HTTP 429 and 5xx get retried.
+  `storageQuotaExceeded` (a full Drive) and other 403s don't.
+- A Drive save writes files before it renames the project folder, so a failed upload never leaves a renamed folder behind.
 - Local projects live in IndexedDB (the `latex-editor` database). Old documents in localStorage get moved into one-file projects the first time the app starts.
 
 Networking (STUN/TURN)

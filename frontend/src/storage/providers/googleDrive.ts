@@ -45,6 +45,8 @@ const LEGACY_FILE_KEY = 'drive_active_file_ref';
 const TOKEN_EXPIRY_SLACK_MS = 60_000;
 // Give up on a silent refresh after this long, so a stuck popup can't stall autosave forever.
 const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
+// Drive error reasons that mean "slow down and try again".
+const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 
 /**
  * Projects in Google Drive. A project is a Drive folder and every project file is a real
@@ -434,7 +436,7 @@ export class GoogleDriveProvider implements StorageProvider {
     }
     if (res.ok) return res;
 
-    const detail = await readGoogleErrorMessage(res);
+    const { message: detail, reason } = await readGoogleError(res);
     if (res.status === 401) {
       // Google can revoke a token early, so try once more with a fresh one.
       if (!isRetry) {
@@ -452,14 +454,27 @@ export class GoogleDriveProvider implements StorageProvider {
         { retryable: false, status: 404 },
       );
     }
+    // Go by Google's error reason, not the message. "Storage quota exceeded" sounds like a rate limit but isn't.
+    if (reason === 'storageQuotaExceeded') {
+      throw new StorageError('Drive: Google Drive is full. Free up space in Drive, or download a .zip so you don\'t lose work.', {
+        retryable: false,
+        status: res.status,
+      });
+    }
+    if (RATE_LIMIT_REASONS.has(reason) || res.status === 429) {
+      throw new StorageError(`Drive: Google is limiting requests, so we could not ${action}. Try again in a minute.`, {
+        retryable: true,
+        status: res.status,
+      });
+    }
     if (res.status === 403) {
       throw new StorageError(`Drive: Permission denied while trying to ${action}${detail ? ` (${detail})` : ''}.`, {
-        retryable: /rate|quota/i.test(detail),
+        retryable: false,
         status: 403,
       });
     }
     throw new StorageError(`Drive: Could not ${action} (HTTP ${res.status}${detail ? `: ${detail}` : ''}).`, {
-      retryable: res.status >= 500 || res.status === 429,
+      retryable: res.status >= 500 || reason === 'backendError',
       status: res.status,
     });
   }
@@ -610,12 +625,19 @@ function sessionExpiredError(status?: number): StorageError {
   });
 }
 
-/** Pull Google's error message out of a failed response, if there is one. */
-async function readGoogleErrorMessage(res: Response): Promise<string> {
+/**
+ * Pull Google's error message and reason out of a failed response, if there are any.
+ * Drive puts the reason in error.errors[0].reason, newer APIs put it in error.details[].reason.
+ */
+async function readGoogleError(res: Response): Promise<{ message: string; reason: string }> {
   try {
-    const body = await res.json();
-    return typeof body?.error?.message === 'string' ? body.error.message : '';
+    const error = (await res.json())?.error;
+    const message = typeof error?.message === 'string' ? error.message : '';
+    const reasons = [...(Array.isArray(error?.errors) ? error.errors : []), ...(Array.isArray(error?.details) ? error.details : [])]
+      .map((item: { reason?: unknown }) => item?.reason)
+      .filter((value: unknown): value is string => typeof value === 'string');
+    return { message, reason: reasons[0] ?? '' };
   } catch {
-    return '';
+    return { message: '', reason: '' };
   }
 }
