@@ -12,6 +12,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 - **Update prompt.** When a new version is deployed, a small card offers to reload. It saves your changes first, and won't reload if the save fails. It also shows when a collaborator is on a newer, incompatible version.
 - **Export dialog.** File > Export… (Ctrl+Shift+E, also on the toolbar and in the palette) saves the project as a `.zip`, a preview-quality PDF through the browser's print dialog, a standalone HTML file that works offline, a flattened `.tex` with every `\input` and `\include` in place, or a single file. It shows progress, can be canceled, and runs entirely in the browser. Formats come from a registry, so new ones are easy to add.
 - `\newpage`, `\clearpage` and `\pagebreak` on their own line now break the page when the preview is printed or exported as PDF.
+- **Export to Google Drive.** The Export dialog has a **Save to** menu next to the **Format** menu: Download or Google Drive. It remembers your choice. Drive uploads go to an `exports` folder in the project's Drive folder (or the top of My Drive for a project that isn't in Drive), or to a folder you pick, and show a bar while they upload and a link to the file when done. If you aren't signed in, Export signs you in first. Guests can't use the host's Drive, and PDF can't go to Drive since it goes through the print dialog; the dialog says so.
+- **Page breaks show in the preview and the HTML export.** `\newpage`, `\clearpage` and `\pagebreak` now show as a dashed line labeled "page break". The line isn't printed, and printing still starts a new page there.
 
 ### Changed
 

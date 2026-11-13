@@ -48,6 +48,7 @@ Document payload channel
 - The host sends a full Yjs snapshot to each guest that joins, tagged with a doc id.
 - The host saves its Yjs state and doc id with the local app session, so a reload resumes the same doc instead of starting a new one.
 - This saved state lives in browser storage only and never goes into rendezvous metadata.
+- Exports (File > Export…) add no messages. A file saved to Google Drive goes from the host's browser to the host's own Drive; guests can only download, and nothing about an export is sent to peers.
 - A guest only accepts snapshots from the peer that is the host, and picks up the new host after the old one leaves.
 - If the snapshot has the guest's doc id, the guest merges it and sends back any edits the host is missing.
 - If the doc id is different, the guest throws away its doc and starts over from the snapshot, so its updates never point at items the host doesn't have.

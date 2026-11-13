@@ -346,6 +346,7 @@
                 <option value="layout">Layout</option>
                 <option value="keybinds">Keyboard shortcuts</option>
                 <option value="tour">Tour (show it again)</option>
+                <option value="export">Where exports go</option>
               </select>
               <button id="settings-reset" type="button" class="btn" data-variant="outline" data-size="sm">Reset to defaults</button>
             </div>
@@ -415,13 +416,27 @@
       <div>
         <header>
           <h2 id="export-dialog-title">Export</h2>
-          <p id="export-dialog-description">Pick a format. Everything happens in this browser, and nothing is sent to a server.</p>
+          <p id="export-dialog-description">Pick a format and where it goes. The file is made in this browser; only Google Drive sends it anywhere.</p>
         </header>
         <section class="export-dialog-body">
-          <fieldset class="export-formats">
-            <legend class="label">Format</legend>
-            <div id="export-formats" class="export-format-list"></div>
-          </fieldset>
+          <div class="export-pickers">
+            <div class="export-field">
+              <label class="label" for="export-format">Format</label>
+              <select id="export-format" class="select" aria-describedby="export-format-info"></select>
+            </div>
+            <div class="export-field">
+              <label class="label" for="export-destination">Save to</label>
+              <select id="export-destination" class="select" aria-describedby="export-destination-info"></select>
+            </div>
+          </div>
+          <div id="export-format-info" class="export-format-info"></div>
+          <div id="export-destination-info" class="export-destination-info" hidden>
+            <p id="export-destination-note" class="export-option-hint" hidden></p>
+            <div id="export-folder" class="export-folder" hidden>
+              <span class="export-folder-label">Folder: <strong id="export-folder-name"></strong></span>
+              <button id="export-folder-change" type="button" class="btn" data-variant="outline" data-size="sm">Choose folder…</button>
+            </div>
+          </div>
           <div id="export-options" class="export-options"></div>
           <p id="export-note" class="export-note" role="status" aria-live="polite" hidden></p>
           <div id="export-progress" class="export-progress" hidden>

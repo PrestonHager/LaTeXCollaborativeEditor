@@ -172,6 +172,7 @@ export const previewPdfExporter: Exporter = {
   icon: 'printer',
   fileExtension: '.pdf',
   quality: 'preview',
+  printsOnly: true,
   available: needsMainFile,
   options: () => [
     {

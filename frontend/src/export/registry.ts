@@ -1,6 +1,6 @@
 import { flattenedTexExporter, projectZipExporter, singleFileExporter } from './sourceExporters';
 import { htmlExporter, previewPdfExporter } from './htmlExporters';
-import type { ExportFile, ExportOptionValues, ExportOutput, ExportRun, ExportSource, Exporter } from './types';
+import { throwIfAborted, type ExportFile, type ExportOptionValues, type ExportOutput, type ExportRun, type ExportSource, type Exporter } from './types';
 
 /**
  * Every export format, in the order the Export dialog lists them. To add a format, write an
@@ -13,8 +13,22 @@ export function findExporter(id: string, list: readonly Exporter[] = exporters):
   return list.find((exporter) => exporter.id === id);
 }
 
-/** Where a finished export goes. Only Download for now; a storage provider can be one later (#47). */
-export type ExportDestination = { id: string; label: string; save(file: ExportFile): Promise<void> | void };
+/** A file a destination saved, with a link to it when there is one (like a Drive file). */
+export type SavedExport = { name: string; url?: string };
+
+/** Progress and Cancel for a destination's save, like an upload. */
+export type SaveRun = { signal: AbortSignal; onProgress(fraction: number, label?: string): void };
+
+/** Where a finished export goes: Download or Google Drive (see export/destinations.ts). */
+export type ExportDestination = {
+  id: string;
+  label: string;
+  save(file: ExportFile, run: SaveRun): Promise<SavedExport | void> | SavedExport | void;
+  /** The notice once everything is saved. Defaults to "Downloaded a, b". */
+  doneMessage?(saved: SavedExport[]): string;
+};
+
+export type ExportResult = ExportOutput & { saved: SavedExport[] };
 
 /**
  * Run one exporter and hand what it made to the destination. Throws the exporter's error,
@@ -26,13 +40,22 @@ export async function runExport(
   options: ExportOptionValues,
   run: ExportRun,
   destination: ExportDestination,
-): Promise<ExportOutput> {
+): Promise<ExportResult> {
   const availability = exporter.available(source);
   if (!availability.ok) throw new Error(availability.reason);
   run.onProgress(0, 'Starting...');
   const output = await exporter.run(source, options, run);
-  if (run.signal.aborted) throw new DOMException('Export canceled', 'AbortError');
-  for (const file of output.files) await destination.save(file);
+  throwIfAborted(run.signal);
+  const saved: SavedExport[] = [];
+  for (const file of output.files) {
+    saved.push((await destination.save(file, run)) || { name: file.name });
+    throwIfAborted(run.signal);
+  }
   run.onProgress(1, 'Done');
-  return output;
+  return { ...output, saved };
+}
+
+/** Save to the person's computer through the browser's download. */
+export function downloadDestination(download: (name: string, data: Blob, type: string) => void): ExportDestination {
+  return { id: 'download', label: 'Download', save: (file) => download(file.name, file.data, file.data.type) };
 }

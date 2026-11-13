@@ -80,6 +80,9 @@ describe('HTML and PDF exporters', () => {
     expect(html).toContain('data:font/woff;base64');
     expect(html).toContain('src="data:image/png;base64,iVA="');
     expect(html).toContain('class="lc-page-break"');
+    // The divider shows on screen only; printing still breaks the page there.
+    expect(html).toContain('@media screen{.lc-page-break{');
+    expect(html).toContain('content:"page break"');
     expect(output.warnings).toEqual([expect.stringContaining('b.png')]);
   });
 

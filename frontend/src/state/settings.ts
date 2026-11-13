@@ -28,7 +28,10 @@ export type Settings = {
   splitRatio: number;
   keybinds: KeybindSettings;
   tourSeen: boolean;
+  /** Where the Export dialog saves to: the browser's Download, or Google Drive. */
+  exportDestination: ExportDestinationId;
 };
+export type ExportDestinationId = 'download' | 'drive';
 export type SettingKey = keyof Settings;
 
 export const defaultSettings = (): Settings => ({
@@ -38,6 +41,7 @@ export const defaultSettings = (): Settings => ({
   splitRatio: 0.5,
   keybinds: { rules: [], disabled: [] },
   tourSeen: false,
+  exportDestination: 'download',
 });
 
 /** Groups that Reset can act on one at a time. */
@@ -46,6 +50,7 @@ export const settingSections = {
   layout: ['layoutMode', 'splitRatio'],
   keybinds: ['keybinds'],
   tour: ['tourSeen'],
+  export: ['exportDestination'],
 } as const satisfies Record<string, readonly SettingKey[]>;
 export type SettingSection = keyof typeof settingSections;
 
@@ -59,6 +64,7 @@ const sanitizers: { [K in SettingKey]: (value: unknown) => Settings[K] | undefin
   splitRatio: (value) => (typeof value === 'number' && Number.isFinite(value) ? Math.max(0.2, Math.min(0.8, value)) : undefined),
   keybinds: (value) => sanitizeKeybinds(value),
   tourSeen: (value) => (typeof value === 'boolean' ? value : undefined),
+  exportDestination: (value) => (value === 'download' || value === 'drive' ? value : undefined),
 };
 
 /** Keep only well-formed keybind rules. Whether a command still exists is checked where it's applied. */

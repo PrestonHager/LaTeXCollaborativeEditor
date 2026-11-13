@@ -39,11 +39,14 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 // The about endpoint tells us who's signed in, and works with the drive.file scope we already have.
 const DRIVE_ABOUT_API = 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)';
-const FOLDER_MIME = 'application/vnd.google-apps.folder';
+export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // What we ask Drive for to tell if a file changed under us.
 const VERSION_FIELDS = 'version,md5Checksum';
 // Project folders are tagged so "list projects" can find them without seeing the rest of Drive.
 const PROJECT_PROPERTY = 'latexProject';
+// The exports folder the Export dialog makes inside a project folder. openProject skips it, so
+// exports never become project files.
+export const EXPORTS_PROPERTY = 'latexExports';
 // Old single-file projects use ids like "file:<drive file id>".
 export const LEGACY_PREFIX = 'file:';
 const LEGACY_FILE_KEY = 'drive_active_file_ref';
@@ -264,9 +267,10 @@ export class GoogleDriveProvider implements StorageProvider {
     while (level.length) {
       const next: typeof level = [];
       for (const dir of level) {
-        const children = await this.listAll(`'${dir.id}' in parents and trashed=false`, `id,name,mimeType,${VERSION_FIELDS}`, 'list project files');
+        const children = await this.listAll(`'${dir.id}' in parents and trashed=false`, `id,name,mimeType,appProperties,${VERSION_FIELDS}`, 'list project files');
         for (const child of children) {
           const path = dir.path ? `${dir.path}/${child.name}` : child.name;
+          if (child.mimeType === FOLDER_MIME && child.appProperties?.[EXPORTS_PROPERTY] === '1') continue;
           if (child.mimeType === FOLDER_MIME) {
             index.paths.set(path, { id: child.id, folder: true });
             entries.push({ path, kind: 'folder' });
@@ -536,8 +540,9 @@ export class GoogleDriveProvider implements StorageProvider {
   /**
    * Call the Drive API with our token and turn failures into readable errors.
    * An expired token or a 401 gets one silent refresh, then we give up and ask the user to reconnect.
+   * Public so the Drive export (export/driveUpload.ts) can use it too.
    */
-  private async driveFetch(url: string, init: RequestInit, action: string, isRetry = false): Promise<Response> {
+  async driveFetch(url: string, init: RequestInit, action: string, isRetry = false): Promise<Response> {
     // First, swap out a token that's about to expire.
     if (!this.hasUsableToken() && !(await this.refreshAccessToken())) {
       throw sessionExpiredError();

@@ -90,6 +90,10 @@ Runtime architecture (summary)
 - Before overwriting a Drive file, the app makes one `files.get` call for its `version` and `md5Checksum` and compares them with what it saw last.
   A changed checksum stops the save for that file and asks the user what to keep.
   No extra scopes or settings are needed for this.
+- **Export to Google Drive** (the Export dialog's **Save to** menu) uploads with the same `drive.file` token, as one multipart `POST` to `https://www.googleapis.com/upload/drive/v3/files` (`XMLHttpRequest`, so it can show upload progress). No new scope or CSP host: `www.googleapis.com` is already in `connect-src`.
+  The default folder is `exports` inside the project's Drive folder. The app makes it on first use and tags it with `appProperties` `latexExports=1`; opening a project skips folders with that tag, so exports never load as project files.
+  A project that isn't in Drive uploads to the top of My Drive. **Choose folder…** uses the Picker in folder mode, so it needs `VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID`; picking the folder is what gives `drive.file` access to it.
+  Guests never see the host's Drive. The PDF export prints instead of making a file, so it can't go to Drive.
 - Local projects live in IndexedDB (the `latex-editor` database). Old documents in localStorage get moved into one-file projects the first time the app starts.
 
 Networking (STUN/TURN)
@@ -142,7 +146,8 @@ Turning the CSP off (rollback)
 Domain and security
 - The domain (e.g., latex.prestonhager.com) must be served over HTTPS to enable P2P APIs.
 - `getBootstrapConfig` treats `localhost`, `*.localhost`, `127.x.x.x` and `[::1]` as local and everything else as production.
-- File > Export… needs no server. Under the CSP, HTML export with Work offline fetches the LaTeX.js styles and fonts from `https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/` (`connect-src`), downloads use `blob:` URLs, and the PDF export prints from a `srcdoc` frame with no scripts.
+- File > Export… needs no server. Under the CSP, HTML export with Work offline fetches the LaTeX.js styles and fonts from `https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/` (`connect-src`), downloads use `blob:` URLs, and the PDF export prints from a `srcdoc` frame with no scripts. Saving an export to Google Drive uses `https://www.googleapis.com/upload/drive/v3/files`, which `connect-src` already allows (`src/security/cspPolicy.test.ts` checks it).
+- The Export dialog, the exporters and the Drive upload are lazy chunks (`exportDialog`, `registry`, `destinations`, `driveUpload` in the build report), loaded the first time someone opens Export.
 
 Documentation
 - The user docs are MkDocs Material, built from `docs/` by `mkdocs.yml`. Run `mkdocs build --strict` before a PR, it fails on broken links and missing images.

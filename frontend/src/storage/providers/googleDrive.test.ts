@@ -352,7 +352,7 @@ describe('GoogleDriveProvider', () => {
             if (parent) return file.parents.includes(parent);
             return file.mimeType === FOLDER && file.appProperties?.latexProject === '1';
           });
-          return reply({ files: list.map((file) => ({ id: file.id, name: file.name, mimeType: file.mimeType, modifiedTime: '2026-01-01T00:00:00Z', ...versionOf(file) })) });
+          return reply({ files: list.map((file) => ({ id: file.id, name: file.name, mimeType: file.mimeType, appProperties: file.appProperties, modifiedTime: '2026-01-01T00:00:00Z', ...versionOf(file) })) });
         }
         if (method === 'GET' && id) {
           const file = files.get(id);
@@ -438,6 +438,9 @@ describe('GoogleDriveProvider', () => {
         { id: 'b', name: 'img', mimeType: FOLDER, parents: ['root1'] },
         { id: 'c', name: 'x.png', mimeType: 'image/png', parents: ['b'], content: new Uint8Array([9]) },
         { id: 'd', name: 'Notes', mimeType: 'application/vnd.google-apps.document', parents: ['root1'] },
+        // The Export dialog's folder is never part of the project.
+        { id: 'e', name: 'exports', mimeType: FOLDER, parents: ['root1'], appProperties: { latexExports: '1' } },
+        { id: 'f', name: 'Paper.html', mimeType: 'text/html', parents: ['e'], content: bytes('<p>') },
       ]);
       const provider = connectedProvider();
       const listing = await provider.openProject('root1');

@@ -104,7 +104,7 @@ Rewritten:
 - `\nomenclature{symbol}{meaning}` shows just the symbol.
 - authblk's `\author[...]{...}` drops the option, and `\affil{...}` becomes a small line of text.
 - `\textcopyright` becomes ©.
-- `\newpage`, `\clearpage`, `\cleardoublepage` and `\pagebreak` on a line of their own become a page break when you [export a PDF](#pdf-export). On screen they show nothing, since the preview has no pages. One in the middle of a line is ignored.
+- `\newpage`, `\clearpage`, `\cleardoublepage` and `\pagebreak` on a line of their own become a page break when you [export a PDF](#pdf-export) or print the HTML export. On screen, in the preview and the HTML export, they show as a dashed line labeled "page break". The line is never printed. One in the middle of a line is ignored.
 
 Comments, `\verb`, and the `verbatim`, `verbatim*`, `Verbatim`, `lstlisting`, `minted`, and `comment` environments are left alone.
 Anything not listed here goes to LaTeX.js as is, and if it doesn't know a command, the error shows up in the diagnostics.

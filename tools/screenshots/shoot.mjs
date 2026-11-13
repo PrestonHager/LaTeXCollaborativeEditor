@@ -296,14 +296,16 @@ async function shootTheme(browser, theme) {
   await shot(page, 'projects', theme);
   await page.click('#projects-done');
 
-  // The Export dialog, with the PDF format picked so its option shows.
+  // The Export dialog, with HTML picked so its option shows.
   await page.keyboard.press('ControlOrMeta+Shift+E');
-  await page.waitForSelector('#export-dialog[open] .export-format', { state: 'attached' });
-  await page.check('#export-formats input[value="pdf-preview"]');
+  await page.waitForSelector('#export-dialog[open] #export-format option', { state: 'attached' });
+  await page.selectOption('#export-format', 'html');
+  await page.selectOption('#export-destination', 'download');
   await annotate(page, [
-    { selector: '#export-formats', label: 'Pick a format', side: 'right', pad: 4 },
+    { selector: '#export-format', label: 'Pick a format', side: 'above', pad: 2, dx: 120, dy: -14 },
+    { selector: '#export-destination', label: 'Where it goes', side: 'above', pad: 2, dx: 120, dy: -14 },
     { selector: '#export-options', label: 'Its options', side: 'right', pad: 4 },
-    { selector: '#export-run', label: 'Export downloads it', side: 'right' },
+    { selector: '#export-run', label: 'Export', side: 'right' },
   ]);
   await shot(page, 'export', theme);
   await page.click('#export-cancel');
