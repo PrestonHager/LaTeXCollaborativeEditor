@@ -1,0 +1,13 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\begin{document}
+\section*{ieeetr}
+% Expect: [1], [2], [3], [4] in citing order.
+% Expect: [1] reads D. E. Knuth, "Literate programming," The Computer Journal, vol. 27, no. 2, pp. 97-111, May 1984.
+% with the title in curly quotes and the journal in italics.
+% Expect: [4] reads D. E. Knuth, The TeXbook. Reading, MA: Addison-Wesley, 1984.
+\input{styles/citations}
+\bibliographystyle{ieeetr}
+\bibliography{refs}
+\end{document}

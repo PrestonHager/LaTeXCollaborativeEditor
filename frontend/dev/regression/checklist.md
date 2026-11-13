@@ -45,7 +45,10 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Image sizes: `width=0.5\textwidth` is half the column, `width=2cm` and `height=1in` keep their proportions, `width=4cm,height=1cm` stretches, adding `keepaspectratio` doesn't, and `scale=0.5` is half size.
 - [ ] Pictures: the box with a diagonal line and a circle renders.
 - [ ] Typing stays smooth while the preview compiles, since the compile runs in a Web Worker.
-- [ ] Citations: the text shows [1] and [2], the repeated cite reuses [1], and a References list follows.
+- [ ] Citations (plain): Lamport is [3] and Knuth is [1], since plain sorts by author. The repeated cite reuses [1], the page note shows as [2, p. 5], and two keys show as [4, 3].
+- [ ] Citations (plain): the References list has five entries in the `% Expect:` order, including the `\nocite` one. "Literate programming" is lowercased after its first word, and the TeX and LaTeX logos render in the book titles.
+- [ ] Bibliography styles: set each file in `styles/` as the main file (`unsrt`, `alpha`, `abbrv`, `ieeetr`, `apalike`, `natbib`, `biblatex`) and check the labels, order and names against its `% Expect:` comments. Set `main.tex` back as the main file after.
+- [ ] Bibliography styles: with `styles/unknown.tex` as the main file, the footer shows 2 diagnostics, the cite shows [?] with a warning on its line, and the `\bibliographystyle{nature}` line has an info note saying it uses plain.
 - [ ] Compile Now (Ctrl+Enter, ⌘↩ on a Mac) refreshes the preview, from the editor too. Ctrl+Shift+C does nothing in the app, so the browser keeps it for the inspector.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
 - [ ] The footer says Compiled, with no diagnostics.

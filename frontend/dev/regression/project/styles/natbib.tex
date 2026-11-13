@@ -1,0 +1,18 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\usepackage{natbib}
+\begin{document}
+\section*{natbib with plainnat}
+% Expect: Lamport (1994) wrote the manual.
+\citet{lamport} wrote the manual.
+% Expect: Two works by Knuth (Knuth, 1984a; Knuth, 1984b, p. 5).
+Two works by Knuth \citep[p.~5]{knuth,literate}.
+% Expect: Patashnik et al. 1988 and Lamport.
+\citealt{bibtex} and \citeauthor{lamport}.
+% Expect: the list has no labels, full first names, and the year at the end of each entry.
+% Expect: the list also has van der Berg and Smith, which is only in \nocite.
+\nocite{vonname}
+\bibliographystyle{plainnat}
+\bibliography{refs}
+\end{document}

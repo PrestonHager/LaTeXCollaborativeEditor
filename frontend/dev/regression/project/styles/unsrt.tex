@@ -1,0 +1,12 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\begin{document}
+\section*{unsrt}
+% Expect: [1], [2], [3], [4] in citing order.
+% Expect: the list is in citing order too: Knuth's article, Lamport, Patashnik et al., Knuth's book,
+% with full first names ("Donald E. Knuth").
+\input{styles/citations}
+\bibliographystyle{unsrt}
+\bibliography{refs}
+\end{document}

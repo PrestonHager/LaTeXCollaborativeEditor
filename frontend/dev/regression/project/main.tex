@@ -26,12 +26,25 @@
 
 \section{Citations}
 \label{sec:citations}
-% Expect: [1] and [2] in the text, then a References list with both entries.
-Knuth wrote the book on \TeX{} \cite{knuth}, and Lamport wrote one on \LaTeX{} \cite{lamport}.
-Citing the same key again keeps its number \cite{knuth}.
+% The plain style numbers entries by the sorted list, not by citing order.
+% Expect: [3] after Lamport and [1] after Knuth.
+Lamport wrote the book on \LaTeX{} \cite{lamport}, after Knuth wrote the one on \TeX{} \cite{knuth}.
+% Expect: the repeated cite keeps [1], and the note shows as [2, p. 5].
+Citing the same key again keeps its number \cite{knuth}. A page note goes inside \cite[p.~5]{literate}.
+% Expect: [4, 3] for two keys in one cite.
+Two keys share brackets \cite{bibtex,lamport}.
+\nocite{vonname}
+% Expect: a References list with five entries, sorted by author:
+% [1] Donald E. Knuth. The TeXbook. (TeX logo, italic title) Addison-Wesley, Reading, MA, 1984.
+% [2] Donald E. Knuth. Literate programming. The Computer Journal, 27(2):97-111, May 1984.
+%     (the title is lowercased after its first word, and the journal is italic)
+% [3] Leslie Lamport. LaTeX: A Document Preparation System. (LaTeX logo) Addison-Wesley, 1994.
+% [4] Oren Patashnik, Leslie Lamport, and Donald E. Knuth. Designing BibTeX styles. In Proceedings ...
+% [5] Jan van der Berg and John Smith, Jr. A note on name parts. ... (only in \nocite)
 % Expect: clicking the 1.5 scrolls the preview back up to the References subsection.
 Back to section~\ref{sec:refs}.
 
+% Other styles are in the styles/ folder. Set one as the main file to check it.
 \bibliographystyle{plain}
 \bibliography{refs}
 

@@ -1,0 +1,11 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\begin{document}
+\section*{apalike}
+% Expect: [Knuth, 1984b], [Lamport, 1994], [Patashnik et al., 1988], [Knuth, 1984a].
+% Expect: the list has no labels. Entries start "Knuth, D. E. (1984a)." and are sorted by author.
+\input{styles/citations}
+\bibliographystyle{apalike}
+\bibliography{refs}
+\end{document}
