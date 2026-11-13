@@ -105,7 +105,13 @@ export function createKeymap(
 
   const rebuild = () => {
     const disabled = new Set(settings.disabled);
-    reservedNow = reserved();
+    // Reading the browser's kept keys must never stop the keymap (and startup) from working.
+    try {
+      reservedNow = reserved();
+    } catch (error) {
+      console.warn('Reading the keys this browser keeps failed', error);
+      reservedNow = new Map();
+    }
     const ruleTakes = (id: CommandId, keybind: string) => settings.rules.some((rule) => !rule.off && rule.id === id && normalizeKeybind(rule.keybind, platform()) === keybind);
     const builtinBindings = builtins.flatMap(({ fallback, ...shortcut }): Binding[] => {
       const keybind = normalizeKeybind(shortcut.keybind, platform());

@@ -107,6 +107,76 @@ describe('detecting the browser and OS', () => {
   });
 });
 
+describe('when the browser APIs are missing or throw (old Safari, locked-down modes)', () => {
+  const throwing = () => {
+    throw new Error('blocked');
+  };
+
+  it('never throws while detecting, and falls back to a tab', () => {
+    const nav = { get userAgent(): string { return throwing(); } };
+    expect(detectBrowser(nav)).toEqual({ browser: 'other', browserName: 'Your browser' });
+    expect(detectOs(nav)).toBe('other');
+    const win = { get navigator(): Navigator { return throwing(); }, matchMedia: throwing } as unknown as Window;
+    expect(detectKeyContext(win)).toMatchObject({ browser: 'other', appWindow: false });
+    expect(detectKeyContext(undefined)).toMatchObject({ appWindow: false });
+    expect(reservedKeys(undefined).size).toBe(0);
+  });
+
+  it('watches with the old addListener, and keeps going when matchMedia or a listener fails', () => {
+    const listeners: (() => void)[] = [];
+    let standalone = false;
+    const oldSafari = {
+      navigator: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1 Safari/605.1.15' },
+      matchMedia: (query: string) => ({
+        get matches() {
+          return standalone && query.includes('standalone');
+        },
+        addListener: (listener: () => void) => listeners.push(listener),
+        removeListener: (listener: () => void) => listeners.splice(listeners.indexOf(listener), 1),
+      }),
+    } as unknown as Window;
+    const onChange = vi.fn(throwing);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const watch = watchKeyContext(onChange, oldSafari);
+    expect(watch.current()).toMatchObject({ browser: 'safari', os: 'mac', appWindow: false });
+    expect(listeners).toHaveLength(4);
+    standalone = true;
+    // The page's own update fails, but that's reported, not thrown into the browser's event.
+    expect(() => listeners[0]()).not.toThrow();
+    expect(watch.current().appWindow).toBe(true);
+    expect(warn).toHaveBeenCalled();
+    watch.stop();
+    expect(listeners).toHaveLength(0);
+
+    // No way to listen at all, or matchMedia throws: it still starts, and stop does nothing.
+    const silent = watchKeyContext(vi.fn(), { navigator: oldSafari.navigator, matchMedia: () => ({ matches: false }) } as unknown as Window);
+    expect(() => silent.stop()).not.toThrow();
+    const broken = watchKeyContext(vi.fn(), { navigator: oldSafari.navigator, matchMedia: throwing } as unknown as Window);
+    expect(broken.current().appWindow).toBe(false);
+    const failingListen = watchKeyContext(vi.fn(), {
+      navigator: oldSafari.navigator,
+      matchMedia: () => ({ matches: false, addEventListener: throwing }),
+    } as unknown as Window);
+    expect(failingListen.current().browser).toBe('safari');
+    const failingStop = watchKeyContext(vi.fn(), {
+      navigator: oldSafari.navigator,
+      matchMedia: () => ({ matches: false, addEventListener: () => undefined, removeEventListener: throwing }),
+    } as unknown as Window);
+    expect(() => failingStop.stop()).not.toThrow();
+    expect(watchKeyContext(vi.fn(), undefined).current().appWindow).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('keeps the keymap working when reading the kept keys fails', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const keymap = createKeymap(shortcuts, () => 'other', undefined, throwing);
+    expect(keymap.labelFor('file.newFile')).toBe('Ctrl+N');
+    expect(keymap.commandFor('Alt+N')?.id).toBe('file.newFile');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
 describe('reserved keys', () => {
   it('has the keys Chromium keeps in a tab (checked) and gives them back in an app window', () => {
     const tab = reservedKeys(context('chromium', 'linux'));

@@ -115,8 +115,9 @@ const appliesTo = (entry: Entry, context: KeyContext) =>
   (!context.appWindow || Boolean(entry.keptInAppWindow));
 
 /** Every key kept in this context, by stored keybind. */
-export function reservedKeys(context: KeyContext): Map<string, ReservedKey> {
+export function reservedKeys(context: KeyContext | null | undefined): Map<string, ReservedKey> {
   const out = new Map<string, ReservedKey>();
+  if (!context) return out;
   for (const entry of ENTRIES) {
     if (!appliesTo(entry, context)) continue;
     for (const key of entry.keys) {
@@ -136,6 +137,14 @@ type NavigatorLike = Pick<Navigator, 'userAgent'> & { userAgentData?: { brands?:
 
 /** The browser engine family and its name, from the user agent. Every iOS browser is Safari underneath. */
 export function detectBrowser(nav: NavigatorLike | undefined = globalThis.navigator): { browser: BrowserFamily; browserName: string } {
+  try {
+    return browserFrom(nav);
+  } catch {
+    return { browser: 'other', browserName: 'Your browser' };
+  }
+}
+
+function browserFrom(nav: NavigatorLike | undefined): { browser: BrowserFamily; browserName: string } {
   const ua = nav?.userAgent ?? '';
   const brands = (nav?.userAgentData?.brands ?? []).map((b) => b.brand);
   if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (nav?.maxTouchPoints ?? 0) > 1)) return { browser: 'safari', browserName: 'Safari' };
@@ -149,6 +158,14 @@ export function detectBrowser(nav: NavigatorLike | undefined = globalThis.naviga
 
 /** The OS, from the user agent. iPadOS says it's a Mac, so a touch screen marks it. */
 export function detectOs(nav: NavigatorLike | undefined = globalThis.navigator): KeyOs {
+  try {
+    return osFrom(nav);
+  } catch {
+    return 'other';
+  }
+}
+
+function osFrom(nav: NavigatorLike | undefined): KeyOs {
   const ua = nav?.userAgent ?? '';
   const platform = nav?.userAgentData?.platform || nav?.platform || '';
   if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && (nav?.maxTouchPoints ?? 0) > 1)) return 'ios';
@@ -175,28 +192,78 @@ export function detectAppWindow(win: Pick<Window, 'matchMedia'> | undefined = gl
   });
 }
 
+/** A context that assumes the most: a Chromium-like browser in a tab, so every fallback is shown. */
+export const FALLBACK_KEY_CONTEXT: KeyContext = { browser: 'other', browserName: 'Your browser', os: 'other', platform: 'other', appWindow: false };
+
+/**
+ * Where the page runs now. It never throws: some browsers throw on navigator or matchMedia in locked-down modes,
+ * and this runs at startup, before the page joins a room.
+ */
 export function detectKeyContext(win: (Pick<Window, 'matchMedia'> & { navigator?: Navigator }) | undefined = globalThis.window): KeyContext {
-  const nav = win?.navigator;
-  return { ...detectBrowser(nav), os: detectOs(nav), platform: detectPlatform(nav), appWindow: detectAppWindow(win) };
+  try {
+    const nav = win?.navigator;
+    return { ...detectBrowser(nav), os: detectOs(nav), platform: detectPlatform(nav), appWindow: detectAppWindow(win) };
+  } catch {
+    return { ...FALLBACK_KEY_CONTEXT, platform: detectPlatform() };
+  }
+}
+
+type Query = Pick<MediaQueryList, 'matches'> & Partial<Pick<MediaQueryList, 'addEventListener' | 'removeEventListener' | 'addListener' | 'removeListener'>>;
+
+/** Listen for a media query change, with the old addListener for Safari before 14. Returns how to stop, or null. */
+function listen(query: Query, listener: () => void): (() => void) | null {
+  try {
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', listener);
+      return () => query.removeEventListener?.('change', listener);
+    }
+    if (typeof query.addListener === 'function') {
+      query.addListener(listener);
+      return () => query.removeListener?.(listener);
+    }
+  } catch {
+    // Can't follow this one. The context just won't update when it changes.
+  }
+  return null;
 }
 
 /**
  * Follow the key context as the window changes, like going fullscreen or the page opening in an app window.
  * Calls onChange with the new context when it changes. Returns the current one and a way to stop.
+ * Nothing here throws: if the browser can't tell, the page keeps the context it started with.
  */
-export function watchKeyContext(onChange: (context: KeyContext) => void, win: Window = window) {
+export function watchKeyContext(onChange: (context: KeyContext) => void, win: Window | undefined = globalThis.window) {
   let context = detectKeyContext(win);
   const update = () => {
     const next = detectKeyContext(win);
     if (next.appWindow === context.appWindow) return;
     context = next;
-    onChange(context);
+    try {
+      onChange(context);
+    } catch (error) {
+      console.warn('Updating shortcuts for the window failed', error);
+    }
   };
-  const queries = win.matchMedia ? APP_DISPLAY_MODES.map((mode) => win.matchMedia(`(display-mode: ${mode})`)) : [];
-  for (const query of queries) query.addEventListener?.('change', update);
+  const stops: (() => void)[] = [];
+  for (const mode of APP_DISPLAY_MODES) {
+    try {
+      const query = typeof win?.matchMedia === 'function' ? win.matchMedia(`(display-mode: ${mode})`) : null;
+      const stop = query ? listen(query, update) : null;
+      if (stop) stops.push(stop);
+    } catch {
+      // This display mode can't be watched here.
+    }
+  }
   return {
     current: () => context,
-    stop: () => queries.forEach((query) => query.removeEventListener?.('change', update)),
+    stop: () =>
+      stops.forEach((stop) => {
+        try {
+          stop();
+        } catch {
+          // Already gone.
+        }
+      }),
   };
 }
 

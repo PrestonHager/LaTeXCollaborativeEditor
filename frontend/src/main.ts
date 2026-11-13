@@ -863,7 +863,7 @@ const keyContext = watchKeyContext(() => {
   refreshCommands();
   if (settingsDialog.isOpen()) keybindSettings.refresh();
 });
-const keymap = createKeymap(shortcuts, detectPlatform, undefined, () => reservedKeys(keyContext.current()));
+const keymap = createKeymap(shortcuts, detectPlatform, undefined, () => reservedKeys(keyContext?.current()));
 const shortcutLabel = (commandId: CommandId) => keymap.labelFor(commandId);
 
 const commands = createCommands({
