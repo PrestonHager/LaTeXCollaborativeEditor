@@ -65,8 +65,8 @@ describe('createAboutDialog', () => {
   it('shows the version and closes from its buttons and the backdrop', () => {
     mountAppShell();
     const el = document.getElementById('about-dialog') as HTMLDialogElement;
-    const about = createAboutDialog(el, '1.2.3');
-    expect(document.getElementById('about-version')!.textContent).toBe('1.2.3');
+    const about = createAboutDialog(el, { version: '1.2.3', commit: 'abc1234', builtAt: '2026-11-13T10:00:00.000Z' });
+    expect(document.getElementById('about-version')!.textContent).toBe('1.2.3 (commit abc1234, built 2026-11-13)');
     about.open();
     expect(el.open).toBe(true);
     (document.getElementById('about-done') as HTMLButtonElement).click();

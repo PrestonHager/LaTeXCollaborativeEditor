@@ -138,6 +138,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] With nobody connected, those three open straight away without asking.
 - [ ] With a guest connected, leaving the Upload .zip confirm open for more than 5 seconds and then pressing OK shows a notice that the browser blocked the picker. Choosing Upload .zip again opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
+- [ ] With both windows on the same build, the console shows no version message. A guest on another build (say `npm run dev` with another version in `package.json`) logs which version each side runs, and still syncs.
 
 ## Network and privacy
 
@@ -165,6 +166,9 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Help > Report a Bug and Request a Feature open the GitHub forms, and the bug form has browser, OS and version filled in, but no document text.
 - [ ] Help > Report a Security Issue sits right under Report a Bug, has a shield icon in the palette, and opens GitHub's private Report a vulnerability form (`/security/advisories/new`), not a public issue.
 - [ ] Help > About shows the app version with links to the docs, the source and the policies.
+- [ ] Help > About says `Version X.Y.Z (commit abc1234, built YYYY-MM-DD)`, and the commit link opens that commit on GitHub.
+- [ ] The footer ends with a small `vX.Y.Z` link. Hovering it shows the commit and build date, and clicking it opens the commit.
+- [ ] The bug form's extra info says `App version: X.Y.Z+abc1234`.
 - [ ] The toolbar under the menus runs the same commands as the menus, shows tooltips on hover, and its buttons are disabled in the same cases.
 - [ ] Tab moves into the toolbar, the arrow keys move between its buttons, and Home and End jump to the ends.
 - [ ] The ? help links next to Share, the save status, the file list and the preview open the matching docs page.
@@ -180,3 +184,4 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] `npm run preview` serves the built app, and the palette has no regression commands.
+- [ ] `dist/version.json` has the `version` from `package.json`, the short commit, and the build time. `/version.json` also works in `npm run dev`.

@@ -68,7 +68,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Report a Bug | | Opens the GitHub bug form. |
 | Report a Security Issue | | Opens GitHub's private vulnerability form. |
 | Request a Feature | | Opens the GitHub feature request form. |
-| About | | Shows the app version and links. |
+| About | | Shows the app version, commit, and links. |
 
 **Report a Bug** and **Request a Feature** open the GitHub issue forms in a new tab.
 The bug form comes with your browser, OS, and the app version filled in.
@@ -78,7 +78,8 @@ It never includes your document, file names, or the room link, and nothing is se
 Only the maintainers see what you send there, so use it for anything that could hurt other people if it were posted publicly.
 The [security policy](https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/SECURITY.md) says what to include.
 
-**About** shows the app version, with links to the docs, the source code, and the policies.
+**About** shows the app version, the commit it was built from (linked to GitHub), and the build date, with links to the docs, the source code, and the policies.
+Include the version when you report a problem. The bug form fills it in for you.
 
 ## Toolbar
 
@@ -171,7 +172,8 @@ Every message they can show is in [Status and error messages](messages.md).
 ## Footer
 
 The footer shows [preview diagnostics](editing-and-preview.md#diagnostics) on the left.
-On the right are links to the Privacy policy, the Terms of Service, and the repository.
+On the right are links to the Privacy policy, the Terms of Service, and the repository, then the app version, like `v0.1.0`.
+Hover the version to see the commit and build date, or click it to open that commit on GitHub.
 
 ## Related topics
 
