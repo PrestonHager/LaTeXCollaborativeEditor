@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-/** Minimum coverage (global). Lines/statements/functions at 80%; branches lower to allow “yellow” while staying above a strict red zone. */
+/** Minimum coverage (global): 80% for lines, statements, functions and branches. AGENTS.md quotes these, so update it too. */
 const COVERAGE_THRESHOLDS = {
   lines: 80,
   statements: 80,

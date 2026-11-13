@@ -1,7 +1,8 @@
 // A small .zip reader and writer. The browser's own CompressionStream does the deflate work,
 // so this adds no library to the bundle. Zip64 (archives over 4 GB) isn't supported.
 
-export type ZipEntry = { path: string; data: Uint8Array };
+/** `modified` is when the file last changed; createZip uses the time of the export when it's missing. */
+export type ZipEntry = { path: string; data: Uint8Array; modified?: Date };
 export type ZipContents = { files: ZipEntry[]; folders: string[] };
 
 let crcTable: Uint32Array | null = null;
@@ -27,6 +28,21 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 
 const canDeflate = () => typeof CompressionStream !== 'undefined';
 
+/**
+ * Pack a date into the MS-DOS time and date fields zip headers use. They hold local time, as
+ * other zip tools write it. Months are 1-12 and days 1-31, and seconds are counted in twos.
+ * The format can't go before 1980-01-01 or past 2107-12-31, so dates outside that are clamped.
+ */
+export function dosDateTime(date: Date): { time: number; date: number } {
+  const min = new Date(1980, 0, 1, 0, 0, 0);
+  const max = new Date(2107, 11, 31, 23, 59, 58);
+  const at = Number.isNaN(date.getTime()) || date < min ? min : date > max ? max : date;
+  return {
+    time: (at.getHours() << 11) | (at.getMinutes() << 5) | (at.getSeconds() >> 1),
+    date: ((at.getFullYear() - 1980) << 9) | ((at.getMonth() + 1) << 5) | at.getDate(),
+  };
+}
+
 /** The folders that need an entry of their own: the ones no file or other folder path already implies. */
 export function emptyFolders(files: ZipEntry[], folders: string[]): string[] {
   const clean = folders.map((folder) => folder.replace(/^\/+|\/+$/g, '')).filter(Boolean);
@@ -41,20 +57,22 @@ export function emptyFolders(files: ZipEntry[], folders: string[]): string[] {
  * Build a .zip. Each file is deflated when that makes it smaller, and stored as-is otherwise.
  * Folders get a directory entry (`name/`, no data) only when nothing else in the archive implies
  * them, so empty folders survive the trip. This is the inverse of readZip.
+ * Each entry is dated with its own `modified` time, or with `now` (the time of the export).
  */
-export async function createZip(files: ZipEntry[], folders: string[] = []): Promise<Uint8Array> {
+export async function createZip(files: ZipEntry[], folders: string[] = [], now = new Date()): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
   let offset = 0;
 
   const records = [
-    ...emptyFolders(files, folders).map((folder) => ({ path: `${folder}/`, data: new Uint8Array(), folder: true })),
+    ...emptyFolders(files, folders).map((folder) => ({ path: `${folder}/`, data: new Uint8Array(), modified: undefined, folder: true })),
     ...files.map((file) => ({ ...file, folder: false })),
   ];
   for (const record of records) {
     const name = encoder.encode(record.path);
     const crc = crc32(record.data);
+    const stamp = dosDateTime(record.modified ?? now);
     let method = 0;
     let body = record.data;
     if (canDeflate() && record.data.length > 64) {
@@ -72,6 +90,8 @@ export async function createZip(files: ZipEntry[], folders: string[] = []): Prom
     lv.setUint16(4, 20, true);
     lv.setUint16(6, 0x0800, true); // Names are UTF-8.
     lv.setUint16(8, method, true);
+    lv.setUint16(10, stamp.time, true);
+    lv.setUint16(12, stamp.date, true);
     lv.setUint32(14, crc, true);
     lv.setUint32(18, body.length, true);
     lv.setUint32(22, record.data.length, true);
@@ -87,6 +107,8 @@ export async function createZip(files: ZipEntry[], folders: string[] = []): Prom
     cv.setUint16(6, 20, true);
     cv.setUint16(8, 0x0800, true);
     cv.setUint16(10, method, true);
+    cv.setUint16(12, stamp.time, true);
+    cv.setUint16(14, stamp.date, true);
     cv.setUint32(16, crc, true);
     cv.setUint32(20, body.length, true);
     cv.setUint32(24, record.data.length, true);
