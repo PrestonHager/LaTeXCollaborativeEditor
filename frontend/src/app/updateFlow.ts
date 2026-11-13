@@ -19,6 +19,8 @@ type UpdateFlowDeps = {
   beforeReload: () => void;
   reload: () => void;
   showNotice: (message: string) => void;
+  /** Open the changelog from the prompt's "What's new" button. */
+  openChangelog?: () => void;
   fetch?: Parameters<typeof createUpdateChecker>[0]['fetch'];
   win?: Window;
   doc?: Document;
@@ -28,6 +30,7 @@ export function setupUpdateFlow(deps: UpdateFlowDeps) {
   const win = deps.win ?? window;
   const prompt = createUpdatePrompt(deps.root, {
     onReload: (force) => void reload(force),
+    onWhatsNew: deps.openChangelog,
   });
   let shownFor: UpdateReason | null = null;
   const warnedPeers = new Set<string>();

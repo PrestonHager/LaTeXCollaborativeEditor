@@ -480,9 +480,26 @@
           </ul>
         </section>
         <footer>
+          <button id="about-changelog" type="button" class="btn" data-variant="outline">View changelog</button>
           <button id="about-done" type="button" class="btn">Close</button>
         </footer>
         <button id="about-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close about"><i data-lucide="x"></i></button>
+      </div>
+    </dialog>
+
+    <!-- Changelog (issue #140). changelogDialog.ts lazy-loads CHANGELOG.md from the repo root and draws it here. -->
+    <dialog id="changelog-dialog" class="dialog changelog-dialog" aria-labelledby="changelog-dialog-title" aria-describedby="changelog-dialog-description">
+      <div>
+        <header>
+          <h2 id="changelog-dialog-title">What's new</h2>
+          <p id="changelog-dialog-description">Changes in each version, newest first.</p>
+        </header>
+        <section id="changelog-body" class="changelog-body" tabindex="0" role="region" aria-label="Changelog"></section>
+        <footer>
+          <a class="btn" data-variant="link" data-size="sm" href="https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">CHANGELOG.md on GitHub</a>
+          <button id="changelog-done" type="button" class="btn">Close</button>
+        </footer>
+        <button id="changelog-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close changelog"><i data-lucide="x"></i></button>
       </div>
     </dialog>
 
@@ -491,6 +508,7 @@
       <p id="update-prompt-text" class="update-prompt-text" data-update-text></p>
       <p class="update-prompt-detail" data-update-detail></p>
       <footer class="update-prompt-buttons">
+        <button type="button" class="btn" data-variant="link" data-size="sm" data-update-whats-new>What's new</button>
         <button type="button" class="btn" data-variant="ghost" data-size="sm" data-update-later>Later</button>
         <button type="button" class="btn" data-variant="outline" data-size="sm" data-update-anyway hidden>Reload anyway</button>
         <button type="button" class="btn" data-size="sm" data-update-reload>Reload to update</button>

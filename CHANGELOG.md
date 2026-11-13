@@ -8,6 +8,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Added
 
+- **What's new.** Help → About → View changelog shows this changelog in the app, newest first, and marks the version you're on. The update prompt has a What's new link to it too.
 - **Update prompt.** When a new version is deployed, a small card offers to reload. It saves your changes first, and won't reload if the save fails. It also shows when a collaborator is on a newer, incompatible version.
 
 ### Changed

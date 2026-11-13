@@ -107,6 +107,7 @@ When you change a stored format:
 - Add a line under `## [Unreleased]` in the PR that makes a user-facing change, under `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed` or `### Security`.
 - Write it for the people using the app, not as a commit message.
 - Leave internal refactors and test-only changes out.
+- The app shows this file in Help → About → View changelog. The build bundles it into a lazy chunk (`frontend/src/ui/changelogView.ts`), so there's still one copy. Its renderer only knows headings, `-` lists, paragraphs, `**bold**`, `` `code` `` and links (inline and reference-style), and shows raw HTML as text. Relative links go to the file on GitHub's `main`.
 
 ## Cutting a release
 

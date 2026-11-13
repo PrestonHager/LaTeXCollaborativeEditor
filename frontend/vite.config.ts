@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, searchForWorkspaceRoot, type Plugin } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { resolveBuildInfo, versionJsonPlugin } from './scripts/build-info.mjs';
 import { addConnectSources, removeCspMeta } from './src/security/csp';
@@ -60,5 +60,9 @@ export default defineConfig({
     host: 'localhost',
     port: 5173,
     strictPort: true,
+    // The changelog dialog bundles ../CHANGELOG.md (issue #140), which sits above the app root.
+    fs: {
+      allow: [searchForWorkspaceRoot(fileURLToPath(new URL('.', import.meta.url))), fileURLToPath(new URL('../CHANGELOG.md', import.meta.url))],
+    },
   },
 });

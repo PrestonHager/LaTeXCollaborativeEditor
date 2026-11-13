@@ -42,12 +42,18 @@ export function renderFooterVersion(link: HTMLAnchorElement, info: BuildInfo) {
 }
 
 /** Wire up the About dialog in index.html and fill in the app version and commit. */
-export function createAboutDialog(dialog: HTMLDialogElement, info: BuildInfo) {
+export function createAboutDialog(dialog: HTMLDialogElement, info: BuildInfo, actions: { onViewChangelog?: () => void } = {}) {
   renderVersionDetails(dialog.querySelector<HTMLElement>('#about-version')!, info);
   const focusReturn = returnFocusOnClose(dialog);
   const close = () => dialog.close();
   dialog.querySelector('#about-done')!.addEventListener('click', close);
   dialog.querySelector('#about-close')!.addEventListener('click', close);
+  // The changelog opens on top of About, so closing it lands back on this button.
+  const changelogButton = dialog.querySelector<HTMLButtonElement>('#about-changelog');
+  if (changelogButton) {
+    changelogButton.hidden = !actions.onViewChangelog;
+    changelogButton.addEventListener('click', () => actions.onViewChangelog?.());
+  }
   // Clicking the dark area outside the box closes it, like the other dialogs.
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) close();

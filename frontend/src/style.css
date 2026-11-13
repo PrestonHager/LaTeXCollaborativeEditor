@@ -228,6 +228,24 @@ label.settings-row { justify-content: flex-start; }
 #about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .dialog-help-links { display: inline-flex; margin-left: auto; }
+/* Changelog dialog (issue #140). The body scrolls so a long changelog keeps the footer in view. */
+.changelog-dialog > div { max-width: min(44rem, calc(100vw - 2rem)); }
+.changelog-body { display: grid; gap: 1.25rem; min-height: 0; max-height: min(60vh, 36rem); overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.5rem 0.125rem 0.25rem; font-size: 14px; line-height: 1.5; }
+.changelog-body:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--radius-md); }
+.changelog-release { display: grid; gap: 0.5rem; padding-left: 0.75rem; border-left: 2px solid var(--panel-border); }
+.changelog-release.is-current { border-left-color: var(--primary); }
+.changelog-release-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; }
+.changelog-release h3 { margin: 0; font-size: 1rem; font-weight: 600; }
+.changelog-release h4 { margin: 0.25rem 0 0; font-size: 0.8125rem; font-weight: 600; color: var(--muted-text); text-transform: uppercase; letter-spacing: 0.03em; }
+.changelog-release h5, .changelog-release h6 { margin: 0; font-size: 0.875rem; font-weight: 600; }
+.changelog-release p { margin: 0; }
+.changelog-release ul { margin: 0; padding-left: 1.25rem; list-style: disc; display: grid; gap: 0.25rem; }
+.changelog-release ul ul { margin-top: 0.25rem; list-style: circle; }
+.changelog-release code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; padding: 0.05rem 0.3rem; border-radius: calc(var(--radius-md) - 2px); background: var(--muted); }
+.changelog-body a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
+.changelog-date { font-size: 0.8125rem; color: var(--muted-text); }
+.changelog-empty { margin: 0; color: var(--muted-text); }
+.changelog-dialog footer { justify-content: space-between; align-items: center; }
 
 /* Confirm and name dialogs (ui/dialogs.ts). Basecoat draws the box. Long paths wrap instead of widening it. */
 .app-dialog h2, .app-dialog-message { overflow-wrap: anywhere; }
@@ -255,6 +273,7 @@ label.settings-row { justify-content: flex-start; }
 .update-prompt-detail { margin: 0; font-size: 13px; color: var(--muted-text); }
 .update-prompt.is-error .update-prompt-detail { color: var(--diag-text); }
 .update-prompt-buttons { display: flex; justify-content: flex-end; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.update-prompt-buttons [data-update-whats-new] { margin-right: auto; }
 
 /* Workspace: the file tree, then the editor and preview split. */
 .workspace { flex: 1; display: flex; min-height: 0; }

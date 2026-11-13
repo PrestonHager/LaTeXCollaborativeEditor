@@ -13,6 +13,7 @@ import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
 import { createAboutDialog, renderFooterVersion } from './ui/aboutDialog';
+import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
@@ -968,7 +969,9 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO);
+const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, { version: BUILD_INFO.version });
+const openChangelog = () => void changelogDialog.open();
+const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO, { onViewChangelog: openChangelog });
 renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorElement, BUILD_INFO);
 
 const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
@@ -1106,6 +1109,7 @@ updateFlow = setupUpdateFlow({
   poll: import.meta.env.PROD,
   baseUrl: document.baseURI,
   room: () => ({ isHost: !isClient, inRoom }),
+  openChangelog,
   flush: () =>
     flushBeforeReload({
       isClient,
