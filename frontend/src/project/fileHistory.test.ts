@@ -53,7 +53,7 @@ describe('createFileHistory', () => {
     history.record('Delete chapter.tex', () => project.removePath('chapter.tex'));
     expect(project.get(id)).toBeUndefined();
     expect(history.undoLabel()).toBe('Delete chapter.tex');
-    expect(history.undo()).toEqual({ label: 'Delete chapter.tex', renamed: [] });
+    expect(history.undo()).toEqual({ label: 'Delete chapter.tex', renamed: [], kept: [], changed: true });
     expect(project.get(id)?.path).toBe('chapter.tex');
     expect(project.getText(id).toString()).toBe('Hello');
     expect(history.canUndo()).toBe(false);
@@ -224,7 +224,7 @@ describe('createFileHistory', () => {
       const mine = a.createTextFile('a.tex', 'mine');
       historyA.record('Delete a.tex', () => a.removePath('a.tex'));
       const theirs = b.createTextFile('a.tex', 'theirs');
-      expect(historyA.undo()).toEqual({ label: 'Delete a.tex', renamed: [{ from: 'a.tex', to: 'a (restored).tex' }] });
+      expect(historyA.undo()).toEqual({ label: 'Delete a.tex', renamed: [{ from: 'a.tex', to: 'a (restored).tex' }], kept: [], changed: true });
       expect(b.get(theirs)?.path).toBe('a.tex');
       expect(b.getText(theirs).toString()).toBe('theirs');
       expect(b.get(mine)?.path).toBe('a (restored).tex');
@@ -283,6 +283,61 @@ describe('createFileHistory', () => {
       Y.applyUpdate(b.doc, Y.encodeStateAsUpdate(a.doc, Y.encodeStateVector(b.doc)));
       expect(b.get(id)?.path).toBe('ch/x.tex');
       expect(b.getText(id).toString()).toBe('base + theirs');
+    });
+
+    it('keeps a new file a peer has typed in, text and all, and says so', () => {
+      const { a, b, historyA } = pair();
+      const id = historyA.record('New File a.tex', () => a.createTextFile('a.tex', 'mine'));
+      b.getText(id).insert(4, ' + theirs');
+      expect(historyA.undo()).toEqual({ label: 'New File a.tex', renamed: [], kept: ['a.tex'], changed: false });
+      expect(b.get(id)?.path).toBe('a.tex');
+      expect(b.getText(id).toString()).toBe('mine + theirs');
+      // The step is used up, and nothing goes on the redo stack.
+      expect(historyA.canUndo()).toBe(false);
+      expect(historyA.canRedo()).toBe(false);
+    });
+
+    it('still undoes the rest of a step, and only keeps the edited file', () => {
+      const { a, b, historyA } = pair();
+      historyA.record('New Folder figs', () => a.createFolder('figs'));
+      let edited = '';
+      historyA.record('Upload 2 files', () => {
+        edited = a.createTextFile('a.tex', 'a');
+        a.createTextFile('b.tex', 'b');
+      });
+      b.getText(edited).insert(0, 'x');
+      const step = historyA.undo();
+      expect(step).toMatchObject({ kept: ['a.tex'], changed: true });
+      expect(paths(b)).toEqual(['a.tex', 'figs']);
+      expect(b.getText(edited).toString()).toBe('xa');
+      // Only one step at a time: the folder from the step before is still there.
+      historyA.redo();
+      expect(paths(b)).toEqual(['a.tex', 'b.tex', 'figs']);
+    });
+
+    it('does not count edits a peer made before, or edits since deleted', () => {
+      const { a, b, historyA } = pair();
+      const id = b.createTextFile('theirs.tex', 'theirs');
+      historyA.record('Delete theirs.tex', () => a.removePath('theirs.tex'));
+      historyA.undo();
+      // Their old text doesn't stop a redo of our delete.
+      expect(historyA.redo()?.kept).toEqual([]);
+      expect(b.get(id)).toBeUndefined();
+      const mine = historyA.record('New File a.tex', () => a.createTextFile('a.tex', 'a'));
+      b.getText(mine).insert(1, 'tmp');
+      b.getText(mine).delete(1, 3);
+      expect(historyA.undo()?.kept).toEqual([]);
+      expect(b.get(mine)).toBeUndefined();
+    });
+
+    it('keeps a file a peer typed in after we undid its delete, when redoing the delete', () => {
+      const { a, b, historyA } = pair();
+      const id = a.createTextFile('a.tex', 'a');
+      historyA.record('Delete a.tex', () => a.removePath('a.tex'));
+      historyA.undo();
+      b.getText(id).insert(1, 'b');
+      expect(historyA.redo()).toMatchObject({ kept: ['a.tex'], changed: false });
+      expect(b.getText(id).toString()).toBe('ab');
     });
 
     it("can undo deleting a file a peer made", () => {

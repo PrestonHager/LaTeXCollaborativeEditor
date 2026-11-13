@@ -135,6 +135,7 @@ These show in the header, next to Share.
 | Deleted name / Renamed name to new / Moved name to folder, with an **Undo** button | A file operation finished. **Undo** reverts it. See [Undoing file operations](editing-and-preview.md#undoing-file-operations). |
 | Undid Delete name. / Redid Delete name. | An undo or redo of a file operation finished. |
 | path came back as name (restored).ext, since someone made a new name. | Someone made a new file where yours was, so yours came back next to it. This one stays until something replaces it. |
+| Kept name because someone else edited it. | Undo or redo would have removed a file a collaborator typed in since, so it stayed. |
 | Couldn't undo ...: someone else changed those files since. | A collaborator renamed or deleted those files after you, so there was nothing of yours left to undo. |
 | That change is no longer the last one. Use Edit > Undo from the file tree. | You clicked an old notice's **Undo** after another file change or undo. |
 | Browser storage is full... | See [Storage full](troubleshooting.md#storage-full). |

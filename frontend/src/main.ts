@@ -621,7 +621,9 @@ function runHistoryStep(kind: 'undo' | 'redo') {
     return;
   }
   const renamed = step.renamed.map(({ from, to }) => `${from} came back as ${basename(to)}, since someone made a new ${basename(from)}.`);
-  showNotice([`${kind === 'undo' ? 'Undid' : 'Redid'} ${label}.`, ...renamed].join(' '), false, renamed.length > 0);
+  const kept = step.kept.map((path) => `Kept ${basename(path)} because someone else edited it.`);
+  const head = step.changed ? `${kind === 'undo' ? 'Undid' : 'Redid'} ${label}.` : `Couldn't ${kind} ${label}.`;
+  showNotice([head, ...kept, ...renamed].join(' '), false, renamed.length + kept.length > 0);
 }
 
 function renderFiles() {

@@ -92,6 +92,7 @@ Project sync
 - A rename or move writes one key in `files`, so ids (and open editors) survive it.
 - Undoing a file operation (`frontend/src/project/fileHistory.ts`) is a Yjs UndoManager on `files`, plus the text of every file, scoped to the local `project` transaction origin. It sends ordinary Yjs updates, so peers need nothing new and older peers sync as before.
   - It only reverts our own changes. Yjs won't write over a key a peer changed since, so a file a peer renamed or deleted after us stays as they left it.
+  - A step never removes a text file that another client has typed in since the step was made (an item from another client id, newer than the state vector saved with the step, and not deleted). That file and its text are left alone, and the rest of the step still runs.
   - A deleted file comes back with the same id. A peer's text edits made at the same time as the delete are kept.
   - If a peer made a new file at the restored path, ours is renamed to `name (restored).ext` in the same change. A folder that's there again merges with ours.
   - A change to `generation` clears every peer's file history, so nobody undoes into a project that's gone. Older peers ignore the key.

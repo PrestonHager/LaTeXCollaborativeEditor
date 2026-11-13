@@ -13,6 +13,10 @@ export type FileHistoryStep = {
   label: string;
   /** What came back under a new name because someone else had taken its path meanwhile. */
   renamed: { from: string; to: string }[];
+  /** Files the step would have removed, kept because someone else edited them since. */
+  kept: string[];
+  /** False when nothing changed, like when every file in it was kept. */
+  changed: boolean;
 };
 
 type BlobPins = { retain(hash: string): void; release(hash: string): void; forget(hash: string): void };
@@ -83,6 +87,8 @@ export function createFileHistory(
 
   manager.on('stack-item-added', ({ stackItem, origin }) => {
     stackItem.meta.set('label', origin === manager ? (stepLabel ?? 'File Change') : recordLabel || 'File Change');
+    // Where every client was when the step happened, so a later step can tell what peers did since.
+    stackItem.meta.set('since', Y.decodeStateVector(Y.encodeStateVector(doc)));
     stackItem.meta.set('hashes', pendingHashes);
     pendingHashes = new Set();
     while (manager.undoStack.length > limit) manager.undoStack.shift();
@@ -169,6 +175,35 @@ export function createFileHistory(
     return renamed;
   }
 
+  /** Check if anyone else typed in a text file after `since`, and it's still there. */
+  function editedByOthers(id: string, since: Map<number, number>): boolean {
+    for (let item = project.getText(id)._start; item; item = item.right) {
+      const { client, clock } = item.id;
+      if (!item.deleted && client !== doc.clientID && clock >= (since.get(client) ?? 0)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Files a step would take out of the project although someone else has typed in them since, like
+   * undoing New File after a collaborator wrote in it. Removing them would throw away their work,
+   * so the step leaves them alone. A rename or move isn't one of these: it puts the old path back.
+   */
+  function filesToKeep(tr: Y.Transaction, top: Y.UndoManager['undoStack'][number]): Set<string> {
+    const keep = new Set<string>();
+    const since = (top.meta.get('since') as Map<number, number> | undefined) ?? new Map<number, number>();
+    const rewritten = new Set<string>();
+    Y.iterateDeletedStructs(tr, top.deletions, (struct) => {
+      if (struct instanceof Y.Item && struct.parent === files && struct.parentSub) rewritten.add(struct.parentSub);
+    });
+    files.forEach((value, id) => {
+      if (value?.kind !== 'text' || rewritten.has(id)) return;
+      const current = (files as unknown as { _map: Map<string, Y.Item> })._map.get(id);
+      if (current && Y.isDeleted(top.insertions, current.id) && editedByOthers(id, since)) keep.add(id);
+    });
+    return keep;
+  }
+
   function step(kind: 'undo' | 'redo'): FileHistoryStep | null {
     const stack = kind === 'undo' ? manager.undoStack : manager.redoStack;
     const top = stack[stack.length - 1];
@@ -178,10 +213,17 @@ export function createFileHistory(
     files.forEach((value, id) => before.set(id, value));
     let done = false;
     let renamed: FileHistoryStep['renamed'] = [];
+    let kept: string[] = [];
+    // Yjs drops a step that changes nothing and goes on to the one under it. Only ever take one.
+    const under = stack.splice(0, stack.length - 1);
     stepLabel = label;
     try {
       // One transaction for the step and its renames, so both land on the other stack as one item.
-      doc.transact(() => {
+      doc.transact((tr) => {
+        const keep = filesToKeep(tr, top);
+        kept = [...keep].map((id) => files.get(id)!.path).sort();
+        const texts = new Set<unknown>([...keep].map((id) => project.getText(id)));
+        manager.deleteFilter = (item) => !(item.parent === files && keep.has(item.parentSub ?? '')) && !texts.has(item.parent);
         done = (kind === 'undo' ? manager.undo() : manager.redo()) !== null;
         if (!done) return;
         renamed = resolveConflicts(before);
@@ -191,12 +233,14 @@ export function createFileHistory(
         else manager.redoing = true;
       }, manager);
     } finally {
+      manager.deleteFilter = () => true;
       manager.undoing = false;
       manager.redoing = false;
       stepLabel = null;
+      stack.unshift(...under);
     }
     sync();
-    return done ? { label, renamed } : null;
+    return done || kept.length ? { label, renamed, kept, changed: done } : null;
   }
 
   function clear() {
@@ -210,16 +254,22 @@ export function createFileHistory(
   return {
     /** Run a file op as one undo step called label, like "Delete chapter.tex". */
     record<T>(label: string, op: () => T): T {
-      if (recording === 0) {
+      const outer = recording === 0;
+      if (outer) {
         recordLabel = label;
         manager.stopCapturing();
+        manager.captureTimeout = Number.POSITIVE_INFINITY;
       }
       recording += 1;
       try {
         return op();
       } finally {
         recording -= 1;
-        if (recording === 0) recordLabel = '';
+        if (outer) {
+          manager.captureTimeout = 0;
+          manager.stopCapturing();
+          recordLabel = '';
+        }
         sync();
       }
     },
