@@ -1,6 +1,8 @@
 import bugForm from '../../../.github/ISSUE_TEMPLATE/bug_report.yml?raw';
 import featureForm from '../../../.github/ISSUE_TEMPLATE/feature_request.yml?raw';
-import { bugReportUrl, describeBrowser, featureRequestUrl, issueAreas, REPO_URL } from './issueLinks';
+import issueConfig from '../../../.github/ISSUE_TEMPLATE/config.yml?raw';
+import securityPolicy from '../../../SECURITY.md?raw';
+import { bugReportUrl, describeBrowser, featureRequestUrl, issueAreas, REPO_URL, SECURITY_REPORT_URL } from './issueLinks';
 
 const template = (name: string) => (name === 'bug_report.yml' ? bugForm : featureForm);
 
@@ -74,5 +76,24 @@ describe('featureRequestUrl', () => {
     expect(url.searchParams.get('area')).toBe(issueAreas.preview);
     expect(feature).toContain('id: area');
     expect(feature).toContain(`- ${issueAreas.preview}`);
+  });
+});
+
+describe('security reports', () => {
+  it('point at the private advisory form, not a public issue', () => {
+    expect(SECURITY_REPORT_URL).toBe(`${REPO_URL}/security/advisories/new`);
+    expect(SECURITY_REPORT_URL).not.toContain('/issues');
+  });
+
+  it('are linked from SECURITY.md, the issue chooser, and the top of both issue forms', () => {
+    expect(securityPolicy).toContain(SECURITY_REPORT_URL);
+    expect(issueConfig).toContain('Report a security vulnerability');
+    expect(issueConfig).toContain(`url: ${SECURITY_REPORT_URL}`);
+    for (const form of [bugForm, featureForm]) {
+      const firstField = form.indexOf('- type: textarea');
+      const note = form.indexOf(SECURITY_REPORT_URL);
+      expect(note).toBeGreaterThan(-1);
+      expect(note).toBeLessThan(firstField);
+    }
   });
 });

@@ -41,7 +41,9 @@ Checklist
 - [ ] Docs diagrams: the UI map, user flows, and state diagrams in `how-it-fits.md` and the sequence diagrams in `protocol.md` render and match the code.
 - [ ] Screenshots: `npm run screenshots` regenerates every docs screenshot, in light and dark, with one command.
 - [ ] UI: menus, the command palette, and the settings dialog open above the editor and preview, work by keyboard, and look right in light and dark themes.
-- [ ] Help: Help has docs, shortcuts, bug report, feature request, tour, and About; `?` links and error notices open the right docs section; the bug form only prefills browser, OS, and app version; and the first-run tour shows once, can be skipped, and reopens from Help.
+- [ ] Help: Help has docs, shortcuts, bug report, private security report, feature request, tour, and About; `?` links and error notices open the right docs section; the bug form only prefills browser, OS, and app version; and the first-run tour shows once, can be skipped, and reopens from Help.
+
+- [ ] Security policy: `SECURITY.md` shows on the repo's Security tab, private vulnerability reporting is on, and the issue forms, Help menu, and docs all send security reports to the private form. Dependabot alerts and secret scanning with push protection are on.
 
 Verification guidance
 - Prefer automated tests where possible; accompany with manual QA for session join, realtime sync, and preview rendering.

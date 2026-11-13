@@ -137,6 +137,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Split View, Editor Only and Preview Only change the layout, and the splitter drags.
 - [ ] Help > Documentation opens the docs, and Keyboard Shortcuts opens the shortcuts page.
 - [ ] Help > Report a Bug and Request a Feature open the GitHub forms, and the bug form has browser, OS and version filled in, but no document text.
+- [ ] Help > Report a Security Issue sits right under Report a Bug, has a shield icon in the palette, and opens GitHub's private Report a vulnerability form (`/security/advisories/new`), not a public issue.
 - [ ] Help > About shows the app version with links to the docs, the source and the policies.
 - [ ] The toolbar under the menus runs the same commands as the menus, shows tooltips on hover, and its buttons are disabled in the same cases.
 - [ ] Tab moves into the toolbar, the arrow keys move between its buttons, and Home and End jump to the ends.

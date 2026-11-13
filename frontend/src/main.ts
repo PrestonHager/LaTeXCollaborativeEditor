@@ -16,7 +16,7 @@ import { createAboutDialog } from './ui/aboutDialog';
 import { createTour } from './ui/tour';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
-import { bugReportUrl, featureRequestUrl, type IssueArea } from './ui/issueLinks';
+import { bugReportUrl, featureRequestUrl, SECURITY_REPORT_URL, type IssueArea } from './ui/issueLinks';
 import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from './ui/statusText';
 import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
@@ -773,6 +773,7 @@ const commands = createCommands({
   showDriveAccount,
   openDocs: (topic) => openExternal(docsUrl(docsBase, topic)),
   openBugForm: () => openExternal(makeBugUrl()),
+  openSecurityReport: () => openExternal(SECURITY_REPORT_URL),
   openFeatureForm: () => openExternal(featureRequestUrl()),
   startTour: () => tour.start(),
   openAbout: () => aboutDialog.open(),

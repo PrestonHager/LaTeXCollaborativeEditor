@@ -92,3 +92,11 @@ Collaboration, Drive, and the preview styles need a connection.
 Open an issue on the [repository](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues).
 Say what you did, what you expected, and what happened.
 Please leave out your document, room links, and any tokens.
+You can also use **Help > Report a Bug**, which fills in your browser and app version.
+
+## How do I report a security problem?
+
+Don't open a public issue for it.
+Use **Help > Report a Security Issue**, or GitHub's private [Report a vulnerability](https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new) form.
+Only the maintainers see it.
+The [security policy](https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/SECURITY.md) says what's in scope, what to include, and when you'll hear back.
