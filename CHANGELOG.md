@@ -22,6 +22,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Changed
 
+- **Your colour in a shared room stays the same when you reload,** and two people in a room no longer get the same colour (up to eight people): whoever joined later gets the next free one. A remote cursor's name label on the first line now shows below the cursor instead of being cut off.
 - **The live site only changes with a release.** It updates to numbered versions listed here, not with every change, so the update prompt shows up less often and always has release notes.
 - **Faster first load.** The page downloads about 33 kB less (gzipped) before the editor shows. Sharing, the lint gutter, the command palette, Settings, About, the Open, Upload and conflict dialogs, the tour, Add Files from Drive and the zip code now load just after the page, when you point at them, or on first use. If a part can't load because a new version was deployed, the update prompt offers a reload.
 - The loading bar at startup says "Loading the editor..." instead of "Loading compiler assets...".

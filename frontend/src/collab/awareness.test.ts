@@ -50,7 +50,7 @@ describe('remote cursors in the editor', () => {
     const awareness = new PresenceAwareness(user('Me', '#dc2626'));
     awareness.setLocalStateField('file', 'abc');
     const sent: unknown[] = [];
-    const sync = new PresenceSync({ awareness, send: (message) => sent.push(message), hasType: (type) => mine.share.has(type) });
+    const sync = new PresenceSync({ awareness, self: { peerId: 'me', presenceId: '0123456789abcdef' }, send: (message) => sent.push(message), hasType: (type) => mine.share.has(type) });
     sync.start();
 
     const undo = createCollabUndo(mine.getText(name));
@@ -69,6 +69,9 @@ describe('remote cursors in the editor', () => {
     expect(caret?.style.backgroundColor).toBe('rgb(147, 51, 234)');
     expect(view.dom.querySelector('.cm-ySelectionInfo')?.textContent).toBe('Grace');
     expect(view.dom.querySelector('.cm-ySelection')?.textContent).toBe('world');
+    // On line 1 the name label would be clipped above the editor, so it goes below the caret there.
+    const css = [...document.querySelectorAll('style')].map((style) => style.textContent).join('\n');
+    expect(css).toMatch(/\.cm-content > \.cm-line:first-child \.cm-ySelectionInfo \{[^}]*top: 100%/);
 
     // Our own selection goes into the awareness once the editor has focus.
     vi.spyOn(view, 'hasFocus', 'get').mockReturnValue(true);
