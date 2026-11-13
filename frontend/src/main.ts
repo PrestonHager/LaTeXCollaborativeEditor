@@ -28,6 +28,7 @@ import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
 import { createThemeController } from './app/theme';
+import { createLayout } from './app/layout';
 import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -79,6 +80,7 @@ const appNoticeEl = document.getElementById('app-notice') as HTMLElement;
 const activeFileNameEl = document.getElementById('active-file-name') as HTMLElement;
 const activeFileMainEl = document.getElementById('active-file-main') as HTMLElement;
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
+const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 const COMPILE_DEBOUNCE_MS = 500;
@@ -115,8 +117,6 @@ let documentId = createDocumentId();
 let savingPaused = false;
 const themeState = createThemeController();
 const { applyEditorTheme, applyPreviewTheme } = themeState;
-let layoutMode: 'split' | 'editor-only' | 'preview-only' = 'split';
-let splitRatio = 0.5;
 let hostStorageText = 'Saved on host local storage';
 const fileProgress = new Map<string, number>();
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
@@ -186,54 +186,6 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled error', event.reason);
   showNotice(describeError(event.reason), true);
 });
-
-const applyLayoutMode = () => {
-  splitRoot.classList.toggle('is-editor-only', layoutMode === 'editor-only');
-  splitRoot.classList.toggle('is-preview-only', layoutMode === 'preview-only');
-  splitter.style.display = layoutMode === 'split' ? '' : 'none';
-  editorPane.style.display = layoutMode === 'preview-only' ? 'none' : '';
-  previewPane.style.display = layoutMode === 'editor-only' ? 'none' : '';
-  if (layoutMode === 'split') {
-    const left = Math.max(20, Math.min(80, Math.round(splitRatio * 100)));
-    splitRoot.style.gridTemplateColumns = `${left}% 8px ${100 - left}%`;
-    splitter.setAttribute('aria-valuenow', String(left));
-  } else {
-    splitRoot.style.gridTemplateColumns = '1fr';
-  }
-};
-
-const installSplitter = () => {
-  let dragging = false;
-  const onMove = (event: PointerEvent) => {
-    if (!dragging || layoutMode !== 'split') return;
-    const bounds = splitRoot.getBoundingClientRect();
-    const ratio = (event.clientX - bounds.left) / bounds.width;
-    splitRatio = Math.max(0.2, Math.min(0.8, ratio));
-    applyLayoutMode();
-  };
-  const onUp = () => {
-    dragging = false;
-    document.body.classList.remove('is-resizing');
-  };
-  splitter.addEventListener('pointerdown', (event) => {
-    if (layoutMode !== 'split') return;
-    dragging = true;
-    document.body.classList.add('is-resizing');
-    splitter.setPointerCapture(event.pointerId);
-  });
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-  // Keyboard users move the splitter with the arrow keys instead of dragging.
-  splitter.addEventListener('keydown', (event) => {
-    if (layoutMode !== 'split') return;
-    const steps: Record<string, number> = { ArrowLeft: -0.05, ArrowRight: 0.05 };
-    const step = steps[event.key];
-    if (step === undefined) return;
-    event.preventDefault();
-    splitRatio = Math.max(0.2, Math.min(0.8, splitRatio + step));
-    applyLayoutMode();
-  });
-};
 
 // First, restore the last session, so we know which doc, project and provider to pick up.
 const restored = isClient ? null : readAppSessionState();
@@ -1069,18 +1021,15 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     requestCompile();
   },
   'view.layoutSplit': () => {
-    layoutMode = 'split';
-    applyLayoutMode();
+    layout.setMode('split');
     menuBar.refresh();
   },
   'view.layoutEditorOnly': () => {
-    layoutMode = 'editor-only';
-    applyLayoutMode();
+    layout.setMode('editor-only');
     menuBar.refresh();
   },
   'view.layoutPreviewOnly': () => {
-    layoutMode = 'preview-only';
-    applyLayoutMode();
+    layout.setMode('preview-only');
     menuBar.refresh();
   },
   'help.documentation': () => {
@@ -1190,11 +1139,11 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'view.togglePauseSaving':
       return { enabled: !isClient, checked: savingPaused };
     case 'view.layoutSplit':
-      return { enabled: true, checked: layoutMode === 'split' };
+      return { enabled: true, checked: layout.mode === 'split' };
     case 'view.layoutEditorOnly':
-      return { enabled: true, checked: layoutMode === 'editor-only' };
+      return { enabled: true, checked: layout.mode === 'editor-only' };
     case 'view.layoutPreviewOnly':
-      return { enabled: true, checked: layoutMode === 'preview-only' };
+      return { enabled: true, checked: layout.mode === 'preview-only' };
     default:
       return { enabled: true };
   }
@@ -1347,8 +1296,8 @@ if (roomId) session.join(roomId);
 else if (hostRoomId) session.join(hostRoomId);
 inRoom = Boolean(roomId || hostRoomId);
 renderConnection();
-installSplitter();
-applyLayoutMode();
+layout.installSplitter();
+layout.applyLayoutMode();
 hideLoading();
 scheduleCompile();
 
