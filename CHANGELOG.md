@@ -6,6 +6,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-13
+
 ### Added
 
 - **Project templates.** File > New Project opens a template picker: an empty project, a blank article, a technical report, a letter, Beamer slides and a thesis with chapters, plus your own templates. File > Save as Template saves any project, with all its files, as a template in this browser or in a `Templates` folder in Google Drive. Templates can be edited, renamed, deleted, and shared as a `.zip`. The built-in templates use current packages (microtype, csquotes, siunitx, biblatex, cleveref and friends), each with a comment saying why it's there.
@@ -78,5 +80,6 @@ The first numbered release. It covers everything built so far.
 - **Interface.** Basecoat and Tailwind UI with menus, a command palette, in-app help links, and a first-run tour.
 - **Docs and policies.** User docs (MkDocs) published under `/docs/`, Privacy and Terms of Service pages, a security policy, and issue forms.
 
-[Unreleased]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/releases/tag/v0.1.0
