@@ -9,7 +9,7 @@ Frontend deployment (GitHub Pages)
   - `VITE_STUN_URL`
   - `VITE_TURN_URL` (optional)
   - `VITE_TURN_USERNAME` (optional)
-  - `VITE_TURN_CREDENTIAL` (optional)
+  - `VITE_TURN_CREDENTIAL` (optional; public once built, see "TURN credentials are public" below)
   - `VITE_GOOGLE_CLIENT_ID`
   - `VITE_GOOGLE_API_KEY`
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
@@ -92,9 +92,37 @@ Networking (STUN/TURN)
 - Start with a public STUN server such as `stun:stun.l.google.com:19302`.
 - Add TURN as needed for restrictive NAT environments.
 
+TURN credentials are public
+- `VITE_TURN_USERNAME` and `VITE_TURN_CREDENTIAL` are built into the JavaScript bundle, like every `VITE_` value.
+  The app is static, so there's nowhere to hide them: anyone can open the site, read them, and relay their own traffic through your TURN server on your bill.
+  Treat them as public, not as secrets. Keeping them in GitHub secrets only keeps them out of the repo, not out of the bundle.
+- Don't put long-lived TURN credentials (a coturn `static-auth-secret` user, or a provider's account password) in these variables.
+- Use short-lived credentials instead:
+  - A hosted TURN service that issues time-limited credentials (Cloudflare, Twilio, Metered and Xirsys all do). Prefer one that can also limit use to the site's origin or cap usage.
+  - Or coturn's TURN REST API (`use-auth-secret`), where the username carries an expiry time. Without a server of our own, that means building with a credential that expires, and rebuilding and redeploying before it does.
+- Rotate the credential on a schedule and right away if usage spikes. Rotating means updating the variables and redeploying, since the old bundle keeps the old values.
+- Set a bandwidth or quota limit on the TURN account, so abuse costs a capped amount.
+- A fetch-at-runtime credential endpoint would fix this properly, but it needs a server, which this repository deliberately doesn't have.
+- `SECURITY.md` lists this as a known issue ([#24](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues/24)), so reports of it are out of scope.
+
+Content Security Policy
+- `frontend/index.html` sets a Content-Security-Policy in a `<meta http-equiv>` tag, since GitHub Pages can't send response headers.
+  It only allows the app itself, LaTeX.js on jsDelivr (pinned to `latex.js@0.12.6`), Google sign-in, the Picker and the Drive API, and the WebTorrent trackers.
+  `src/security/cspPolicy.test.ts` fails if a URL in `src/` isn't allowed, so a new CDN, API or tracker needs a matching change to the policy.
+- The sandboxed preview iframe uses `srcdoc`, so it inherits the same policy. That's why `style-src` has `'unsafe-inline'` (our theme and KaTeX font `<style>` tags, and LaTeX.js's `style` attributes), `img-src` has `data:` (project images), and `base-uri` allows the LaTeX.js CDN path (its `<base>` tag).
+  `script-src` has no `'unsafe-inline'` or `'unsafe-eval'`, so a peer's document can't run inline script in the preview, and an injected `<img>` to another host is blocked, so it can't ping a tracker either.
+- `frame-src` and `img-src` allow `blob:` for the PDF and image viewer, and `object-src` allows `blob:` too, because Chrome's PDF viewer in that iframe counts as a plugin.
+- `connect-src` lists the default trackers. If `VITE_P2P_RENDEZVOUS` lists others, the `csp-rendezvous` plugin in `vite.config.ts` adds their origins at build time.
+  STUN and TURN aren't covered by CSP, so `VITE_STUN_URL` and `VITE_TURN_URL` need no change.
+- A meta tag can't set `frame-ancestors`, `report-uri`/`report-to` or `sandbox`; browsers ignore them there.
+  So the CSP doesn't stop other sites from framing the app (clickjacking), and GitHub Pages can't send `X-Frame-Options` either.
+  If the site moves behind a host or proxy that can set headers (Cloudflare, Netlify, a custom server), send the same policy as a header and add `frame-ancestors 'none'`.
+- `upgrade-insecure-requests` is left out on purpose: it would break `npm run dev` and `vite preview` on `http://localhost`.
+- After changing the policy, check the browser console on the live site for "violates the following Content Security Policy directive" while signing in to Google, opening the Picker, sharing a room and compiling.
+
 Domain and security
 - The domain (e.g., latex.prestonhager.com) must be served over HTTPS to enable P2P APIs.
-- Keep CORS and CSP policies permissive enough for rendezvous and TURN endpoints while minimizing exposure.
+- `getBootstrapConfig` treats `localhost`, `*.localhost`, `127.x.x.x` and `[::1]` as local and everything else as production.
 
 Documentation
 - The user docs are MkDocs Material, built from `docs/` by `mkdocs.yml`. Run `mkdocs build --strict` before a PR, it fails on broken links and missing images.

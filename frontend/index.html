@@ -3,6 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Content Security Policy. GitHub Pages can't send headers, so it's a meta tag, which means
+      frame-ancestors, report-to and sandbox can't be set here (see docs/deployment.md).
+      The sandboxed preview iframe uses srcdoc, so it inherits this policy too: LaTeX.js's CDN
+      css/js/fonts, its <base> tag, and our inline theme styles have to stay allowed.
+      The build adds custom VITE_P2P_RENDEZVOUS trackers to connect-src (vite.config.ts).
+      src/security/cspPolicy.test.ts checks this against the URLs the app uses.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; connect-src 'self' https://www.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
+    />
     <title>Collaborative LaTeX Editor</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   </head>

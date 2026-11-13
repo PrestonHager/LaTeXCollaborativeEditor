@@ -32,6 +32,8 @@ Checklist
 - [ ] Drive add files: a file put in a project folder from drive.google.com (also in a subfolder made there) comes into the project at the same path with File > Add Files from Drive, and the next save doesn't write it back. Guests see the command turned off. A picked file that meets an unsaved project file of the same name goes through the conflict dialog, never a silent overwrite.
 - [ ] Drive conflicts: a file changed in Drive since the last load or save is never overwritten silently. Saving pauses for that file only, and the conflict dialog's Keep mine, Take theirs, and Save mine as a copy each work.
 - [x] Networking: no repository-owned signaling server is required for connection setup.
+- [ ] Content Security Policy: on the production domain, the console shows no CSP violations while loading the app, compiling (LaTeX.js CSS, fonts and `base.js` from jsDelivr still load in the preview), signing in to Google, opening the Drive Picker, saving to Drive, and sharing a room through the trackers. `src/security/cspPolicy.test.ts` passes.
+- [ ] TURN credentials: `docs/deployment.md` says the TURN credentials in the bundle are public, and any TURN server in use has short-lived or origin-restricted credentials and a usage cap.
 - [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.
 - [ ] Message validation: malformed or oversized peer messages, file chunks, and unsafe file paths are dropped, snapshots and metadata are only taken from the host, and only a few files transfer at once (see `docs/protocol.md`).

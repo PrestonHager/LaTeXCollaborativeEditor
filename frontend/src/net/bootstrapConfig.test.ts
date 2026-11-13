@@ -1,4 +1,4 @@
-import { getBootstrapConfig } from './bootstrapConfig';
+import { getBootstrapConfig, isLocalhostOrigin } from './bootstrapConfig';
 
 describe('getBootstrapConfig', () => {
   beforeEach(() => {
@@ -57,5 +57,26 @@ describe('getBootstrapConfig', () => {
     const config = getBootstrapConfig('http://localhost:5173');
     expect(config.iceServers[0].urls).toBe('stun:custom:3478');
     expect(config.appId).toBe('my-app');
+  });
+});
+
+describe('isLocalhostOrigin', () => {
+  it.each(['http://localhost:5173', 'http://127.0.0.1:4173', 'http://127.1.2.3', 'http://[::1]:5173', 'http://app.localhost:5173'])(
+    'treats %s as localhost',
+    (origin) => {
+      expect(isLocalhostOrigin(origin)).toBe(true);
+      expect(getBootstrapConfig(origin).environment).toBe('localhost');
+    },
+  );
+
+  it.each([
+    'https://latex.prestonhager.com',
+    'https://localhost.evil.example',
+    'https://evil.example/?localhost',
+    'http://127.0.0.1.evil.example',
+    'not a url',
+  ])('treats %s as production', (origin) => {
+    expect(isLocalhostOrigin(origin)).toBe(false);
+    expect(getBootstrapConfig(origin).environment).toBe('production');
   });
 });
