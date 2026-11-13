@@ -40,17 +40,6 @@
   --preview-text: #e0e0e0;
   --preview-loading-bg: rgba(0, 0, 0, 0.82);
   --preview-loading-text: #e0e0e0;
-  /* Line-number gutter (CodeMirror `.cm-gutters`): defaults so gutter is always dark unless overridden below. */
-  --editor-gutter-bg: #141820;
-  --editor-gutter-active-bg: #1e2430;
-  --editor-line-number: #8b95a8;
-  --editor-line-number-active: #d1d5db;
-  /* Syntax token colors (src/ui/syntaxHighlight.ts): dark defaults, so the "system" editor theme on a dark OS still gets colors. */
-  --editor-keyword: #7ab8ff;
-  --editor-string: #9ddf7d;
-  --editor-number: #f4ba6e;
-  --editor-comment: #8b949e;
-  --editor-operator: #d2d8e0;
 }
 
 .dark {
@@ -58,18 +47,25 @@
   --diag-text: #f6c177;
 }
 
+/*
+ * Editor colors. The dark set is also the :root default, so the "system" editor theme on a dark OS
+ * looks the same as the explicit dark theme. The light set is repeated in the prefers-color-scheme
+ * block below; keep the two light copies identical (src/style.test.ts checks this and the contrast).
+ * Line numbers must stay at least 4.5:1 against their gutter background.
+ */
+:root,
 [data-editor-theme="dark"] {
+  --editor-text: #d4d4d4;
+  --editor-bg: #1e1e1e;
+  --editor-gutter-bg: #0f1218;
+  --editor-gutter-active-bg: #1a1f2a;
   --editor-line-number: #8b95a8;
   --editor-line-number-active: #e5e7eb;
-  --editor-gutter-bg: #0f1218;
   --editor-keyword: #7ab8ff;
   --editor-string: #9ddf7d;
   --editor-number: #f4ba6e;
   --editor-comment: #8b949e;
   --editor-operator: #d2d8e0;
-  --editor-text: #d4d4d4;
-  --editor-bg: #1e1e1e;
-  --editor-gutter-active-bg: #1a1f2a;
 }
 
 [data-editor-theme="light"] {
@@ -80,11 +76,10 @@
   --editor-operator: #2d3c4f;
   --editor-text: #1f2a3d;
   --editor-bg: #ffffff;
-  /* Keep gutter rail dark so line numbers stay readable; tweak these to taste. */
-  --editor-gutter-bg: #141820;
-  --editor-gutter-active-bg: #1c2230;
-  --editor-line-number: #8b95a8;
-  --editor-line-number-active: #f3f4f6;
+  --editor-gutter-bg: #f3f4f6;
+  --editor-gutter-active-bg: #e5e7eb;
+  --editor-line-number: #5f6b7d;
+  --editor-line-number-active: #1f2a3d;
 }
 
 [data-preview-theme="dark"] {
@@ -110,10 +105,10 @@
     --editor-operator: #2d3c4f;
     --editor-text: #1f2a3d;
     --editor-bg: #ffffff;
-    --editor-gutter-bg: #141820;
-    --editor-gutter-active-bg: #1c2230;
-    --editor-line-number: #8b95a8;
-    --editor-line-number-active: #f3f4f6;
+    --editor-gutter-bg: #f3f4f6;
+    --editor-gutter-active-bg: #e5e7eb;
+    --editor-line-number: #5f6b7d;
+    --editor-line-number-active: #1f2a3d;
   }
   :root:not([data-preview-theme="dark"]) {
     --preview-bg: #ffffff;
@@ -300,7 +295,8 @@ label.settings-row { justify-content: flex-start; }
 .editor .cm-editor .cm-lineNumbers .cm-gutterElement {
   color: var(--editor-line-number) !important;
 }
-.editor .cm-editor .cm-activeLineGutter .cm-gutterElement {
+/* CodeMirror puts cm-activeLineGutter on the gutter element itself, so match both classes on one node. */
+.editor .cm-editor .cm-lineNumbers .cm-gutterElement.cm-activeLineGutter {
   color: var(--editor-line-number-active) !important;
 }
 .cm-content, .cm-line { color: var(--editor-text); }

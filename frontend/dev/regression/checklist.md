@@ -11,6 +11,7 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Line numbers show next to every line of `main.tex`.
 - [ ] LaTeX is colored in `main.tex`: commands like `\section`, arguments like `{document}`, `$` math, brackets and `%` comments each have their own color.
 - [ ] Switching Settings > App and editor theme between Light and Dark recolors the syntax right away, and both stay readable.
+- [ ] The line number gutter matches the editor theme: light gutter with dark numbers on Light, dark gutter with light numbers on Dark. With Match system, it follows the OS (light or dark mode) and looks the same as picking that theme directly. The current line's number stays readable in all of them.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts.
