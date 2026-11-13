@@ -197,6 +197,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 label.settings-row { justify-content: flex-start; }
 .settings-dialog footer { justify-content: space-between; align-items: center; }
 .about-dialog-body { display: grid; gap: 0.5rem; font-size: 14px; }
+#about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .dialog-help-links { display: inline-flex; margin-left: auto; }
 

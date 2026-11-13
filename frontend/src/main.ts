@@ -12,7 +12,8 @@ import { createUploadDialog } from './ui/uploadDialog';
 import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
-import { createAboutDialog } from './ui/aboutDialog';
+import { createAboutDialog, renderFooterVersion } from './ui/aboutDialog';
+import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { createTour } from './ui/tour';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -82,7 +83,6 @@ const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
-const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev';
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
 
 // Now point every [data-help] link in the page at its docs section.
@@ -90,7 +90,7 @@ wireHelpLinks(document, docsBase);
 
 /** The prefilled bug form. It only carries the browser, app version, and a fixed summary. */
 const makeBugUrl = (area?: IssueArea, summary?: string) =>
-  bugReportUrl({ appVersion: APP_VERSION, userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
+  bugReportUrl({ appVersion: formatVersion(BUILD_INFO), userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 
@@ -191,6 +191,7 @@ themeState.watchSystemTheme();
 const session: SessionController = new SessionController({
   isHost: !isClient,
   blobs,
+  build: BUILD_INFO,
   onConnectionState: (state, peers) => {
     transportState = state;
     peerCount = peers;
@@ -846,7 +847,8 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, APP_VERSION);
+const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO);
+renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorElement, BUILD_INFO);
 
 const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
   store: (() => {

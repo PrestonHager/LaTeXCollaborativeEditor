@@ -21,6 +21,13 @@ If P2P protocol, bootstrap/build steps, or storage provider behavior changes, up
 - `docs/deployment.md`
 - `docs/dod-checklist.md`
 
+## Versioning
+- The version is `frontend/package.json` `version` (SemVer). The root `package.json` follows it.
+- Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes.
+- Bump `PROTOCOL_VERSION` in `frontend/src/collab/messages.ts` only for a P2P change older peers can't handle.
+- Releases are a `vX.Y.Z` tag on `main`; `.github/workflows/release.yml` makes the GitHub release. Only maintainers tag.
+- Details: `docs/versioning.md`.
+
 ## Regression checklist
 When a PR adds, changes, or removes a user-facing feature, update `frontend/dev/regression/checklist.md` in the same PR.
 If the preview can render something new, add it to the test project in `frontend/dev/regression/project/` with a `% Expect:` comment.

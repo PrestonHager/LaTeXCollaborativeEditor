@@ -25,6 +25,19 @@ Transport behavior
   - Relayed: at least one peer's selected ICE candidate pair uses a relay (TURN) candidate, checked with `RTCPeerConnection.getStats()` when the peer joins.
   - Reconnecting: the last peer left, so the app rejoins the room with backoff.
 
+Version handshake
+- When a peer joins, each side sends it `{ kind: 'hello', protocol, appVersion, commit }` on the document channel.
+  - `protocol` is `PROTOCOL_VERSION` from `frontend/src/collab/messages.ts`, now `1`. It changes only when older peers can't handle the new messages.
+  - `appVersion` is the app's SemVer version, like `0.1.0`, and `commit` is the short commit SHA of the build (or `dev`).
+- Each peer compares the hello with its own build: `same-build`, `different-build` (same protocol, another version or commit), or `incompatible-protocol`.
+  - It logs anything but `same-build` to the console. `incompatible-protocol` is a warning that says to reload.
+  - It never blocks or disconnects the peer. The update prompt (issue #121) reads `SessionController.getPeerVersions()` and `onPeerVersion` to ask people to reload.
+- Backward compatible both ways:
+  - Builds from before the handshake drop `hello` as an unknown kind (quietly, or with a dev-only `console.warn`) and sync as before.
+  - A newer peer that never gets a hello from an old one just doesn't list it. Nothing waits on the hello.
+- The hello only has version numbers, never document content, and it goes over WebRTC like every other message, not through the trackers.
+- How the protocol version is bumped and migrated is in `docs/versioning.md`.
+
 Document payload channel
 - Document updates are exchanged peer-to-peer as action payloads.
 - Rendezvous metadata does not carry document bodies.
@@ -69,6 +82,7 @@ Message validation and limits
   - `{ kind: 'metadata', metadata }`: `metadata` is `{ title, storage }`. The title is at most 200 characters and the storage label at most 200.
   - `{ kind: 'sync-request' }`: no other fields.
   - `{ kind: 'file-request', hash }`: `hash` is 1 to 128 letters, digits, or dashes.
+  - `{ kind: 'hello', protocol, appVersion, commit? }`: `protocol` is a whole number from 1 to 1,000,000. `appVersion` is 1 to 64 letters, digits, dots, pluses, or dashes. `commit` is 7 to 40 lowercase hex characters, or `dev`.
   - Anything else, or anything with the wrong types, is dropped. Fields we don't know about are stripped.
 - File chunks on the `file-chunk` action:
   - The data is binary and at most 256 KB per chunk.
@@ -126,6 +140,9 @@ sequenceDiagram
     Note over H,G: STUN (and TURN if set) find a path.<br/>Data channel opens.
     H->>H: onPeerJoin, badge: Connected · 1 peer<br/>(Relayed if getStats() shows TURN)
     G->>G: onPeerJoin, badge: Connected · 1 peer
+    H->>G: doc-msg {kind: hello, protocol, appVersion, commit}
+    G->>H: doc-msg {kind: hello, protocol, appVersion, commit}
+    Note over H,G: Each side compares the other's build with its own.<br/>A mismatch is logged, never blocked.
     opt the last peer leaves
         Note over H,G: Badge: Reconnecting.<br/>Rejoin with backoff 1, 2, 4 ... 20 s.
     end

@@ -5,6 +5,8 @@ import {
   MAX_STORAGE_LABEL_LENGTH,
   MAX_TITLE_LENGTH,
   MAX_UPDATE_BYTES,
+  MAX_APP_VERSION_LENGTH,
+  PROTOCOL_VERSION,
   dropMessage,
   isByteArray,
   isValidHash,
@@ -132,5 +134,41 @@ describe('dropMessage', () => {
     dropMessage('test reason', { kind: 'x' });
     expect(warn).toHaveBeenCalledWith('Dropped peer message: test reason', { kind: 'x' });
     warn.mockRestore();
+  });
+});
+
+describe('hello message', () => {
+  it('accepts a hello and strips unknown fields', () => {
+    expect(parseSyncMessage({ kind: 'hello', protocol: 1, appVersion: '0.1.0', commit: 'abc1234', extra: 'x' })).toEqual({
+      kind: 'hello',
+      protocol: 1,
+      appVersion: '0.1.0',
+      commit: 'abc1234',
+    });
+    // A later build may leave the commit out.
+    expect(parseSyncMessage({ kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: '1.0.0-rc.1' })).toEqual({
+      kind: 'hello',
+      protocol: PROTOCOL_VERSION,
+      appVersion: '1.0.0-rc.1',
+      commit: undefined,
+    });
+  });
+
+  it('drops a hello with bad fields', () => {
+    const ok = { kind: 'hello', protocol: 1, appVersion: '0.1.0' };
+    for (const bad of [
+      { ...ok, protocol: '1' },
+      { ...ok, protocol: 0 },
+      { ...ok, protocol: 1.5 },
+      { ...ok, protocol: 2_000_000 },
+      { ...ok, appVersion: 1 },
+      { ...ok, appVersion: '' },
+      { ...ok, appVersion: '<b>1</b>' },
+      { ...ok, appVersion: '1'.repeat(MAX_APP_VERSION_LENGTH + 1) },
+      { ...ok, commit: 'XYZ' },
+      { ...ok, commit: 7 },
+    ]) {
+      expect(parseSyncMessage(bad)).toBeNull();
+    }
   });
 });

@@ -13,18 +13,33 @@ export const MAX_CHUNK_BYTES = 256 * 1024;
 export const MAX_TITLE_LENGTH = MAX_PROJECT_NAME_LENGTH;
 export const MAX_STORAGE_LABEL_LENGTH = 200;
 export const MAX_DOC_ID_LENGTH = 128;
+export const MAX_APP_VERSION_LENGTH = 64;
+
+/**
+ * Version of the messages on this page. Bump it only for a change an older peer can't handle
+ * (see docs/versioning.md). Adding an optional field or a new message kind doesn't need a bump,
+ * since peers drop kinds they don't know and strip fields they don't know.
+ */
+export const PROTOCOL_VERSION = 1;
 
 export type Metadata = { title: string; storage: string };
+
+/** Sent once to each peer that joins, so both sides know which build the other runs. */
+export type HelloMessage = { kind: 'hello'; protocol: number; appVersion: string; commit?: string };
 
 export type SyncMessage =
   | { kind: 'snapshot'; state: number[]; docId?: string; metadata?: Metadata }
   | { kind: 'y-update'; update: number[] }
   | { kind: 'metadata'; metadata: Metadata }
   | { kind: 'sync-request' }
-  | { kind: 'file-request'; hash: string };
+  | { kind: 'file-request'; hash: string }
+  | HelloMessage;
 
 // Hex SHA-256 hashes and the "fnv-…" fallback ones only use these characters.
 const HASH_PATTERN = /^[A-Za-z0-9-]{1,128}$/;
+// SemVer characters only, so a version string can't carry markup or anything long into logs or the UI.
+const APP_VERSION_PATTERN = /^[0-9A-Za-z.+-]+$/;
+const COMMIT_PATTERN = /^(?:[0-9a-f]{7,40}|dev)$/;
 
 /** Say why a peer message got dropped, only in dev so the console stays quiet for everyone else. */
 export function dropMessage(reason: string, payload?: unknown) {
@@ -87,6 +102,15 @@ export function parseSyncMessage(payload: unknown): SyncMessage | null {
       return { kind: 'sync-request' };
     case 'file-request':
       return isValidHash(payload.hash) ? { kind: 'file-request', hash: payload.hash } : null;
+    case 'hello': {
+      const { protocol, appVersion, commit } = payload;
+      if (typeof protocol !== 'number' || !Number.isInteger(protocol) || protocol < 1 || protocol > 1_000_000) return null;
+      if (typeof appVersion !== 'string' || appVersion.length > MAX_APP_VERSION_LENGTH || !APP_VERSION_PATTERN.test(appVersion)) {
+        return null;
+      }
+      if (commit !== undefined && (typeof commit !== 'string' || !COMMIT_PATTERN.test(commit))) return null;
+      return { kind: 'hello', protocol, appVersion, commit };
+    }
     default:
       return null;
   }

@@ -38,6 +38,7 @@ Checklist
 - [x] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
 - [ ] Legal pages: `npm run build` passes its page check, and the Privacy and ToS links in the footer and About dialog open `privacy.html` and `tos.html` on the deployed site, not a 404.
+- [ ] Versioning: the About dialog and footer show the version and commit, the bug form prefills `App version: X.Y.Z+sha`, `npm run build` fails without a valid `dist/version.json`, peers exchange `hello` with their versions (an older peer without it still syncs), and a `vX.Y.Z` tag makes a GitHub release from `CHANGELOG.md` (see `docs/versioning.md`).
 - [x] Bundle size: `npm run build` reports the gzipped JS and CSS under the budget in `scripts/check-bundle-size.mjs`, or the PR explains why it went over.
 - [ ] Docs: every menu item, dialog, shortcut, palette command, and status message has a docs section, and `mkdocs build --strict` passes.
 - [ ] Docs diagrams: the UI map, user flows, and state diagrams in `how-it-fits.md` and the sequence diagrams in `protocol.md` render and match the code.

@@ -21,6 +21,9 @@ Frontend deployment (GitHub Pages)
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
 - Vite builds every page in `BUILD_PAGES` in `frontend/vite.config.ts`: `index.html`, `privacy.html` and `tos.html`. A new top-level HTML page that should ship has to be added there, or it won't reach `dist/`. `regression.html` is dev-only and stays off the list.
 - After `vite build`, `npm run build` runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
+- The build bakes in the version from `frontend/package.json`, the short commit SHA (`git rev-parse --short HEAD`, else `$GITHUB_SHA`, else `dev`) and the build time, and writes them to `dist/version.json`.
+  The page check fails the build if `version.json` is missing, malformed, or doesn't match `package.json`.
+  The Pages workflow's checkout has the git history it needs, so no extra setup is needed. See `docs/versioning.md`.
 - `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). If the gzipped JS and CSS go over the budget, it prints a warning (a GitHub annotation in CI) but doesn't fail the build.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
 - Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.
@@ -104,3 +107,9 @@ Security
 - `.github/dependabot.yml` checks npm in `frontend/`, `e2e/` and `tools/screenshots/`, and the GitHub Actions versions, every week.
   Dependabot alerts and security updates, and secret scanning with push protection, are switched on in **Settings > Code security** too. The `.env` files hold Google and TURN keys, so keep push protection on.
 - Only the live site and `main` get security fixes. There are no release branches.
+
+Versions and releases
+- How to version, write the changelog, tag and release is in [`docs/versioning.md`](versioning.md).
+- Every merge to `main` still deploys to Pages. A release is a `vX.Y.Z` tag on a commit that's already on `main`.
+- Pushing the tag runs `.github/workflows/release.yml`. It checks the tag against both `package.json` files, runs the tests and build, and creates the GitHub release from the `CHANGELOG.md` section. It needs no secrets: the default `GITHUB_TOKEN` with `contents: write` is enough.
+- `dist/version.json` is served with GitHub Pages' default caching (about 10 minutes), so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
