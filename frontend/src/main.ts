@@ -39,6 +39,7 @@ import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
 import { createKeymap } from './app/keymap';
+import { describeKeyContext, reservedKeys, watchKeyContext } from './app/reservedKeys';
 import { createSettingsStore } from './state/settings';
 import { bindSettings, importSettingsFile, resetSettings, settingsFileName } from './app/settingsBinding';
 import { createKeybindSettings } from './ui/keybindSettings';
@@ -50,7 +51,7 @@ import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
 import { createConflictDialog } from './ui/conflictDialog';
 import { confirmDialog, promptDialog } from './ui/dialogs';
-import { pathProblem, projectNameProblem } from './ui/nameChecks';
+import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import {
   readAppSessionState,
@@ -410,6 +411,7 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
       initialValue: path,
       confirmLabel: 'Rename',
       validate: (value) => pathProblem(value, (taken) => project.hasPath(taken), path),
+      suggest: (value) => suggestFreeName(value, (typed) => typed, (taken) => project.hasPath(taken), path),
     });
     if (next !== null && next !== path) runFileOp(() => project.movePath(path, next));
     refocusFileTree(normalizePath(next ?? path) ?? path);
@@ -852,7 +854,16 @@ const switchToDrive = () => {
 };
 
 // Every shortcut label and key press reads from this one table.
-const keymap = createKeymap(shortcuts);
+// Where the browser keeps a key for itself (a normal tab), the built-in fallback is used and shown instead.
+// Going fullscreen or opening in an app window gives those keys back, so follow that.
+const keyContext = watchKeyContext(() => {
+  keymap.refresh();
+  menuBar.refreshShortcuts();
+  toolbar.refreshShortcuts();
+  refreshCommands();
+  if (settingsDialog.isOpen()) keybindSettings.refresh();
+});
+const keymap = createKeymap(shortcuts, detectPlatform, undefined, () => reservedKeys(keyContext?.current()));
 const shortcutLabel = (commandId: CommandId) => keymap.labelFor(commandId);
 
 const commands = createCommands({
@@ -1000,7 +1011,7 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
 
 const keybindSettings = createKeybindSettings(document.getElementById('settings-keybinds')!, {
   keymap,
-  builtins: shortcuts,
+  contextLabel: () => describeKeyContext(keyContext.current()),
   commands: listCommands,
   editorKeybinds: editorKeybinds(detectPlatform()),
   onChange: (next) => {

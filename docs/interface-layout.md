@@ -20,11 +20,11 @@ Items that don't apply right now are grayed out, for example host-only items whe
 
 | Item | Shortcut | What it does |
 | --- | --- | --- |
-| New Project | Ctrl+N | Starts a fresh project after you confirm. Host only. |
+| New Project | Ctrl+Shift+N (Alt+Shift+N in a browser tab) | Starts a fresh project after you confirm. Host only. |
 | Open Local Project | Ctrl+O | Lists projects saved in this browser. Host only. |
 | Open from Google Drive | Ctrl+Shift+O | Opens the Drive picker. Host only. |
 | Upload .zip as New Project | | Makes a new project from a `.zip`. Host only. |
-| New File | | Adds a text file to the current folder. |
+| New File | Ctrl+N (Alt+N in a browser tab) | Adds a text file to the current folder. |
 | New Folder | | Adds a folder to the current folder. |
 | Upload Files | | Opens the upload dialog. |
 | Download Project .zip | Ctrl+Shift+S | Saves the project as a `.zip`. |

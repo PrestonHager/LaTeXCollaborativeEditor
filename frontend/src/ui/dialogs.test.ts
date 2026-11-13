@@ -47,6 +47,16 @@ describe('dialogs', () => {
       expect(await answer).toBe(false);
     });
 
+    it('can start on Cancel without the red button, to catch a misclick', async () => {
+      const answer = confirmDialog({ title: 'Replace the whole project?', message: 'a', confirmLabel: 'Start new project', focusCancel: true });
+      const [cancel, ok] = buttons();
+      expect(ok.dataset.variant).toBeUndefined();
+      expect(openDialog().getAttribute('role')).toBeNull();
+      expect(document.activeElement).toBe(cancel);
+      cancel.click();
+      expect(await answer).toBe(false);
+    });
+
     it('cancels on Escape and on a click outside the box', async () => {
       const first = confirmDialog({ title: 'A', message: 'a', confirmLabel: 'Go' });
       escape();
@@ -122,6 +132,69 @@ describe('dialogs', () => {
       expect(buttons()[1].getAttribute('form')).toBe(openDialog().querySelector('form')!.id);
       submit();
       expect(await answer).toBe('fresh');
+    });
+
+    describe('free name suggestions', () => {
+      const names = ['chapter.tex', 'chapter (2).tex', 'figures'];
+      const validate = (value: string) => (names.includes(value) ? `${value} already exists.` : value ? null : 'Enter a name.');
+      const suggest = (value: string) => {
+        if (!names.includes(value)) return null;
+        const next = value === 'figures' ? 'figures (2)' : 'chapter (3).tex';
+        return { value: next, message: `${value} already exists, so here's ${next} instead.` };
+      };
+      const useButton = () => error().querySelector<HTMLButtonElement>('.app-dialog-suggest');
+
+      it('swaps a taken default for a free one, selects its base name, and says why until they type', async () => {
+        const answer = promptDialog({ title: 'New file', label: 'File name', initialValue: 'chapter.tex', confirmLabel: 'Create file', validate, suggest });
+        expect(input().value).toBe('chapter (3).tex');
+        expect(document.activeElement).toBe(input());
+        expect([input().selectionStart, input().selectionEnd]).toEqual([0, 11]);
+        expect(error().hidden).toBe(false);
+        expect(error().textContent).toBe("chapter.tex already exists, so here's chapter (3).tex instead.");
+        // The box itself is fine now.
+        expect(input().hasAttribute('aria-invalid')).toBe(false);
+        type('intro.tex');
+        expect(error().hidden).toBe(true);
+        submit();
+        expect(await answer).toBe('intro.tex');
+      });
+
+      it('takes the suggested name on Enter', async () => {
+        const answer = promptDialog({ title: 'New folder', label: 'Folder name', initialValue: 'figures', confirmLabel: 'Create folder', validate, suggest });
+        expect(input().value).toBe('figures (2)');
+        submit();
+        expect(await answer).toBe('figures (2)');
+      });
+
+      it('offers a free name for a taken one typed in, and Enter fills it in rather than failing', async () => {
+        const answer = promptDialog({ title: 'New folder', label: 'Folder name', initialValue: 'plots', confirmLabel: 'Create folder', validate, suggest });
+        expect(input().value).toBe('plots');
+        type('figures');
+        expect(input().getAttribute('aria-invalid')).toBe('true');
+        expect(error().firstChild?.textContent).toBe('figures already exists.');
+        expect(useButton()?.textContent).toBe('Use figures (2)');
+        useButton()!.click();
+        expect(input().value).toBe('figures (2)');
+        expect(document.activeElement).toBe(input());
+        expect(error().textContent).toBe("figures already exists, so here's figures (2) instead.");
+        expect(useButton()).toBeNull();
+        type('figures');
+        submit();
+        expect(input().value).toBe('figures (2)');
+        expect(openDialog()).not.toBeNull();
+        submit();
+        expect(await answer).toBe('figures (2)');
+      });
+
+      it('leaves other problems as they are', async () => {
+        const answer = promptDialog({ title: 'New file', label: 'File name', initialValue: '', confirmLabel: 'Create file', validate, suggest });
+        expect(error().hidden).toBe(true);
+        submit();
+        expect(error().textContent).toBe('Enter a name.');
+        expect(useButton()).toBeNull();
+        escape();
+        expect(await answer).toBeNull();
+      });
     });
 
     it('resolves null on Cancel', async () => {

@@ -148,6 +148,11 @@ describe('keybindFromEvent', () => {
     // Option+O types ø on a Mac.
     expect(keybindFromEvent(press('ø', { metaKey: true, altKey: true }, 'KeyO'), 'mac')).toBe('Mod+Alt+O');
     expect(keybindFromEvent(press('!', { ctrlKey: true, shiftKey: true }, 'Digit1'), 'other')).toBe('Mod+Shift+1');
+    // ⌥⌘N can arrive as a dead key, since ⌥N starts ñ. With ⌘ held it's a shortcut, not typing.
+    expect(keybindFromEvent(press('Dead', { metaKey: true, altKey: true }, 'KeyN'), 'mac')).toBe('Mod+Alt+N');
+    // On its own, a dead key is typing.
+    expect(keybindFromEvent(press('Dead', { altKey: true }, 'KeyN'), 'mac')).toBeNull();
+    expect(keybindFromEvent(press('Dead', { metaKey: true }, 'Quote'), 'mac')).toBeNull();
   });
 
   it('keeps Shift out of symbols that already include it', () => {

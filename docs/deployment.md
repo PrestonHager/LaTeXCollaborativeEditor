@@ -180,3 +180,10 @@ Versions and releases
 - `dist/version.json` is served with GitHub Pages' default caching (about 10 minutes), so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
   The app's update check (`frontend/src/app/updateCheck.ts`) does both. It fetches `version.json` next to `index.html` on load, every 15 minutes, and when the tab gets focus or becomes visible (at most once a minute). A different build shows the "new version" card. Failed checks back off up to an hour, a 404 stops checking, and `npm run dev` never checks.
   Other static hosts need to serve `version.json` from the same folder as `index.html`. Without it the app works, it just never offers updates.
+
+Installing the app
+- `frontend/public/manifest.webmanifest` and `frontend/public/icons/` (192 and 512 px PNGs, plus a maskable one) make the site installable, so Chrome and Edge can open it in its own window, where keys like Ctrl+N reach the editor (`docs/keyboard-shortcuts.md`).
+  Vite copies them to `dist/` as plain static files, and `index.html` links the manifest with a relative path. Every path in the manifest is relative too, so it installs from any folder, like `/LaTeXCollaborativeEditor/` on Pages.
+- There's no service worker. Chromium doesn't need one to install, so the installed app loads from the network like the tab does, and the update check and "new version" card work the same.
+- The CSP has no `manifest-src`, so `default-src 'self'` covers the manifest. Serve `.webmanifest` as `application/manifest+json` if your host lets you set types (Pages does).
+- `npm run build` checks the manifest (`scripts/check-build-pages.mjs`): it has to parse, open in its own window, use relative paths, and have 192 and 512 px PNG icons that are in `dist/`.

@@ -73,6 +73,8 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 ## Projects and files
 
 - [ ] New File opens an in-app **New file** dialog with `chapter` selected in `chapter.tex`. Create file makes it in the selected folder, and it opens in the editor.
+- [ ] Open New File again in the same folder. The box says `chapter (2).tex` with `chapter (2)` selected, and the red line says `chapter.tex already exists, so here's chapter (2).tex instead.` until you type. Enter creates `chapter (2).tex`. New Folder twice does the same with `figures (2)`.
+- [ ] In the New file dialog, type `chapter` while `chapter.tex` exists. The line says `chapter.tex already exists.` with an underlined **Use chapter (2).tex** button. Clicking it, or pressing Enter, puts `chapter (2).tex` in the box. Rename a file to another file's name and it offers the same.
 - [ ] In the New file dialog, typing `main` says `main.tex already exists.` under the box, `a:b` says the `:` isn't allowed, and an empty box says Enter a name. Enter does nothing until the name is fine.
 - [ ] New Folder opens a **New folder** dialog, and Create folder makes the folder.
 - [ ] Rename a file from its pencil in the Files panel. The **Rename** dialog selects the name without its extension. The preview still finds it if you update the `\input`.
@@ -90,13 +92,17 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Add an empty folder (like `figures/`), download the .zip, and upload it as a new project: the empty folder is still in the file tree.
 - [ ] Upload .zip as New Project opens that zip as a project, with the right main file.
 - [ ] Rename Project (or clicking the title) opens a **Rename project** dialog. A name over 200 characters shows an error under the box. Rename project changes the name in the header.
-- [ ] New Project (Ctrl+N) asks first in a **Start a new project?** dialog, then opens a starter `main.tex`.
-- [ ] Clear Local Projects asks in a **Delete all local projects?** dialog with a red **Delete N projects** button, focus on Cancel.
-- [ ] Pressing Ctrl+N while a dialog is open doesn't open a second one.
+- [ ] New Project (from the File menu, or its key) asks first in a **Replace the whole project?** dialog that says every file and folder closes and points to File > New File, even with nobody connected. Focus starts on **Cancel**, so Enter closes it and nothing changes. Start new project opens a starter `main.tex`.
+- [ ] In a normal Chrome or Edge tab: the File menu and palette show **Alt+N** on New File, **Alt+Shift+N** on New Project, Ctrl+Shift+E on Export, and no key on New Folder. Alt+N, Alt+Shift+N and Alt+Shift+E open their dialogs. Ctrl+N and Ctrl+Shift+N open a browser window (that's the browser, not a bug).
+- [ ] Install the app (Chrome: ⋮ > Cast, save, and share > Install page as app; Edge: … > Apps > Install this site as an app) and open it. The menus show **Ctrl+N** and **Ctrl+Shift+N**, both open their dialogs with no new window, and Alt+N still works. Pressing F11 in a tab does the same until you leave full screen, and the menu labels switch back.
+- [ ] In Firefox on Windows or Linux, Export shows **Alt+Shift+E**, and Alt+Shift+E opens it. On a Mac (any browser) New File shows ⌥⌘N in a tab, and ⌥⌘N opens it.
+- [ ] Settings > Keyboard shortcuts, in a tab: the hint says shortcuts are saved in this browser profile only and "Keys shown are for Chrome in a browser tab." New File shows Ctrl+N and Alt+N, with "Chrome uses Ctrl+N to open a new window, so Alt+N is used here instead…". Adding Ctrl+T to a command warns that Chrome uses it to open a new tab.
+- [ ] With keybinds saved by the previous version that turned Ctrl+N off for New Project, Settings shows Ctrl+N crossed out on New File, Ctrl+N does nothing in the app, and New Project has Ctrl+Shift+N. A keybind you added on Ctrl+Shift+N still wins over New Project.
+- [ ] Pressing Alt+N or Alt+Shift+N (or Ctrl+N in an installed app) while a dialog is open doesn't open a second one.
 
 ## Export
 
-- [ ] File > Export… (Ctrl+Shift+E), the toolbar Export button, and the palette's Export all open the Export dialog. Guests can open it too.
+- [ ] File > Export… (Ctrl+Shift+E, or Alt+Shift+E), the toolbar Export button, and the palette's Export all open the Export dialog, the first press included (the dialog loads on first use). Guests can open it too.
 - [ ] The Format menu lists Project .zip, PDF, HTML, Flattened .tex, and Single file. PDF and HTML say "(preview quality)" and show a "Preview quality" badge in the box under the menus.
 - [ ] With no main file, PDF, HTML and Flattened .tex say "(unavailable)", the box says why, and Export is off. With an image still coming from a peer, Project .zip warns about it.
 - [ ] The Save to menu has Download and Google Drive. The choice is remembered after a reload (Settings > Reset > Where exports go puts it back to Download).

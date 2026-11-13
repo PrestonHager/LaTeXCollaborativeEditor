@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +19,7 @@ import {
   parseIndexHtml,
   toDistPath,
 } from './check-bundle-size.mjs';
-import { checkChangelogFile, checkPages, checkVersionFile, REQUIRED_PAGES, FORBIDDEN_PATHS } from './check-build-pages.mjs';
+import { checkChangelogFile, checkManifestFile, checkPages, checkVersionFile, REQUIRED_PAGES, FORBIDDEN_PATHS } from './check-build-pages.mjs';
 import {
   CHANGELOG_FILE,
   VERSION_FILE,
@@ -333,6 +333,22 @@ describe('build info script', () => {
     expect(checkChangelogFile('# Changelog\n\n## [Unreleased]\n')).toEqual({ ok: true, errors: [] });
     expect(checkChangelogFile(null).errors[0]).toMatch(/CHANGELOG.md is missing/);
     expect(checkChangelogFile('nothing').errors[0]).toMatch(/no "## " version sections/);
+  });
+
+  it('checks the web app manifest that makes the app installable', () => {
+    const real = readFileSync(join(fileURLToPath(new URL('..', import.meta.url)), 'public', 'manifest.webmanifest'), 'utf8');
+    const publicDir = join(fileURLToPath(new URL('..', import.meta.url)), 'public');
+    expect(checkManifestFile(real, (path) => existsSync(join(publicDir, path)))).toEqual({ ok: true, errors: [] });
+    expect(checkManifestFile(null).errors[0]).toMatch(/manifest.webmanifest is missing/);
+    expect(checkManifestFile('{').errors[0]).toMatch(/not valid JSON/);
+    const bad = JSON.stringify({ display: 'browser', start_url: '/', icons: [{ src: 'https://x/a.png', sizes: '192x192', type: 'image/png' }] });
+    const errors = checkManifestFile(bad, () => false).errors.join('\n');
+    expect(errors).toMatch(/needs a name/);
+    expect(errors).toMatch(/standalone/);
+    expect(errors).toMatch(/\/ has to be relative/);
+    expect(errors).toMatch(/https:\/\/x\/a.png has to be relative/);
+    expect(errors).toMatch(/needs a 512x512 PNG icon/);
+    expect(errors).toMatch(/icon https:\/\/x\/a.png is missing/);
   });
 
   it('is wired into vite.config.ts with the version from package.json', () => {

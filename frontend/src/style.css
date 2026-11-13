@@ -297,6 +297,7 @@ label.settings-row { justify-content: flex-start; }
 .app-dialog-input[aria-invalid="true"]:focus-visible { outline-color: var(--destructive); }
 .app-dialog-error { margin: 0; font-size: 0.8125rem; color: var(--destructive); overflow-wrap: anywhere; }
 .app-dialog-error[hidden] { display: none; }
+.app-dialog-error .app-dialog-suggest { height: auto; padding: 0; vertical-align: baseline; font-size: inherit; font-weight: 500; white-space: normal; text-align: start; color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
 
 /* First-run tour card. tour.ts sets top and left next to the part it's pointing at. */
 /* Narrower gutter than dialogs: tour.ts keeps the card 0.75rem from the window edge. */

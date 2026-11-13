@@ -176,7 +176,7 @@ Buttons for things you can't easily undo are red, and focus starts on **Cancel**
 
 | Title | Buttons | From |
 | --- | --- | --- |
-| Start a new project? | Cancel, **Start new project** | **New Project**. Red while a guest is connected, and it says it clears the project for everyone in the room. |
+| Replace the whole project? | Cancel, **Start new project** | **New Project**. Always asks, starts on Cancel so Enter does nothing, and says every file and folder closes and to use **New File** to add one file. Red while a guest is connected, and it says it's for everyone in the room. |
 | Open another project? | Cancel, **Choose a project** | **Open Local Project** or **Open from Google Drive**, while a guest is connected. Says it replaces the project for everyone in the room. |
 | Upload a .zip as a new project? | Cancel, **Choose a .zip** | **Upload .zip as New Project**, while a guest is connected. |
 | Name this project | Cancel, **Save project** | **Save Now** or **Save to Google Drive** on an unnamed project. |
@@ -196,7 +196,8 @@ The name dialogs select the name without its extension, so you can type over it,
 | Names can't contain *character*. | File names can't use a backslash, a control character, a vertical bar, or any of `:` `*` `?` `"` `<` `>`. |
 | Names can't use ".." to leave the project. | Paths stay inside the project. |
 | Keep the path to 512 characters or fewer. | The whole path is too long. |
-| *path* already exists. | A file or folder already has that path. |
+| *path* already exists. | A file or folder already has that path. New file, New folder and Rename add a **Use** button with the next free name, and Enter fills it in. |
+| *path* already exists, so here's *new path* instead. | The suggested name was taken, so the box has the next free one, like `chapter (2).tex`. It goes away when you type. |
 | A folder cannot be moved inside itself. | You tried to move a folder into one of its own subfolders. |
 | Keep the name to 200 characters or fewer (it has N). | Project names are limited to 200 characters. |
 - The browser's own "Leave site?" box shows only when something could be lost: edits not yet in Google Drive, edits made while saving is paused, a failed save, a file waiting on the conflict dialog, files still uploading or arriving, or browser storage too full to keep the project. Edits saved to this browser are written right away when you leave, so they don't ask. See [Saving and storage](saving-and-storage.md#autosave-and-save-now).

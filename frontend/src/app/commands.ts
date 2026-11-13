@@ -5,7 +5,7 @@ import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '..
 import type { ThemeMode } from '../state/appSession';
 import { canRunCommand, replaceProjectDialog, type ReplaceAction } from '../state/guestCommands';
 import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
-import { pathProblem } from '../ui/nameChecks';
+import { pathProblem, suggestFreeName } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
 import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
@@ -114,15 +114,25 @@ export type CommandContext = {
  * The built-in keybinds, the one place they're listed. `Mod` is Cmd on a Mac and Ctrl everywhere else.
  * Menus, toolbar tooltips, the palette, and the tour all show labels from this table.
  * When two commands list the same key, the first one gets it.
+ *
+ * Where the browser keeps a key for itself (app/reservedKeys.ts), the `fallback` is used and shown instead.
+ * Every default here was checked against that table: only New File, New Project and Export need one.
+ * Fallbacks use Alt on Windows and Linux. On a Mac, Option+letter types a character (⌥N starts ñ) and
+ * ⌃N moves the cursor down in the editor, so they add ⌥ to ⌘ instead. Alt+N, Alt+Shift+N and Alt+Shift+E
+ * were checked in Chromium on Linux: they reach the page and the browser does nothing with them.
  */
 export const shortcuts: Shortcut[] = [
   { id: 'app.commandPalette', keybind: 'Mod+P' },
   { id: 'app.openSettings', keybind: 'Mod+,' },
-  { id: 'file.new', keybind: 'Mod+N' },
+  // New File gets the key people reach for. New Project replaces everything, so it takes Shift too.
+  // Browsers keep both for a new window in a normal tab, so there they fall back. They work in an app window.
+  { id: 'file.new', keybind: 'Mod+Shift+N', fallback: { other: 'Alt+Shift+N', mac: 'Mod+Alt+Shift+N' } },
+  { id: 'file.newFile', keybind: 'Mod+N', fallback: { other: 'Alt+N', mac: 'Mod+Alt+N' } },
   { id: 'file.openLocal', keybind: 'Mod+O' },
   { id: 'file.openDrive', keybind: 'Mod+Shift+O' },
   { id: 'file.download', keybind: 'Mod+Shift+S' },
-  { id: 'file.export', keybind: 'Mod+Shift+E' },
+  // Firefox on Windows and Linux opens its Network Monitor on Ctrl+Shift+E. ⇧⌘E is free on a Mac.
+  { id: 'file.export', keybind: 'Mod+Shift+E', fallback: { other: 'Alt+Shift+E' } },
   { id: 'file.saveNow', keybind: 'Mod+S' },
   { id: 'edit.undo', keybind: 'Mod+Z' },
   { id: 'edit.redo', keybind: 'Mod+Shift+Z' },
@@ -250,28 +260,34 @@ export function createCommands(app: CommandContext) {
       const folder = fileTree.currentFolder();
       // New files are text, so give them a text extension if they don't have one.
       const pathFor = (name: string) => joinPath(folder, isTextPath(name) ? name : `${name}.tex`);
+      const taken = (path: string) => app.project.hasPath(path);
       const name = await promptDialog({
         title: 'New file',
         message: `${folder ? `Adds it to ${folder}/.` : 'Adds it to the top of the project.'} Names without a text extension get .tex.`,
         label: 'File name',
         initialValue: 'chapter.tex',
         confirmLabel: 'Create file',
-        validate: (value) => pathProblem(value && pathFor(value), (path) => app.project.hasPath(path)),
+        validate: (value) => pathProblem(value && pathFor(value), taken),
+        // A second chapter.tex starts as chapter (2).tex.
+        suggest: (value) => suggestFreeName(value, pathFor, taken),
       });
       if (name === null) return;
       runFileOp(() => openFile(app.project.createTextFile(pathFor(name))));
     },
     'file.newFolder': async () => {
       const folder = fileTree.currentFolder();
+      const pathFor = (name: string) => joinPath(folder, name);
+      const taken = (path: string) => app.project.hasPath(path);
       const name = await promptDialog({
         title: 'New folder',
         message: folder ? `Adds it to ${folder}/.` : 'Adds it to the top of the project.',
         label: 'Folder name',
         initialValue: 'figures',
         confirmLabel: 'Create folder',
-        validate: (value) => pathProblem(value && joinPath(folder, value), (path) => app.project.hasPath(path)),
+        validate: (value) => pathProblem(value && pathFor(value), taken),
+        suggest: (value) => suggestFreeName(value, pathFor, taken),
       });
-      if (name !== null) runFileOp(() => app.project.createFolder(joinPath(folder, name)));
+      if (name !== null) runFileOp(() => app.project.createFolder(pathFor(name)));
     },
     'file.upload': () => uploadDialog.open(fileTree.currentFolder()),
     // The Project .zip exporter with no dialog. It reports how it went in the notice line.

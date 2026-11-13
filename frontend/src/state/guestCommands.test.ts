@@ -23,10 +23,13 @@ describe('guest commands', () => {
 
   it('warns the host that New Project clears it for everyone in the room', () => {
     expect(replaceProjectDialog('new')).toEqual({
-      title: 'Start a new project?',
-      message: 'This clears the project for everyone in the room. The current one stays saved where it is.',
+      title: 'Replace the whole project?',
+      message:
+        'New Project closes every file and folder here for everyone in the room and starts a new project with only main.tex. ' +
+        'This project stays saved where it is. To add one file instead, cancel and use File > New File.',
       confirmLabel: 'Start new project',
       destructive: true,
+      focusCancel: true,
     });
   });
 
@@ -37,6 +40,16 @@ describe('guest commands', () => {
   });
 
   it('drops the warning and the red button when nobody else is in the room', () => {
-    expect(replaceProjectDialog('new', false)).toMatchObject({ message: 'The current project stays saved where it is.', destructive: false });
+    expect(replaceProjectDialog('open', false)).toMatchObject({ message: 'The current project stays saved where it is.', destructive: false });
+  });
+
+  it('still says New Project replaces the whole project when nobody else is in the room', () => {
+    const dialog = replaceProjectDialog('new', false);
+    // Not red with nobody else in the room, but focus still starts on Cancel, so Ctrl+Shift+N then Enter does nothing.
+    expect(dialog).toMatchObject({ title: 'Replace the whole project?', confirmLabel: 'Start new project', destructive: false, focusCancel: true });
+    expect(replaceProjectDialog('open', false)).not.toHaveProperty('focusCancel');
+    expect(dialog.message).toMatch(/^New Project closes every file and folder here and starts a new project with only main\.tex\./);
+    expect(dialog.message).toContain('use File > New File');
+    expect(dialog.message).not.toContain('everyone in the room');
   });
 });
