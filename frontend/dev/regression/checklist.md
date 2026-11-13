@@ -36,6 +36,8 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] References: the missing label shows `??` as plain text, not a link.
 - [ ] Scroll the preview halfway down, then type in the editor. After the preview updates it stays at the same place instead of jumping to the top.
 - [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list (the ⓘ button above the preview) doesn't mention `\vspace` or `\addcontentsline`.
+- [ ] Code: in the Code section, each `verbatim`, `lstlisting`, `minted` and `\lstinputlisting` block shows as a monospaced box with the text exactly as typed (indents, tabs, `%`, `<b>`, and `\ { } $ & # ^ _ ~`), in both the light and dark preview themes. Captions, line numbers, `firstline`/`lastline` and `\ref` to listings match the `% Expect:` comments, and the ⓘ list says listings have no syntax highlighting.
+- [ ] Code: `\verb*`, `\lstinline` and `\mintinline` stay inside their line, and copying a numbered listing copies the code without the line numbers.
 - [ ] Math: inline math, the integral and the sum are typeset, with limits above and below the sum.
 - [ ] Math: Greek letters, symbols and the matrix render.
 - [ ] Math: `\infty`, `\neq`, `\notin` and the other symbols in the "Computer Modern lacks" line use a serif math font, and the `\neq`-style slashes cross their symbol.
@@ -59,7 +61,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] The button and popover look right in the light and dark app themes, and the popover fits on a phone-width screen.
 - [ ] Open a project with nothing for the preview to change (the starter project). The ⓘ button isn't there.
 - [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
-- [ ] Code in `verbatim`, `lstlisting`, `minted` or `comment` blocks, and in environments the document defines with `\lstnewenvironment`, `\DefineVerbatimEnvironment`, `\newminted` or a `\newenvironment` around one of those, is left alone, even when `\begin` or `\end` is in the middle of a line. LaTeX.js has none of these except `comment`, so the unit tests in `src/compile/latexJsAdapt.test.ts` cover them.
+- [ ] Code in `verbatim`, `lstlisting`, `minted` or `comment` blocks, and in environments the document defines with `\lstnewenvironment`, `\DefineVerbatimEnvironment`, `\newminted` or a `\newenvironment` around one of those, is left alone, even when `\begin` or `\end` is in the middle of a line. The unit tests in `src/compile/latexJsAdapt.test.ts` and `src/compile/verbatimBlocks.test.ts` cover them.
 
 Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio` (a height relative to `\textheight` is ignored).
 

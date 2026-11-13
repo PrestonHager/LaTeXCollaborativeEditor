@@ -10,7 +10,9 @@ describe('regressionProject', () => {
     expect(content.mainPath).toBe('main.tex');
     const paths = content.files.map((file) => file.path).sort();
     expect(paths).toEqual([
+      'chapters/code.tex',
       'chapters/figures.tex',
+      'chapters/hello.py',
       'chapters/math.tex',
       'chapters/text.tex',
       'figures/quadrants.png',
@@ -42,6 +44,19 @@ describe('regressionProject', () => {
         expect(paths.has(name.endsWith('.tex') ? name : `${name}.tex`)).toBe(true);
       }
     }
+  });
+
+  it('compiles the code listings chapter with nothing missing', async () => {
+    const content = await regressionProject(new BlobStore());
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    // jsdom can't measure the picture in the figures chapter, so compile this chapter on its own.
+    texts.set('code-only.tex', '\\documentclass{article}\n\\begin{document}\n\\input{chapters/code}\n\\end{document}');
+    const result = projectToPreviewHtml({ mainPath: 'code-only.tex', texts, binaryPaths: [], imageUrls: new Map() });
+    expect(result.errors).toEqual([]);
+    expect(result.missing).toEqual([]);
+    const doc = new DOMParser().parseFromString(result.html!, 'text/html');
+    expect(doc.querySelectorAll('pre.lc-listing').length).toBe(6);
+    expect(doc.body.textContent).toContain('Listing 3: A minted listing');
   });
 
   it('compiles every bibliography style file, with notes only in unknown.tex', async () => {

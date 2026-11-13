@@ -20,6 +20,7 @@ Editing and preview:
 - `\input` and `\include` from the main file.
 - `\includegraphics` for PNG, JPG, GIF, WebP, and SVG, with `\graphicspath` and the size options `width`, `height`, `scale` and `keepaspectratio`. Sizes can be relative, like `0.5\textwidth`, or absolute, like `5cm`, `30mm`, `2in`, `72pt` or `10em`.
 - Bibliographies from `.bib` files, with `\bibliography` or biblatex's `\addbibresource` and `\printbibliography`. The `plain`, `unsrt`, `abbrv`, `alpha`, `ieeetr`, `IEEEtran`, `apalike`, `plainnat`, `unsrtnat` and `abbrvnat` styles set the order, the labels (`[1]`, `[Knu84]` or `Knuth, 1984`) and the entry format. See [Bibliography](editing-and-preview.md#bibliography).
+- Verbatim text and code listings, shown exactly as typed: `verbatim`, `verbatim*`, `\verb`, `\verb*`, fancyvrb's `Verbatim`, `alltt`, listings' `lstlisting`, `\lstinline` and `\lstinputlisting`, and minted's `minted`, `\mintinline` and `\inputminted` (no `-shell-escape` needed), plus environments the document makes with `\lstnewenvironment`, `\newminted` or `\DefineVerbatimEnvironment`. The options `caption`, `label`, `title`, `numbers` (`linenos` for minted), `firstnumber`, `firstline`, `lastline`, `gobble` and `autogobble` work, and `\ref` to a listing's label gives its number. Listing files are read from the project.
 - Errors with the file and line they came from.
 
 Collaboration:
@@ -49,6 +50,7 @@ These are known limits right now.
 
 - **It's not real LaTeX.** The preview is LaTeX.js, which covers common commands and environments, but not every package. A document that works here might not build with `pdflatex`, and the other way around. There's no PDF output.
 - **PDF and EPS figures don't show in the preview.** The preview puts a note in their place. The file viewer can still show PDFs. Convert figures to PNG or SVG if you want them in the preview.
+- **Code listings have no syntax colors.** The preview shows the code exactly, in a plain monospaced box. Style options like `basicstyle`, `frame` or a minted style are ignored.
 - **The bibliography is close, not exact.** The preview copies the common BibTeX styles itself instead of running BibTeX, so small details can differ. Other styles fall back to `plain` with a note. Citations aren't compressed or merged (no `[1-3]` or `1984a,b`), and biblatex options other than `style` and `sorting=none` are ignored.
 - **Files added to a Drive project folder from Drive itself don't show up.** The app only has permission to see files it made or that you picked. Upload files from the editor instead.
 - **There's no undo for file operations.** Undo only covers typing. Deleting, renaming, or moving a file can't be undone from the app.

@@ -2,6 +2,7 @@ import { HtmlGenerator, parse } from 'latex.js';
 import { PAGE_BREAK_TOKEN, adaptLatexSource } from './latexJsAdapt';
 import { expandProjectSource, type ProjectDiagnostic } from './projectSource';
 import { addKatexFontFallbacks } from './katexFonts';
+import { extractVerbatim, insertVerbatimBlocks, type VerbatimBlock } from './verbatimBlocks';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 import { LATEX_JS_ASSET_BASE } from './latexJsAssets';
@@ -67,7 +68,9 @@ export function markPageBreaks(doc: Document): void {
  * Typeset editor LaTeX into a full HTML document (LaTeX.js), using the raw `source` only.
  */
 export function latexSourceToPreviewHtml(source: string): { html: string | null; errors: EditorDiagnostic[]; changes: string[] } {
-  const { doc, errors, changes } = typeset(source);
+  const path = 'main.tex';
+  const verbatim = extractVerbatim(path, new Map([[path, source]]));
+  const { doc, errors, changes } = typeset(verbatim.texts.get(path)!, verbatim.blocks, verbatim.changes);
   return { html: doc ? doc.documentElement.outerHTML : null, errors, changes };
 }
 
@@ -75,8 +78,13 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
  * Typeset LaTeX into a document, with dangerous URLs stripped. `changes` lists what the adapter
  * removed or rewrote; the preview pane shows it next to the preview, not inside the document.
  */
-function typeset(source: string): { doc: Document | null; errors: EditorDiagnostic[]; changes: string[] } {
+function typeset(
+  source: string,
+  blocks: VerbatimBlock[] = [],
+  verbatimChanges: string[] = [],
+): { doc: Document | null; errors: EditorDiagnostic[]; changes: string[] } {
   const adapted = adaptLatexSource(source);
+  const changes = [...verbatimChanges, ...adapted.changes];
   try {
     const generator = parse(adapted.source, {
       generator: new HtmlGenerator({ hyphenate: false, documentClass: 'article' }),
@@ -87,12 +95,13 @@ function typeset(source: string): { doc: Document | null; errors: EditorDiagnost
     unlinkMissingRefs(doc);
     markPageBreaks(doc);
     addKatexFontFallbacks(doc);
-    return { doc, errors: [], changes: adapted.changes };
+    insertVerbatimBlocks(doc, blocks);
+    return { doc, errors: [], changes };
   } catch (err) {
     return {
       doc: null,
       errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }],
-      changes: adapted.changes,
+      changes,
     };
   }
 }
@@ -131,8 +140,11 @@ export type ProjectPreviewResult = {
  * bibliography come from the project. Errors say which file and line they belong to.
  */
 export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreviewResult {
-  const expanded = expandProjectSource(input.mainPath, input.texts, input.binaryPaths);
-  const { doc, errors: sourceErrors, changes } = typeset(expanded.source);
+  // Verbatim text comes out first, so nothing after this (\input, \cite, the adapter) can touch it.
+  const verbatim = extractVerbatim(input.mainPath, input.texts);
+  const expanded = expandProjectSource(input.mainPath, verbatim.texts, input.binaryPaths);
+  expanded.missing.push(...verbatim.missing.filter((name) => !expanded.missing.includes(name)));
+  const { doc, errors: sourceErrors, changes } = typeset(expanded.source, verbatim.blocks, verbatim.changes);
   // LaTeX.js errors come first, since they stop the preview. Bibliography notes follow.
   const errors: ProjectDiagnostic[] = [
     ...sourceErrors.map((error) => {
