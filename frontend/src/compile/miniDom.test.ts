@@ -60,6 +60,14 @@ $\mathbf{v} \mathit{x} \mathsf{S} \mathrm{d}$ and text: < > \& ~
 \verb|x&y| \begin{description}\item[A] b\end{description}
 \begin{flushright}r\end{flushright} \fbox{box} \hspace{1cm} \underline{u} \LaTeX
 \end{document}`,
+  // Issue #118: listings go back in after LaTeX.js, so they must work on the mini DOM too.
+  'code listings': String.raw`\documentclass{article}
+\begin{document}
+\begin{lstlisting}[caption=Code <b>, label=lst:a, numbers=left]
+  if (a < b) { x = "&amp;"; }  % $ # ^ _ ~
+\end{lstlisting}
+See \ref{lst:a} and \lstinline|<i>| \verb*|a b|.
+\end{document}`,
 };
 
 describe('miniDom with LaTeX.js', () => {

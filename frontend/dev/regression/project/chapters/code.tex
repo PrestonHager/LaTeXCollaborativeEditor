@@ -1,0 +1,62 @@
+\section{Code}
+\label{sec:code}
+% Issue #118: verbatim and code listings. Every block shows as a gray box in monospace, in light and dark themes.
+% Expect: the ⓘ list says code listings show as plain text without syntax highlighting, mentions alltt,
+% and says the listings, minted and fancyvrb setup commands were removed.
+\lstset{basicstyle=\ttfamily\small, breaklines=true, frame=single}
+\setminted{fontsize=\small}
+
+\subsection{verbatim}
+% Expect: a box with these four lines exactly as typed: the two-space and tab indents,
+% the % (not a comment), and every special character. Nothing is bold, nothing is a link.
+\begin{verbatim}
+  if (a < b) {
+	tab_indented = "\textbf{not bold}";   % not a comment
+  }
+\ { } % $ & # ^ _ ~ <b>not html</b> \url{https://example.com}
+\end{verbatim}
+% Expect: the same box style, with every space shown as an open-box sign.
+\begin{verbatim*}
+two  spaces
+\end{verbatim*}
+% Expect: in this line, the first inline code shows a, an open-box sign, then b. The other two show as typed.
+Inline: \verb*|a b|, \lstinline[language=Python]|x = {1, 2}| and \mintinline{c}|int *p = &x;|.
+
+\subsection{listings}
+% Expect: "Listing 1: A loop in C" above a box of three lines numbered 2 to 4 (firstline=2, lastline=4).
+% The "skipped" lines don't show.
+\begin{lstlisting}[language=C, caption={A loop in C}, label=lst:loop, numbers=left, firstline=2, lastline=4]
+// skipped
+for (int i = 0; i < 10; i++) {
+    printf("%d\n", i);
+}
+// skipped too
+\end{lstlisting}
+% Expect: the 1 is a link that scrolls to the caption above.
+Listing~\ref{lst:loop} counts to ten.
+
+% Expect: "Listing 2: Read from a file" above the whole of chapters/hello.py, tab and all.
+\lstinputlisting[language=Python, caption={Read from a file}]{chapters/hello.py}
+
+\subsection{minted}
+% Expect: a box with lines numbered from 10 and the common indent removed (autogobble),
+% then "Listing 3: A minted listing" under it. Real TeX needs -shell-escape for minted; the preview doesn't.
+\begin{listing}[H]
+\begin{minted}[linenos, firstnumber=10, autogobble]{rust}
+    fn main() {
+        println!("{}", 1 + 1);
+    }
+\end{minted}
+\caption{A minted listing}
+\label{lst:minted}
+\end{listing}
+% Expect: the 3 is a link to the caption above. Then lines 2 and 3 of chapters/hello.py, without numbers.
+See Listing~\ref{lst:minted}.
+\inputminted[firstline=2, lastline=3]{python}{chapters/hello.py}
+
+\subsection{alltt}
+% Expect: two monospace lines that keep their spaces, with "bold" in bold and the special characters as typed.
+\begin{alltt}
+x  =  \textbf{bold}   % $ & # ^ _ ~
+  indented line
+\end{alltt}

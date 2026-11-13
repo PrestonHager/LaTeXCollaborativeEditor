@@ -6,7 +6,8 @@ import { contentFromFiles } from '../project/projectIo';
 const ROOT = '../../dev/regression/project/';
 
 // Pull the test project in at build time. Text comes in as strings, images as data URLs.
-const texts = import.meta.glob<string>('../../dev/regression/project/**/*.{tex,bib}', {
+// The .py file is there for \lstinputlisting.
+const texts = import.meta.glob<string>('../../dev/regression/project/**/*.{tex,bib,py}', {
   query: '?raw',
   import: 'default',
   eager: true,
