@@ -21,7 +21,7 @@
 @import "basecoat-css/components/tooltip";
 
 /*
- * App chrome colors come from Basecoat's theme tokens, which flip when main.ts puts `dark` on <html>.
+ * App chrome colors come from Basecoat's theme tokens, which flip when src/app/theme.ts puts `dark` on <html>.
  * These aliases keep the editor and preview rules below readable.
  */
 :root {

@@ -27,6 +27,7 @@ import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
+import { createThemeController } from './app/theme';
 import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -112,8 +113,8 @@ let activeFileId: string | null = null;
 // Only used to match an old single-file Drive link from before projects.
 let documentId = createDocumentId();
 let savingPaused = false;
-let editorTheme: ThemeMode = 'system';
-let previewTheme: ThemeMode = 'system';
+const themeState = createThemeController();
+const { applyEditorTheme, applyPreviewTheme } = themeState;
 let layoutMode: 'split' | 'editor-only' | 'preview-only' = 'split';
 let splitRatio = 0.5;
 let hostStorageText = 'Saved on host local storage';
@@ -186,36 +187,6 @@ window.addEventListener('unhandledrejection', (event) => {
   showNotice(describeError(event.reason), true);
 });
 
-function resolveDisplayTheme(mode: ThemeMode): 'dark' | 'light' {
-  if (mode === 'dark') return 'dark';
-  if (mode === 'light') return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function applyEditorTheme(theme: ThemeMode) {
-  editorTheme = theme;
-  const display = resolveDisplayTheme(theme);
-  // Basecoat switches its own colors on the `dark` class.
-  document.documentElement.classList.toggle('dark', display === 'dark');
-  if (theme === 'system') {
-    document.documentElement.removeAttribute('data-editor-theme');
-  } else {
-    document.documentElement.setAttribute('data-editor-theme', theme);
-  }
-  document.documentElement.style.colorScheme = display === 'dark' ? 'dark' : 'light';
-  window.dispatchEvent(new CustomEvent('editorthemechange'));
-}
-
-function applyPreviewTheme(theme: ThemeMode) {
-  previewTheme = theme;
-  if (theme === 'system') {
-    document.documentElement.removeAttribute('data-preview-theme');
-  } else {
-    document.documentElement.setAttribute('data-preview-theme', theme);
-  }
-  window.dispatchEvent(new CustomEvent('previewthemechange'));
-}
-
 const applyLayoutMode = () => {
   splitRoot.classList.toggle('is-editor-only', layoutMode === 'editor-only');
   splitRoot.classList.toggle('is-preview-only', layoutMode === 'preview-only');
@@ -271,8 +242,6 @@ if (restored) {
   if (restored.documentId) documentId = restored.documentId;
   // The saved flag kept its old name, so false there means saving is paused.
   savingPaused = !restored.saveNowEnabled;
-  editorTheme = restored.editorTheme;
-  previewTheme = restored.previewTheme;
   projectId = restored.projectId ?? null;
   manifest = restored.manifest ?? null;
   activeFileId = restored.activeFileId ?? null;
@@ -299,12 +268,9 @@ function restoredDocState() {
   return state ? { docId: restored.yjs.docId, state } : undefined;
 }
 
-applyEditorTheme(editorTheme);
-applyPreviewTheme(previewTheme);
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  if (editorTheme === 'system') applyEditorTheme('system');
-  if (previewTheme === 'system') applyPreviewTheme('system');
-});
+applyEditorTheme(restored?.editorTheme ?? 'system');
+applyPreviewTheme(restored?.previewTheme ?? 'system');
+themeState.watchSystemTheme();
 
 const session: SessionController = new SessionController({
   isHost: !isClient,
@@ -345,8 +311,8 @@ const persistAppSession = () => {
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
     providerMode: getProviderMode(),
     saveNowEnabled: !savingPaused,
-    editorTheme,
-    previewTheme,
+    editorTheme: themeState.editorTheme,
+    previewTheme: themeState.previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
     projectId: projectId ?? undefined,
     activeFileId: activeFileId ?? undefined,
@@ -1078,12 +1044,12 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   },
   'view.toggleEditorTheme': () => {
     const nextTheme: Record<ThemeMode, ThemeMode> = { dark: 'light', light: 'system', system: 'dark' };
-    applyEditorTheme(nextTheme[editorTheme]);
+    applyEditorTheme(nextTheme[themeState.editorTheme]);
     persistAppSession();
   },
   'view.togglePreviewTheme': () => {
     const nextTheme: Record<ThemeMode, ThemeMode> = { dark: 'light', light: 'system', system: 'dark' };
-    applyPreviewTheme(nextTheme[previewTheme]);
+    applyPreviewTheme(nextTheme[themeState.previewTheme]);
     persistAppSession();
   },
   'view.darkMode': () => setAllThemes('dark'),
@@ -1245,8 +1211,8 @@ const commandPalette = createCommandPalette(document.getElementById('command-pal
 
 const settingsDialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
   getState: () => ({
-    editorTheme,
-    previewTheme,
+    editorTheme: themeState.editorTheme,
+    previewTheme: themeState.previewTheme,
     savingPaused,
     canChangeSaving: !isClient,
     driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
@@ -1307,7 +1273,7 @@ function buildPaletteCommands(): PaletteCommand[] {
     }));
   // Skip the theme switch for the theme that's already in use.
   const themes = themeSwitchCommands
-    .filter(({ theme }) => !(editorTheme === theme && previewTheme === theme))
+    .filter(({ theme }) => !(themeState.editorTheme === theme && themeState.previewTheme === theme))
     .map(({ id, section, label, description }) => ({ id, section, label, description, enabled: true }));
   const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
   return [...fromMenus, ...themes, ...extras];
