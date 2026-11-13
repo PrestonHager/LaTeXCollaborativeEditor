@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { defineConfig, searchForWorkspaceRoot, type Plugin } from 'vite';
+import { defineConfig, loadEnv, searchForWorkspaceRoot, type Plugin } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
-import { changelogFilePlugin, resolveBuildInfo, versionJsonPlugin } from './scripts/build-info.mjs';
+import { changelogFilePlugin, deployEnvPlugin, resolveBuildInfo, versionJsonPlugin } from './scripts/build-info.mjs';
 import { addConnectSources, removeCspMeta } from './src/security/csp';
 
 // The version, commit and build time go in the About dialog, the footer, the bug report form,
@@ -10,6 +10,11 @@ import { addConnectSources, removeCspMeta } from './src/security/csp';
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 const buildInfo = resolveBuildInfo({ version });
 const CHANGELOG_PATH = fileURLToPath(new URL('../CHANGELOG.md', import.meta.url));
+const APP_ROOT = fileURLToPath(new URL('.', import.meta.url));
+
+// VITE_DEPLOY_ENV (production, staging or dev) goes in version.json. A staging build also gets
+// its own P2P app id, a "Staging" badge in the header, noindex and a robots.txt (docs/deployment.md).
+const deployEnv = deployEnvPlugin((mode) => loadEnv(mode, APP_ROOT, 'VITE_'));
 
 // Every HTML page that ships. Vite only builds index.html unless told otherwise, so the
 // Privacy and ToS pages linked from the footer and About dialog must be listed here.
@@ -42,7 +47,13 @@ function cspPlugin(): Plugin {
 export default defineConfig({
   base: './',
   // The repo-root CHANGELOG.md also goes to dist/ (issue #140), for the update prompt's What's new.
-  plugins: [tailwindcss(), versionJsonPlugin(buildInfo), changelogFilePlugin(CHANGELOG_PATH), cspPlugin()],
+  plugins: [
+    tailwindcss(),
+    deployEnv,
+    versionJsonPlugin(buildInfo, () => deployEnv.api.env),
+    changelogFilePlugin(CHANGELOG_PATH),
+    cspPlugin(),
+  ],
   build: {
     // scripts/check-bundle-size.mjs reads dist/.vite/manifest.json to find the initial-load graph.
     manifest: true,
@@ -64,7 +75,7 @@ export default defineConfig({
     strictPort: true,
     // The changelog dialog bundles ../CHANGELOG.md (issue #140), which sits above the app root.
     fs: {
-      allow: [searchForWorkspaceRoot(fileURLToPath(new URL('.', import.meta.url))), CHANGELOG_PATH],
+      allow: [searchForWorkspaceRoot(APP_ROOT), CHANGELOG_PATH],
     },
   },
 });

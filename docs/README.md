@@ -4,7 +4,7 @@
 
 The **built documentation** is the **user guide**: getting started, editing, collaboration, storage, interface, and shortcuts. Those pages are listed in `mkdocs.yml` under `nav`.
 
-`mkdocs build` (and `pages.yml`) **exclude** some Markdown from the published site (see `exclude_docs` in `mkdocs.yml`) so the public site stays end-user focused. Excluded files remain in this folder for **contributors and operators** (protocol, deployment checklist, DoD, internal notes).
+`mkdocs build` (and the deploy workflows, `staging.yml` and `release.yml`) **exclude** some Markdown from the published site (see `exclude_docs` in `mkdocs.yml`) so the public site stays end-user focused. Excluded files remain in this folder for **contributors and operators** (protocol, deployment checklist, DoD, internal notes).
 
 ## Maintainer references (not in the MkDocs nav)
 

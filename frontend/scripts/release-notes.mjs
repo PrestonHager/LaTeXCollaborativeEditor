@@ -1,5 +1,5 @@
 /**
- * Used by .github/workflows/release.yml when a vX.Y.Z tag is pushed.
+ * Used by .github/workflows/release.yml (and tag-release.yml, prepare-release.yml) for a vX.Y.Z release.
  * Checks the tag matches the version in frontend/package.json and the root package.json,
  * then prints that version's CHANGELOG.md section, which becomes the GitHub release notes.
  * Exits 1 with a message if anything doesn't line up.

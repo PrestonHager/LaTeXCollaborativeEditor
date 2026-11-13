@@ -1,0 +1,88 @@
+# Cuts a release: bumps the version, dates the changelog and opens a release PR from
+# release/vX.Y.Z. Merging that PR tags it and deploys it to production (tag-release.yml).
+# See docs/versioning.md, "Cutting a release".
+#
+# Needs "Allow GitHub Actions to create and approve pull requests" (Settings > Actions > General).
+# A PR opened with GITHUB_TOKEN doesn't start other workflows, so this runs test.yml on the
+# branch itself. If its checks still don't show, close and reopen the PR.
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to bump. Ignored when version is set.
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: Or an exact version, like 0.2.0 or 1.0.0-rc.1. Leave empty to use bump.
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error title=Run it on main::Prepare release only runs on main, so the release PR starts from what's on main."
+          exit 1
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Bump the version and date the changelog
+        id: bump
+        env:
+          BUMP: ${{ inputs.version || inputs.bump }}
+        run: |
+          set -euo pipefail
+          version="$(node frontend/scripts/prepare-release.mjs "$BUMP")"
+          node frontend/scripts/release-notes.mjs "v$version" > "$RUNNER_TEMP/notes.md"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Open the release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="release/v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error title=Already released::v$VERSION is already tagged."
+            exit 1
+          fi
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "::error title=Branch exists::$branch already exists. Merge or close its PR and delete the branch first."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git add CHANGELOG.md package.json package-lock.json frontend/package.json frontend/package-lock.json
+          git commit -q -m "Release v$VERSION"
+          git push -q origin "$branch"
+          {
+            echo "Releases **v$VERSION**. Merging this PR tags \`v$VERSION\` on the merge commit and deploys it to production (\`tag-release.yml\`, then \`release.yml\`)."
+            echo
+            echo "This PR was opened by GitHub Actions, so GitHub doesn't start the usual \`pull_request\` checks for it."
+            echo "Prepare release already ran **Test and Coverage** on \`$branch\`. If its checks don't show here, close and reopen this PR."
+            echo
+            echo "## Release notes"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --base main --head "$branch" --title "Release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+          # workflow_dispatch is one of the events GITHUB_TOKEN may start, so the PR gets its checks.
+          gh workflow run test.yml --ref "$branch"

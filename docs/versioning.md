@@ -32,7 +32,8 @@ Before 1.0, a breaking change may go in a MINOR bump (`0.1.0` to `0.2.0`), as Se
 
 - `version` from `frontend/package.json`;
 - `commit`, the short SHA from `git rev-parse --short HEAD`, falling back to `$GITHUB_SHA` (cut to 7 characters) and then to `dev`;
-- `builtAt`, the build time as an ISO string.
+- `builtAt`, the build time as an ISO string;
+- `env`, the deploy environment (only in `version.json`, not in the bundle's build info).
 
 These go into the bundle as `import.meta.env.VITE_APP_VERSION`, `VITE_APP_COMMIT` and `VITE_APP_BUILT_AT`. App code reads them through `frontend/src/app/buildInfo.ts` (`BUILD_INFO`), never from `import.meta.env` directly. The full build is written the SemVer way, `0.1.0+abc1234` (`formatVersion`).
 
@@ -54,13 +55,14 @@ The Vite plugin `versionJsonPlugin` writes `dist/version.json` next to `index.ht
 {
   "version": "0.1.0",
   "commit": "abc1234",
-  "builtAt": "2026-11-13T10:00:00.000Z"
+  "builtAt": "2026-11-13T10:00:00.000Z",
+  "env": "production"
 }
 ```
 
-It only ever has these three fields. The dev server serves the same file at `/version.json` with `Cache-Control: no-store`.
+It only ever has these four fields. `env` is the deploy environment, `VITE_DEPLOY_ENV` (`production`, `staging` or `dev`, see `docs/deployment.md`). The update check ignores it: staging and production are separate sites, so a tab only ever sees its own site's file. The dev server serves the same file at `/version.json` with `Cache-Control: no-store`.
 
-After `vite build`, `frontend/scripts/check-build-pages.mjs` fails the build if `version.json` is missing, isn't JSON, has a bad field, or has a version that doesn't match `package.json`.
+After `vite build`, `frontend/scripts/check-build-pages.mjs` fails the build if `version.json` is missing, isn't JSON, has a bad field (`env` included), or has a version that doesn't match `package.json`.
 
 The update check fetches it, checks it with `parseVersionInfo`, and compares it with `BUILD_INFO` using `isDifferentBuild`. GitHub Pages sends `Cache-Control: max-age=600` and we can't change headers there, so the fetch bypasses the cache itself: `fetch('version.json?t=' + Date.now(), { cache: 'no-store' })`. There's no service worker, so nothing else caches it.
 
@@ -112,30 +114,34 @@ When you change a stored format:
 
 ## Cutting a release
 
-1. Pick the number from the changelog's Unreleased section, using the table above.
-2. In a PR to `main`:
-   - Set the version: `cd frontend && npm version X.Y.Z --no-git-tag-version`, then set the same `version` in the root `package.json` and run `npm install --package-lock-only` at the root.
-   - In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty `## [Unreleased]` above it, and update the links at the bottom.
-   - Run `npm run test:run` and `npm run build` in `frontend/`.
-3. Merge it. Pages deploys it as usual.
-4. Tag the merge commit on `main` and push the tag:
+PRs don't bump the version. They only add lines under `## [Unreleased]`, so parallel PRs don't fight over `package.json` and the changelog. A release bumps it once, in its own PR, made by a workflow.
 
-   ```sh
-   git checkout main && git pull
-   git tag -a vX.Y.Z -m "vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
+`main` deploys to staging on every push. Production only gets releases, so every production deploy is a version (`docs/deployment.md`, "Staging and production").
 
-5. `.github/workflows/release.yml` runs on the tag. It:
-   - checks the tag matches both `package.json` files and that the changelog has a section for it (`frontend/scripts/release-notes.mjs`);
-   - runs the tests and the build on the tagged commit;
-   - creates the GitHub release with that changelog section as the notes, marked as a pre-release if the version has a `-`.
+1. Try `main` on staging. Pick the bump from the Unreleased section, using the table above.
+2. Actions > **Prepare release** > Run workflow, on `main`. Choose `patch`, `minor` or `major`, or type an exact version (like `0.2.0` or `1.0.0-rc.1`). It runs `frontend/scripts/prepare-release.mjs`, which:
+   - sets the version in both `package.json` files and both lockfiles;
+   - renames `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` (today, UTC), puts a fresh empty `## [Unreleased]` above it, and updates the compare links at the bottom;
+   - fails, changing nothing, if Unreleased is empty, the version isn't newer, or the changelog already has that version.
 
-If the workflow fails, fix it in a new PR, delete the tag (`git push origin :refs/tags/vX.Y.Z` and `git tag -d vX.Y.Z`), and tag again. If it can't run at all, make the release by hand on GitHub with the same title and notes.
+   Then it pushes the branch `release/vX.Y.Z` and opens the PR "Release vX.Y.Z" with the release notes in its description.
+3. Check the PR. Edit the changelog wording on the branch if you like, but keep the version and the heading.
+   A PR opened with `GITHUB_TOKEN` doesn't start other workflows, so its `pull_request` checks don't run on their own. Prepare release runs **Test and Coverage** on the branch itself (`workflow_dispatch`). If the checks still don't show on the PR, close and reopen it, or push a commit to the branch. Both start `pull_request` runs.
+4. Merge it. `.github/workflows/tag-release.yml` runs on the push to `main`. It sees the release when `frontend/package.json`'s version went up, or the commit message names `release/vX.Y.Z` for the current version (`frontend/scripts/release-tag.mjs`). Then it:
+   - tags `vX.Y.Z` (annotated) on that commit, unless the tag is already there;
+   - calls `.github/workflows/release.yml`, which checks the tag is on `main`, matches both `package.json` files and has a changelog section (`frontend/scripts/release-notes.mjs`), runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to GitHub Pages, and creates the GitHub release with that changelog section as the notes, marked as a pre-release if the version has a `-`.
 
-Builds between releases still deploy from `main` with the last released version, so the commit in `version.json` and the footer is what tells them apart.
+   A normal PR that bumps the version by hand releases the same way when it merges.
+
+If the release fails after tagging, fix it in a new PR, then Actions > **Release** > Run workflow on `main` with the tag to retry. That's also how to redeploy a release (for example after changing a Production variable): it deploys the tag again and refreshes the GitHub release's notes.
+If the tagged commit itself is broken, release the fix as the next patch. Don't move a tag that's been deployed.
+
+You can still tag by hand (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`) on a commit on `main` whose version already matches. That runs `release.yml` on the tag, which can only deploy if the github-pages environment allows `v*` tags (`docs/deployment.md`, one-time setup). Running Release on `main` with the tag needs no such rule.
+
+Between releases, staging runs the last released version number from `main`, so the commit in `version.json` and the footer tells builds apart. `version.json`'s `env` says which site a build is for.
+
+The first release under this flow is **v0.2.0**. Unreleased has the Trystero protocol break, which before 1.0 goes in a minor bump (see the scheme above).
 
 ## Not done yet
 
-- A CI check that the version was bumped when user-facing code changed.
 - The version in the docs site footer.

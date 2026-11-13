@@ -15,7 +15,8 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
   - `VITE_DISABLE_CSP` (optional; `1` ships without the Content Security Policy, see "Turning the CSP off" below)
-- The Pages workflow reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (repository or **Production** environment).
+  - `VITE_DEPLOY_ENV` (set by the deploy workflows: `production` or `staging`, see "Staging and production" below)
+- The deploy workflows (`release.yml` for production, `staging.yml` for staging) read `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** or **staging** environment). Both build with the `.github/actions/build-site` action.
   The rendezvous and TURN values aren't passed to the build yet, so production uses the defaults in `bootstrapConfig.ts`.
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
@@ -26,7 +27,7 @@ Frontend deployment (GitHub Pages)
   The page check fails the build if `version.json` is missing, malformed, or doesn't match `package.json`.
 - The build also copies the repo-root `CHANGELOG.md` to `dist/CHANGELOG.md` (`changelogFilePlugin` in `scripts/build-info.mjs`), read from the root file each build, so there's no second copy in the repo. The page check fails the build if it's missing.
   The update prompt's **What's new** fetches it next to `index.html` with a cache-busting query and `cache: 'no-store'`, so an open tab can show what the new deploy changed. CSP `connect-src 'self'` already covers it. A host that doesn't serve it only loses that: the dialog falls back to the changelog bundled in the running build and links to the latest on GitHub.
-  The Pages workflow's checkout has the git history it needs, so no extra setup is needed. See `docs/versioning.md`.
+  The deploy workflows' checkout has the git history it needs, so no extra setup is needed. See `docs/versioning.md`.
 - `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). It splits the build in two:
   - **Initial load**: `index.html` plus everything it loads before the editor is usable (the entry script, its static imports and modulepreloads, and the linked CSS).
     The script finds these from `dist/index.html` and the Vite manifest (`dist/.vite/manifest.json`, turned on with `build.manifest` in `vite.config.ts`).
@@ -41,9 +42,49 @@ Frontend deployment (GitHub Pages)
   - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
   - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
-- Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.
+- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder: to staging on every push to `main`, to production on a release (see "Staging and production" below).
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
-- **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository or **Production** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/`. Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
+- **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository, or **Production** or **staging** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/` (for staging, the staging site's URL under `/docs/`). Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
+
+Staging and production
+- **`main` is staging. Releases are production.** Every push to `main` deploys to the staging site (`.github/workflows/staging.yml`). Production (https://latex.prestonhager.com/) only deploys from a `vX.Y.Z` release (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
+- **Staging is on its own origin.** If it were a path on the production site, it would share localStorage and IndexedDB with production, so a staging build's migration could damage real users' projects, and Google OAuth only allows exact origins anyway.
+  GitHub Pages has one site per repo, so staging lives in a second repo, `PrestonHager/LaTeXCollaborativeEditor-staging`, served at `https://staging.latex.prestonhager.com/`.
+  `staging.yml` builds the site and force-pushes it as one commit to that repo's `gh-pages` branch, with a `.nojekyll` file and a `CNAME` for the custom domain. Pages in the staging repo publishes it a minute or two later.
+- **Skipped until it's set up.** Without the `STAGING_REPO` variable and the `STAGING_DEPLOY_TOKEN` secret, the Deploy staging run passes with a notice saying staging was skipped, so forks and a fresh setup don't fail on every push.
+- **Its own peers.** Peers only meet peers with the same `VITE_P2P_APP_ID`. A staging build always uses an app id with `staging` in it: the staging value as is if it already has one, else that value (or the default) plus `-staging`. So staging peers never meet production peers, even if staging inherits production's app id from a repository variable.
+- **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. The deploy workflows set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
+  It goes in `dist/version.json` as `env`. A staging build also shows a small **Staging** badge next to the project name, adds `<meta name="robots" content="noindex">` to every page, and ships a `robots.txt` that blocks every crawler (that covers the docs too). Production and dev builds have none of these.
+  It's all done at build time by `deployEnvPlugin` in `frontend/scripts/build-info.mjs`, which replaces the `<!-- deploy-env-badge -->` comment in `index.html`. No app code reads it.
+- **Environments.** The production build runs in the **Production** environment, and its deploy in **github-pages**. The staging build runs in the **staging** environment. Each one's variables and secrets override the repository's, so put values that differ in the environment:
+
+  | Name | Kind | Staging | Production |
+  | --- | --- | --- | --- |
+  | `STAGING_REPO` | variable | `PrestonHager/LaTeXCollaborativeEditor-staging` | (not used) |
+  | `STAGING_DOMAIN` | variable | `staging.latex.prestonhager.com` (leave unset to use `https://<owner>.github.io/<repo>/`) | (not used) |
+  | `STAGING_DEPLOY_TOKEN` | secret | Fine-grained token, see below | (not used) |
+  | `VITE_P2P_APP_ID` | variable | Something with `staging` in it, like `latex-collaborative-editor-staging` | As today |
+  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY` | secrets | The same client ID and key as production | As today |
+  | `VITE_GOOGLE_APP_ID` | variable | The same project number | As today |
+  | `DOCS_SITE_URL` | variable | `https://staging.latex.prestonhager.com/docs/` | `https://latex.prestonhager.com/docs/` |
+  | `VITE_DOCS_BASE_URL` | variable | Unset (same-origin `docs/`), or the staging docs URL | As today |
+  | `VITE_STUN_URL` | variable | As production, unless staging should test another | As today |
+
+- **One-time setup** (a maintainer, once):
+  1. Create the public repo `PrestonHager/LaTeXCollaborativeEditor-staging`, with nothing in it. Pages on a free plan needs it public.
+  2. Make a fine-grained personal access token: **Settings > Developer settings > Fine-grained tokens**, resource owner PrestonHager, **Only select repositories**: the staging repo, **Repository permissions > Contents: Read and write**, and nothing else. Give it an expiry and a calendar reminder to renew it.
+  3. In this repo, **Settings > Environments > New environment** `staging`. Add the secret `STAGING_DEPLOY_TOKEN` (the token) and the variables in the table above. Restrict its deployment branches to `main`.
+  4. Run **Deploy staging** (Actions, Run workflow, on `main`) once, so the staging repo gets a `gh-pages` branch.
+  5. In the staging repo, **Settings > Pages**: Source **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`. Set the custom domain to `staging.latex.prestonhager.com` and tick **Enforce HTTPS** once the certificate is ready.
+  6. DNS: add `CNAME staging.latex.prestonhager.com -> prestonhager.github.io`. Verifying the domain for the account (**Settings > Pages > Verified domains**) keeps anyone else from claiming it.
+  7. Google Cloud console, the production OAuth client: add `https://staging.latex.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
+  8. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
+  9. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
+  10. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
+- **Why production deploys from `main`, not from the tag.** The github-pages environment only lets `main` deploy, and that's the setting most likely to be left as it is. A tag pushed with `GITHUB_TOKEN` doesn't start other workflows either.
+  So when a release PR merges, `tag-release.yml` (a push to `main`) tags the merge commit and then calls `release.yml` as a reusable workflow. That run's ref is still `main`, so the deploy passes the default rule, and the code it builds is the tag's.
+  Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 9's `v*` rule is in.
+- **Transition.** Once this setup merges, production stops updating from `main`, and stays on the last build from `main` until the first release. The first one is **v0.2.0**: the Trystero protocol break in Unreleased is a breaking change, which before 1.0 is a minor bump (`docs/versioning.md`). Cut it with Prepare release, version `0.2.0`.
 
 Local development
 - The dev server always runs on `http://localhost:5173`. It won't pick another port if that one is taken, since Google OAuth only allows exact origins.
@@ -133,7 +174,7 @@ Content Security Policy
 - After changing the policy, check the browser console on the live site for "violates the following Content Security Policy directive" while signing in to Google, opening the Picker, sharing a room and compiling.
 
 Turning the CSP off (rollback)
-- If the CSP breaks something in production, set the repository (or **Production** environment) variable `VITE_DISABLE_CSP` to `1` and rerun the Pages workflow.
+- If the CSP breaks something in production, set the repository (or **Production** environment) variable `VITE_DISABLE_CSP` to `1` and redeploy the current release: Actions > **Release** > Run workflow on `main`, with the live tag (like `v0.2.0`).
   The `csp` plugin in `vite.config.ts` then leaves the CSP meta tag out of every page. Nothing else changes. Locally, `VITE_DISABLE_CSP=1 npm run build` does the same.
 - Then find what was blocked, with the CSP still on (`npm run dev`, `npm run preview`, or the live site before the rollback):
   1. Open DevTools > Console and do the thing that broke (for example sign in to Google or open the Picker).
@@ -141,7 +182,7 @@ Turning the CSP off (rollback)
      The **Issues** tab groups the same reports under "Content Security Policy".
   3. Add that origin (`https://host`, or a path prefix ending in `/` if only one path is needed) to that directive in `frontend/index.html`. Don't add whole schemes like `https:` or `*`.
   4. If no URL in `src/` names it (a host Google loads by itself), add it to `GOOGLE_RUNTIME_SOURCES` in `src/security/cspPolicy.test.ts` too, then run `npm run test:run`.
-- After the fix is deployed, delete `VITE_DISABLE_CSP` (or set it to anything but `1`) and rerun the workflow to turn the CSP back on.
+- After the fix is released, delete `VITE_DISABLE_CSP` (or set it to anything but `1`) and redeploy to turn the CSP back on. Staging reads the same variable from the **staging** environment.
 
 Domain and security
 - The domain (e.g., latex.prestonhager.com) must be served over HTTPS to enable P2P APIs.
@@ -175,8 +216,9 @@ Security
 
 Versions and releases
 - How to version, write the changelog, tag and release is in [`docs/versioning.md`](versioning.md).
-- Every merge to `main` still deploys to Pages. A release is a `vX.Y.Z` tag on a commit that's already on `main`.
-- Pushing the tag runs `.github/workflows/release.yml`. It checks the tag against both `package.json` files, runs the tests and build, and creates the GitHub release from the `CHANGELOG.md` section. It needs no secrets: the default `GITHUB_TOKEN` with `contents: write` is enough.
+- Every merge to `main` deploys to staging. Production only deploys a release: a `vX.Y.Z` tag on a commit that's already on `main`.
+- Prepare release (`.github/workflows/prepare-release.yml`) opens the release PR. When it merges, `tag-release.yml` tags it and calls `release.yml`, which checks the tag against both `package.json` files and the changelog, runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to Pages, and creates the GitHub release from the `CHANGELOG.md` section.
+  The release workflows need no secrets beyond the build's own: the default `GITHUB_TOKEN` is enough. Only staging needs `STAGING_DEPLOY_TOKEN`.
 - `dist/version.json` is served with GitHub Pages' default caching (about 10 minutes), so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
   The app's update check (`frontend/src/app/updateCheck.ts`) does both. It fetches `version.json` next to `index.html` on load, every 15 minutes, and when the tab gets focus or becomes visible (at most once a minute). A different build shows the "new version" card. Failed checks back off up to an hour, a 404 stops checking, and `npm run dev` never checks.
   Other static hosts need to serve `version.json` from the same folder as `index.html`. Without it the app works, it just never offers updates.
