@@ -1,4 +1,4 @@
-import { exporters, findExporter, runExport, type ExportDestination } from './registry';
+import { downloadDestination, exporters, findExporter, runExport, type ExportDestination } from './registry';
 import { createBrowserExportServices, isBundleableAsset, printHtml, PRINT_FRAME_SANDBOX } from './browserServices';
 import { LATEX_JS_ASSET_BASE } from '../compile/latexJsPreview';
 import { defaultOptions, isAbortError, type Exporter, type ExportRun, type ExportSource } from './types';
@@ -17,6 +17,8 @@ describe('exporter registry', () => {
       expect(exporter.icon).toBeTruthy();
     }
     expect(findExporter('html')?.label).toBe('HTML');
+    // Only the print exporter makes no file, so it's the only one that can't go to Drive.
+    expect(exporters.filter((exporter) => exporter.printsOnly).map((exporter) => exporter.id)).toEqual(['pdf-preview']);
     expect(findExporter('nope')).toBeUndefined();
   });
 
@@ -36,9 +38,19 @@ describe('exporter registry', () => {
     const progress = run();
     const output = await runExport(exporter, source, defaultOptions(exporter.options(source)), progress, destination);
     expect(exporter.run).toHaveBeenCalledWith(source, { flag: true }, progress);
-    expect(destination.save).toHaveBeenCalledWith(file);
+    expect(destination.save).toHaveBeenCalledWith(file, progress);
     expect(output.files).toEqual([file]);
+    // A destination that returns nothing still counts the file as saved, under its own name.
+    expect(output.saved).toEqual([{ name: 'a.txt' }]);
     expect(progress.onProgress).toHaveBeenLastCalledWith(1, 'Done');
+
+    const linked = await runExport(exporter, source, {}, run(), { ...destination, save: async () => ({ name: 'a.txt', url: 'https://drive.example/a' }) });
+    expect(linked.saved).toEqual([{ name: 'a.txt', url: 'https://drive.example/a' }]);
+
+    // Download hands the file to the browser's download with its type.
+    const download = vi.fn();
+    downloadDestination(download).save(file, progress);
+    expect(download).toHaveBeenCalledWith('a.txt', file.data, file.data.type);
 
     await expect(runExport({ ...exporter, available: () => ({ ok: false, reason: 'Not now' }) }, source, {}, run(), destination)).rejects.toThrow('Not now');
 

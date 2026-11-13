@@ -63,6 +63,11 @@ export type Exporter = {
   fileExtension: string;
   /** 'preview' marks output that only looks like LaTeX.js, not like a real TeX build. */
   quality?: 'preview';
+  /**
+   * True when it hands its document to the browser's print dialog instead of making a file.
+   * There's nothing to upload then, so the Export dialog only offers Download.
+   */
+  printsOnly?: boolean;
   available(source: ExportSource): Availability;
   options(source: ExportSource): ExportOption[];
   run(source: ExportSource, options: ExportOptionValues, run: ExportRun): Promise<ExportOutput>;

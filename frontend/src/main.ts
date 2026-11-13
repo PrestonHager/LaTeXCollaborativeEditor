@@ -9,8 +9,7 @@ import { renderStaticIcons } from './ui/icons';
 import { createSettingsDialog } from './ui/settingsDialog';
 import { createFileTree } from './ui/fileTree';
 import { createUploadDialog } from './ui/uploadDialog';
-import { createExportDialog } from './ui/exportDialog';
-import { createBrowserExportServices } from './export/browserServices';
+import type { ExportDialog } from './ui/exportDialog';
 import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
@@ -686,13 +685,53 @@ const uploadDialog = createUploadDialog(document.getElementById('upload-dialog')
   },
 });
 
-// File > Export. The formats come from the exporter registry in src/export/registry.ts.
-const exportDialog = createExportDialog(document.getElementById('export-dialog') as HTMLDialogElement, {
-  getSource: () => ({ project, blobs, name: projectName(), activePath: (activeFileId && project.get(activeFileId)?.path) || null }),
-  services: createBrowserExportServices(),
-  destination: { id: 'download', label: 'Download', save: (file) => localDownload.download(file.name, file.data, file.data.type) },
-  notify: (message, isError) => showNotice(message, isError),
-});
+// File > Export. The formats come from the exporter registry in src/export/registry.ts. The dialog,
+// the exporters and the Drive upload load on first use, to keep them out of the initial bundle.
+let exportDialogLoad: Promise<ExportDialog> | null = null;
+function loadExportDialog(): Promise<ExportDialog> {
+  exportDialogLoad ??= Promise.all([import('./ui/exportDialog'), import('./export/browserServices'), import('./export/destinations')]).then(
+    ([{ createExportDialog }, { createBrowserExportServices }, { downloadChoice, driveChoice }]) =>
+      createExportDialog(document.getElementById('export-dialog') as HTMLDialogElement, {
+        getSource: () => ({ project, blobs, name: projectName(), activePath: (activeFileId && project.get(activeFileId)?.path) || null }),
+        services: createBrowserExportServices(),
+        destinations: [
+          downloadChoice((name, data, type) => localDownload.download(name, data, type)),
+          driveChoice({
+            api: driveProvider,
+            isGuest: () => isClient,
+            configured: () => Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+            signedIn: () => driveProvider.hasUsableToken(),
+            // Not ensureDriveConnected: signing in to export doesn't change where autosave goes or what the pill says.
+            signIn: async () => {
+              if (driveProvider.hasUsableToken()) return true;
+              const ok = await driveProvider.connect();
+              if (ok) void driveProvider.loadAccount().then(showDriveAccount);
+              return ok;
+            },
+            projectFolderId: async () => (projectState.isDrive() && projectState.projectId ? driveProvider.projectFolderId(projectState.projectId) : null),
+            inDriveProject: () => projectState.isDrive() && Boolean(projectState.projectId),
+            projectKey: () => `${projectState.getProviderMode()}:${projectState.projectId ?? ''}`,
+            exportsFolderName: () => (project.findByPath('exports') ? 'exports (from Export)' : 'exports'),
+            pickFolder: async () => (ensureDrivePickerConfig() ? pickFromDrive('folder') : null),
+          }),
+        ],
+        rememberDestination: { get: () => settings.get('exportDestination'), set: (id) => settings.set('exportDestination', id === 'drive' ? 'drive' : 'download') },
+        notify: (message, isError) => showNotice(message, isError),
+      }),
+  );
+  // Let the next try load it again, like after a deploy replaced the chunk.
+  exportDialogLoad.catch(() => (exportDialogLoad = null));
+  return exportDialogLoad;
+}
+const exportLoadFailed = (error: unknown) => showNotice(`Couldn't load Export. Reload the page and try again. (${describeError(error)})`, true);
+const exportDialog = {
+  open: (exporterId?: string) => void loadExportDialog().then((dialog) => dialog.open(exporterId), exportLoadFailed),
+  runNow: (exporterId: string) =>
+    loadExportDialog().then(
+      (dialog) => dialog.runNow(exporterId),
+      (error) => (exportLoadFailed(error), false),
+    ),
+};
 
 const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
   onPick: (summary) => {

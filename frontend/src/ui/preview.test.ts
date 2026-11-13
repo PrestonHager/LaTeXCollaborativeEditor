@@ -13,6 +13,7 @@ import {
   PREVIEW_LINK_SCRIPT,
   previewScrollPosition,
   previewThemeCss,
+  pageBreakCss,
   safeExternalUrl,
   withPreviewTheme,
 } from './preview';
@@ -120,6 +121,16 @@ describe('preview theme style', () => {
     const css = previewThemeCss('dark');
     expect(css).toContain('svg{fill:currentColor;}');
     expect(css).toContain('svg[stroke="#000000"],svg [stroke="#000000"]{stroke:currentColor;}');
+  });
+
+  it.each(['light', 'dark'] as const)('draws a page break as a labeled dashed line on screen only, in %s', (theme) => {
+    const css = previewThemeCss(theme);
+    expect(css).toContain(pageBreakCss(PREVIEW_COLORS[theme].background));
+    const rules = pageBreakCss('#fff');
+    expect(rules.startsWith('@media screen{')).toBe(true);
+    expect(rules).toContain('border-top:1px dashed currentColor');
+    expect(rules).toContain('content:"page break"');
+    expect(rules).not.toContain('print');
   });
 
   it('goes at the end of the head, after the LaTeX.js stylesheets', () => {

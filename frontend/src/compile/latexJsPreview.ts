@@ -44,7 +44,7 @@ export function unlinkMissingRefs(doc: Document): void {
   }
 }
 
-/** Class of the empty block a \newpage becomes. It takes no space on screen and breaks the page in print. */
+/** Class of the empty block a \newpage becomes. It breaks the page in print; on screen, pageBreakCss in ui/preview.ts draws it as a dashed line. */
 export const PAGE_BREAK_CLASS = 'lc-page-break';
 
 /**

@@ -46,6 +46,7 @@ const resetMessages: Record<ResetScope, string> = {
   layout: 'Layout is back to its default.',
   keybinds: 'Keyboard shortcuts are back to their defaults.',
   tour: 'The tour will show again next time you open the editor.',
+  export: 'Exports go back to Download.',
 };
 
 /** Reset settings for the dialog, and say what happened. */

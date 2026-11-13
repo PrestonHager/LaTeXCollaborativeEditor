@@ -46,7 +46,22 @@ export function previewThemeCss(theme: PreviewDisplayTheme): string {
     `a:link,a:visited{color:${c.link};}` +
     // LaTeX.js draws pictures with a hard-coded black stroke, and filled shapes and arrow
     // heads with the SVG default fill (black). Draw them in the text color instead.
-    `svg{fill:currentColor;}svg[stroke="#000000"],svg [stroke="#000000"]{stroke:currentColor;}svg [fill="#000000"]{fill:currentColor;}`
+    `svg{fill:currentColor;}svg[stroke="#000000"],svg [stroke="#000000"]{stroke:currentColor;}svg [fill="#000000"]{fill:currentColor;}` +
+    pageBreakCss(c.background)
+  );
+}
+
+/**
+ * How a \newpage, \clearpage or \pagebreak looks: a dashed line with a small "page break" label.
+ * It's for the screen only, so a printout or a PDF just starts a new page there, with nothing
+ * drawn. The block itself (markPageBreaks in latexJsPreview.ts) does the breaking. The label is
+ * CSS content, so it isn't part of the document's text when copied.
+ */
+export function pageBreakCss(background: string): string {
+  return (
+    '@media screen{.lc-page-break{position:relative;height:0;margin:2em 0;border-top:1px dashed currentColor;opacity:.5;}' +
+    `.lc-page-break::after{content:"page break";position:absolute;left:50%;top:0;transform:translate(-50%,-50%);padding:0 .5em;background:${background};` +
+    'font:12px/1.4 system-ui,sans-serif;letter-spacing:.04em;}}'
   );
 }
 

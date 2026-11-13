@@ -97,12 +97,18 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 ## Export
 
 - [ ] File > Export… (Ctrl+Shift+E), the toolbar Export button, and the palette's Export all open the Export dialog. Guests can open it too.
-- [ ] The dialog lists Project .zip, PDF, HTML, Flattened .tex, and Single file. PDF and HTML have a "Preview quality" badge.
-- [ ] With no main file, PDF, HTML and Flattened .tex are grayed out and say why. With an image still coming from a peer, Project .zip warns about it.
+- [ ] The Format menu lists Project .zip, PDF, HTML, Flattened .tex, and Single file. PDF and HTML say "(preview quality)" and show a "Preview quality" badge in the box under the menus.
+- [ ] With no main file, PDF, HTML and Flattened .tex say "(unavailable)", the box says why, and Export is off. With an image still coming from a peer, Project .zip warns about it.
+- [ ] The Save to menu has Download and Google Drive. The choice is remembered after a reload (Settings > Reset > Where exports go puts it back to Download).
+- [ ] On a site with no Google keys, Google Drive says "(not set up)" and can't be picked. As a guest in a room, it says "(host only)" and the line under the menus says guests can't use the host's Drive.
+- [ ] With PDF picked, Google Drive says "(not for PDF)", Download is used, and the line under the menus says why. Picking HTML again goes back to Google Drive if that was the choice.
+- [ ] Not signed in to Drive: Google Drive says "(sign-in needed)". Export with it opens Google's sign-in, then uploads. Closing the sign-in shows "Google Drive sign-in didn't finish..." in the dialog and nothing is exported.
+- [ ] **Live Drive (maintainer):** with a project saved in Drive, HTML to Google Drive makes an `exports` folder in the project folder and uploads `<name>.html` as an HTML file, with an upload bar and an "Open <name>.html" link that opens it in Drive. Reopening the project doesn't show `exports` in the file tree. A local project uploads to the top of My Drive. **Choose folder…** opens the Picker in folder mode and the next export goes there. Flattened .tex is stored as `text/x-tex` and Project .zip as a zip.
 - [ ] Project .zip downloads `<project name>.zip`. Uploading it as a new project gives the same files and folders, empty folders included.
 - [ ] Single file starts on the open file, and downloads the file picked in its list.
 - [ ] Flattened .tex on the regression test project downloads `main-flat.tex` with the chapters in place, and `\clearpage` around `chapters/figures`. With Remove comments on, the `% Expect:` lines are gone and `\%` is kept.
 - [ ] HTML with Work offline downloads one file (about 5 MB) that opens with the right fonts with the network off. With Work offline off it's small and loads styles from the CDN.
+- [ ] In the HTML file, the `\newpage` before Citations shows as a dashed line labeled "page break". Printing the HTML file from the browser starts Citations on a new page and doesn't draw the line. The preview shows the same line.
 - [ ] PDF opens the print dialog with the document only (no app UI). Save as PDF: A4 or Letter as picked, no dark background, and Citations starts on a new page (the `\newpage` in the test project).
 - [ ] A document with an error (like `\begin{itemize}` with no end) makes PDF and HTML show the error in the dialog, and nothing downloads.
 - [ ] Cancel export during an HTML export stops it, says "Export canceled.", and keeps the dialog open. Escape closes the dialog.

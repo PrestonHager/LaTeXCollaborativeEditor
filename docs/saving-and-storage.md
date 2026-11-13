@@ -89,12 +89,13 @@ More in [Projects and files](projects.md#downloading).
 **File > Export…** (**Ctrl+Shift+E**, or the toolbar button) saves the project in another format.
 Guests can export too, since it only reads the project.
 
-![The Export dialog with PDF picked](assets/screenshots/export-light.png#only-light)
-![The Export dialog with PDF picked](assets/screenshots/export-dark.png#only-dark)
+![The Export dialog with HTML picked](assets/screenshots/export-light.png#only-light)
+![The Export dialog with HTML picked](assets/screenshots/export-dark.png#only-dark)
 
-1. Pick a format. One that can't run right now is grayed out and says why, like "The project has no main .tex file".
-2. Set its options, if it has any.
-3. Press **Export**. A bar shows how far along it is, and **Cancel export** stops it.
+1. Pick a **Format**. The box under the menus says what you get. One that can't run right now says "(unavailable)" and why, like "The project has no main .tex file".
+2. Pick where it goes in **Save to**: **Download** or **Google Drive**. The dialog remembers this for next time.
+3. Set the format's options, if it has any.
+4. Press **Export**. A bar shows how far along it is, and **Cancel export** stops it.
 
 The formats:
 
@@ -108,13 +109,30 @@ The formats:
 
 Things to know:
 
-- Everything happens in your browser. Nothing is sent to a server.
-  The one network request is for **HTML** with **Work offline**: it downloads the preview's own styles and fonts from the same CDN the preview uses. If that fails, you still get the file, and it loads them from the internet when it opens.
+- The file is made in your browser. With **Download**, nothing is sent to a server.
+  The one other network request is for **HTML** with **Work offline**: it downloads the preview's own styles and fonts from the same CDN the preview uses. If that fails, you still get the file, and it loads them from the internet when it opens.
 - An image or file that hasn't finished arriving from a peer is left out, and the notice after the export lists it. The Export dialog warns about it before you start.
 - **PDF** and **HTML** come from the preview, so they look like the preview, not like a TeX PDF. See [what to expect from the PDF](editing-and-preview.md#pdf-export).
 - If the document has an error, **PDF** and **HTML** stop and show it in the dialog, instead of making a broken file.
 - **Flattened .tex** keeps an `\input` it can't find as it was, and says which ones. An `\include` gets `\clearpage` before and after it, like LaTeX does.
-- Exports download to your computer. Saving one into Google Drive isn't there yet.
+- In **HTML**, a `\newpage`, `\clearpage` or `\pagebreak` shows as a dashed line labeled "page break", like in the preview. Print the file and the page breaks there, without the line.
+- **File > Download Project .zip** always downloads, whatever **Save to** says.
+
+### Export to Google Drive
+
+Pick **Google Drive** in **Save to**, then press **Export**. The file is uploaded to your Drive, with a bar while it goes, and the dialog stays open with an **Open** link to the file.
+
+- **Where it goes:** the line under the menus shows the folder.
+  - A project saved in Drive: an `exports` folder inside the project's folder. The app makes it the first time. It's kept apart from your project, so exported files never show up in the file tree or get loaded as project files.
+  - A project saved in the browser: the top of **My Drive**.
+  - **Choose folder…** opens the Google Picker so you can pick any folder. It's used until you open another project.
+- **Signing in:** if you aren't signed in, Google Drive says "(sign-in needed)", and **Export** opens Google's sign-in first. Signing in here doesn't change where the project saves.
+- **Guests** in a shared session see "Google Drive (host only)", turned off. A guest can't use the host's Drive, so download the file instead.
+- **PDF** can't go to Drive: it goes through the browser's print dialog, so there's no file for the app to upload. Choose **Save as PDF** there, then add the file to Drive yourself. The dialog says so and uses **Download**.
+- If the site wasn't set up with Google keys, Google Drive says "(not set up)".
+- Drive stores each file as its own kind: HTML as a web page, Flattened .tex as a TeX file, Project .zip as a zip.
+
+There's no other place to export to yet. Browser storage only holds projects, not exported files, so it isn't in the menu.
 
 ## Google Drive
 
