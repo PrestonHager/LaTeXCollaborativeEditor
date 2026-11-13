@@ -17,6 +17,9 @@
  *   same HTTP/2 connection) and for parsing and running the script on a mid-range device.
  * - That leaves about 200 ms of transfer, and 200 ms at 1.25 MB/s is 250 kB gzipped.
  * GitHub Pages serves gzip, so gzip size is what goes over the wire.
+ * 250 kB is the ceiling. The budget itself sits lower, at the initial load after the trim that
+ * moved P2P, lint, dialogs, Drive add files and zip behind dynamic imports (208.6 kB) plus about
+ * 15 kB of headroom, so growth has to be a choice. Raise it only with a reason in the PR.
  *
  * Run from frontend/ after a build: node scripts/check-bundle-size.mjs
  */
@@ -30,7 +33,7 @@ export const ASSUMED_BYTES_PER_SECOND = 1_250_000;
 /** Assumed round trip to the CDN, added once to each load time estimate. */
 export const ASSUMED_RTT_MS = 50;
 /** Gzip budget for the initial load (index.html plus its JS and CSS). See the header comment. */
-export const INITIAL_BUDGET_GZIP_BYTES = 250_000;
+export const INITIAL_BUDGET_GZIP_BYTES = 225_000;
 /** A lazy chunk above this prints a warning. About 0.85 s at the assumed speed. */
 export const LAZY_WARN_GZIP_BYTES = 1_000_000;
 /** A lazy chunk above this fails the build. About 4 s at the assumed speed. */

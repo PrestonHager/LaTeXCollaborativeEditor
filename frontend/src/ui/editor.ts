@@ -5,10 +5,9 @@ import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { bracketMatching } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
-import { lintGutter } from '@codemirror/lint';
 import type { Extension } from '@codemirror/state';
 import type { EditorDiagnostic } from './diagnostics';
-import { diagnosticsExtensions, setEditorDiagnostics } from './diagnostics';
+import { diagnosticsExtensions, lintGutterPlaceholder, loadLintExtensions, setEditorDiagnostics } from './diagnostics';
 import { latexSyntaxHighlighting } from './syntaxHighlight';
 import { yUndoManagerKeymap } from 'y-codemirror.next';
 import { isAssignableKeybind, normalizeKeybind, type Platform } from './modifierShortcutLabels';
@@ -51,6 +50,8 @@ export function createEditorPane(container: HTMLElement) {
   let suppress = false;
   const collabCompartment = new Compartment();
   const editableCompartment = new Compartment();
+  // Holds a placeholder until @codemirror/lint has loaded, then the real lint gutter and linter.
+  const lintCompartment = new Compartment();
 
   const state = EditorState.create({
     doc: DEFAULT_DOC,
@@ -61,7 +62,7 @@ export function createEditorPane(container: HTMLElement) {
       highlightActiveLineGutter(),
       bracketMatching(),
       closeBrackets(),
-      lintGutter(),
+      lintCompartment.of(lintGutterPlaceholder),
       StreamLanguage.define(stex),
       latexSyntaxHighlighting,
       diagnosticsExtensions,
@@ -80,11 +81,18 @@ export function createEditorPane(container: HTMLElement) {
   });
 
   const view = new EditorView({ state, parent: host });
+  // Lines with problems are highlighted without it, so if it can't load, just log that.
+  const lintReady = loadLintExtensions().then(
+    (extensions) => view.dispatch({ effects: lintCompartment.reconfigure(extensions) }),
+    (error: unknown) => console.warn('Lint gutter failed to load', error),
+  );
 
   return {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
     getText() { return view.state.doc.toString(); },
     getView() { return view; },
+    /** Resolves once the lint gutter is in (or failed to load). For tests. */
+    lintReady() { return lintReady; },
     setCollabExtensions(extensions: Extension[]) {
       view.dispatch({
         effects: collabCompartment.reconfigure(extensions),

@@ -31,14 +31,19 @@ Frontend deployment (GitHub Pages)
 - `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). It splits the build in two:
   - **Initial load**: `index.html` plus everything it loads before the editor is usable (the entry script, its static imports and modulepreloads, and the linked CSS).
     The script finds these from `dist/index.html` and the Vite manifest (`dist/.vite/manifest.json`, turned on with `build.manifest` in `vite.config.ts`).
-    The budget is **250 kB gzipped**, and going over it fails the build.
+    The budget is **225 kB gzipped**, and going over it fails the build.
+    That's the initial load after the trim pass (208.6 kB) plus about 15 kB of headroom, under the 250 kB ceiling below, so the bundle doesn't creep back up unnoticed.
   - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js`. They load on demand and in parallel from the GitHub Pages CDN, so there's no total cap.
     Each one warns above 1 MB gzipped and fails the build above 5 MB.
     The build also fails if a lazy chunk ended up in the initial load, either because a module that's imported dynamically is also imported statically, or because initial code statically imports a chunk outside the initial graph.
-  - Where 250 kB comes from: the goal is an editor you can type in within a few hundred milliseconds.
+  - Where the 250 kB ceiling comes from: the goal is an editor you can type in within a few hundred milliseconds.
     Assume 10 Mbps (typical broadband or fast 4G, about 1.25 MB/s) and about 300 ms in total.
     Take off about 100 ms for latency and for parsing and running the script, which leaves about 200 ms of transfer, or 250 kB at 1.25 MB/s.
     GitHub Pages serves gzip, so gzip size is what goes over the wire.
+  - What loads later: sharing (Trystero and the P2P transport) loads on the first join, which is right away for a `?room=` guest or a host that had shared, and when the pointer or focus reaches Share.
+    The lint gutter loads just after the editor shows. The command palette, Settings and its keybind editor, the Open and Upload dialogs and the tour load when the page is idle, or when the pointer or focus reaches the menus or toolbar.
+    Export, the changelog, Add Files from Drive, the Google Picker, conflict resolution and the zip code load on first use.
+    The helpers are in `src/app/lazy.ts` and `src/app/lazyUi.ts`. A chunk that fails to load shows the update prompt ("Reload to update"), since after a deploy the old chunk is gone and browsers keep a failed chunk failed until the page reloads. Any other failure shows a "couldn't load" notice.
   - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
   - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
