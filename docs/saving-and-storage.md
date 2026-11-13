@@ -36,6 +36,7 @@ It doesn't take focus, so you can keep typing.
 
 - **Reload to update** saves first: the pending autosave runs right away, to this browser or Google Drive, then the page reloads. While saving is paused, it skips the save and keeps your edits in this browser instead.
 - If the save fails, the page doesn't reload. The card says why and offers **Reload anyway**.
+- **What's new** opens the new version's changelog. Sections you don't have yet say "New in the update", and the version you're on still says "You're on this version". If it can't be loaded, you see the changelog for your version and a link to the latest one on GitHub.
 - **Later** hides the card until the next version.
 - If you're sharing, guests are disconnected for a moment and rejoin on their own. A guest who reloads rejoins the room.
 - The card also shows when a collaborator is on a newer version that this one can't fully talk to, or when part of the app can't load because a new version replaced it.

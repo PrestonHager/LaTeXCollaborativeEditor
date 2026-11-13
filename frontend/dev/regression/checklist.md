@@ -219,6 +219,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] The build's lazy chunks list a `changelogView` chunk, and the changelog text isn't in the initial `index-*.js`. In `npm run preview`, Help > About > View changelog loads it with no CSP errors in the console.
+- [ ] `dist/CHANGELOG.md` matches the repo-root `CHANGELOG.md`. In `npm run preview`, edit `dist/CHANGELOG.md` to add a `## [9.9.9]` section, then show the update card (dev tools: remove `hidden` from `#update-prompt`) and click What's new: 9.9.9 says "New in the update" and the running version says "You're on this version". With `dist/CHANGELOG.md` deleted, it shows this build's changelog with a note linking to GitHub.
 - [ ] `npm run preview` serves the built app, and the palette has no regression commands.
 - [ ] `dist/version.json` has the `version` from `package.json`, the short commit, and the build time. `/version.json` also works in `npm run dev`.
 - [ ] In `npm run preview`, open the app, then edit `dist/version.json` to another commit and switch to another tab and back (or wait 15 minutes). The "A new version of the app is available" card shows in the bottom corner without taking focus from the editor, in light and dark themes.

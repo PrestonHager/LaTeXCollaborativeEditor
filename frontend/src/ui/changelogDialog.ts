@@ -1,16 +1,35 @@
 // The "What's new" changelog dialog (issue #140, markup in index.html #changelog-dialog).
-// Help → About → View changelog opens it, and so does "What's new" on the update prompt.
+// Help → About → View changelog opens it with the changelog bundled in this build.
+// "What's new" on the update prompt opens it with the new deploy's CHANGELOG.md, fetched from
+// next to index.html (the build copies it there), falling back to the bundled one.
 // This file is small and in the initial load; the changelog text and its renderer (changelogView.ts)
 // are imported only when the dialog first opens.
 import { returnFocusOnClose } from './focusReturn';
 
-type ChangelogView = { renderChangelog: (container: HTMLElement, currentVersion: string) => void };
+type FetchLike = (input: string, init?: RequestInit) => Promise<{ ok: boolean; text: () => Promise<string> }>;
+
+type ChangelogView = {
+  renderChangelog: (container: HTMLElement, currentVersion: string) => void;
+  renderUpdateChangelog: (container: HTMLElement, currentVersion: string, url: string, fetchImpl?: FetchLike) => Promise<unknown>;
+};
+
+/** Which changelog to show: the one in this build, or the newly deployed one. */
+export type ChangelogSource = 'build' | 'update';
 
 type ChangelogDialogOptions = {
   /** The running version (buildInfo), so its section gets marked. */
   version: string;
+  /** Where the deployed CHANGELOG.md lives, e.g. `${import.meta.env.BASE_URL}CHANGELOG.md`. */
+  updateUrl?: string;
   /** Load the renderer. Defaults to the lazy chunk; tests pass their own. */
   load?: () => Promise<ChangelogView>;
+  fetch?: FetchLike;
+  now?: () => number;
+};
+
+const DESCRIPTIONS: Record<ChangelogSource, string> = {
+  build: 'Changes in each version, newest first.',
+  update: "What's in the new version, newest first.",
 };
 
 export function createChangelogDialog(dialog: HTMLDialogElement, options: ChangelogDialogOptions) {
@@ -20,9 +39,20 @@ export function createChangelogDialog(dialog: HTMLDialogElement, options: Change
     return el;
   };
   const body = find<HTMLElement>('#changelog-body');
-  const load = options.load ?? (() => import('./changelogView'));
+  const description = find<HTMLElement>('#changelog-dialog-description');
+  const importView = options.load ?? (() => import('./changelogView'));
+  // Keep the loaded module, and forget a failed load so the next open tries again.
+  let viewPromise: Promise<ChangelogView> | null = null;
+  const load = () => {
+    viewPromise ??= importView().catch((error: unknown) => {
+      viewPromise = null;
+      throw error;
+    });
+    return viewPromise;
+  };
   const focusReturn = returnFocusOnClose(dialog);
-  let rendered: Promise<void> | null = null;
+  // The bundled changelog never changes, so it's drawn once. The update's is fetched on each open.
+  let rendered: { source: ChangelogSource; done: Promise<void> } | null = null;
 
   const close = () => {
     // NOTE: jsdom has no dialog methods, so fall back to the open attribute there.
@@ -53,35 +83,51 @@ export function createChangelogDialog(dialog: HTMLDialogElement, options: Change
     return p;
   };
 
-  const render = () => {
+  /** The deployed file, with a query that gets past GitHub Pages' cache like version.json does. */
+  const updateUrl = () => {
+    const base = options.updateUrl ?? 'CHANGELOG.md';
+    return `${base}${base.includes('?') ? '&' : '?'}t=${(options.now ?? Date.now)()}`;
+  };
+
+  const render = async (source: ChangelogSource) => {
+    description.textContent = DESCRIPTIONS[source];
     body.setAttribute('aria-busy', 'true');
     body.replaceChildren(message('Loading the changelog...'));
-    return load().then(
-      (view) => {
-        view.renderChangelog(body, options.version);
-        body.removeAttribute('aria-busy');
-        body.scrollTop = 0;
-      },
-      () => {
-        rendered = null;
-        body.removeAttribute('aria-busy');
-        body.replaceChildren(message("Couldn't load the changelog. Check your connection and try again."));
-      },
-    );
+    try {
+      const view = await load();
+      if (source === 'update') await view.renderUpdateChangelog(body, options.version, updateUrl(), options.fetch);
+      else view.renderChangelog(body, options.version);
+      body.scrollTop = 0;
+    } catch {
+      rendered = null;
+      body.replaceChildren(message("Couldn't load the changelog. Check your connection and try again."));
+    } finally {
+      body.removeAttribute('aria-busy');
+    }
   };
 
   return {
     /** Open the dialog. Resolves once the changelog is drawn (or failed to load). */
-    open(): Promise<void> {
+    open(source: ChangelogSource = 'build'): Promise<void> {
       focusReturn.remember();
       if (!dialog.open) {
         if (typeof dialog.showModal === 'function') dialog.showModal();
         else dialog.setAttribute('open', '');
       }
-      rendered ??= render();
-      return rendered;
+      if (!rendered || rendered.source !== source || source === 'update') rendered = { source, done: render(source) };
+      return rendered.done;
     },
     close,
     isOpen: () => dialog.open,
+    /**
+     * Load the renderer ahead of time. A deploy replaces the old lazy chunks, so a tab that waits
+     * until the update prompt to load it would find it gone. main.ts calls this when the tab is idle.
+     */
+    preload(): Promise<void> {
+      return load().then(
+        () => undefined,
+        () => undefined,
+      );
+    },
   };
 }

@@ -2,6 +2,7 @@
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildSubset, readVegaSource, OUTPUT_PATH } from './basecoat-subset.mjs';
 import {
   ASSUMED_BYTES_PER_SECOND,
@@ -18,9 +19,11 @@ import {
   parseIndexHtml,
   toDistPath,
 } from './check-bundle-size.mjs';
-import { checkPages, checkVersionFile, REQUIRED_PAGES, FORBIDDEN_PATHS } from './check-build-pages.mjs';
+import { checkChangelogFile, checkPages, checkVersionFile, REQUIRED_PAGES, FORBIDDEN_PATHS } from './check-build-pages.mjs';
 import {
+  CHANGELOG_FILE,
   VERSION_FILE,
+  changelogFilePlugin,
   isValidVersionInfo,
   resolveBuildInfo,
   resolveCommit,
@@ -303,6 +306,33 @@ describe('build info script', () => {
     middleware({ url: '/index.html' }, res, next);
     middleware({}, res, next);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it('copies the root CHANGELOG.md into dist and serves it in dev', () => {
+    const source = fileURLToPath(new URL('../../CHANGELOG.md', import.meta.url));
+    const text = readFileSync(source, 'utf8');
+    const plugin = changelogFilePlugin(source);
+    const emitFile = vi.fn();
+    plugin.generateBundle.call({ emitFile });
+    expect(emitFile).toHaveBeenCalledWith({ type: 'asset', fileName: CHANGELOG_FILE, source: text });
+
+    let middleware;
+    plugin.configureServer({ middlewares: { use: (fn) => (middleware = fn) } });
+    const res = { setHeader: vi.fn(), end: vi.fn() };
+    const next = vi.fn();
+    middleware({ url: '/CHANGELOG.md?t=1' }, res, next);
+    expect(res.end).toHaveBeenCalledWith(text);
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
+    middleware({ url: '/index.html' }, res, next);
+    middleware({}, res, next);
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(viteConfig.plugins.flat().map((p) => p?.name)).toContain('app-changelog-file');
+  });
+
+  it('checks dist/CHANGELOG.md', () => {
+    expect(checkChangelogFile('# Changelog\n\n## [Unreleased]\n')).toEqual({ ok: true, errors: [] });
+    expect(checkChangelogFile(null).errors[0]).toMatch(/CHANGELOG.md is missing/);
+    expect(checkChangelogFile('nothing').errors[0]).toMatch(/no "## " version sections/);
   });
 
   it('is wired into vite.config.ts with the version from package.json', () => {

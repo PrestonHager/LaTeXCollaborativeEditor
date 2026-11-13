@@ -108,6 +108,7 @@ When you change a stored format:
 - Write it for the people using the app, not as a commit message.
 - Leave internal refactors and test-only changes out.
 - The app shows this file in Help → About → View changelog. The build bundles it into a lazy chunk (`frontend/src/ui/changelogView.ts`), so there's still one copy. Its renderer only knows headings, `-` lists, paragraphs, `**bold**`, `` `code` `` and links (inline and reference-style), and shows raw HTML as text. Relative links go to the file on GitHub's `main`.
+  The build also copies it to `dist/CHANGELOG.md`, and the update prompt's What's new fetches that one, so open tabs see what the new deploy changed.
 
 ## Cutting a release
 

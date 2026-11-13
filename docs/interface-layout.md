@@ -84,6 +84,7 @@ The [security policy](https://github.com/PrestonHager/LaTeXCollaborativeEditor/b
 
 **About** shows the app version, the commit it was built from (linked to GitHub), and the build date, with links to the docs, the source code, and the policies.
 Include the version when you report a problem. The bug form fills it in for you.
+**View changelog** in About opens **What's new**: the changelog for this build, newest first. "Unreleased (in this build)" is at the top, and the version you're on says "You're on this version". Esc or Close goes back to About.
 
 ## Toolbar
 

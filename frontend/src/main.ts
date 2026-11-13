@@ -969,7 +969,11 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, { version: BUILD_INFO.version });
+const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, {
+  version: BUILD_INFO.version,
+  // The build copies CHANGELOG.md next to index.html, so the update prompt can show the new deploy's.
+  updateUrl: `${import.meta.env.BASE_URL}CHANGELOG.md`,
+});
 const openChangelog = () => void changelogDialog.open();
 const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO, { onViewChangelog: openChangelog });
 renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorElement, BUILD_INFO);
@@ -1109,7 +1113,7 @@ updateFlow = setupUpdateFlow({
   poll: import.meta.env.PROD,
   baseUrl: document.baseURI,
   room: () => ({ isHost: !isClient, inRoom }),
-  openChangelog,
+  openChangelog: () => void changelogDialog.open('update'),
   flush: () =>
     flushBeforeReload({
       isClient,
@@ -1124,3 +1128,9 @@ updateFlow = setupUpdateFlow({
   reload: () => location.reload(),
   showNotice: (message) => showNotice(message),
 });
+// The update prompt's What's new needs the changelog renderer, and after a deploy its old chunk is
+// gone from the server, so fetch it (about 4 kB) once the tab is idle. Dev has no deploys.
+if (import.meta.env.PROD) {
+  const whenIdle = window.requestIdleCallback ?? ((callback: () => void) => window.setTimeout(callback, 3000));
+  whenIdle(() => void changelogDialog.preload(), { timeout: 10000 });
+}

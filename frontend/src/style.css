@@ -234,6 +234,8 @@ label.settings-row { justify-content: flex-start; }
 .changelog-body:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--radius-md); }
 .changelog-release { display: grid; gap: 0.5rem; padding-left: 0.75rem; border-left: 2px solid var(--panel-border); }
 .changelog-release.is-current { border-left-color: var(--primary); }
+.changelog-release.is-new { border-left-color: var(--link-text); }
+.changelog-note { margin: 0; padding: 0.5rem 0.75rem; border: 1px solid var(--panel-border); border-radius: var(--radius-md); background: var(--muted); }
 .changelog-release-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; }
 .changelog-release h3 { margin: 0; font-size: 1rem; font-weight: 600; }
 .changelog-release h4 { margin: 0.25rem 0 0; font-size: 0.8125rem; font-weight: 600; color: var(--muted-text); text-transform: uppercase; letter-spacing: 0.03em; }

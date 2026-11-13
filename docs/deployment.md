@@ -24,6 +24,8 @@ Frontend deployment (GitHub Pages)
 - After `vite build`, `npm run build` runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
 - The build bakes in the version from `frontend/package.json`, the short commit SHA (`git rev-parse --short HEAD`, else `$GITHUB_SHA`, else `dev`) and the build time, and writes them to `dist/version.json`.
   The page check fails the build if `version.json` is missing, malformed, or doesn't match `package.json`.
+- The build also copies the repo-root `CHANGELOG.md` to `dist/CHANGELOG.md` (`changelogFilePlugin` in `scripts/build-info.mjs`), read from the root file each build, so there's no second copy in the repo. The page check fails the build if it's missing.
+  The update prompt's **What's new** fetches it next to `index.html` with a cache-busting query and `cache: 'no-store'`, so an open tab can show what the new deploy changed. CSP `connect-src 'self'` already covers it. A host that doesn't serve it only loses that: the dialog falls back to the changelog bundled in the running build and links to the latest on GitHub.
   The Pages workflow's checkout has the git history it needs, so no extra setup is needed. See `docs/versioning.md`.
 - `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). It splits the build in two:
   - **Initial load**: `index.html` plus everything it loads before the editor is usable (the entry script, its static imports and modulepreloads, and the linked CSS).

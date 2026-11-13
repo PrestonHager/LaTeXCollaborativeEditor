@@ -6,9 +6,17 @@
  * See docs/versioning.md.
  */
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 /** Name of the file written next to index.html. */
 export const VERSION_FILE = 'version.json';
+
+/**
+ * The repo-root CHANGELOG.md, copied next to index.html at build time (issue #140), so an open
+ * tab's update prompt can show what the new deploy changed. It's read from the root file each
+ * build, never kept as a second copy in the repo.
+ */
+export const CHANGELOG_FILE = 'CHANGELOG.md';
 
 /** SemVer 2.0 without build metadata, e.g. 0.1.0 or 1.0.0-rc.1. */
 export const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
@@ -73,6 +81,24 @@ export function versionJson(info) {
  * Vite plugin that writes dist/version.json and serves /version.json from the dev server,
  * so the update check works the same in `npm run dev`.
  */
+/** Copy the CHANGELOG.md at `sourcePath` into dist/, and serve it in dev, uncached like version.json. */
+export function changelogFilePlugin(sourcePath) {
+  return {
+    name: 'app-changelog-file',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (!req.url || req.url.split('?')[0] !== `/${CHANGELOG_FILE}`) return next();
+        res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(readFileSync(sourcePath, 'utf8'));
+      });
+    },
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: CHANGELOG_FILE, source: readFileSync(sourcePath, 'utf8') });
+    },
+  };
+}
+
 export function versionJsonPlugin(info) {
   return {
     name: 'app-version-json',
