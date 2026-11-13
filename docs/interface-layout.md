@@ -137,6 +137,7 @@ While the palette is open, other shortcuts are paused so the palette can use the
 Open **Edit > Settings**, press **Ctrl+,** (**⌘,** on macOS), or search the palette for "settings".
 Changes apply right away, so there's no save button.
 **Done**, the X, or **Escape** close it.
+On a window 1024px or wider, it's two columns: the settings on the left and keyboard shortcuts on the right.
 
 ![The settings dialog](assets/screenshots/settings-light.png#only-light)
 ![The settings dialog](assets/screenshots/settings-dark.png#only-dark)
