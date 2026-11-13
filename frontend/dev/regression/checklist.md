@@ -161,5 +161,6 @@ Use two browser windows, or a normal and a private window, so each has its own s
 
 - [ ] `npm run build` passes and reports the gzipped size under the budget.
 - [ ] `npm run test:e2e` from the repo root passes the two-browser sync test (it uses public relays, so retry once if it times out).
-- [ ] `dist/` has no `regression.html` and no regression test files.
+- [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
+- [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] `npm run preview` serves the built app, and the palette has no regression commands.
