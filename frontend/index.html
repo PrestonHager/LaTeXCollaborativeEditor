@@ -228,7 +228,18 @@
           <section id="preview-pane" class="pane preview-pane" aria-label="Preview">
             <div class="pane-bar">
               <span>Preview</span>
-              <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="preview" aria-label="Help with the preview" data-tooltip="Help with the preview" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
+              <div class="pane-bar-actions">
+                <div id="preview-changes" class="popover preview-changes" hidden>
+                  <button id="preview-changes-btn" type="button" class="btn preview-changes-btn" data-variant="ghost" data-size="xs" aria-haspopup="dialog" aria-expanded="false" aria-controls="preview-changes-popover" aria-label="Preview is approximate" data-tooltip="Preview is approximate" data-side="bottom" data-align="end"><i data-lucide="info"></i><span id="preview-changes-count" class="preview-changes-count" aria-hidden="true"></span></button>
+                  <div id="preview-changes-popover" class="preview-changes-popover" data-popover data-side="bottom" data-align="end" role="dialog" aria-labelledby="preview-changes-title" aria-hidden="true">
+                    <h2 id="preview-changes-title" class="preview-changes-title">Preview is approximate</h2>
+                    <p id="preview-changes-summary" class="preview-changes-summary"></p>
+                    <ul id="preview-changes-list" class="preview-changes-list"></ul>
+                    <a class="preview-changes-learn" data-help="supported">What's supported</a>
+                  </div>
+                </div>
+                <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="preview" aria-label="Help with the preview" data-tooltip="Help with the preview" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
+              </div>
             </div>
             <div id="preview-empty" class="empty preview-empty" hidden>
               <header>

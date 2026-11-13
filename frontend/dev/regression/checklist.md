@@ -35,7 +35,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] References: clicking the 4 in "Jump to section 4" scrolls the preview to the Citations section, and clicking the 1.5 there scrolls back up.
 - [ ] References: the missing label shows `??` as plain text, not a link.
 - [ ] Scroll the preview halfway down, then type in the editor. After the preview updates it stays at the same place instead of jumping to the top.
-- [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list doesn't mention `\vspace` or `\addcontentsline`.
+- [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list (the ⓘ button above the preview) doesn't mention `\vspace` or `\addcontentsline`.
 - [ ] Math: inline math, the integral and the sum are typeset, with limits above and below the sum.
 - [ ] Math: Greek letters, symbols and the matrix render.
 - [ ] Math: `\infty`, `\neq`, `\notin` and the other symbols in the "Computer Modern lacks" line use a serif math font, and the `\neq`-style slashes cross their symbol.
@@ -52,7 +52,12 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Compile Now (Ctrl+Enter, ⌘↩ on a Mac) refreshes the preview, from the editor too. Ctrl+Shift+C does nothing in the app, so the browser keeps it for the inspector.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
 - [ ] The footer says Compiled, with no diagnostics.
-- [ ] The preview shows "Preview is approximate: N changes made for LaTeX.js", and its list includes showing figures in place and footnotes inline.
+- [ ] The rendered document has no "Preview is approximate" note at the top.
+- [ ] The preview bar has a small ⓘ button with a count, next to the `?` help link. Hovering it shows "Preview is approximate: N changes", and a screen reader reads the same name.
+- [ ] Clicking it opens a popover that lists the changes, including showing figures in place and footnotes inline, with a "What's supported" link that opens the docs page in a new tab.
+- [ ] The popover closes with Esc (focus goes back to the button), with a click outside it, and with a click in the preview. Tab reaches the button, Enter opens it, and Tab moves on to the link.
+- [ ] The button and popover look right in the light and dark app themes, and the popover fits on a phone-width screen.
+- [ ] Open a project with nothing for the preview to change (the starter project). The ⓘ button isn't there.
 - [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
 - [ ] Code in `verbatim`, `lstlisting`, `minted` or `comment` blocks, and in environments the document defines with `\lstnewenvironment`, `\DefineVerbatimEnvironment`, `\newminted` or a `\newenvironment` around one of those, is left alone, even when `\begin` or `\end` is in the middle of a line. LaTeX.js has none of these except `comment`, so the unit tests in `src/compile/latexJsAdapt.test.ts` cover them.
 
@@ -173,7 +178,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
 - [ ] With the app theme on Light and the OS in dark mode, a preview theme of Match system shows a dark preview with light text. "Match system" follows the OS, not the app theme.
-- [ ] Try each preview theme (Light, Dark, Match system) with the app theme on Light, Dark and Match system, in OS light and dark mode. The preview's text, links, math, picture lines and "Preview is approximate" note are always readable on its background.
+- [ ] Try each preview theme (Light, Dark, Match system) with the app theme on Light, Dark and Match system, in OS light and dark mode. The preview's text, links, math and picture lines are always readable on its background.
 - [ ] With a Match system preview open, switch the OS between light and dark. The preview follows without a reload.
 - [ ] Split View, Editor Only and Preview Only change the layout, and the splitter drags.
 - [ ] Help > Documentation opens the docs, and Keyboard Shortcuts opens the shortcuts page.

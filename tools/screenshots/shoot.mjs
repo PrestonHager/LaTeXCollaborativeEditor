@@ -271,6 +271,18 @@ async function shootTheme(browser, theme) {
     { selector: '#diagnostics', label: 'First error, with file and line', side: 'above', pad: 2, dx: 120, dy: -16 },
   ]);
   await shot(page, 'diagnostics', theme);
+
+  // A footnote is one of the things LaTeX.js can't place, so the preview's info button shows. Open its list.
+  await setEditorText(page, MAIN_TEX.replace('from each site.', 'from each site.\\footnote{Site 3 was flooded on day 9.}'));
+  await waitForCompile(page);
+  await page.waitForSelector('#preview-changes:not([hidden])');
+  await page.click('#preview-changes-btn');
+  await page.waitForSelector('#preview-changes-popover[aria-hidden="false"]');
+  await page.mouse.move(640, 790);
+  const pane = await page.locator('#preview-pane').boundingBox();
+  await shot(page, 'preview-changes', theme, { clip: { x: pane.x, y: pane.y, width: pane.width, height: 260 } });
+  await page.keyboard.press('Escape');
+
   await setEditorText(page, MAIN_TEX);
   await waitForCompile(page);
 

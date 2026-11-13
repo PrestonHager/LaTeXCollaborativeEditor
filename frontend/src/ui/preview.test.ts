@@ -95,15 +95,14 @@ describe('preview theme style', () => {
     expect(css).toContain(`color-scheme:${theme}`);
     expect(css).toContain(`background:${colors.background}`);
     expect(css).toContain(`color:${colors.text}`);
-    expect(css).toContain(`--lc-note-bg:${colors.noteBackground}`);
+    expect(css).not.toContain('--lc-note');
   });
 
   it('keeps text readable on its own background in both themes', () => {
     for (const theme of ['light', 'dark'] as const) {
-      const { background, text, link, noteText, noteBackground } = PREVIEW_COLORS[theme];
+      const { background, text, link } = PREVIEW_COLORS[theme];
       expect(contrast(text, background)).toBeGreaterThanOrEqual(7);
       expect(contrast(link, background)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast(noteText, noteBackground)).toBeGreaterThanOrEqual(4.5);
     }
   });
 

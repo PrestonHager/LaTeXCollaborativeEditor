@@ -44,34 +44,6 @@ export function unlinkMissingRefs(doc: Document): void {
 }
 
 /**
- * Add a small note to the top of the preview listing what the adapter removed or rewrote,
- * so people know the preview isn't exact. It's a <details>, so it works without scripts.
- */
-export function addChangesNote(doc: Document, changes: string[]): void {
-  if (!changes.length) return;
-  const note = doc.createElement('details');
-  note.className = 'lc-preview-note';
-  note.setAttribute(
-    'style',
-    // Colors come from the preview theme style (src/ui/preview.ts), with light fallbacks.
-    'font:12px/1.4 system-ui,sans-serif;color:var(--lc-note-text,#555);background:var(--lc-note-bg,#f6f6f6);border:1px solid var(--lc-note-border,#ddd);border-radius:4px;padding:4px 8px;margin:8px;',
-  );
-  const summary = doc.createElement('summary');
-  summary.setAttribute('style', 'cursor:pointer;');
-  summary.textContent = `Preview is approximate: ${changes.length} change${changes.length === 1 ? '' : 's'} made for LaTeX.js.`;
-  const list = doc.createElement('ul');
-  list.setAttribute('style', 'margin:4px 0;padding-left:20px;');
-  for (const change of changes) {
-    const item = doc.createElement('li');
-    item.textContent = change;
-    list.appendChild(item);
-  }
-  note.append(summary, list);
-  // The worker's mini DOM has no prepend, so we insert before the first child instead.
-  doc.body.insertBefore(note, doc.body.firstChild);
-}
-
-/**
  * Typeset editor LaTeX into a full HTML document (LaTeX.js), using the raw `source` only.
  */
 export function latexSourceToPreviewHtml(source: string): { html: string | null; errors: EditorDiagnostic[]; changes: string[] } {
@@ -79,7 +51,10 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
   return { html: doc ? doc.documentElement.outerHTML : null, errors, changes };
 }
 
-/** Typeset LaTeX into a document, with dangerous URLs stripped and the changes note added. */
+/**
+ * Typeset LaTeX into a document, with dangerous URLs stripped. `changes` lists what the adapter
+ * removed or rewrote; the preview pane shows it next to the preview, not inside the document.
+ */
 function typeset(source: string): { doc: Document | null; errors: EditorDiagnostic[]; changes: string[] } {
   const adapted = adaptLatexSource(source);
   try {
@@ -91,7 +66,6 @@ function typeset(source: string): { doc: Document | null; errors: EditorDiagnost
     stripDangerousUrls(doc);
     unlinkMissingRefs(doc);
     addKatexFontFallbacks(doc);
-    addChangesNote(doc, adapted.changes);
     return { doc, errors: [], changes: adapted.changes };
   } catch (err) {
     return {
@@ -123,7 +97,13 @@ export type ProjectPreviewInput = {
   imageUrls: Map<string, string>;
 };
 
-export type ProjectPreviewResult = { html: string | null; errors: ProjectDiagnostic[]; missing: string[] };
+export type ProjectPreviewResult = {
+  html: string | null;
+  errors: ProjectDiagnostic[];
+  missing: string[];
+  /** What the preview removed or rewrote for LaTeX.js, as plain text. It can quote the document. */
+  changes: string[];
+};
 
 /**
  * Typeset the whole project, starting at the main file. \input files, images and the
@@ -131,7 +111,7 @@ export type ProjectPreviewResult = { html: string | null; errors: ProjectDiagnos
  */
 export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreviewResult {
   const expanded = expandProjectSource(input.mainPath, input.texts, input.binaryPaths);
-  const { doc, errors: sourceErrors } = typeset(expanded.source);
+  const { doc, errors: sourceErrors, changes } = typeset(expanded.source);
   // LaTeX.js errors come first, since they stop the preview. Bibliography notes follow.
   const errors: ProjectDiagnostic[] = [
     ...sourceErrors.map((error) => {
@@ -140,7 +120,7 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
     }),
     ...expanded.diagnostics,
   ];
-  if (!doc) return { html: null, errors, missing: expanded.missing };
+  if (!doc) return { html: null, errors, missing: expanded.missing, changes };
 
   // Images go in after the URL check, since it would strip our data: URLs along with a peer's.
   for (const img of Array.from(doc.querySelectorAll('img'))) {
@@ -154,5 +134,5 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
     if (url) img.setAttribute('src', url);
     else img.removeAttribute('src');
   }
-  return { html: doc.documentElement.outerHTML, errors, missing: expanded.missing };
+  return { html: doc.documentElement.outerHTML, errors, missing: expanded.missing, changes };
 }

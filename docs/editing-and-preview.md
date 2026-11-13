@@ -77,8 +77,15 @@ The preview uses [LaTeX.js](https://latex.js.org/), which covers the basics of t
 It can't load most packages, so before typesetting, the editor strips or rewrites the things below.
 Your source isn't changed, only the copy sent to the preview.
 
-When something gets stripped or rewritten, a small "Preview is approximate" note shows at the top of the preview.
-Click it to see the list.
+When something gets stripped or rewritten, a small info button (ⓘ) shows in the preview's bar, next to the `?` help link, with the number of changes.
+Its tooltip says "Preview is approximate: 3 changes" (or however many there are).
+Click it, or press Enter on it, to see the list, with a link to [What's supported](whats-supported.md).
+Esc, or a click anywhere else, closes it.
+The document itself stays as it is, with no note on top.
+When nothing needed changing, the button isn't there.
+
+![The preview's info button, open, listing one change](assets/screenshots/preview-changes-light.png#only-light)
+![The preview's info button, open, listing one change](assets/screenshots/preview-changes-dark.png#only-dark)
 
 Stripped:
 

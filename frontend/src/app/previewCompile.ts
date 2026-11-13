@@ -24,6 +24,11 @@ type PreviewCompileOptions = {
   onDiagnostics?: (text: string, topic: DiagnosticsTopic) => void;
   /** Called with true when there's no main file to show, so the page can say how to pick one. */
   onEmpty?: (empty: boolean) => void;
+  /**
+   * Called with what the preview had to strip or rewrite for LaTeX.js, each time a document renders,
+   * and with an empty list when there's nothing to show. The pane shows it as an info button.
+   */
+  onChanges?: (changes: string[]) => void;
   onCompiled?: () => void;
   onCompileError?: () => void;
   /** Extra words after "Not found in the project", like where to look for the missing files. */
@@ -44,6 +49,7 @@ export function createPreviewCompile({
   compiler = new CompileScheduler(),
   onDiagnostics,
   onEmpty,
+  onChanges,
   onCompiled,
   onCompileError,
   missingHint,
@@ -81,6 +87,7 @@ export function createPreviewCompile({
     if (!main) {
       compileStatusEl.textContent = project.isEmpty() ? 'Idle' : 'No main file';
       setDiagnostics('');
+      onChanges?.([]);
       return;
     }
     const texts = project.textFiles();
@@ -104,7 +111,11 @@ export function createPreviewCompile({
       const result = await compiler.compile({ mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) });
       if (!result || seq !== compileSequence) return;
       const { html, errors, missing } = result;
-      if (html) await preview.renderHtml(html);
+      if (html) {
+        await preview.renderHtml(html);
+        // When the parse fails, the last document stays up, so its changes stay too.
+        onChanges?.(result.changes ?? []);
+      }
       const activeFileId = getActiveFileId();
       const activePath = activeFileId ? project.get(activeFileId)?.path : undefined;
       editor.setDiagnostics(errors.filter((error) => error.path === activePath));
