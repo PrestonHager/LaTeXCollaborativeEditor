@@ -50,6 +50,10 @@ export function createThemeController() {
     get previewTheme() {
       return previewTheme;
     },
+    /** The preview theme actually shown: light or dark, with system resolved from the OS. */
+    get previewDisplayTheme() {
+      return resolveDisplayTheme(previewTheme);
+    },
     applyEditorTheme,
     applyPreviewTheme,
     watchSystemTheme,

@@ -58,6 +58,37 @@ describe('theme', () => {
     expect(document.documentElement.hasAttribute('data-preview-theme')).toBe(false);
   });
 
+  it('resolves the shown preview theme from the OS, not the app theme', () => {
+    const media = stubMatchMedia(true);
+    const theme = createThemeController();
+    theme.applyEditorTheme('light');
+    theme.applyPreviewTheme('system');
+    // Light app on a dark OS: "Match system" follows the OS, so the preview is dark.
+    expect(theme.previewDisplayTheme).toBe('dark');
+    media.flip(false);
+    expect(theme.previewDisplayTheme).toBe('light');
+    theme.applyPreviewTheme('dark');
+    expect(theme.previewDisplayTheme).toBe('dark');
+    theme.applyPreviewTheme('light');
+    media.flip(true);
+    expect(theme.previewDisplayTheme).toBe('light');
+  });
+
+  it('tells the preview when the OS flips under a system preview theme', () => {
+    const media = stubMatchMedia(false);
+    const theme = createThemeController();
+    theme.applyEditorTheme('light');
+    theme.applyPreviewTheme('system');
+    theme.watchSystemTheme();
+    const seen: string[] = [];
+    const listener = () => seen.push(theme.previewDisplayTheme);
+    window.addEventListener('previewthemechange', listener);
+    media.flip(true);
+    media.flip(false);
+    expect(seen).toEqual(['dark', 'light']);
+    window.removeEventListener('previewthemechange', listener);
+  });
+
   it('follows the OS only for themes set to system', () => {
     const media = stubMatchMedia(false);
     const theme = createThemeController();

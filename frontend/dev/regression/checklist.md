@@ -134,6 +134,9 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] The palette has the palette-only commands: Copy share link, Focus editor, and Switch to dark, light or system theme.
 - [ ] Ctrl+, opens Settings. Its theme selects, Pause Saving and Clear Local Projects all work.
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
+- [ ] With the app theme on Light and the OS in dark mode, a preview theme of Match system shows a dark preview with light text. "Match system" follows the OS, not the app theme.
+- [ ] Try each preview theme (Light, Dark, Match system) with the app theme on Light, Dark and Match system, in OS light and dark mode. The preview's text, links, math, picture lines and "Preview is approximate" note are always readable on its background.
+- [ ] With a Match system preview open, switch the OS between light and dark. The preview follows without a reload.
 - [ ] Split View, Editor Only and Preview Only change the layout, and the splitter drags.
 - [ ] Help > Documentation opens the docs, and Keyboard Shortcuts opens the shortcuts page.
 - [ ] Help > Report a Bug and Request a Feature open the GitHub forms, and the bug form has browser, OS and version filled in, but no document text.

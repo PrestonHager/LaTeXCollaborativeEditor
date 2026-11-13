@@ -102,6 +102,8 @@ const { conflicts, overwrite } = projectState;
 let activeFileId: string | null = null;
 const themeState = createThemeController();
 const { applyEditorTheme, applyPreviewTheme } = themeState;
+// The rendered document sets its own colors, so keep it on the same preview theme as the frame around it.
+window.addEventListener('previewthemechange', () => preview.setTheme(themeState.previewDisplayTheme));
 let hostStorageText = 'Saved on host local storage';
 const fileProgress = new Map<string, number>();
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;

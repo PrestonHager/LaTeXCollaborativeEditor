@@ -65,6 +65,15 @@ describe('latexSourceToPreviewHtml', () => {
     expect(doc.body.lastElementChild?.tagName).toBe('P');
   });
 
+  it('takes the note colors from the preview theme, with light fallbacks', () => {
+    const doc = new DOMParser().parseFromString('<html><body><p>x</p></body></html>', 'text/html');
+    addChangesNote(doc, ['Removed \\vspace.']);
+    const style = doc.querySelector('.lc-preview-note')?.getAttribute('style') ?? '';
+    expect(style).toContain('color:var(--lc-note-text,#555)');
+    expect(style).toContain('background:var(--lc-note-bg,#f6f6f6)');
+    expect(style).toContain('border:1px solid var(--lc-note-border,#ddd)');
+  });
+
   it('returns structured error when parse fails', () => {
     const { html, errors } = latexSourceToPreviewHtml('\\invalidtokenalone');
     expect(html).toBeNull();
