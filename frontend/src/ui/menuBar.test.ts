@@ -218,6 +218,113 @@ describe('createMenuBar', () => {
     container.remove();
   });
 
+  describe('hover switching', () => {
+    const setup = () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const calls: CommandId[] = [];
+      const menuBar = createMenuBar(withMenus(container, [
+          { label: 'File', items: [{ commandId: 'file.new', label: 'New' }] },
+          { label: 'Edit', items: [{ commandId: 'edit.undo', label: 'Undo' }] },
+          { label: 'View', items: [{ commandId: 'view.compileNow', label: 'Compile' }] },
+        ]), {
+        getCommandState: () => ({ enabled: true }),
+        onCommand: (id) => calls.push(id),
+      });
+      const triggers = Array.from(container.querySelectorAll('.menu-trigger')) as HTMLButtonElement[];
+      const openLabels = () => Array.from(container.querySelectorAll<HTMLElement>('.menu-root.is-open')).map((el) => el.dataset.menuLabel);
+      const hover = (el: HTMLElement, pointerType = 'mouse') => {
+        const event = new Event('pointerenter');
+        Object.defineProperty(event, 'pointerType', { value: pointerType });
+        el.dispatchEvent(event);
+      };
+      const cleanup = () => {
+        menuBar.destroy();
+        container.remove();
+      };
+      return { container, calls, triggers, openLabels, hover, cleanup };
+    };
+
+    it('does nothing when no menu is open', () => {
+      const { triggers, openLabels, hover, cleanup } = setup();
+      hover(triggers[1]);
+      expect(openLabels()).toEqual([]);
+      cleanup();
+    });
+
+    it('switches the open menu to the hovered one and updates ARIA and focus', () => {
+      const { triggers, openLabels, hover, calls, cleanup } = setup();
+      triggers[0].click();
+      expect(openLabels()).toEqual(['File']);
+      hover(triggers[1]);
+      expect(openLabels()).toEqual(['Edit']);
+      expect(triggers[0].getAttribute('aria-expanded')).toBe('false');
+      expect(triggers[1].getAttribute('aria-expanded')).toBe('true');
+      expect(document.getElementById('menu-0')?.getAttribute('aria-hidden')).toBe('true');
+      expect(document.getElementById('menu-1')?.getAttribute('aria-hidden')).toBe('false');
+      expect(document.activeElement).toBe(triggers[1]);
+      // Hovering only opens menus, it never runs a command.
+      expect(calls).toEqual([]);
+      cleanup();
+    });
+
+    it('hovering the already-open menu keeps it open and focus where it is', () => {
+      const { triggers, openLabels, hover, cleanup } = setup();
+      triggers[0].click();
+      const item = document.activeElement;
+      hover(triggers[0]);
+      expect(openLabels()).toEqual(['File']);
+      expect(document.activeElement).toBe(item);
+      cleanup();
+    });
+
+    it('ignores touch pointerenter so a tap does not open then toggle shut', () => {
+      const { triggers, openLabels, hover, cleanup } = setup();
+      triggers[0].click();
+      hover(triggers[1], 'touch');
+      expect(openLabels()).toEqual(['File']);
+      triggers[1].click();
+      expect(openLabels()).toEqual(['Edit']);
+      cleanup();
+    });
+
+    it('does not move focus out of the editor when switching by hover', () => {
+      const { triggers, openLabels, hover, cleanup } = setup();
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      triggers[0].click();
+      outside.focus();
+      hover(triggers[2]);
+      expect(openLabels()).toEqual(['View']);
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
+      cleanup();
+    });
+
+    it('arrow keys still switch menus after a hover switch', () => {
+      const { triggers, openLabels, hover, cleanup } = setup();
+      triggers[0].click();
+      hover(triggers[1]);
+      triggers[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      expect(openLabels()).toEqual(['View']);
+      expect((document.activeElement as HTMLElement).textContent).toContain('Compile');
+      (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      expect(openLabels()).toEqual(['File']);
+      triggers[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+      expect(openLabels()).toEqual(['View']);
+      cleanup();
+    });
+
+    it('arrow keys on a trigger with no open menu only move focus', () => {
+      const { triggers, openLabels, cleanup } = setup();
+      triggers[0].focus();
+      triggers[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      expect(document.activeElement).toBe(triggers[1]);
+      expect(openLabels()).toEqual([]);
+      cleanup();
+    });
+  });
+
   it('focuses first enabled item when leading items are disabled', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);

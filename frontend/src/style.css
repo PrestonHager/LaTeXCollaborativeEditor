@@ -169,6 +169,9 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 /* Menu bar. Basecoat styles the dropdowns, we only set sizes and the check spacing. */
 .menu-bar { display: inline-flex; align-items: center; gap: 0.125rem; }
 .menu-popover { min-width: 15rem; }
+/* Basecoat fades `visibility` too, so an opening menu stays invisible for its first frame and
+   focus() on its first item is dropped. Show it at once on open; closing still fades out. */
+.menu-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
 .menu-list { display: flex; flex-direction: column; }
 .menu-item-label { flex: 1; text-align: left; }
 .menu-item-indicator { display: inline-flex; }

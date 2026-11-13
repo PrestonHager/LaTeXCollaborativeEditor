@@ -128,6 +128,8 @@ Use two browser windows, or a normal and a private window, so each has its own s
 
 - [ ] Each menu (File, Edit, View, Help) opens on click and shows above the editor.
 - [ ] Arrow keys move through menu items and between menus, and Escape closes them.
+- [ ] With one menu open, moving the mouse over another menu (File, Edit, View, Help) switches to it without clicking. Hovering never runs a command, and with no menu open hovering does nothing.
+- [ ] After switching menus by hover, arrow keys still move between menus and Escape closes the menu.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).

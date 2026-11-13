@@ -121,32 +121,60 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     updateOpenState();
   };
 
+  /**
+   * Open one menu and close the rest. `focus` says where keyboard focus goes:
+   * the first enabled item (click or keyboard), or the menu's trigger (hover).
+   */
+  const openMenu = (menuLabel: string, focus: 'firstItem' | 'trigger') => {
+    openMenuLabel = menuLabel;
+    updateOpenState();
+    if (focus === 'firstItem') {
+      focusFirstEnabledItem(menuLabel);
+      return;
+    }
+    // Hover only moves focus when it is already in the menu bar, so it never steals it from the editor.
+    if (root.contains(document.activeElement)) {
+      triggerButtons.find((button) => button.closest<HTMLElement>('.menu-root')?.dataset.menuLabel === menuLabel)?.focus();
+    }
+  };
+
+  /** Arrow keys between menus: move to the next trigger, and keep a menu open if one was. */
+  const stepMenu = (offset: number, currentTrigger: HTMLButtonElement) => {
+    const wasOpen = openMenuLabel !== null;
+    moveTriggerFocus(offset, currentTrigger);
+    const focused = document.activeElement;
+    const nextLabel = focused instanceof HTMLElement && focused.classList.contains('menu-trigger')
+      ? focused.closest<HTMLElement>('.menu-root')?.dataset.menuLabel
+      : undefined;
+    if (wasOpen && nextLabel !== undefined) openMenu(nextLabel, 'firstItem');
+  };
+
   root.querySelectorAll<HTMLElement>('.menu-root').forEach((menuRoot) => {
     const menuLabel = menuRoot.dataset.menuLabel ?? '';
     const trigger = menuRoot.querySelector<HTMLButtonElement>('.menu-trigger');
     if (!trigger) return;
 
     trigger.addEventListener('click', () => {
-      openMenuLabel = openMenuLabel === menuLabel ? null : menuLabel;
-      updateOpenState();
-      if (openMenuLabel === menuLabel) focusFirstEnabledItem(menuLabel);
+      if (openMenuLabel === menuLabel) closeMenus();
+      else openMenu(menuLabel, 'firstItem');
+    });
+    // Once the menu bar is active (a menu is open), hovering another menu switches to it.
+    // Hover only opens menus, it never runs a command. Touch is left to the click handler,
+    // since a tap fires pointerenter right before click and would toggle the menu shut.
+    trigger.addEventListener('pointerenter', (event) => {
+      if ((event as PointerEvent).pointerType === 'touch') return;
+      if (openMenuLabel === null || openMenuLabel === menuLabel) return;
+      openMenu(menuLabel, 'trigger');
     });
     trigger.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowRight') {
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         event.preventDefault();
-        moveTriggerFocus(1, trigger);
-        return;
-      }
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        moveTriggerFocus(-1, trigger);
+        stepMenu(event.key === 'ArrowRight' ? 1 : -1, trigger);
         return;
       }
       if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openMenuLabel = menuLabel;
-        updateOpenState();
-        focusFirstEnabledItem(menuLabel);
+        openMenu(menuLabel, 'firstItem');
       }
     });
     triggerButtons.push(trigger);
@@ -190,9 +218,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
         }
         if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
           event.preventDefault();
-          moveTriggerFocus(event.key === 'ArrowRight' ? 1 : -1, trigger);
-          const focused = document.activeElement as HTMLButtonElement | null;
-          if (focused?.classList.contains('menu-trigger')) focused.click();
+          stepMenu(event.key === 'ArrowRight' ? 1 : -1, trigger);
         }
       });
 
