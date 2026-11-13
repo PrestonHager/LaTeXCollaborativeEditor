@@ -82,11 +82,11 @@ So are the Drive commands, **Save Now**, **Rename Project**, **Clear Local Proje
 Their shortcuts do nothing in a guest tab either.
 If you're a guest and want your own project, open the editor in a new tab without the `room` link.
 
-When the host picks **New Project**, the confirm says it clears the project for everyone in the room.
+When the host picks **New Project**, the dialog says it clears the project for everyone in the room, and its **Start new project** button is red.
 Opening or importing another project as the host also swaps it out for every guest.
 So while at least one guest is connected, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** ask first, before any dialog, sign-in, or file picker opens.
 Cancel leaves the project as it was.
-After an OK on Open Local Project, its **Upload .zip** button doesn't ask again.
+After **Choose a project** on Open Local Project, its **Upload .zip** button doesn't ask again.
 With nobody connected, they open straight away.
 
 ## Related topics

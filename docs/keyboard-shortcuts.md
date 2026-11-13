@@ -60,7 +60,7 @@ It lists every command, with its keybinds next to it.
 - **Turn off a built-in keybind**: press the **×** on it. It stays in the list, crossed out, with a **Turn on** button.
   Press **×** on a keybind you added to remove it.
 - **Search** by command name, menu, what it does, or key, like "save" or "Ctrl+S".
-- **Reset to defaults** removes every keybind you added and turns the built-in ones back on.
+- **Reset to defaults** asks first, then removes every keybind you added and turns the built-in ones back on.
 
 Your keybinds are saved in this browser, apart from your projects, along with your other [settings](saving-and-storage.md#your-settings). Your other open tabs pick up a change right away, and **Settings > Export settings** lets you take them to another browser.
 They're stored with a "main modifier" instead of Ctrl or ⌘, so a keybind you add on Windows shows as ⌘ on a Mac.

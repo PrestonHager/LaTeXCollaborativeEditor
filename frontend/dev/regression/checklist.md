@@ -72,11 +72,14 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 
 ## Projects and files
 
-- [ ] New File makes a file in the selected folder, and it opens in the editor.
-- [ ] New Folder makes a folder.
-- [ ] Rename a file from its menu in the Files panel. The preview still finds it if you update the `\input`.
-- [ ] Move a file into another folder.
-- [ ] Delete a file after the confirm dialog.
+- [ ] New File opens an in-app **New file** dialog with `chapter` selected in `chapter.tex`. Create file makes it in the selected folder, and it opens in the editor.
+- [ ] In the New file dialog, typing `main` says `main.tex already exists.` under the box, `a:b` says the `:` isn't allowed, and an empty box says Enter a name. Enter does nothing until the name is fine.
+- [ ] New Folder opens a **New folder** dialog, and Create folder makes the folder.
+- [ ] Rename a file from its pencil in the Files panel. The **Rename** dialog selects the name without its extension. The preview still finds it if you update the `\input`.
+- [ ] Move a file into another folder by typing `folder/name.tex` in the Rename dialog.
+- [ ] Delete a file from its trash can. The dialog's **Delete file** button is red and focus starts on Cancel, so Enter keeps the file. Clicking Delete file removes it.
+- [ ] Every one of these dialogs closes on Escape and on a click outside the box, gives focus back to the button that opened it (or a row in the Files panel after a rename or delete), and looks right in light and dark mode and in a narrow window.
+- [ ] No browser `prompt`/`confirm` box shows anywhere, except the browser's own "Leave site?" box.
 - [ ] Set main file on another `.tex` file. The preview compiles from that file instead.
 - [ ] Upload Files adds a file, and an image you upload can be used with `\includegraphics`.
 - [ ] A file over 10 MB is refused with a message.
@@ -85,8 +88,10 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Download Project .zip (Ctrl+Shift+S) saves a zip with every file and folder.
 - [ ] Add an empty folder (like `figures/`), download the .zip, and upload it as a new project: the empty folder is still in the file tree.
 - [ ] Upload .zip as New Project opens that zip as a project, with the right main file.
-- [ ] Rename Project changes the name in the header.
-- [ ] New Project (Ctrl+N) asks first, then opens a starter `main.tex`.
+- [ ] Rename Project (or clicking the title) opens a **Rename project** dialog. A name over 200 characters shows an error under the box. Rename project changes the name in the header.
+- [ ] New Project (Ctrl+N) asks first in a **Start a new project?** dialog, then opens a starter `main.tex`.
+- [ ] Clear Local Projects asks in a **Delete all local projects?** dialog with a red **Delete N projects** button, focus on Cancel.
+- [ ] Pressing Ctrl+N while a dialog is open doesn't open a second one.
 
 ## Saving in the browser
 
@@ -138,15 +143,16 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] An image uploaded on one side shows up in the other's preview, with a progress bar while it transfers.
 - [ ] Reloading the host rejoins the same room, and the guest keeps syncing.
 - [ ] Text the guest typed while the host was reloading shows up on the host.
-- [ ] New link starts a different room, and the old link stops working.
+- [ ] New link asks in a **Start a new link?** dialog with Keep current link (focused) and a red Start new link. Start new link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
 - [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
-- [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first, saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
-- [ ] With a guest connected, OK on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.
+- [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
+- [ ] With a guest connected, New Project's Start new project button is red and focus starts on Cancel.
+- [ ] With a guest connected, Choose a project on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.
 - [ ] With nobody connected, those three open straight away without asking.
-- [ ] With a guest connected, leaving the Upload .zip confirm open for more than 5 seconds and then pressing OK shows a notice that the browser blocked the picker. Choosing Upload .zip again opens the picker without asking.
+- [ ] With a guest connected, leaving the Upload .zip dialog open for more than 5 seconds and then clicking Choose a .zip (or Tab to it and Enter) still opens the file picker. If the browser ever blocks it, a notice says so and the next Upload .zip opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
 - [ ] With both windows on the same build, the console shows no version message. A guest on another build (say `npm run dev` with another version in `package.json`) logs which version each side runs, and still syncs.
 
@@ -173,7 +179,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Giving Ctrl+S to Compile Now shows a warning on both rows. Use it here on Save Now gives it back, and the Compile Now chip turns off.
 - [ ] The × on Redo's Ctrl+Y crosses it out and Ctrl+Y stops redoing. Turn on brings it back.
 - [ ] Giving Ctrl+] to a command warns that the editor uses it. In the editor Ctrl+] still indents, and outside it runs the command.
-- [ ] Added keybinds are still there after a reload, and Reset to defaults puts everything back.
+- [ ] Added keybinds are still there after a reload, and Reset to defaults asks in a **Reset keyboard shortcuts?** dialog (red Reset shortcuts, focus on Cancel) over Settings, then puts everything back. Escape closes only that dialog, not Settings.
 - [ ] Upgrading keeps your settings: with keybinds, tour seen and themes saved by the previous version, the new version shows the same themes and keybinds and no tour. DevTools > Application > Local Storage then has `latex-editor.settings`, and `latex-editor.keybinds` and `latex-editor.tour-seen` are gone.
 - [ ] Open the app in two tabs. Changing the theme, a keybind or the layout (View > Editor Only, or dragging the splitter) in one shows up in the other right away, Settings included if it's open.
 - [ ] The layout mode and splitter position survive a reload.

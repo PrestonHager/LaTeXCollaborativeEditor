@@ -3,6 +3,7 @@ import { addRule, pickWinner, toggleBinding, type Binding, type Keymap, type Key
 import { formatKeybind, isAssignableKeybind, keybindFromEvent } from './modifierShortcutLabels';
 import { scoreCommand } from './commandPalette';
 import { icon, keybindIcons } from './icons';
+import { confirmDialog, type ConfirmOptions } from './dialogs';
 
 /** A command Settings can give keybinds to. */
 export type KeybindCommand = { id: CommandId; label: string; section: string; description?: string };
@@ -16,7 +17,8 @@ type KeybindSettingsOptions = {
   editorKeybinds: ReadonlySet<string>;
   /** Save the new settings and refresh every label. The keymap already has them. */
   onChange: (settings: KeybindSettings) => void;
-  confirm?: (message: string) => boolean;
+  /** Ask before Reset all. Defaults to the in-app confirm dialog; tests pass their own answer. */
+  confirm?: (options: ConfirmOptions) => boolean | Promise<boolean>;
 };
 
 // Keys the browser keeps for itself (new tab, close tab, DevTools), whatever the page asks.
@@ -236,12 +238,19 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
     recording = null;
     render();
   });
-  resetButton.addEventListener('click', () => {
-    const confirm = options.confirm ?? ((message: string) => window.confirm(message));
-    if (!confirm('Reset every keyboard shortcut to its default? Your added keybinds go away.')) return;
+  resetButton.addEventListener('click', async () => {
+    const ask = options.confirm ?? confirmDialog;
+    const ok = await ask({
+      title: 'Reset keyboard shortcuts?',
+      message: 'Every shortcut goes back to its default, and the keybinds you added go away.',
+      confirmLabel: 'Reset shortcuts',
+      destructive: true,
+    });
+    if (!ok) return;
     recording = null;
     apply({ rules: [], disabled: [] });
-    resetButton.focus();
+    // Reset turns itself off once there's nothing left to reset, so keep focus in the section.
+    (resetButton.disabled ? search : resetButton).focus();
   });
 
   render();

@@ -31,9 +31,25 @@ const REPLACE_QUESTIONS: Record<ReplaceAction, string> = {
   import: 'Upload a .zip as a new project?',
 };
 
-/** The host's confirm before it replaces the project, which has to say it hits everyone in the room. */
-export const replaceProjectConfirm = (action: ReplaceAction): string =>
-  `${REPLACE_QUESTIONS[action]} This ${action === 'new' ? 'clears' : 'replaces'} the project for everyone in the room. The current one stays saved where it is.`;
+const REPLACE_BUTTONS: Record<ReplaceAction, string> = {
+  new: 'Start new project',
+  open: 'Choose a project',
+  import: 'Choose a .zip',
+};
 
-// The host's New Project confirm. New Project always asks, even with nobody in the room.
-export const NEW_PROJECT_CONFIRM = replaceProjectConfirm('new');
+/** What the replace dialog says under its title. It has to say it hits everyone in the room. */
+const replaceProjectMessage = (action: ReplaceAction): string =>
+  `This ${action === 'new' ? 'clears' : 'replaces'} the project for everyone in the room. The current one stays saved where it is.`;
+
+/**
+ * The wording for the host's replace dialog: a title, the message, and a button that names the action.
+ * New Project always asks, even with nobody in the room. Open and Upload .zip only ask while guests are in it.
+ * It's marked destructive while guests are in the room, since it changes their project too.
+ */
+export const replaceProjectDialog = (action: ReplaceAction, withGuests = true) => ({
+  title: REPLACE_QUESTIONS[action],
+  // With nobody in the room there's no one else to warn.
+  message: withGuests ? replaceProjectMessage(action) : 'The current project stays saved where it is.',
+  confirmLabel: REPLACE_BUTTONS[action],
+  destructive: withGuests,
+});

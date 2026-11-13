@@ -140,18 +140,20 @@ describe('setupShareButton', () => {
       initialRoomId: 'old',
       newLinkButton: newLink,
       getNewRoomId,
-      confirmNewLink: () => confirmed,
+      // The real one is the in-app dialog, which answers later.
+      confirmNewLink: async () => confirmed,
     });
 
     // First, a declined confirm leaves the old link alone.
     newLink.click();
+    await Promise.resolve();
     expect(getNewRoomId).not.toHaveBeenCalled();
     expect(link.textContent).toBe('https://host/?room=old');
 
     // Now confirm and the new link is shown and copied.
     confirmed = true;
     newLink.click();
-    await Promise.resolve();
+    await vi.waitFor(() => expect(getNewRoomId).toHaveBeenCalled());
     expect(getNewRoomId).toHaveBeenCalledTimes(1);
     expect(link.textContent).toBe('https://host/?room=fresh');
     expect(copyText).toHaveBeenCalledWith('https://host/?room=fresh');

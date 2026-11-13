@@ -11,7 +11,8 @@ type ShareButtonConfig = {
   /** Optional button that drops the current room and makes a fresh link. */
   newLinkButton?: HTMLButtonElement;
   getNewRoomId?: () => string;
-  confirmNewLink?: () => boolean;
+  /** Ask before dropping the old link. Resolve false to keep it. */
+  confirmNewLink?: () => boolean | Promise<boolean>;
 };
 
 export function setupShareButton(config: ShareButtonConfig) {
@@ -59,8 +60,8 @@ export function setupShareButton(config: ShareButtonConfig) {
 
   const { newLinkButton, getNewRoomId } = config;
   if (newLinkButton && getNewRoomId) {
-    newLinkButton.addEventListener('click', () => {
-      if (config.confirmNewLink && !config.confirmNewLink()) return;
+    newLinkButton.addEventListener('click', async () => {
+      if (config.confirmNewLink && !(await config.confirmNewLink())) return;
       shareWith(getNewRoomId);
     });
   }

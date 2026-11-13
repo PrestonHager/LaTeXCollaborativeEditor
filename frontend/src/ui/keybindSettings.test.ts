@@ -11,7 +11,7 @@ const commands: KeybindCommand[] = [
   { id: 'share.copyLink', label: 'Copy share link', section: 'Share' },
 ];
 
-function setup(options: { platform?: 'mac' | 'other'; settings?: KeybindSettings; confirm?: boolean } = {}) {
+function setup(options: { platform?: 'mac' | 'other'; settings?: KeybindSettings; confirm?: boolean | 'dialog' } = {}) {
   mountAppShell();
   // jsdom 31+ (like real browsers) will not focus controls inside a closed <dialog>.
   document.getElementById('settings-dialog')!.setAttribute('open', '');
@@ -24,7 +24,7 @@ function setup(options: { platform?: 'mac' | 'other'; settings?: KeybindSettings
     commands: () => commands,
     editorKeybinds: new Set(['Mod+]']),
     onChange,
-    confirm: () => options.confirm ?? true,
+    confirm: options.confirm === 'dialog' ? undefined : () => options.confirm !== false,
   });
   const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const row = (id: string) => q(`.keybind-row[data-command="${id}"]`);
@@ -190,16 +190,31 @@ describe('createKeybindSettings', () => {
     expect(root.querySelector('.keybind-empty')?.textContent).toBe('No commands match.');
   });
 
-  it('resets to the defaults after asking', () => {
+  it('resets to the defaults after asking', async () => {
     const settings = { rules: [{ id: 'share.copyLink' as const, keybind: 'Alt+L' }], disabled: ['edit.redo Mod+Y'] };
     const declined = setup({ settings, confirm: false });
     declined.q<HTMLButtonElement>('[data-keybind-reset]').click();
+    await Promise.resolve();
     expect(declined.chips('share.copyLink')).toEqual(['Alt+L']);
     const { q, chips, onChange } = setup({ settings });
     q<HTMLButtonElement>('[data-keybind-reset]').click();
-    expect(chips('share.copyLink')).toEqual([]);
+    await vi.waitFor(() => expect(chips('share.copyLink')).toEqual([]));
     expect(chips('edit.redo')).toEqual(['Ctrl+Shift+Z', 'Ctrl+Y']);
     expect(onChange).toHaveBeenLastCalledWith({ rules: [], disabled: [] });
+  });
+
+  it('asks with the in-app dialog by default, with a named, red Reset button', async () => {
+    const settings = { rules: [{ id: 'share.copyLink' as const, keybind: 'Alt+L' }], disabled: [] };
+    const { q, chips } = setup({ settings, confirm: 'dialog' });
+    q<HTMLButtonElement>('[data-keybind-reset]').click();
+    const dialog = document.querySelector<HTMLDialogElement>('dialog.app-dialog')!;
+    expect(dialog.querySelector('h2')?.textContent).toBe('Reset keyboard shortcuts?');
+    const [cancel, ok] = dialog.querySelectorAll<HTMLButtonElement>('footer button');
+    expect(ok.textContent).toBe('Reset shortcuts');
+    expect(ok.dataset.variant).toBe('destructive');
+    expect(document.activeElement).toBe(cancel);
+    ok.click();
+    await vi.waitFor(() => expect(chips('share.copyLink')).toEqual([]));
   });
 
   it('draws again from the keymap on refresh, dropping a half-done recording', () => {

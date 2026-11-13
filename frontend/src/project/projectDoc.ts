@@ -163,7 +163,7 @@ export class ProjectDoc {
     if (!to) throw new Error('That name is not allowed.');
     if (to === from) return;
     if (isInside(to, from)) throw new Error('A folder cannot be moved inside itself.');
-    if (this.findByPath(to) || this.folderPaths().includes(to)) throw new Error(`${to} already exists.`);
+    if (this.hasPath(to)) throw new Error(`${to} already exists.`);
     const affected = this.entries().filter((entry) => entry.path === from || isInside(entry.path, from));
     if (!affected.length) throw new Error('That file no longer exists.');
     this.doc.transact(() => {
@@ -269,10 +269,15 @@ export class ProjectDoc {
     };
   }
 
+  /** Check if a file or folder (even one only implied by a file in it) is already at this path. */
+  hasPath(path: string): boolean {
+    return Boolean(this.findByPath(path)) || this.folderPaths().includes(path);
+  }
+
   private freePath(rawPath: string): string {
     const path = normalizePath(rawPath);
     if (!path) throw new Error('That file name is not allowed.');
-    if (this.findByPath(path) || this.folderPaths().includes(path)) throw new Error(`${basename(path)} already exists here.`);
+    if (this.hasPath(path)) throw new Error(`${basename(path)} already exists here.`);
     return path;
   }
 }
