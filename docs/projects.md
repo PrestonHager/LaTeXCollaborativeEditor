@@ -133,7 +133,7 @@ The new project isn't saved until the first autosave, which needs a name.
 - **File > Download Current File** saves just the open file.
 
 If a peer hasn't finished sending you an image yet, the zip leaves it out and the notice says which files it's still waiting on.
-Empty folders aren't written into the zip.
+Empty folders are kept in the zip, so uploading it again gives back the same folder tree.
 
 ## Projects with collaborators
 

@@ -66,6 +66,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] A file over 10 MB is refused with a message.
 - [ ] Download Current File saves the open file.
 - [ ] Download Project .zip (Ctrl+Shift+S) saves a zip with every file and folder.
+- [ ] Add an empty folder (like `figures/`), download the .zip, and upload it as a new project: the empty folder is still in the file tree.
 - [ ] Upload .zip as New Project opens that zip as a project, with the right main file.
 - [ ] Rename Project changes the name in the header.
 - [ ] New Project (Ctrl+N) asks first, then opens a starter `main.tex`.

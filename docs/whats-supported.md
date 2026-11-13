@@ -51,7 +51,6 @@ These are known limits right now.
 - **PDF and EPS figures don't show in the preview.** The preview puts a note in their place. The file viewer can still show PDFs. Convert figures to PNG or SVG if you want them in the preview.
 - **The bibliography is simple.** `\cite` becomes `[1]`, `[2]`, and so on, with a basic reference list. There are no BibTeX styles, and `\bibliographystyle` is ignored. `biblatex` commands like `\printbibliography` aren't handled.
 - **Files added to a Drive project folder from Drive itself don't show up.** The app only has permission to see files it made or that you picked. Upload files from the editor instead.
-- **Empty folders aren't kept in downloaded zips.** Put a file in a folder if you want it in the zip.
 - **There's no undo for file operations.** Undo only covers typing. Deleting, renaming, or moving a file can't be undone from the app.
 - **Undo history is per file and only lasts until you switch files.** Opening another file starts a fresh undo history.
 - **Files over 10 MB** can't be uploaded or sent to peers.

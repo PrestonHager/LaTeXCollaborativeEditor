@@ -1,4 +1,4 @@
-import { crc32, createZip, readZip } from './zip';
+import { crc32, createZip, emptyFolders, readZip } from './zip';
 
 const enc = (text: string) => new TextEncoder().encode(text);
 const dec = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
@@ -34,12 +34,34 @@ describe('zip', () => {
     expect(read.files.map((file) => file.path)).toEqual(['main.tex', 'ch/one.tex']);
   });
 
-  it('reads folder entries', async () => {
-    // Build a zip by hand with a directory entry, since createZip only writes files.
-    const withFolder = await createZip([{ path: 'empty/', data: new Uint8Array() }, { path: 'a.tex', data: enc('a') }]);
-    const read = await readZip(withFolder);
-    expect(read.folders).toEqual(['empty']);
-    expect(read.files.map((file) => file.path)).toEqual(['a.tex']);
+  it('writes and reads folder entries, only for folders nothing else implies', async () => {
+    const zip = await createZip([{ path: 'a.tex', data: enc('a') }, { path: 'ch/one.tex', data: enc('b') }], [
+      'empty',
+      'ch',
+      'deep/er/',
+      'deep',
+      '/empty/',
+      '',
+    ]);
+    const read = await readZip(zip);
+    expect(read.folders).toEqual(['deep/er', 'empty']);
+    expect(read.files.map((file) => file.path)).toEqual(['a.tex', 'ch/one.tex']);
+    // Directory entries have no data and carry the directory attribute.
+    const view = new DataView(zip.buffer);
+    const centralAt = view.getUint32(zip.length - 22 + 16, true);
+    expect(view.getUint16(zip.length - 22 + 10, true)).toBe(4);
+    expect(view.getUint32(centralAt + 24, true)).toBe(0);
+    expect(view.getUint32(centralAt + 38, true)).toBe(0x10);
+  });
+
+  it('keeps an empty folder next to a shared top folder', async () => {
+    const read = await readZip(await createZip([{ path: 'project/main.tex', data: enc('a') }], ['project/figures']));
+    expect(read.files.map((file) => file.path)).toEqual(['main.tex']);
+    expect(read.folders).toEqual(['figures']);
+  });
+
+  it('lists the folders that need their own entry', () => {
+    expect(emptyFolders([{ path: 'a/b/c.tex', data: enc('') }], ['a', 'a/b', 'x', 'x/y', 'z'])).toEqual(['x/y', 'z']);
   });
 
   it('refuses things that are not zips, and methods it cannot read', async () => {

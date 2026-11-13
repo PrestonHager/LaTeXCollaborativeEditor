@@ -17,7 +17,7 @@ Checklist
 - [ ] Projects: you can create a project, add files and folders, rename, move and delete them, and set the main file.
 - [ ] Project images: an uploaded image used with `\includegraphics` shows up in the preview, and `\input` and `\bibliography` resolve against the file tree.
 - [ ] Project sync: a second peer joining the room sees the full file tree and gets uploaded images over WebRTC, with progress, and files over 10 MB are refused.
-- [ ] Export: the project can be downloaded as a .zip, and a .zip can be uploaded as a new project.
+- [ ] Export: the project can be downloaded as a .zip (empty folders included), and a .zip can be uploaded as a new project.
 - [ ] Migration: documents saved before projects (local docs, a linked Drive file, and saved sessions) still open as one-file projects.
 - [ ] Drive projects: a project saved to Google Drive shows up as a folder with the same file tree.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
