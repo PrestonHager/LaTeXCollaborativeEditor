@@ -113,7 +113,10 @@ function replaceGraphics(source: string, has: (path: string) => boolean, missing
   }
   return source
     .replace(pathDecl, keepLineBreaks)
-    .replace(/\\includegraphics\s*(\[[^\]]*\])?\s*\{([^}]*)\}/g, (whole, options: string | undefined, rawName: string) => {
+    .replace(/\\includegraphics\s*(\[[^\]]*\])?\s*\{([^}]*)\}/g, (whole, options: string | undefined, rawName: string, offset: number) => {
+      // A commented-out \includegraphics is neither missing nor shown.
+      const lineStart = source.lastIndexOf('\n', offset - 1) + 1;
+      if (commentStart(source.slice(lineStart, offset)) < offset - lineStart) return whole;
       const name = rawName.trim();
       let found: string | null = null;
       for (const dir of ['', ...graphicsPaths]) {

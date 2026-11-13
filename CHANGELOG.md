@@ -27,7 +27,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 ### Changed
 
 - **File > New Project** opens the template picker instead of a confirm box. **Empty project** is still first, and the picker warns when it would replace the project for people in your room.
-- Figures with placement options like `[htbp]` no longer show the options as text in the preview, and a `\newpage` right after a list now breaks the page.
+- Figures with placement options like `[htbp]` no longer show the options as text in the preview, and a `\newpage` right after a list now breaks the page. A commented-out `\includegraphics` is no longer reported as a missing file.
 - **Your colour in a shared room stays the same when you reload,** and two people in a room no longer get the same colour (up to eight people): whoever joined later gets the next free one. A remote cursor's name label on the first line now shows below the cursor instead of being cut off.
 - **The live site only changes with a release.** It updates to numbered versions listed here, not with every change, so the update prompt shows up less often and always has release notes.
 - **Faster first load.** The page downloads about 33 kB less (gzipped) before the editor shows. Sharing, the lint gutter, the command palette, Settings, About, the Open, Upload and conflict dialogs, the tour, Add Files from Drive and the zip code now load just after the page, when you point at them, or on first use. If a part can't load because a new version was deployed, the update prompt offers a reload.

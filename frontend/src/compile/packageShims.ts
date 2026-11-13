@@ -13,10 +13,33 @@ const keepLineBreaks = (removed: string) => removed.replace(/[^\n]/g, '');
 /** The line breaks of `whole` that aren't in the parts of it that are kept. */
 const outside = (whole: string, ...kept: string[]) => keepLineBreaks(whole).slice(kept.reduce((count, part) => count + keepLineBreaks(part).length, 0));
 
+/** Escape every character a regular expression treats as special, so a string matches only itself. */
+export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/** Escape the characters LaTeX treats as special, for text we put into the source. */
+const LATEX_SPECIALS: Record<string, string> = {
+  '\\': '\\textbackslash{}',
+  '{': '\\{',
+  '}': '\\}',
+  '&': '\\&',
+  '%': '\\%',
+  $: '\\$',
+  '#': '\\#',
+  _: '\\_',
+  '~': '\\textasciitilde{}',
+  '^': '\\textasciicircum{}',
+};
+export const escapeLatexText = (text: string) => text.replace(/[\\{}&%$#_~^]/g, (char) => LATEX_SPECIALS[char]);
+
+// How far an argument may run. An unclosed { gives up after this many characters instead of
+// scanning to the end of the document for every command, which would be quadratic.
+const MAX_ARGUMENT = 20_000;
+
 /** Index of the `close` that matches the `open` at `start`, or -1. */
 function matching(source: string, start: number, open: string, close: string): number {
   let depth = 0;
-  for (let i = start; i < source.length; i += 1) {
+  const end = Math.min(source.length, start + MAX_ARGUMENT);
+  for (let i = start; i < end; i += 1) {
     const ch = source[i];
     if (ch === '\\') {
       i += 1;
@@ -71,9 +94,10 @@ function readArgs(source: string, i: number, groups: number): Parsed | null {
   return { end: i, optional, groups: found };
 }
 
-/** Replace every `\name` (not a longer name) with what `replace` returns for its arguments. */
-function replaceCommand(source: string, name: string, groups: number, replace: (args: Parsed, whole: string) => string): string {
-  const pattern = new RegExp(`\\\\${name}(?![A-Za-z@])`, 'g');
+/** Replace every `\name` for the given names (not longer names) with what `replace` returns for its arguments. */
+function replaceCommand(source: string, names: string | string[], groups: number, replace: (args: Parsed, whole: string) => string): string {
+  const alternatives = (Array.isArray(names) ? names : [names]).map(escapeRegExp).join('|');
+  const pattern = new RegExp(`\\\\(?:${alternatives})(?![A-Za-z@])`, 'g');
   let out = '';
   let last = 0;
   for (const match of source.matchAll(pattern)) {
@@ -88,31 +112,64 @@ function replaceCommand(source: string, name: string, groups: number, replace: (
   return out + source.slice(last);
 }
 
-/** Replace `\begin{env}...\end{env}` for each env in `names`, innermost first. */
+// \begin{name} or \end{name}. Linear: no nested quantifiers.
+const ENVIRONMENT_TAG = /\\(begin|end)\s*\{([^{}]*)\}/g;
+
+type Pair = { start: number; beginEnd: number; endStart: number; end: number; name: string };
+
+/**
+ * Replace `\begin{env}...\end{env}` for each env in `names`. Inner ones are replaced first, and
+ * their result is what the outer one sees. A scanner with a stack, not one big regex, so a
+ * document with unclosed environments can't make it backtrack.
+ */
 function replaceEnvironment(
   source: string,
   names: string[],
   replace: (name: string, args: Parsed, body: string, begin: string, end: string) => string,
   argGroups = 0,
 ): string {
-  if (!names.length) return source;
-  const alternatives = names.map((name) => name.replace(/[*]/g, '\\*')).join('|');
-  const pattern = new RegExp(`\\\\begin\\s*\\{(${alternatives})\\}([\\s\\S]*?)\\\\end\\s*\\{\\1\\}`, 'g');
-  let previous = '';
-  let s = source;
-  // Repeat, so a nested one (an equation in a theorem) is handled too.
-  for (let guard = 0; guard < 20 && s !== previous; guard += 1) {
-    previous = s;
-    s = s.replace(pattern, (whole: string, name: string) => {
-      const beginTag = whole.match(/^\\begin\s*\{[^}]*\}/)![0];
-      const args = readArgs(whole, beginTag.length, argGroups) ?? { end: beginTag.length, optional: [], groups: [] };
-      const begin = whole.slice(0, args.end);
-      const endTag = whole.match(/\\end\s*\{[^}]*\}$/)![0];
-      const body = whole.slice(args.end, whole.length - endTag.length);
-      return replace(name, args, body, begin, endTag);
-    });
+  const wanted = new Set(names);
+  const open: { name: string; start: number; beginEnd: number }[] = [];
+  const pairs: Pair[] = [];
+  for (const match of source.matchAll(ENVIRONMENT_TAG)) {
+    const name = match[2];
+    if (!wanted.has(name)) continue;
+    if (match[1] === 'begin') {
+      open.push({ name, start: match.index, beginEnd: match.index + match[0].length });
+      continue;
+    }
+    // Pair it with the nearest open one of the same name. Unclosed ones in between are left as they are.
+    const at = open.map((entry) => entry.name).lastIndexOf(name);
+    if (at === -1) continue;
+    const begin = open[at];
+    open.length = at;
+    pairs.push({ ...begin, endStart: match.index, end: match.index + match[0].length });
   }
-  return s;
+  if (!pairs.length) return source;
+  pairs.sort((a, b) => a.start - b.start);
+
+  // Write out [from, to), replacing each pair in it; a pair's body is written the same way first.
+  const render = (from: number, to: number, index: { next: number }): string => {
+    let out = '';
+    let at = from;
+    while (index.next < pairs.length && pairs[index.next].start < to) {
+      const pair = pairs[index.next];
+      index.next += 1;
+      if (pair.start < at || pair.end > to) continue;
+      const inner = render(pair.beginEnd, pair.endStart, index);
+      out += source.slice(at, pair.start) + renderPair(pair, inner);
+      at = pair.end;
+    }
+    return out + source.slice(at, to);
+  };
+  const renderPair = (pair: Pair, inner: string): string => {
+    const beginTag = source.slice(pair.start, pair.beginEnd);
+    const endTag = source.slice(pair.endStart, pair.end);
+    const whole = beginTag + inner;
+    const args = readArgs(whole, beginTag.length, argGroups) ?? { end: beginTag.length, optional: [], groups: [] };
+    return replace(pair.name, args, whole.slice(args.end), whole.slice(0, args.end), endTag);
+  };
+  return render(0, source.length, { next: 0 });
 }
 
 // --- cleveref ---------------------------------------------------------------------------------
@@ -223,12 +280,12 @@ export function formatNumber(number: string): string {
 
 export function rewriteSiunitx(source: string): string {
   let s = source;
-  const unitText = (unit: string) => formatUnit(unit).replace(/%/g, '\\%');
-  s = replaceCommand(s, '(?:qtyrange|SIrange)', 3, ({ groups: [a, b, unit] }, whole) => `${formatNumber(a)}--${formatNumber(b)}~${unitText(unit)}${keepLineBreaks(whole)}`);
-  s = replaceCommand(s, '(?:qty|SI)', 2, ({ groups: [value, unit] }, whole) => `${formatNumber(value)}~${unitText(unit)}${keepLineBreaks(whole)}`);
+  const unitText = (unit: string) => escapeLatexText(formatUnit(unit));
+  s = replaceCommand(s, ['qtyrange', 'SIrange'], 3, ({ groups: [a, b, unit] }, whole) => `${formatNumber(a)}--${formatNumber(b)}~${unitText(unit)}${keepLineBreaks(whole)}`);
+  s = replaceCommand(s, ['qty', 'SI'], 2, ({ groups: [value, unit] }, whole) => `${formatNumber(value)}~${unitText(unit)}${keepLineBreaks(whole)}`);
   s = replaceCommand(s, 'numrange', 2, ({ groups: [a, b] }, whole) => `${formatNumber(a)}--${formatNumber(b)}${keepLineBreaks(whole)}`);
   s = replaceCommand(s, 'num', 1, ({ groups: [value] }, whole) => `${formatNumber(value)}${keepLineBreaks(whole)}`);
-  s = replaceCommand(s, '(?:unit|si)', 1, ({ groups: [unit] }, whole) => `${unitText(unit)}${keepLineBreaks(whole)}`);
+  s = replaceCommand(s, ['unit', 'si'], 1, ({ groups: [unit] }, whole) => `${unitText(unit)}${keepLineBreaks(whole)}`);
   s = replaceCommand(s, 'ang', 1, ({ groups: [value] }, whole) => `${value.trim()}°${keepLineBreaks(whole)}`);
   return s;
 }

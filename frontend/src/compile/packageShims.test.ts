@@ -1,4 +1,6 @@
 import {
+  escapeLatexText,
+  escapeRegExp,
   formatNumber,
   formatUnit,
   placeholderTables,
@@ -151,5 +153,45 @@ describe('package stand-ins for the preview', () => {
     // The \newpage right after a list still becomes a page break (its paragraph is marked "continue").
     expect(doc.querySelectorAll(`.${PAGE_BREAK_CLASS}`)).toHaveLength(1);
     expect(doc.body.textContent).not.toContain('lcpagebreak');
+  });
+
+  it('escapes every regex special character, including backslash and slash', () => {
+    const special = '.*+?^${}()|[]\\/';
+    expect(new RegExp(`^${escapeRegExp(special)}$`).test(special)).toBe(true);
+    expect(escapeRegExp('a.b')).toBe('a\\.b');
+    expect(new RegExp(escapeRegExp('a.b')).test('axb')).toBe(false);
+  });
+
+  it('escapes LaTeX specials in unit text, backslash included', () => {
+    expect(escapeLatexText('\\{}&%$#_~^')).toBe('\\textbackslash{}\\{\\}\\&\\%\\$\\#\\_\\textasciitilde{}\\textasciicircum{}');
+    expect(rewriteSiunitx('\\unit{a_b}')).toBe('a\\_b');
+  });
+
+  it('treats theorem names with regex characters as plain names', () => {
+    const source = '\\newtheorem{th(m)*+}{Odd}\\begin{th(m)*+}x\\end{th(m)*+}\\begin{thm}y\\end{thm}';
+    const out = rewriteTheorems(source);
+    expect(out).toContain('\\textbf{Odd.} x\\par ');
+    expect(out).toContain('\\begin{thm}y\\end{thm}');
+  });
+
+  it('pairs nested environments of the same name from the inside out, and leaves unclosed ones', () => {
+    expect(rewriteAppendices('\\begin{appendices}a\\begin{appendices}b\\end{appendices}c\\end{appendices}')).toBe('\\appendixa\\appendixbc');
+    expect(rewriteDisplayMath('\\begin{equation}a\\begin{equation}b\\end{equation}')).toBe('\\begin{equation}a\\[b\\]');
+    expect(rewriteDisplayMath('\\end{equation}x')).toBe('\\end{equation}x');
+  });
+
+  it('stays fast on long hostile input', () => {
+    const inputs = [
+      '\\begin{equation}'.repeat(20_000),
+      '\\begin{tabular}{'.repeat(20_000),
+      '\\qty{'.repeat(20_000),
+      `\\cref{${'a'.repeat(100_000)}`,
+      `\\enquote{${'{'.repeat(50_000)}`,
+      `\\begin{frame}${'{'.repeat(50_000)}\\end{frame}`,
+      `{{${' '.repeat(100_000)}`,
+    ];
+    const started = performance.now();
+    for (const input of inputs) adaptLatexSource(`\\documentclass{beamer}\n${input}`);
+    expect(performance.now() - started).toBeLessThan(3000);
   });
 });

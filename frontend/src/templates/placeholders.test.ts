@@ -52,6 +52,15 @@ describe('fillPlaceholders', () => {
     expect(fillPlaceholders(text, defs, { name: 'Ann' })).toBe(text);
   });
 
+  it('stays fast on long text that almost looks like placeholders', () => {
+    const started = performance.now();
+    fillPlaceholders(`{{${' '.repeat(100_000)}`, defs, {});
+    fillPlaceholders(`{{name${' '.repeat(100_000)}}`, defs, {});
+    fillPlaceholders('{{a'.repeat(50_000), defs, {});
+    placeholdersIn(`{{${'a'.repeat(100_000)} }`);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it('fills a missing value with nothing', () => {
     expect(fillPlaceholders('[{{orcid}}]', defs, {})).toBe('[]');
   });
