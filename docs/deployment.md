@@ -103,6 +103,8 @@ Local development
 
 Runtime architecture (summary)
 - There is no custom signaling server in this repository.
+  The one exception is test infrastructure: the e2e tests start a WebTorrent tracker on `127.0.0.1` (`e2e/tracker/server.mjs`, the `bittorrent-tracker` package, a dev dependency of `e2e/` only) and build a separate copy of the app into `frontend/dist-e2e/` that points `VITE_P2P_RENDEZVOUS` at it, so CI doesn't depend on the public trackers (issue #167).
+  It never deploys, users never reach it, and deploy builds don't change: they use the trackers below and the CSP in `index.html`. Details are in `docs/qa-runbook.md`.
 - Peers discover each other via configured public rendezvous endpoints.
 - Signaling uses Trystero's torrent strategy (`@trystero-p2p/torrent`, 0.26), so the rendezvous endpoints are WebTorrent trackers, not Nostr relays.
 - Trystero's wire format changed in 0.25, so a deploy that moves between Trystero 0.24 and 0.26 (P2P protocol 1 to 2) splits open sessions: tabs on the old build and on the new one find each other but can't sync. The update prompt polls `version.json` and asks open tabs to reload, and once everyone has reloaded they sync again. Mention it in the changelog for any Trystero bump that changes the wire format.

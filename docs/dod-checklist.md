@@ -65,7 +65,7 @@ Checklist
 
 Verification guidance
 - Prefer automated tests where possible; accompany with manual QA for session join, realtime sync, and preview rendering.
-- `npm run test:e2e` runs a Playwright test in `e2e/` that opens a host and a guest in two browser contexts, shares a room, and checks the file tree, an uploaded image, and edits in both directions. It runs in Chromium, Firefox and WebKit, plus a Chromium host with a Firefox guest, as one CI job per browser. It goes through public relays, so those jobs are non-blocking.
+- `npm run test:e2e` runs a Playwright test in `e2e/` that opens a host and a guest in two browser contexts, shares a room, and checks the file tree, an uploaded image, and edits in both directions. It runs in Chromium, Firefox and WebKit, plus a Chromium host with a Firefox guest, as one CI job per browser. Peers meet through a WebTorrent tracker the test starts on `127.0.0.1` (test infrastructure only, see `docs/qa-runbook.md`), not the public trackers. Those jobs are still non-blocking.
 - Maintain a runbook for reproducible test scenarios (local, remote, and cross-browser) in `docs/qa-runbook.md`.
 
 ## Verification log

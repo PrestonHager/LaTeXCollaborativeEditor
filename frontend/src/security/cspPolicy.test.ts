@@ -137,6 +137,11 @@ describe('Content-Security-Policy in index.html', () => {
     }
   });
 
+  it("doesn't allow the e2e tests' local tracker, which only the e2e build adds (issue #167)", () => {
+    expect(csp['connect-src'].filter((source) => /localhost|127\.0\.0\.1|^ws:/.test(source))).toEqual([]);
+    expect(cspAllows(csp, 'connect-src', 'ws://127.0.0.1:4185/', APP_ORIGIN)).toBe(false);
+  });
+
   it('allows the app itself, including the Vite dev server socket', () => {
     expect(cspAllows(csp, 'script-src', `${APP_ORIGIN}/assets/index.js`, APP_ORIGIN)).toBe(true);
     expect(cspAllows(csp, 'worker-src', `${APP_ORIGIN}/assets/compile.worker.js`, APP_ORIGIN)).toBe(true);

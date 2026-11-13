@@ -8,6 +8,7 @@
     "install-browsers": "playwright install --with-deps chromium firefox webkit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0"
+    "@playwright/test": "^1.65.0",
+    "bittorrent-tracker": "^11.2.3"
   }
 }
