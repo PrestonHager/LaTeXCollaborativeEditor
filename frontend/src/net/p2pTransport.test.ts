@@ -1,4 +1,4 @@
-import { joinRoom } from 'trystero';
+import { joinRoom } from '@trystero-p2p/torrent';
 import { P2pTransport } from './p2pTransport';
 import type { BootstrapConfig } from './bootstrapConfig';
 
@@ -7,7 +7,7 @@ const onPeerJoin = vi.fn();
 const onPeerLeave = vi.fn();
 const leave = vi.fn();
 
-vi.mock('trystero', () => ({
+vi.mock('@trystero-p2p/torrent', () => ({
   joinRoom: vi.fn(() => ({
     makeAction,
     onPeerJoin,
@@ -50,6 +50,20 @@ describe('P2pTransport', () => {
     expect(sendBinary).toHaveBeenCalledWith(chunk, 'peer-1', { hash: 'h' });
     expect(onBinary).toHaveBeenCalledWith(chunk.buffer, 'peer-1', { hash: 'h' });
     makeAction.mockReset();
+  });
+
+  it('passes the rendezvous list to trystero as relayConfig urls', () => {
+    const transport = new P2pTransport(bootstrap, { onMessage: vi.fn(), onState: vi.fn(), onPeerCount: vi.fn(), onPeerJoin: vi.fn() });
+    transport.join('room-relays');
+
+    expect(joinRoom).toHaveBeenLastCalledWith(
+      {
+        appId: 'test-app',
+        relayConfig: { urls: ['wss://tracker.example'] },
+        rtcConfig: { iceServers: bootstrap.iceServers },
+      },
+      'room-relays',
+    );
   });
 
   it('joins room, receives, and sends payloads', () => {

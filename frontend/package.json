@@ -33,11 +33,11 @@
     "@codemirror/search": "^6.7.0",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.1",
+    "@trystero-p2p/torrent": "^0.24.0",
     "basecoat-css": "^1.1.0",
     "diff-match-patch": "^1.0.5",
     "latex.js": "^0.12.6",
     "lucide": "^1.70.0",
-    "trystero": "^0.24.0",
     "y-codemirror.next": "^0.3.5",
     "yjs": "^13.6.30"
   }
