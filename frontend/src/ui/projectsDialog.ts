@@ -1,5 +1,6 @@
 import type { ProjectSummary } from '../storage/providers/types';
 import { renderStaticIcons } from './icons';
+import { returnFocusOnClose } from './focusReturn';
 
 type ProjectsDialogOptions = {
   onPick: (project: ProjectSummary) => void;
@@ -14,6 +15,7 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
   const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
   const close = () => dialog.close();
+  const focusReturn = returnFocusOnClose(dialog);
   dialog.querySelector('#projects-done')!.addEventListener('click', close);
   dialog.querySelector('#projects-close')!.addEventListener('click', close);
   dialog.querySelector('#projects-import-zip')!.addEventListener('click', () => {
@@ -40,6 +42,7 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
         }),
       );
       empty.hidden = projects.length > 0;
+      focusReturn.remember();
       dialog.showModal();
     },
   };

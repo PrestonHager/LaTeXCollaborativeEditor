@@ -11,8 +11,16 @@ import { createFileTree } from './ui/fileTree';
 import { createUploadDialog } from './ui/uploadDialog';
 import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
+import { createToolbar } from './ui/toolbar';
+import { createAboutDialog } from './ui/aboutDialog';
+import { createTour } from './ui/tour';
+import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
+import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
+import { bugReportUrl, featureRequestUrl, type IssueArea } from './ui/issueLinks';
+import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from './ui/statusText';
+import { paletteOnlyCommands, themeSwitchCommands } from './ui/paletteCommands';
+import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
-import { connectionLabel } from './net/p2pTransport';
 import { LocalDownloadStorage } from './storage/localDownload';
 import { GoogleDriveProvider, LEGACY_PREFIX } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
@@ -57,6 +65,10 @@ const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
+const connectionStatusEl = document.getElementById('connection-status')!;
+const diagnosticsHelpEl = document.getElementById('diagnostics-help') as HTMLAnchorElement;
+const editorEmptyEl = document.getElementById('editor-empty') as HTMLElement;
+const previewEmptyEl = document.getElementById('preview-empty') as HTMLElement;
 const titleEl = document.getElementById('doc-title')!;
 const splitRoot = document.getElementById('split-root') as HTMLElement;
 const splitter = document.getElementById('splitter') as HTMLElement;
@@ -71,16 +83,17 @@ const isClient = Boolean(roomId);
 const COMPILE_DEBOUNCE_MS = 500;
 const COMPILE_MIN_INTERVAL_MS = 900;
 
-/** MkDocs `serve` default in dev; production uses same-origin `/docs/` unless overridden. */
-function documentationBaseUrl(): string {
-  const fromEnv = import.meta.env.VITE_DOCS_BASE_URL as string | undefined;
-  if (fromEnv?.trim()) {
-    const u = fromEnv.trim();
-    return u.endsWith('/') ? u : `${u}/`;
-  }
-  if (import.meta.env.DEV) return 'http://127.0.0.1:8000/';
-  return new URL('docs/', globalThis.location.href).href;
-}
+const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev';
+const docsBase = documentationBaseUrl(import.meta.env, location.href);
+
+// Now point every [data-help] link in the page at its docs section.
+wireHelpLinks(document, docsBase);
+
+/** The prefilled bug form. It only carries the browser, app version, and a fixed summary. */
+const makeBugUrl = (area?: IssueArea, summary?: string) =>
+  bugReportUrl({ appVersion: APP_VERSION, userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
+
+const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
@@ -107,30 +120,65 @@ let hostStorageText = 'Saved on host local storage';
 const fileProgress = new Map<string, number>();
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
 const driveAppId = import.meta.env.VITE_GOOGLE_APP_ID as string | undefined;
-const NOTICE_TIMEOUT_MS = 8000;
-let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+const notice = createNotice(appNoticeEl, {
+  getDocsBase: () => docsBase,
+  getBugUrl: (help) => makeBugUrl(help.report, help.summary),
+});
+// Which kind of problem the notice shows right now, so we can clear it once that's fixed.
+let noticeKind: 'save' | 'connection' | 'compile' | null = null;
+let lastSavedAt: Date | null = null;
+let transportState: TransportState = 'Not sharing';
+let peerCount = 0;
+let inRoom = isClient;
 
 const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
 const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 'drive' : 'local');
 // Tell guests where the host is actually saving, instead of always saying local storage.
 const currentStorageLabel = () => (activeProvider === driveProvider ? 'Saved on host Google Drive' : 'Saved on host local storage');
 
-/** Show a short message in the header, then clear it after a few seconds unless it's sticky. */
-function showNotice(message: string, isError = false, sticky = false) {
-  appNoticeEl.textContent = message;
-  appNoticeEl.classList.toggle('is-error', isError);
-  if (noticeTimer) clearTimeout(noticeTimer);
-  noticeTimer = null;
-  if (sticky) return;
-  noticeTimer = setTimeout(() => {
-    appNoticeEl.textContent = '';
-    noticeTimer = null;
-  }, NOTICE_TIMEOUT_MS);
+/**
+ * Show a short message in the header, then clear it after a few seconds unless it's sticky.
+ * Pass help to add "Learn more" (and maybe "Report this") links.
+ */
+function showNotice(message: string, isError = false, sticky = false, help: NoticeHelp | null = null) {
+  noticeKind = null;
+  // Errors like "storage is full" get their docs link even when the caller didn't pass one.
+  notice.show(message, { isError, sticky, help: help ?? (isError ? helpForMessage(message) : null) });
 }
 
 const setStatus = (message: string) => {
-  autosaveStatusEl.textContent = message;
+  // First, note when a save lands, so the pill can say when as well as where.
+  const saved = isSavedStatus(message);
+  if (saved) lastSavedAt = new Date();
+  autosaveStatusEl.textContent = saveStatusText(message, saved ? lastSavedAt : null);
+  // Then, for problems like a failed save, show a notice that links to the fix.
+  const help = helpForMessage(message);
+  if (help) {
+    showNotice(message, true, true, help);
+    noticeKind = 'save';
+  } else if (saved && noticeKind === 'save') {
+    notice.clear();
+    noticeKind = null;
+  }
 };
+
+/** Update the connection pill, and tell guests where to look when they can't reach the host. */
+function renderConnection() {
+  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount };
+  connectionStatusEl.textContent = connectionText(info);
+  if (connectionFailed(info)) {
+    if (noticeKind === 'connection') return;
+    showNotice("Can't reach the host. We'll keep trying.", true, true, {
+      topic: 'p2pProblems',
+      report: 'collaboration',
+      summary: "A guest couldn't connect to the host.",
+    });
+    noticeKind = 'connection';
+  } else if (peerCount > 0 && noticeKind === 'connection') {
+    notice.clear();
+    noticeKind = null;
+  }
+}
 
 // Catch anything a command forgot to handle, so failures never just vanish into the console.
 window.addEventListener('unhandledrejection', (event) => {
@@ -177,6 +225,7 @@ const applyLayoutMode = () => {
   if (layoutMode === 'split') {
     const left = Math.max(20, Math.min(80, Math.round(splitRatio * 100)));
     splitRoot.style.gridTemplateColumns = `${left}% 8px ${100 - left}%`;
+    splitter.setAttribute('aria-valuenow', String(left));
   } else {
     splitRoot.style.gridTemplateColumns = '1fr';
   }
@@ -203,6 +252,16 @@ const installSplitter = () => {
   });
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
+  // Keyboard users move the splitter with the arrow keys instead of dragging.
+  splitter.addEventListener('keydown', (event) => {
+    if (layoutMode !== 'split') return;
+    const steps: Record<string, number> = { ArrowLeft: -0.05, ArrowRight: 0.05 };
+    const step = steps[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    splitRatio = Math.max(0.2, Math.min(0.8, splitRatio + step));
+    applyLayoutMode();
+  });
 };
 
 // First, restore the last session, so we know which doc, project and provider to pick up.
@@ -250,8 +309,10 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 const session: SessionController = new SessionController({
   isHost: !isClient,
   blobs,
-  onConnectionState: (status, peers) => {
-    document.getElementById('connection-status')!.textContent = connectionLabel(status, peers);
+  onConnectionState: (state, peers) => {
+    transportState = state;
+    peerCount = peers;
+    renderConnection();
   },
   onRemoteMetadata: ({ storage }) => {
     hostStorageText = storage;
@@ -348,7 +409,9 @@ driveProvider.onSessionLost(() => {
   showDriveAccount();
   if (activeProvider !== driveProvider) return;
   useProvider(localAppProvider, null);
-  showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true);
+  showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true, {
+    topic: 'driveSignIn',
+  });
   if (!savingPaused) void autosave.saveNow();
 });
 
@@ -424,11 +487,21 @@ const imageUrl = (path: string): string | null => {
   return url;
 };
 
+/** Show diagnostics in the footer, with a "Learn more" link while there's something to explain. */
+function setDiagnostics(text: string, topic: 'diagnostics' | 'previewErrors' = 'diagnostics') {
+  diagnosticsEl.textContent = text;
+  diagnosticsHelpEl.hidden = !text;
+  diagnosticsHelpEl.href = docsUrl(docsBase, topic);
+}
+
 const runCompile = async () => {
   const mainId = project.getMainFileId();
   const main = mainId ? project.get(mainId) : undefined;
+  // With no main file there's nothing to compile, so say how to pick one instead of showing a blank page.
+  previewEmptyEl.hidden = Boolean(main) || (isClient && project.isEmpty());
   if (!main) {
     compileStatusEl.textContent = project.isEmpty() ? 'Idle' : 'No main file';
+    setDiagnostics('');
     return;
   }
   const texts = project.textFiles();
@@ -457,17 +530,30 @@ const runCompile = async () => {
     editor.setDiagnostics(errors.filter((error) => error.path === activePath));
     lastCompiledKey = key;
     compileStatusEl.textContent = 'Compiled';
+    if (noticeKind === 'compile') {
+      notice.clear();
+      noticeKind = null;
+    }
     if (errors.length) {
       const first = errors[0];
-      diagnosticsEl.textContent = `${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`;
+      setDiagnostics(`${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`);
     } else {
-      diagnosticsEl.textContent = missing.length ? `Not found in the project: ${missing.join(', ')}` : '';
+      setDiagnostics(missing.length ? `Not found in the project: ${missing.join(', ')}` : '');
     }
   } catch (error) {
     if (seq !== compileSequence) return;
     editor.setDiagnostics([{ line: 1, severity: 'error', message: String(error) }]);
     compileStatusEl.textContent = 'Compile Error';
-    diagnosticsEl.textContent = String(error);
+    setDiagnostics(String(error), 'previewErrors');
+    // Only say so once per broken streak, not on every keystroke.
+    if (noticeKind !== 'compile') {
+      showNotice("The preview couldn't be built.", true, true, {
+        topic: 'previewErrors',
+        report: 'preview',
+        summary: 'The preview failed to compile.',
+      });
+      noticeKind = 'compile';
+    }
   } finally {
     if (seq === compileSequence) preview.setLoading(false);
   }
@@ -541,6 +627,10 @@ function showActiveFile() {
   activeFileNameEl.textContent = entry?.path ?? '';
   activeFileMainEl.hidden = !entry || entry.id !== project.getMainFileId();
   titleEl.textContent = projectName();
+  // With nothing open, swap the blank editor for a hint about what to do.
+  const nothingOpen = !entry && !(isClient && project.isEmpty());
+  editorEmptyEl.hidden = !nothingOpen;
+  editorPane.classList.toggle('is-empty', nothingOpen);
   if (entry?.kind === 'binary') {
     const bytes = entry.hash ? (blobs.peek(entry.hash) ?? null) : null;
     fileViewer.show({ path: entry.path, size: entry.size, bytes, progress: entry.hash ? fileProgress.get(entry.hash) : undefined });
@@ -793,7 +883,8 @@ const ensureDriveConnected = async () => {
     return false;
   }
   // Clear any leftover "sign-in expired" notice now that we're back.
-  appNoticeEl.textContent = '';
+  notice.clear();
+  noticeKind = null;
   setStatus('Drive: Connected');
   void driveProvider.loadAccount().then(showDriveAccount);
   return true;
@@ -1027,11 +1118,20 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     menuBar.refresh();
   },
   'help.documentation': () => {
-    window.open(documentationBaseUrl(), '_blank', 'noreferrer');
+    openExternal(docsUrl(docsBase, 'gettingStarted'));
   },
-  'help.about': () => {
-    window.open('https://github.com/PrestonHager/LaTeXCollaborativeEditor', '_blank', 'noreferrer');
+  'help.shortcuts': () => {
+    openExternal(docsUrl(docsBase, 'shortcuts'));
   },
+  'help.tour': () => tour.start(),
+  // NOTE: these only open the GitHub form. The person reads it and submits it themselves.
+  'help.reportBug': () => {
+    openExternal(makeBugUrl());
+  },
+  'help.requestFeature': () => {
+    openExternal(featureRequestUrl());
+  },
+  'help.about': () => aboutDialog.open(),
 };
 
 // The palette's "Switch to ... mode" commands set the app, editor, and preview together.
@@ -1075,6 +1175,7 @@ function executeCommand(commandId: CommandId) {
 // Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
 function refreshCommands() {
   menuBar.refresh();
+  toolbar.refresh();
   commandPalette.setCommands(buildPaletteCommands());
 }
 
@@ -1154,18 +1255,30 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
   onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
 });
 
-// Commands that only show in the palette. The theme switches stand in for the menu's toggles.
-const themeSwitchCommands: { theme: ThemeMode; id: CommandId; label: string }[] = [
-  { theme: 'dark', id: 'view.darkMode', label: 'Switch to dark mode' },
-  { theme: 'light', id: 'view.lightMode', label: 'Switch to light mode' },
-  { theme: 'system', id: 'view.systemTheme', label: 'Switch to system theme' },
-];
-const paletteOnlyCommands: { id: CommandId; section: string; label: string }[] = [
-  { id: 'share.copyLink', section: 'Share', label: 'Copy share link' },
-  { id: 'view.focusEditor', section: 'View', label: 'Focus editor' },
-];
+const toolbar = createToolbar(document.getElementById('toolbar')!, {
+  getCommandState,
+  onCommand: (commandId) => executeCommand(commandId),
+});
 
-/** Build the palette from the menu HTML, plus the palette-only commands above. */
+const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, APP_VERSION);
+
+const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
+  store: (() => {
+    // Some browsers throw just for touching localStorage when site data is blocked.
+    try {
+      return window.localStorage;
+    } catch {
+      return undefined;
+    }
+  })(),
+});
+
+// The empty states have their own buttons for the next step, like New file.
+document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #preview-empty [data-command]').forEach((button) => {
+  button.addEventListener('click', () => executeCommand(button.dataset.command as CommandId));
+});
+
+/** Build the palette from the menu HTML, plus the palette-only commands in paletteCommands.ts. */
 function buildPaletteCommands(): PaletteCommand[] {
   const fromMenus = menuBar
     .entries()
@@ -1176,12 +1289,13 @@ function buildPaletteCommands(): PaletteCommand[] {
       // The menu shows a checkmark for this one, but the palette has to say which way it goes.
       label: entry.commandId === 'view.togglePauseSaving' && savingPaused ? 'Resume Saving' : entry.label,
       shortcut: entry.shortcut,
+      description: entry.description,
       enabled: getCommandState(entry.commandId).enabled,
     }));
   // Skip the theme switch for the theme that's already in use.
   const themes = themeSwitchCommands
     .filter(({ theme }) => !(editorTheme === theme && previewTheme === theme))
-    .map(({ id, label }) => ({ id, section: 'View', label, enabled: true }));
+    .map(({ id, section, label, description }) => ({ id, section, label, description, enabled: true }));
   const extras = paletteOnlyCommands.map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
   return [...fromMenus, ...themes, ...extras];
 }
@@ -1252,6 +1366,8 @@ if (!isClient) {
 const hostRoomId = isClient ? null : readHostRoomId();
 if (roomId) session.join(roomId);
 else if (hostRoomId) session.join(hostRoomId);
+inRoom = Boolean(roomId || hostRoomId);
+renderConnection();
 installSplitter();
 applyLayoutMode();
 hideLoading();
@@ -1263,6 +1379,8 @@ setupShareButton({
   getRoomId: () => {
     const id = session.ensureRoom();
     if (!isClient) writeHostRoomId(id);
+    inRoom = true;
+    renderConnection();
     return id;
   },
   getCurrentUrl: () => location.href,
@@ -1272,12 +1390,30 @@ setupShareButton({
   getNewRoomId: () => {
     const id = session.newRoom();
     writeHostRoomId(id);
+    // Everyone on the old link is gone now.
+    peerCount = 0;
+    renderConnection();
     return id;
   },
   confirmNewLink: () => window.confirm('Start a new link? Anyone using the old link will be disconnected.'),
 });
 
-if (!isClient) titleEl.addEventListener('click', () => void renameProject());
+// Guests can't rename the host's project, so the title is just a label for them.
+if (isClient) {
+  (titleEl as HTMLButtonElement).disabled = true;
+  titleEl.removeAttribute('data-tooltip');
+} else {
+  titleEl.addEventListener('click', () => void renameProject());
+}
+
+// The skip link jumps to the editor itself, not just its pane.
+document.querySelector('.skip-link')?.addEventListener('click', (event) => {
+  event.preventDefault();
+  editor.focus();
+});
+
+// Finally, show the tour to first-time visitors once the page has settled.
+setTimeout(() => tour.startIfNew(), 600);
 
 window.addEventListener('beforeunload', (event) => {
   persistAppSession();

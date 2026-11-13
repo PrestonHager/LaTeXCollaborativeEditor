@@ -1,0 +1,81 @@
+import { returnFocusOnClose } from './focusReturn';
+import { createAboutDialog } from './aboutDialog';
+import { mountAppShell } from '../test/appShell';
+
+// jsdom has no showModal, so stand in for it and fire close like a browser does.
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.open = false;
+    this.dispatchEvent(new Event('close'));
+  };
+});
+
+describe('returnFocusOnClose', () => {
+  it('puts focus back on the button that opened the dialog', () => {
+    mountAppShell();
+    const dialog = document.getElementById('upload-dialog') as HTMLDialogElement;
+    const opener = document.getElementById('share-btn') as HTMLButtonElement;
+    const focusReturn = returnFocusOnClose(dialog);
+    opener.focus();
+    focusReturn.remember();
+    dialog.showModal();
+    (document.getElementById('upload-done') as HTMLButtonElement).focus();
+    dialog.close();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it('uses the menu trigger when a menu item opened it', () => {
+    mountAppShell();
+    const dialog = document.getElementById('settings-dialog') as HTMLDialogElement;
+    const item = document.querySelector<HTMLButtonElement>('[data-command="app.openSettings"]')!;
+    const trigger = document.querySelector<HTMLButtonElement>('[aria-controls="menu-edit"]')!;
+    const focusReturn = returnFocusOnClose(dialog);
+    item.focus();
+    focusReturn.remember();
+    dialog.close();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('falls back when the opener is hidden or gone', () => {
+    mountAppShell();
+    const dialog = document.getElementById('about-dialog') as HTMLDialogElement;
+    const fallback = document.getElementById('share-btn') as HTMLButtonElement;
+    const focusReturn = returnFocusOnClose(dialog, () => fallback);
+    const input = document.querySelector<HTMLInputElement>('.command-palette-input')!;
+    input.focus();
+    focusReturn.remember();
+    dialog.close();
+    expect(document.activeElement).toBe(fallback);
+
+    const temp = document.createElement('button');
+    document.body.append(temp);
+    temp.focus();
+    focusReturn.remember();
+    temp.remove();
+    fallback.blur();
+    dialog.close();
+    expect(document.activeElement).toBe(fallback);
+  });
+});
+
+describe('createAboutDialog', () => {
+  it('shows the version and closes from its buttons and the backdrop', () => {
+    mountAppShell();
+    const el = document.getElementById('about-dialog') as HTMLDialogElement;
+    const about = createAboutDialog(el, '1.2.3');
+    expect(document.getElementById('about-version')!.textContent).toBe('1.2.3');
+    about.open();
+    expect(el.open).toBe(true);
+    (document.getElementById('about-done') as HTMLButtonElement).click();
+    expect(el.open).toBe(false);
+    about.open();
+    (document.getElementById('about-close') as HTMLButtonElement).click();
+    expect(el.open).toBe(false);
+    about.open();
+    el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(el.open).toBe(false);
+  });
+});

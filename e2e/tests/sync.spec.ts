@@ -26,6 +26,10 @@ test('host and guest sync files and edits both ways', async ({ browser }) => {
   // Each context has its own storage, like two separate browsers.
   const hostContext = await browser.newContext();
   const guestContext = await browser.newContext();
+  // Both are first visits, so mark the first-run tour as seen, or it would sit on top of the app.
+  for (const context of [hostContext, guestContext]) {
+    await context.addInitScript(() => localStorage.setItem('latex-editor.tour-seen', '1'));
+  }
   const host = await hostContext.newPage();
   const guest = await guestContext.newPage();
   const stamp = Date.now().toString(36);
@@ -36,7 +40,8 @@ test('host and guest sync files and edits both ways', async ({ browser }) => {
     await waitForApp(host);
     await expect(fileRow(host, 'main.tex')).toBeVisible();
 
-    await host.locator('#file-pane [data-command="file.upload"]').click();
+    // The file pane also has an Upload button for empty projects, so use the one in its header.
+    await host.locator('#file-pane .file-pane-actions [data-command="file.upload"]').click();
     await host.locator('#upload-input').setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: PIXEL_PNG });
     await expect(host.locator('#upload-results')).toContainText('pixel.png: added');
     await host.locator('#upload-done').click();

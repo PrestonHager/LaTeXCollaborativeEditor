@@ -449,4 +449,13 @@
     @apply bg-primary;
   }
 
+  /* Tooltip */
+  [data-tooltip]::before {
+    @apply bg-foreground text-background rounded-md px-3 py-1.5 text-xs;
+  }
+
+  [data-tooltip][data-arrow]::after {
+    @apply bg-foreground absolute z-[60] size-2.5 rotate-45 rounded-[2px];
+  }
+
 }

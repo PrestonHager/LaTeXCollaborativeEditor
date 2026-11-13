@@ -9,6 +9,8 @@ const COVERAGE_THRESHOLDS = {
 } as const;
 
 export default defineConfig({
+  // issueLinks.test.ts reads the issue forms in ../.github to check the prefill field ids.
+  server: { fs: { allow: ['..'] } },
   test: {
     environment: 'jsdom',
     globals: true,

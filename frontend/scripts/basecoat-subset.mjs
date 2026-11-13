@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 // Add a component here (by its comment name in vega.css) when the app starts using it.
-export const COMPONENTS = ['Button', 'Badge', 'Command', 'Dialog', 'Dropdown Menu', 'Popover', 'Checkbox', 'Label', 'Native Select', 'Empty', 'Item', 'Progress'];
+export const COMPONENTS = ['Button', 'Badge', 'Command', 'Dialog', 'Dropdown Menu', 'Popover', 'Checkbox', 'Label', 'Native Select', 'Empty', 'Item', 'Progress', 'Tooltip'];
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));

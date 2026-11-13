@@ -40,6 +40,10 @@ export type CommandId =
   | 'view.layoutEditorOnly'
   | 'view.layoutPreviewOnly'
   | 'help.documentation'
+  | 'help.shortcuts'
+  | 'help.tour'
+  | 'help.reportBug'
+  | 'help.requestFeature'
   | 'help.about';
 
 export type CommandState = {
@@ -53,6 +57,8 @@ export type MenuEntry = {
   label: string;
   section: string;
   shortcut?: string;
+  /** What the command does, from the item's data-description, for the palette. */
+  description?: string;
   /** False when the HTML marks the item `data-palette="false"`. */
   inPalette: boolean;
 };
@@ -158,6 +164,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
         label: itemButton.querySelector('.menu-item-label')?.textContent?.trim() ?? commandId,
         section: menuLabel,
         shortcut,
+        description: itemButton.dataset.description,
         inPalette: itemButton.dataset.palette !== 'false',
       });
 

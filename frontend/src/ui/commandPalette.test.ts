@@ -1,4 +1,5 @@
-import { createCommandPalette } from './commandPalette';
+import { createCommandPalette, scoreCommand } from './commandPalette';
+import { paletteOnlyCommands, themeSwitchCommands } from './paletteCommands';
 import { mountAppShell } from '../test/appShell';
 
 const mountPalette = () => {
@@ -188,5 +189,83 @@ describe('createCommandPalette', () => {
       (el) => el.textContent ?? '',
     );
     expect(mains[0]).toContain('Help: About');
+  });
+});
+
+describe('palette descriptions', () => {
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const typeQuery = (value: string) => {
+    const input = document.querySelector('.command-palette-input') as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const labels = () => Array.from(document.querySelectorAll('.command-palette-label')).map((el) => el.textContent);
+
+  it('shows a one-line description under each command', () => {
+    const palette = createCommandPalette(mountPalette(), { onSelect: () => {} });
+    palette.setCommands([{ id: 'help.reportBug', label: 'Report a Bug', section: 'Help', enabled: true, description: 'Open a bug report on GitHub.' }]);
+    palette.open();
+    expect(document.querySelector('.command-palette-description')?.textContent).toBe('Open a bug report on GitHub.');
+    const input = document.querySelector('.command-palette-input') as HTMLInputElement;
+    expect(input.getAttribute('aria-activedescendant')).toBe(document.querySelector('.command-palette-item')!.id);
+  });
+
+  it('matches whole words in descriptions, after label matches', () => {
+    const palette = createCommandPalette(mountPalette(), { onSelect: () => {} });
+    palette.setCommands([
+      { id: 'help.reportBug', label: 'Report a Bug', section: 'Help', enabled: true, description: 'Open a bug report on GitHub.' },
+      { id: 'help.shortcuts', label: 'Keyboard Shortcuts', section: 'Help', enabled: true, description: 'Open the list of keyboard shortcuts.' },
+      { id: 'file.saveNow', label: 'Save Now', section: 'File', enabled: true, description: 'Save right away instead of waiting for autosave.' },
+    ]);
+    palette.open();
+    typeQuery('github');
+    expect(labels()).toEqual(['Help: Report a Bug']);
+    typeQuery('autosave');
+    expect(labels()).toEqual(['File: Save Now']);
+    typeQuery('waiting autosave');
+    expect(labels()).toEqual(['File: Save Now']);
+    typeQuery('zzzz');
+    expect(labels()).toEqual([]);
+  });
+
+  it('scores label matches above description matches', () => {
+    const save = { id: 'file.saveNow' as const, label: 'Save Now', section: 'File', enabled: true, description: 'Save right away.' };
+    expect(scoreCommand('save', save)).toBeGreaterThan(1);
+    expect(scoreCommand('right away', save)).toBe(1);
+    expect(scoreCommand('nothing', save)).toBeNull();
+    expect(scoreCommand('nothing', { ...save, description: undefined })).toBeNull();
+  });
+
+  it('gives every menu command and palette-only command a description, and finds help commands', () => {
+    mountAppShell();
+    const items = Array.from(document.querySelectorAll<HTMLElement>('.menu-item[data-command]'));
+    for (const item of items) expect(item.dataset.description, item.dataset.command).toBeTruthy();
+    for (const command of [...paletteOnlyCommands, ...themeSwitchCommands]) expect(command.description, command.id).toBeTruthy();
+    const help = items.filter((item) => item.closest('[data-menu-label="Help"]')).map((item) => item.dataset.command);
+    expect(help).toEqual(
+      expect.arrayContaining(['help.documentation', 'help.shortcuts', 'help.tour', 'help.reportBug', 'help.requestFeature', 'help.about']),
+    );
+  });
+
+  it('puts focus back after closing, then runs the command', () => {
+    const order: string[] = [];
+    const opener = document.createElement('button');
+    const palette = createCommandPalette(mountPalette(), {
+      onSelect: (id) => order.push(`${id}:${document.activeElement === opener}`),
+    });
+    document.body.append(opener);
+    opener.focus();
+    palette.setCommands([{ id: 'help.tour', label: 'Show Tour', section: 'Help', enabled: true }]);
+    palette.open();
+    expect(document.activeElement).not.toBe(opener);
+    (document.querySelector('.command-palette-item') as HTMLButtonElement).click();
+    expect(order).toEqual(['help.tour:true']);
+    palette.open();
+    palette.close();
+    palette.close();
+    expect(document.activeElement).toBe(opener);
   });
 });

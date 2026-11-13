@@ -1,4 +1,5 @@
 import type { ThemeMode } from '../state/appSession';
+import { returnFocusOnClose } from './focusReturn';
 
 export type SettingsState = {
   editorTheme: ThemeMode;
@@ -67,8 +68,11 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
     driveAccount.textContent = account == null ? 'Not connected' : account ? `Signed in as ${account}` : 'Connected';
   };
 
+  const focusReturn = returnFocusOnClose(dialog);
+
   const open = () => {
     refresh();
+    focusReturn.remember();
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
     editorSelect.focus();

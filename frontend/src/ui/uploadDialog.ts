@@ -1,4 +1,6 @@
-type UploadResult = { name: string; ok: boolean; message: string };
+import { returnFocusOnClose } from './focusReturn';
+
+type UploadResult ={ name: string; ok: boolean; message: string };
 
 type UploadDialogOptions = {
   /** Folders to offer, with '' meaning the project root. */
@@ -43,6 +45,7 @@ export function createUploadDialog(dialog: HTMLDialogElement, options: UploadDia
     void addFiles(Array.from(event.dataTransfer?.files ?? []));
   });
   const close = () => dialog.close();
+  const focusReturn = returnFocusOnClose(dialog);
   dialog.querySelector('#upload-done')!.addEventListener('click', close);
   dialog.querySelector('#upload-close')!.addEventListener('click', close);
   // Clicking the dark area outside the box closes it, like the settings dialog.
@@ -63,6 +66,7 @@ export function createUploadDialog(dialog: HTMLDialogElement, options: UploadDia
       );
       folderSelect.value = folders.includes(folder) ? folder : '';
       results.replaceChildren();
+      focusReturn.remember();
       dialog.showModal();
     },
     addFiles,

@@ -18,6 +18,7 @@
 @import "basecoat-css/components/empty";
 @import "basecoat-css/components/item";
 @import "basecoat-css/components/progress";
+@import "basecoat-css/components/tooltip";
 
 /*
  * App chrome colors come from Basecoat's theme tokens, which flip when main.ts puts `dark` on <html>.
@@ -42,7 +43,7 @@
   /* Line-number gutter (CodeMirror `.cm-gutters`): defaults so gutter is always dark unless overridden below. */
   --editor-gutter-bg: #141820;
   --editor-gutter-active-bg: #1e2430;
-  --editor-line-number: #6b7280;
+  --editor-line-number: #8b95a8;
   --editor-line-number-active: #d1d5db;
 }
 
@@ -52,13 +53,13 @@
 }
 
 [data-editor-theme="dark"] {
-  --editor-line-number: #6b7280;
+  --editor-line-number: #8b95a8;
   --editor-line-number-active: #e5e7eb;
   --editor-gutter-bg: #0f1218;
   --editor-keyword: #7ab8ff;
   --editor-string: #9ddf7d;
   --editor-number: #f4ba6e;
-  --editor-comment: #6a737d;
+  --editor-comment: #8b949e;
   --editor-operator: #d2d8e0;
   --editor-text: #d4d4d4;
   --editor-bg: #1e1e1e;
@@ -134,14 +135,34 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 /* Top bar and footer. */
 /* Sit above CodeMirror's sticky gutter (z-index 200) so the menus don't open behind the editor. */
 .topbar { position: relative; z-index: 300; display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--panel-border); flex-wrap: wrap; background: var(--bg); }
-.doc-title { margin: 0; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: var(--radius-md); border: 1px dashed var(--panel-border); font-size: 1.125rem; font-weight: 600; }
-.doc-title:hover { background: var(--surface-3); }
-.status-badges { display: inline-flex; gap: 0.35rem; margin-left: auto; flex-wrap: wrap; }
+.doc-title-heading { margin: 0; font-size: 1.125rem; font-weight: 600; }
+.doc-title { cursor: pointer; padding: 0.2rem 0.5rem; border-radius: var(--radius-md); border: 1px dashed var(--panel-border); font: inherit; }
+.doc-title:hover:not(:disabled) { background: var(--surface-3); }
+.doc-title:disabled { cursor: default; border-style: solid; }
+.doc-title:focus-visible, .splitter:focus-visible, .skip-link:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.share-area { display: inline-flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.status-badges { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; flex-wrap: wrap; }
+.status-badges .pill { gap: 0.3rem; }
 .muted { color: var(--muted-text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .share-link { color: var(--link-text); text-decoration: underline; }
-#app-notice.is-error { color: var(--diag-text); }
+.app-notice { display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; max-width: 45vw; font-size: 13px; color: var(--muted-text); }
+.app-notice [data-notice-text] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-notice.is-error { color: var(--diag-text); }
+.app-notice a { flex-shrink: 0; color: var(--link-text); }
+/* Hidden until it gets focus, so keyboard users can jump past the menus. */
+.skip-link { position: absolute; left: 0.5rem; top: -3rem; z-index: 500; }
+.skip-link:focus { top: 0.5rem; }
+
+/* Toolbar under the header. It sits above CodeMirror too, so its tooltips aren't covered. */
+.toolbar { position: relative; z-index: 290; display: flex; align-items: center; gap: 0.125rem; padding: 0.2rem 0.75rem; border-bottom: 1px solid var(--panel-border); background: var(--bg); }
+.toolbar-separator { width: 1px; height: 1.25rem; margin: 0 0.35rem; background: var(--panel-border); }
+.toolbar .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.toolbar .btn[aria-pressed="true"] { background: var(--surface-3); }
+.help-link { color: var(--muted-text); }
 .footer { border-top: 1px solid var(--panel-border); padding: 0.25rem 1rem; font-size: 12px; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; background: var(--bg); }
+.diagnostics-area { display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; }
 .diagnostics { color: var(--diag-text); }
+.diagnostics-area a { color: var(--link-text); }
 .legal-nav { display: inline-flex; gap: 0.25rem; }
 .legal-nav a { color: var(--muted-text); }
 
@@ -160,14 +181,29 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .command-palette-list { max-height: 48vh; }
 /* We render our own empty message, so hide Basecoat's built-in one. */
 .command-palette .command-palette-list::before { display: none; }
-.command-palette-main { flex: 1; text-align: left; }
+.command-palette-main { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
+.command-palette-description { font-size: 12px; color: var(--muted-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-palette-item.active .command-palette-description { color: inherit; opacity: 0.8; }
+.command-palette-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; border-top: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); }
 .command-palette-empty { color: var(--muted-text); padding: 1.5rem 0.65rem; font-size: 13px; text-align: center; }
 
 /* Settings dialog. Basecoat handles the box, we lay out the rows. */
 .settings-dialog-body { display: grid; gap: 1rem; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 label.settings-row { justify-content: flex-start; }
-.settings-dialog footer { justify-content: space-between; }
+.settings-dialog footer { justify-content: space-between; align-items: center; }
+.about-dialog-body { display: grid; gap: 0.5rem; font-size: 14px; }
+.about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.dialog-help-links { display: inline-flex; margin-left: auto; }
+
+/* First-run tour card. tour.ts sets top and left next to the part it's pointing at. */
+.tour { position: fixed; z-index: 400; width: min(22rem, calc(100vw - 1.5rem)); padding: 1rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
+.tour-count { margin: 0; font-size: 12px; color: var(--muted-text); }
+.tour-title { margin: 0; font-size: 1rem; font-weight: 600; }
+.tour-body { margin: 0; font-size: 14px; }
+.tour-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem; }
+.tour-buttons { display: inline-flex; gap: 0.25rem; margin-left: auto; }
+.tour-highlight { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--radius-sm); }
 
 /* Workspace: the file tree, then the editor and preview split. */
 .workspace { flex: 1; display: flex; min-height: 0; }
@@ -195,7 +231,14 @@ label.settings-row { justify-content: flex-start; }
 /* Editor pane: a bar with the open file, then the editor or the file viewer. */
 .editor-pane { display: flex; flex-direction: column; }
 .editor-pane > .editor { flex: 1; min-height: 0; height: auto; }
-.editor-pane.is-viewing > .editor { display: none; }
+.editor-pane.is-viewing > .editor, .editor-pane.is-empty > .editor { display: none; }
+.editor-empty { flex: 1; border: 0; }
+
+/* Preview pane: a small bar on top, then the preview frame, or an empty state when there's no main file. */
+.preview-pane { position: relative; display: flex; flex-direction: column; }
+.preview-pane > .preview { flex: 1; min-height: 0; height: auto; }
+.pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 0.5rem 0 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
+.preview-empty { position: absolute; inset: 2rem 0 0 0; z-index: 1; border: 0; background: var(--surface); }
 .editor-file-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
 .editor-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-viewer { flex: 1; min-height: 0; display: flex; overflow: auto; }
