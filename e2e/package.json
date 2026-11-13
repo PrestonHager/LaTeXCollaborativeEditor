@@ -1,6 +1,7 @@
 {
   "name": "latex-collaborative-editor-e2e",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "test": "playwright test",

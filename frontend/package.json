@@ -2,10 +2,11 @@
   "name": "frontend",
   "private": true,
   "version": "0.1.0",
+  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
+    "build": "tsc && vite build && node scripts/third-party-notices.mjs && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
     "check:pages": "node scripts/check-build-pages.mjs",
     "preview": "vite preview",
     "test": "vitest",

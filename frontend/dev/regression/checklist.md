@@ -275,6 +275,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Help > Report a Security Issue sits right under Report a Bug, has a shield icon in the palette, and opens GitHub's private Report a vulnerability form (`/security/advisories/new`), not a public issue.
 - [ ] Help > About shows the app version with links to the docs, the source and the policies.
 - [ ] Help > About says `Version X.Y.Z (commit abc1234, built YYYY-MM-DD)`, and the commit link opens that commit on GitHub.
+- [ ] Help > About has the line "Free software under GPL-3.0-or-later (third-party licenses)" under the version. GPL-3.0-or-later opens `LICENSE` on GitHub in a new tab. In `npm run preview`, third-party licenses opens `third-party-licenses.txt` with every library's license (it's a 404 in `npm run dev`, which doesn't build it).
 - [ ] Help > About > View changelog opens What's new on top of About. It shows "Unreleased (in this build)" first, then each version newest first with its date, and the running version has a "You're on this version" badge (none in `npm run dev`, which is a dev build). The list scrolls, Tab stays inside the dialog, and Esc or Close goes back to About with focus on View changelog. Links open GitHub in a new tab, and it reads well in the light and dark app themes.
 - [ ] The footer ends with a small `vX.Y.Z` link. Hovering it shows the commit and build date, and clicking it opens the commit.
 - [ ] The bug form's extra info says `App version: X.Y.Z+abc1234`.

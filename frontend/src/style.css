@@ -278,7 +278,7 @@ label.settings-row { justify-content: flex-start; }
 .keybind-note .btn { height: auto; padding: 0; margin-left: 0.375rem; font-size: 0.75rem; vertical-align: baseline; }
 .keybind-empty { padding: 0.5rem; font-size: 0.875rem; }
 .about-dialog-body { display: grid; gap: 0.5rem; font-size: 14px; }
-#about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
+#about-version a, .about-license a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .dialog-help-links { display: inline-flex; margin-left: auto; }
 /* Changelog dialog (issue #140, dialog-lg). The body scrolls so a long changelog keeps the footer in view. */

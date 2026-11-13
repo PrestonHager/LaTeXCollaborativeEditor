@@ -22,7 +22,8 @@ Frontend deployment (GitHub Pages)
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
 - Vite builds every page in `BUILD_PAGES` in `frontend/vite.config.ts`: `index.html`, `privacy.html` and `tos.html`. A new top-level HTML page that should ship has to be added there, or it won't reach `dist/`. `regression.html` is dev-only and stays off the list.
-- After `vite build`, `npm run build` runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
+- After `vite build`, `npm run build` runs `scripts/third-party-notices.mjs`. It writes `dist/third-party-licenses.txt` (every runtime dependency's name, version, license and license text; the About dialog links to it) and fails the build if a runtime dependency's license isn't GPLv3-compatible. The project is GPL-3.0-or-later; see `docs/licensing.md` for the audit and how to add a dependency.
+- Then it runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
 - The build bakes in the version from `frontend/package.json`, the short commit SHA (`git rev-parse --short HEAD`, else `$GITHUB_SHA`, else `dev`) and the build time, and writes them to `dist/version.json`.
   The page check fails the build if `version.json` is missing, malformed, or doesn't match `package.json`.
 - The build also copies the repo-root `CHANGELOG.md` to `dist/CHANGELOG.md` (`changelogFilePlugin` in `scripts/build-info.mjs`), read from the root file each build, so there's no second copy in the repo. The page check fails the build if it's missing.

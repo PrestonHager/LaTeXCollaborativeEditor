@@ -10,6 +10,7 @@
 - Do not introduce a repository-owned signaling server.
 - Keep rendezvous/bootstrap metadata separate from document payload content.
 - Preserve static-hosting compatibility for the web app.
+- The project is GPL-3.0-or-later. New runtime dependencies must be GPLv3-compatible; `npm run build` checks this. See `docs/licensing.md`.
 - New dialogs and popovers take a size from the shared scale (`dialog-sm`, `dialog-md`, `dialog-lg`, `dialog-palette`) in `frontend/src/style.css`; pick one with `docs/ui-sizing.md`, and don't add one-off widths.
 
 ## Validation commands
