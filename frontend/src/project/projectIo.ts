@@ -62,7 +62,8 @@ export async function projectFromZip(fileName: string, bytes: Uint8Array, blobs:
 
 /**
  * Zip the whole project. Binary files we don't have yet (still coming from a peer) are left
- * out, and their paths are returned so the caller can say so.
+ * out, and their paths are returned so the caller can say so. Empty folders are kept as
+ * directory entries, so the folder tree comes back the same when the zip is imported.
  */
 export async function projectToZip(project: ProjectDoc, blobs: BlobStore): Promise<{ zip: Uint8Array; skipped: string[] }> {
   const entries: ZipEntry[] = [];
@@ -76,5 +77,5 @@ export async function projectToZip(project: ProjectDoc, blobs: BlobStore): Promi
       else skipped.push(entry.path);
     }
   }
-  return { zip: await createZip(entries), skipped };
+  return { zip: await createZip(entries, project.folderPaths()), skipped };
 }

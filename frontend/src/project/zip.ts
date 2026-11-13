@@ -27,21 +27,39 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 
 const canDeflate = () => typeof CompressionStream !== 'undefined';
 
-/** Build a .zip. Each file is deflated when that makes it smaller, and stored as-is otherwise. */
-export async function createZip(files: ZipEntry[]): Promise<Uint8Array> {
+/** The folders that need an entry of their own: the ones no file or other folder path already implies. */
+export function emptyFolders(files: ZipEntry[], folders: string[]): string[] {
+  const clean = folders.map((folder) => folder.replace(/^\/+|\/+$/g, '')).filter(Boolean);
+  const implied = new Set<string>();
+  for (const path of [...files.map((file) => file.path), ...clean]) {
+    for (let at = path.indexOf('/'); at > 0; at = path.indexOf('/', at + 1)) implied.add(path.slice(0, at));
+  }
+  return [...new Set(clean)].filter((folder) => !implied.has(folder)).sort();
+}
+
+/**
+ * Build a .zip. Each file is deflated when that makes it smaller, and stored as-is otherwise.
+ * Folders get a directory entry (`name/`, no data) only when nothing else in the archive implies
+ * them, so empty folders survive the trip. This is the inverse of readZip.
+ */
+export async function createZip(files: ZipEntry[], folders: string[] = []): Promise<Uint8Array> {
   const encoder = new TextEncoder();
   const locals: Uint8Array[] = [];
   const centrals: Uint8Array[] = [];
   let offset = 0;
 
-  for (const file of files) {
-    const name = encoder.encode(file.path);
-    const crc = crc32(file.data);
+  const records = [
+    ...emptyFolders(files, folders).map((folder) => ({ path: `${folder}/`, data: new Uint8Array(), folder: true })),
+    ...files.map((file) => ({ ...file, folder: false })),
+  ];
+  for (const record of records) {
+    const name = encoder.encode(record.path);
+    const crc = crc32(record.data);
     let method = 0;
-    let body = file.data;
-    if (canDeflate() && file.data.length > 64) {
-      const deflated = await pipe(file.data, new CompressionStream('deflate-raw'));
-      if (deflated.length < file.data.length) {
+    let body = record.data;
+    if (canDeflate() && record.data.length > 64) {
+      const deflated = await pipe(record.data, new CompressionStream('deflate-raw'));
+      if (deflated.length < record.data.length) {
         method = 8;
         body = deflated;
       }
@@ -56,7 +74,7 @@ export async function createZip(files: ZipEntry[]): Promise<Uint8Array> {
     lv.setUint16(8, method, true);
     lv.setUint32(14, crc, true);
     lv.setUint32(18, body.length, true);
-    lv.setUint32(22, file.data.length, true);
+    lv.setUint32(22, record.data.length, true);
     lv.setUint16(26, name.length, true);
     local.set(name, 30);
     locals.push(local, body);
@@ -71,8 +89,9 @@ export async function createZip(files: ZipEntry[]): Promise<Uint8Array> {
     cv.setUint16(10, method, true);
     cv.setUint32(16, crc, true);
     cv.setUint32(20, body.length, true);
-    cv.setUint32(24, file.data.length, true);
+    cv.setUint32(24, record.data.length, true);
     cv.setUint16(28, name.length, true);
+    if (record.folder) cv.setUint32(38, 0x10, true); // The MS-DOS directory attribute.
     cv.setUint32(42, offset, true);
     central.set(name, 46);
     centrals.push(central);
@@ -84,8 +103,8 @@ export async function createZip(files: ZipEntry[]): Promise<Uint8Array> {
   const end = new Uint8Array(22);
   const ev = new DataView(end.buffer);
   ev.setUint32(0, 0x06054b50, true);
-  ev.setUint16(8, files.length, true);
-  ev.setUint16(10, files.length, true);
+  ev.setUint16(8, records.length, true);
+  ev.setUint16(10, records.length, true);
   ev.setUint32(12, centralSize, true);
   ev.setUint32(16, offset, true);
 
