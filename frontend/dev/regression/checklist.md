@@ -39,6 +39,8 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Compile Now (Ctrl+Shift+C) refreshes the preview.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
 - [ ] The footer says Compiled, with no diagnostics.
+- [ ] The preview shows "Preview is approximate: N changes made for LaTeX.js", and its list includes showing figures in place and footnotes inline.
+- [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
 
 Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` ignores `width` and other options.
 
@@ -70,7 +72,9 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] The save status in the header says when the project last saved.
 - [ ] Reloading the page brings back the same project and files.
 - [ ] Save Now (Ctrl+S) saves right away.
-- [ ] View > Disable Save Now turns Save Now off, and the menu shows it checked.
+- [ ] View > Pause Saving stops autosave and Save Now, the menu shows it checked, and the status says "Saving paused".
+- [ ] While paused, the palette shows Resume Saving, and leaving the page warns about unsaved edits.
+- [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
 - [ ] Open Local Project (Ctrl+O) lists saved projects and opens the one you pick.
 - [ ] Clear Local Projects asks first, then removes the saved projects.
 
@@ -126,7 +130,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] The palette has the palette-only commands: Copy share link, Focus editor, and Switch to dark, light or system theme.
-- [ ] Ctrl+, opens Settings. Its theme selects, Disable Save Now and Clear Local Projects all work.
+- [ ] Ctrl+, opens Settings. Its theme selects, Pause Saving and Clear Local Projects all work.
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
 - [ ] Split View, Editor Only and Preview Only change the layout, and the splitter drags.
 - [ ] Help > Documentation opens the docs, and About / Repository opens the repo.
