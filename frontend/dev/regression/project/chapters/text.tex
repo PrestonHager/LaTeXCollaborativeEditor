@@ -1,0 +1,46 @@
+\section{Text}
+% Expect: this section comes from chapters/text.tex through \input.
+
+\subsection{Formatting}
+This line has \textbf{bold}, \emph{emphasis}, \textit{italic}, \texttt{monospace}, and \underline{underlined} text.
+Special characters: \& \% \$ \# \_ \{ \} and an en--dash and an em---dash.
+Unicode: café, naïve, Zürich, and “curly quotes”.\footnote{Expect: this note shows. LaTeX.js puts it inline, not at the bottom.}
+
+\subsection{Lists}
+\begin{itemize}
+  \item A bullet
+  \item Another bullet
+  \begin{itemize}
+    \item A nested bullet
+  \end{itemize}
+\end{itemize}
+
+\begin{enumerate}
+  \item First
+  \item Second
+\end{enumerate}
+
+\begin{description}
+  \item[Term] Its description.
+\end{description}
+
+\subsection{Blocks}
+\begin{quote}
+A quote, indented on both sides.
+\end{quote}
+
+\begin{center}
+Centered text.
+\end{center}
+
+\subsection{Links}
+% Expect: the first two are clickable links.
+% The last two must show as text with no href, since the preview strips unsafe links.
+\href{https://github.com/PrestonHager/LaTeXCollaborativeEditor}{The repository},
+\url{https://example.com},
+\href{javascript:alert(1)}{a javascript link},
+and \href{data:text/html,hi}{a data link}.
+
+\subsection{References}
+\label{sec:refs}
+This is section~\ref{sec:refs}.

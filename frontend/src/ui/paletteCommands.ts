@@ -15,3 +15,11 @@ export const paletteOnlyCommands: PaletteOnlyCommand[] = [
   { id: 'share.copyLink', section: 'Share', label: 'Copy share link', description: 'Start sharing if needed, and copy the link for others to join.' },
   { id: 'view.focusEditor', section: 'View', label: 'Focus editor', description: 'Put the cursor back in the editor.' },
 ];
+
+// Regression testing helpers, only in npm run dev. See dev/regression/checklist.md.
+export const devPaletteCommands: PaletteOnlyCommand[] = import.meta.env.DEV
+  ? [
+      { id: 'dev.openTestProject', section: 'Dev', label: 'Open regression test project', description: 'Load the test LaTeX project that exercises every preview feature.' },
+      { id: 'dev.openChecklist', section: 'Dev', label: 'Open regression checklist', description: 'Open the regression checklist in a new tab.' },
+    ]
+  : [];

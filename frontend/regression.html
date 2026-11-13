@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Regression Checklist</title>
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <!-- The app's CSS locks the body for its full-screen layout, but this page needs to scroll. -->
+    <style>
+      html, body { height: auto; }
+      body.regression-page { overflow: auto; background: var(--background); color: var(--foreground); }
+    </style>
+  </head>
+  <!--
+    Dev-only page. Vite serves it during npm run dev, but vite build only builds index.html,
+    so it never ships. The checklist itself lives in dev/regression/checklist.md.
+  -->
+  <body class="regression-page">
+    <main id="checklist" class="mx-auto max-w-3xl space-y-8 px-4 py-8"></main>
+    <script type="module" src="/src/dev/regressionMain.ts"></script>
+  </body>
+</html>

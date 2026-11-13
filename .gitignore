@@ -13,3 +13,4 @@ third_party/
 __pycache__/
 *.tex
 !frontend/src/**/__fixtures__/*.tex
+!frontend/dev/regression/project/**/*.tex

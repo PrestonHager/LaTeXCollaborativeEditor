@@ -2,6 +2,8 @@ import {
   createElement,
   createIcons,
   BookOpen,
+  FlaskConical,
+  ListChecks,
   ChevronRight,
   File,
   FileArchive,
@@ -103,6 +105,8 @@ const commandIcons: Record<CommandId, IconNode> = {
   'help.reportBug': Bug,
   'help.requestFeature': Lightbulb,
   'help.about': Info,
+  'dev.openTestProject': FlaskConical,
+  'dev.openChecklist': ListChecks,
 };
 
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.

@@ -3,6 +3,7 @@
 ## Scope ownership
 - `frontend/`: browser UI, networking, storage, and worker integrations.
 - `docs/`: protocol, deployment, and validation checklists.
+- `frontend/dev/regression/`: the dev-only regression checklist and test LaTeX project. Never import it from production code paths.
 
 ## Guardrails
 - Keep document content peer-to-peer over WebRTC only.
@@ -19,3 +20,8 @@ If P2P protocol, bootstrap/build steps, or storage provider behavior changes, up
 - `docs/protocol.md`
 - `docs/deployment.md`
 - `docs/dod-checklist.md`
+
+## Regression checklist
+When a PR adds, changes, or removes a user-facing feature, update `frontend/dev/regression/checklist.md` in the same PR.
+If the preview can render something new, add it to the test project in `frontend/dev/regression/project/` with a `% Expect:` comment.
+Both only load in `npm run dev` (palette: **Open regression test project** and **Open regression checklist**), so `npm run build` must not include them.
