@@ -19,6 +19,7 @@ const sendBinary = vi.fn();
 let callbacks:
   | {
       onState: (s: string) => void;
+      onPeerCount: (count: number) => void;
       onPeerJoin: (peerId: string) => void;
       onMessage: (payload: unknown, peerId?: string) => void;
       onPeerLeave?: (peerId: string) => void;
@@ -32,6 +33,7 @@ vi.mock('../net/peerSession', () => ({
       _bootstrap: unknown,
       cb: {
         onState: (s: string) => void;
+        onPeerCount: (count: number) => void;
         onPeerJoin: (peerId: string) => void;
         onMessage: (payload: unknown, peerId?: string) => void;
         onPeerLeave?: (peerId: string) => void;
@@ -397,5 +399,16 @@ describe('SessionController', () => {
     expect(progress).toHaveBeenCalledWith(hash, null);
     callbacks?.onPeerJoin('peer-2');
     callbacks?.onPeerLeave?.('peer-2');
+  });
+
+  it('passes the state and peer count to the connection badge', () => {
+    const onConnectionState = vi.fn();
+    new SessionController({ isHost: true, blobs: new BlobStore(), onConnectionState });
+    expect(onConnectionState).toHaveBeenLastCalledWith('Not sharing', 0);
+    callbacks?.onState('Waiting for peers');
+    expect(onConnectionState).toHaveBeenLastCalledWith('Waiting for peers', 0);
+    callbacks?.onPeerCount(2);
+    callbacks?.onState('Relayed');
+    expect(onConnectionState).toHaveBeenLastCalledWith('Relayed', 2);
   });
 });

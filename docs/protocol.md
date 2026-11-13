@@ -17,7 +17,13 @@ Rendezvous and session bootstrap
 Transport behavior
 - The app uses a transport layer over a third-party rendezvous infrastructure (WebRTC-like semantics).
 - ICE configuration starts with STUN, with optional TURN fallback for restricted NATs.
-- UI surfaces connection states: Discovering, Dialing, Connected, Relayed, Reconnecting, Failed.
+- UI surfaces connection states, with the number of connected peers next to them:
+  - Not sharing: not in a room.
+  - Waiting for peers: in a room, nobody else has joined yet.
+    There is no timeout to a failed state.
+  - Connected: at least one peer is connected and none go through TURN.
+  - Relayed: at least one peer's selected ICE candidate pair uses a relay (TURN) candidate, checked with `RTCPeerConnection.getStats()` when the peer joins.
+  - Reconnecting: the last peer left, so the app rejoins the room with backoff.
 
 Document payload channel
 - Document updates are exchanged peer-to-peer as action payloads.
