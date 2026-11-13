@@ -21,7 +21,7 @@ import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
 import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
 import { createCollabUndo } from './collab/undo';
-import { projectToPreviewHtml } from './compile/latexJsPreview';
+import { CompileScheduler, collectImageUrls } from './compile/compileScheduler';
 import {
   createDocumentId,
   readAppSessionState,
@@ -348,6 +348,7 @@ let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 let lastCompiledKey: string | null = null;
 let lastCompileStartedAt = 0;
 let compileSequence = 0;
+const compiler = new CompileScheduler();
 const imageUrls = new Map<string, string>();
 
 /** A data: URL for an image file, if we have its bytes. Cached by content hash. */
@@ -387,13 +388,10 @@ const runCompile = async () => {
   compileStatusEl.textContent = 'Compiling';
   preview.setLoading(true);
   try {
-    const { html, errors, missing } = projectToPreviewHtml({
-      mainPath: main.path,
-      texts,
-      binaryPaths: binaries.map((entry) => entry.path),
-      imageUrl,
-    });
-    if (seq !== compileSequence) return;
+    const binaryPaths = binaries.map((entry) => entry.path);
+    const result = await compiler.compile({ mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) });
+    if (!result || seq !== compileSequence) return;
+    const { html, errors, missing } = result;
     if (html) await preview.renderHtml(html);
     const activePath = activeFileId ? project.get(activeFileId)?.path : undefined;
     editor.setDiagnostics(errors.filter((error) => error.path === activePath));

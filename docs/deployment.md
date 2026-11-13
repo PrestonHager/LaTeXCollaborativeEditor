@@ -44,6 +44,8 @@ Runtime architecture (summary)
 - Document content remains peer-to-peer after joining a room.
 - Every peer checks the messages it gets and drops bad ones, since anyone with the room link can join. The limits are in `docs/protocol.md`. Nothing about this needs a server or any config.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
+- The compile runs in a module worker, built to its own `dist/assets/compile.worker-*.js` file.
+  It's a plain static file, so static hosting still works, and it counts toward the bundle size budget.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.
   Older builds kept it in `localStorage` as `drive_access_token`; the app deletes that key on load.

@@ -87,6 +87,9 @@ Message validation and limits
 
 LaTeX preview channel
 - Preview rendering is performed locally in the browser using LaTeX.js.
+- LaTeX.js runs in a Web Worker with a small built-in DOM, so typing doesn't freeze on big documents.
+  A new compile kills a worker that's still busy with an old one.
+  If the worker can't start, or the project uses the `picture` environment (it needs real layout), the compile runs on the main thread instead.
 - The preview reads the whole project, starting at the main file. `\input` and `\include` files are inlined, `\includegraphics` images go in as data URLs, and `\bibliography` gets a simple numbered reference list built from the .bib files.
 - PDF and EPS figures can't be shown by LaTeX.js, so the preview puts a note in their place.
 - Assets (CSS/fonts/scripts) may be loaded from public CDNs; document LaTeX content is never sent to a server for preview.
