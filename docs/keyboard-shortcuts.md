@@ -65,7 +65,7 @@ Use the menus or the command palette.
 - New File, New Folder, Upload Files, Download Current File, and Upload .zip as New Project.
 - Connect Google Drive, Disconnect Google Drive, Save to Google Drive, Move to Drive Folder, Rename Project, and Clear Local Projects.
 - The theme toggles, the layout modes, and Pause Saving.
-- The **Help** menu items: Keyboard Shortcuts, Show Tour, Report a Bug, Request a Feature, and About.
+- The **Help** menu items: Keyboard Shortcuts, Show Tour, Report a Bug, Report a Security Issue, Request a Feature, and About.
 
 ## Related topics
 

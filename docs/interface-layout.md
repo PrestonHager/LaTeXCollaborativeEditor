@@ -66,12 +66,17 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Keyboard Shortcuts | | Opens the [keyboard shortcuts](keyboard-shortcuts.md) page. |
 | Show Tour | | Runs the [first-run tour](#first-run-tour) again. |
 | Report a Bug | | Opens the GitHub bug form. |
+| Report a Security Issue | | Opens GitHub's private vulnerability form. |
 | Request a Feature | | Opens the GitHub feature request form. |
 | About | | Shows the app version and links. |
 
 **Report a Bug** and **Request a Feature** open the GitHub issue forms in a new tab.
 The bug form comes with your browser, OS, and the app version filled in.
 It never includes your document, file names, or the room link, and nothing is sent until you submit the form yourself.
+
+**Report a Security Issue** opens GitHub's private [Report a vulnerability](https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new) form instead.
+Only the maintainers see what you send there, so use it for anything that could hurt other people if it were posted publicly.
+The [security policy](https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/SECURITY.md) says what to include.
 
 **About** shows the app version, with links to the docs, the source code, and the policies.
 

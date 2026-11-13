@@ -6,6 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
+        **Security problem?** Don't open a public issue. Use the [private vulnerability form](https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new) instead (see [SECURITY.md](https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/SECURITY.md)).
+
         Thanks for taking the time to report this.
         Please search the existing issues first so we don't end up with duplicates.
         Don't paste tokens, API keys, or private document contents in here.

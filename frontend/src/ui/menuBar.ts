@@ -43,6 +43,7 @@ export type CommandId =
   | 'help.shortcuts'
   | 'help.tour'
   | 'help.reportBug'
+  | 'help.reportSecurity'
   | 'help.requestFeature'
   | 'help.about'
   | 'dev.openTestProject'

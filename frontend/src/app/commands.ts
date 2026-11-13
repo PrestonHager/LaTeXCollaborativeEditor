@@ -78,6 +78,8 @@ export type CommandContext = {
   // The Help menu. These open a docs page, a GitHub form, the tour, or the About dialog.
   openDocs(topic: 'gettingStarted' | 'shortcuts'): void;
   openBugForm(): void;
+  /** Opens GitHub's private vulnerability form. Security reports never go to a public issue. */
+  openSecurityReport(): void;
   openFeatureForm(): void;
   startTour(): void;
   openAbout(): void;
@@ -335,6 +337,7 @@ export function createCommands(app: CommandContext) {
     'help.tour': () => app.startTour(),
     // NOTE: these only open the GitHub form. The person reads it and submits it themselves.
     'help.reportBug': () => app.openBugForm(),
+    'help.reportSecurity': () => app.openSecurityReport(),
     'help.requestFeature': () => app.openFeatureForm(),
     'help.about': () => app.openAbout(),
     // These two only show in the palette in dev builds (see devPaletteCommands).

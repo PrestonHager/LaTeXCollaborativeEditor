@@ -92,3 +92,11 @@ Screenshots
 - The script builds a small sample project, opens each dialog, and draws numbered callouts over the buttons each docs page talks about. The PNGs are palette-compressed with `sharp` to keep them small.
 - The Share shot joins a real room through the public trackers, so it needs a network connection. The room id is blanked out of the picture.
 - Rerun it when the UI changes, and before a release. It's not in CI yet.
+
+Security
+- `SECURITY.md` at the repository root is the security policy. GitHub shows it on the Security tab and links it from new issues.
+- Vulnerabilities are reported through GitHub's private vulnerability reporting ([form](https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new)), which must stay turned on in **Settings > Code security**.
+  The issue chooser (`.github/ISSUE_TEMPLATE/config.yml`), the top of the bug and feature forms, and **Help > Report a Security Issue** all point there.
+- `.github/dependabot.yml` checks npm in `frontend/`, `e2e/` and `tools/screenshots/`, and the GitHub Actions versions, every week.
+  Dependabot alerts and security updates, and secret scanning with push protection, are switched on in **Settings > Code security** too. The `.env` files hold Google and TURN keys, so keep push protection on.
+- Only the live site and `main` get security fixes. There are no release branches.

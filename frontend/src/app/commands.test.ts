@@ -108,6 +108,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
     toolbar: { refresh: vi.fn() },
     openDocs: vi.fn(),
     openBugForm: vi.fn(),
+    openSecurityReport: vi.fn(),
     openFeatureForm: vi.fn(),
     startTour: vi.fn(),
     openAbout: vi.fn(),
@@ -516,6 +517,9 @@ describe('commands', () => {
       expect(app.startTour).toHaveBeenCalled();
       await run('help.reportBug');
       expect(app.openBugForm).toHaveBeenCalled();
+      expect(app.openSecurityReport).not.toHaveBeenCalled();
+      await run('help.reportSecurity');
+      expect(app.openSecurityReport).toHaveBeenCalled();
       await run('help.requestFeature');
       expect(app.openFeatureForm).toHaveBeenCalled();
       await run('help.about');

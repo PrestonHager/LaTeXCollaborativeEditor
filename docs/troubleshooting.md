@@ -6,6 +6,7 @@ For the meaning of a single status message, see [Status and error messages](mess
 
 If none of this helps, open an issue on the [repository](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues).
 Please don't paste your document, room link, or any tokens into it.
+If it looks like a security problem, don't post it publicly. Use **Help > Report a Security Issue** or the [private vulnerability form](https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new) instead.
 
 ## P2P connection problems
 

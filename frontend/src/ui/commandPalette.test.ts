@@ -246,8 +246,13 @@ describe('palette descriptions', () => {
     for (const command of [...paletteOnlyCommands, ...themeSwitchCommands]) expect(command.description, command.id).toBeTruthy();
     const help = items.filter((item) => item.closest('[data-menu-label="Help"]')).map((item) => item.dataset.command);
     expect(help).toEqual(
-      expect.arrayContaining(['help.documentation', 'help.shortcuts', 'help.tour', 'help.reportBug', 'help.requestFeature', 'help.about']),
+      expect.arrayContaining(['help.documentation', 'help.shortcuts', 'help.tour', 'help.reportBug', 'help.reportSecurity', 'help.requestFeature', 'help.about']),
     );
+    // The private security report sits right next to Report a Bug, so nobody files one publicly by mistake.
+    expect(help.indexOf('help.reportSecurity')).toBe(help.indexOf('help.reportBug') + 1);
+    const security = items.find((item) => item.dataset.command === 'help.reportSecurity');
+    expect(security?.textContent).toBe('Report a Security Issue');
+    expect(security?.dataset.description).toMatch(/privately/);
   });
 
   it('puts focus back after closing, then runs the command', () => {

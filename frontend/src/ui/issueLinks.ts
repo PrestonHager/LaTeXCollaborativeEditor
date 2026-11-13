@@ -1,5 +1,11 @@
 export const REPO_URL = 'https://github.com/PrestonHager/LaTeXCollaborativeEditor';
 
+/**
+ * GitHub's private vulnerability reporting form. Only the maintainers see what's sent there.
+ * Security problems go here, never to the public bug form. See SECURITY.md.
+ */
+export const SECURITY_REPORT_URL = `${REPO_URL}/security/advisories/new`;
+
 /** Options of the "Area" dropdown in .github/ISSUE_TEMPLATE. They have to match the form exactly. */
 export const issueAreas = {
   collaboration: 'Collaboration (P2P sync, rooms)',
