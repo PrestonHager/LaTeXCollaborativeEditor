@@ -53,10 +53,24 @@ describe('presence flow', () => {
     const name = settings.get('displayName');
     expect(name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/);
     expect(flow.name()).toBe(name);
-    expect(send.mock.calls[0][0].state).toMatchObject({ name, color: colorForPeer('self-peer') });
+    // A random presence id is saved, and our colour comes from it.
+    const id = settings.get('presenceId');
+    expect(id).toMatch(/^[0-9a-f]{16}$/);
+    expect(send.mock.calls[0][0].state).toMatchObject({ name, color: colorForPeer(id), id });
     // Starting again is the same start.
     await flow.start();
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the saved presence id across starts, so our colour survives a reload', async () => {
+    const { flow, settings, send } = setup();
+    settings.set('presenceId', '0123456789abcdef');
+    await flow.start();
+    expect(send.mock.lastCall?.[0].state).toMatchObject({ id: '0123456789abcdef', color: colorForPeer('0123456789abcdef') });
+    flow.stop();
+    await flow.start();
+    expect(send.mock.lastCall?.[0].state?.id).toBe('0123456789abcdef');
+    expect(settings.get('presenceId')).toBe('0123456789abcdef');
   });
 
   it('uses the saved name, and follows changes to it', async () => {

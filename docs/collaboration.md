@@ -52,7 +52,7 @@ The first time you share or join, you get an anonymous animal name, like "Curiou
 Click your own avatar to change it.
 The name is kept in this browser with your other settings, so you keep it in later rooms. Resetting all settings picks a new animal name.
 
-Everyone gets a colour from a fixed set of eight. It comes from the connection's id, so everyone in the room sees the same colour for you, but it can change when you reload.
+Everyone gets a colour from a fixed set of eight. It comes from a random id kept with your settings, so you keep your colour when you reload, and everyone in the room sees the same colour for you. If someone who was in the room before you has your colour, you get the next free one instead, so nobody in the room shares a colour until there are more than eight people.
 
 Only your name, colour, which file you have open, and where your cursor is go to the room. Nothing else about you is shared.
 People on an older version of the editor still sync with you; they just don't show up in the avatars, and don't see yours.

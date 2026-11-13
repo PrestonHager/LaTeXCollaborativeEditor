@@ -4,7 +4,8 @@ import type { ThemeMode } from './appSession';
 
 /**
  * The person's own settings: themes, layout, keybinds and the like. They live in this browser,
- * apart from the app session and the project, and are never sent to peers in a room. Guests keep
+ * apart from the app session and the project, and are never sent to peers in a room (except
+ * `displayName` and `presenceId`, which go out in presence messages while you share). Guests keep
  * their own too.
  *
  * Stored under one localStorage key as `{ version, values, updatedAt }`. `updatedAt` holds a
@@ -35,6 +36,11 @@ export type Settings = {
    * which fills in an anonymous animal name. It's the only thing about you a room gets.
    */
   displayName: string;
+  /**
+   * A random id sent with presence so your colour stays the same across reloads (16 hex characters,
+   * made on the first share). It says nothing about you and is only used to pick the colour.
+   */
+  presenceId: string;
 };
 export type ExportDestinationId = 'download' | 'drive';
 export type SettingKey = keyof Settings;
@@ -48,6 +54,7 @@ export const defaultSettings = (): Settings => ({
   tourSeen: false,
   exportDestination: 'download',
   displayName: '',
+  presenceId: '',
 });
 
 /** Groups that Reset can act on one at a time. */
@@ -72,7 +79,19 @@ const sanitizers: { [K in SettingKey]: (value: unknown) => Settings[K] | undefin
   tourSeen: (value) => (typeof value === 'boolean' ? value : undefined),
   exportDestination: (value) => (value === 'download' || value === 'drive' ? value : undefined),
   displayName: (value) => (value === '' ? '' : cleanDisplayName(value)),
+  presenceId: (value) => (value === '' || isPresenceId(value) ? value : undefined),
 };
+
+const PRESENCE_ID_PATTERN = /^[0-9a-f]{16}$/;
+/** A presence id is exactly 16 lowercase hex characters. Peers drop presence with anything else. */
+export const isPresenceId = (value: unknown): value is string => typeof value === 'string' && PRESENCE_ID_PATTERN.test(value);
+
+/** A new random presence id: 8 random bytes as hex. */
+export function newPresenceId(fill: (bytes: Uint8Array<ArrayBuffer>) => unknown = (bytes) => crypto.getRandomValues(bytes)): string {
+  const bytes = new Uint8Array(8);
+  fill(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 
 /** Longest display name, in characters. Peers drop presence messages with a longer one. */
 export const MAX_DISPLAY_NAME_LENGTH = 40;

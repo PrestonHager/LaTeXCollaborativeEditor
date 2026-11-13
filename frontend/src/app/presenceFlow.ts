@@ -2,7 +2,7 @@
 // the sync, the checks and the avatar row load with sharing (collab/presenceRuntime.ts).
 import { PresenceAwareness } from '../collab/awareness';
 import type { PresencePeer, PresenceSync } from '../collab/presence';
-import type { SettingsStore } from '../state/settings';
+import { isPresenceId, newPresenceId, type SettingsStore } from '../state/settings';
 import { whenOnline } from './lazy';
 
 type Runtime = typeof import('../collab/presenceRuntime');
@@ -12,7 +12,7 @@ export type PresenceFlowOptions = {
   /** The avatar row next to Share. */
   root: HTMLElement;
   send: (message: unknown, peerId?: string) => void;
-  /** Our peer id, so our colour matches what everyone else works out for us. */
+  /** Our peer id. Colours are ordered by it last, so every screen breaks ties the same way. */
   selfId: () => Promise<string>;
   /** Whether the shared doc has a root type by this name (see PresenceSync). */
   hasType: (name: string) => boolean;
@@ -44,6 +44,15 @@ export function createPresenceFlow(options: PresenceFlowOptions) {
     return picked;
   };
 
+  /** The saved presence id, or a new random one, saved so our colour survives a reload. */
+  const savedPresenceId = () => {
+    const id = options.settings.get('presenceId');
+    if (isPresenceId(id)) return id;
+    const picked = newPresenceId();
+    options.settings.set('presenceId', picked);
+    return picked;
+  };
+
   const self = () => {
     const user = awareness.getLocalState()?.user;
     return user?.color ? { name: user.name, color: user.color } : null;
@@ -67,12 +76,15 @@ export function createPresenceFlow(options: PresenceFlowOptions) {
       ([loaded, selfId]) => {
         runtime = loaded;
         const name = savedName(loaded);
-        const color = loaded.colorForPeer(selfId);
+        const presenceId = savedPresenceId();
+        // PresenceSync moves us to another colour if someone who joined earlier has this one.
+        const color = loaded.colorForPeer(presenceId);
         const state = awareness.getLocalState();
         awareness.setLocalState({ user: { name, color, colorLight: loaded.lightColor(color) }, file: state?.file ?? null, cursor: null });
         bar = loaded.createPresenceBar(options.root, { onFollow: options.onFollow, onEditName: options.onEditName, filePath: options.filePath });
         sync = new loaded.PresenceSync({
           awareness,
+          self: { peerId: selfId, presenceId },
           send: options.send,
           hasType: options.hasType,
           onPeersChange: () => {

@@ -18,6 +18,13 @@ const remoteCursorTheme = EditorView.theme({
     borderRadius: '0.2rem 0.2rem 0.2rem 0',
     pointerEvents: 'none',
   },
+  // On line 1 there's no room above, and the scroller would clip the label, so it goes below the
+  // caret. Line 1 is the content's first child whenever it's drawn (lines above the viewport
+  // leave a gap element first).
+  '.cm-content > .cm-line:first-child .cm-ySelectionInfo': {
+    top: '100%',
+    borderRadius: '0 0.2rem 0.2rem 0.2rem',
+  },
   '.cm-ySelectionCaret': { borderLeftWidth: '2px', borderRightWidth: '0' },
   '.cm-ySelectionCaretDot': { display: 'none' },
 });

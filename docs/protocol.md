@@ -43,16 +43,22 @@ Version handshake
 
 Presence (awareness)
 - While sharing, each peer tells the room who it is and where its cursor is (issue #22), so others see avatars next to Share, a dot on the file in the tree, and a caret with a name label in the editor.
-- It's `{ kind: 'awareness', clock, state }` on the same `doc-msg` action as everything else. `state` is `{ name, color, file, cursor }`, or `null` when the peer stops sharing or closes the tab.
+- It's `{ kind: 'awareness', clock, state }` on the same `doc-msg` action as everything else. `state` is `{ name, color, file, cursor, id, joined }`, or `null` when the peer stops sharing or closes the tab. Builds from #163 send no `id` or `joined`.
   - `name` is the display name from Settings (an anonymous animal name like "Curious Otter" until the person changes it).
-  - `color` is one of eight fixed colours. Each peer picks it from a hash of its own Trystero peer id, which is the id everyone else sees, so all screens agree.
+  - `id` is a presence id: 16 random lowercase hex characters, made on the first share and kept in settings (`presenceId`), so a person keeps their colour across reloads. It says nothing about the person and is only used for colours.
+  - `joined` is when the sender started sharing, in ms since 1970 by its own clock. It only orders people for colours.
+  - `color` is one of eight fixed colours. Everyone works it out the same way (`assignColors` in `collab/presence.ts`):
+    - Each person prefers the colour an FNV hash of their `id` picks. A peer from #163 (no `id`) prefers the colour it sends, which it hashes from its Trystero peer id.
+    - People are put in order: peers without `id` first (they can't move, since they pick their own colour), then by `joined`, then by `id`, then by Trystero peer id (which settles two tabs of one browser, which share an `id`).
+    - In that order, each person gets their preferred colour, or the next one in the palette nobody before them has. So whoever joined later moves off a colour that's taken. Colours only repeat past eight people.
+    - The order only uses what every peer sends, so every screen that sees the same people shows the same colours. A peer sends the colour it works out for itself, which is what #163 builds show. When someone leaves, the people after them can get their preferred colour back. A sender's clock being off only changes the order, not whether screens agree.
   - `file` is the id of the file the peer has open (not its path), or `null`.
   - `cursor` is `{ anchor, head }`, two Yjs relative positions as JSON (`{ tname, item?, assoc? }`), so the cursor stays on the same character while others type.
   - `clock` goes up with every message. A receiver ignores a clock that isn't newer than the last one from that peer.
 - Nothing else is shared: no email, account, storage or browser details.
 - Sending:
   - At most one message every 100 ms. Changes in between are folded into the next one.
-  - A heartbeat every 15 s, even when nothing changed, and one straight to each peer that joins.
+  - A heartbeat every 15 s, even when nothing changed, and one straight to each peer that joins or that we hear from for the first time (its presence may have loaded after our join-time message reached it).
   - `state: null` on `pagehide`.
   - Never more than 1 KB as JSON. Every field has a cap, so a valid message is well under it.
 - Receiving:
@@ -114,7 +120,8 @@ Message validation and limits
   - `{ kind: 'awareness', clock, state }`, checked in `frontend/src/collab/presence.ts` (`parseAwarenessMessage`) after the rate limit above:
     - `clock` is a whole number, 0 or more. `state` is `null` or an object with exactly these fields:
     - `name`: 1 to 40 characters, already trimmed, single-spaced, with no control characters, line separators or bidi overrides (the same cleaning as the setting, `cleanDisplayName`).
-    - `color`: exactly one of the eight palette colours, lowercase `#rrggbb`. It goes into a `style` attribute, so nothing else is accepted.
+    - `color`: exactly one of the eight palette colours, lowercase `#rrggbb`. It goes into a `style` attribute, so nothing else is accepted. For a peer that sends `id`, the receiver shows the colour it works out itself (see above).
+    - `id` and `joined`: both or neither. `id` is exactly 16 lowercase hex characters (`/^[0-9a-f]{16}$/`); `joined` is a whole number, 0 or more.
     - `file`: `null`, or 1 to 64 letters, digits or dashes.
     - `cursor`: `null`, or `{ anchor, head }` when `file` is set. Each position has `tname`, which must be the open file's Y.Text name (`file:<file>`, or `doc` for a project from before multi-file), an optional `item` `{ client, clock }` (client 0 to 2^32 - 1, clock a safe whole number), and an optional `assoc` of -1, 0 or 1. A position with a nested type id (`type`) is dropped.
     - Before a cursor is used, the receiver checks that its doc already has a root type named `tname`, since resolving a position with an unknown name would create one. If not, the peer is shown without a cursor.
@@ -144,7 +151,7 @@ LaTeX preview channel
 - The preview reads the whole project, starting at the main file. `\input` and `\include` files are inlined, `\includegraphics` images go in as data URLs, and `\bibliography` gets a simple numbered reference list built from the .bib files.
 - PDF and EPS figures can't be shown by LaTeX.js, so the preview puts a note in their place.
 - Assets (CSS/fonts/scripts) may be loaded from public CDNs; document LaTeX content is never sent to a server for preview.
-- User settings (themes, layout, keybinds, see `frontend/src/state/settings.ts`) are never part of any peer message, with one exception: the display name goes out in presence messages while you share. A room otherwise only shares the project; each person, host or guest, keeps their own settings in their browser.
+- User settings (themes, layout, keybinds, see `frontend/src/state/settings.ts`) are never part of any peer message, with one exception: the display name and the random presence id go out in presence messages while you share. A room otherwise only shares the project; each person, host or guest, keeps their own settings in their browser.
 
 ## Sequence diagrams
 

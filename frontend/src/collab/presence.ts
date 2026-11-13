@@ -8,7 +8,7 @@
 // it refuses that peer's large transfers too, like a snapshot. See docs/protocol.md.
 import * as Y from 'yjs';
 import { LOCAL_CLIENT_ID, type PresenceAwareness, type PresenceCursor, type PresenceState } from './awareness';
-import { cleanDisplayName, MAX_DISPLAY_NAME_LENGTH } from '../state/settings';
+import { cleanDisplayName, isPresenceId, MAX_DISPLAY_NAME_LENGTH } from '../state/settings';
 import { dropMessage } from './messages';
 
 /**
@@ -39,7 +39,19 @@ const MAX_CLIENT_ID = 0xffffffff;
 
 /** A relative position as JSON. Only root types (named by `tname`) are allowed, which covers every file. */
 export type WirePosition = { tname: string; item?: { client: number; clock: number }; assoc?: number };
-export type WireState = { name: string; color: string; file: string | null; cursor: { anchor: WirePosition; head: WirePosition } | null };
+/**
+ * `id` (a random 16-hex presence id, kept in settings) and `joined` (when the sender started
+ * sharing, ms since 1970 on its clock) pick the colour. They come together; builds from #163 send
+ * neither, and their `color` is used as is.
+ */
+export type WireState = {
+  name: string;
+  color: string;
+  file: string | null;
+  cursor: { anchor: WirePosition; head: WirePosition } | null;
+  id?: string;
+  joined?: number;
+};
 /** `state: null` means the sender stopped sharing or is leaving. */
 export type AwarenessMessage = { kind: 'awareness'; clock: number; state: WireState | null };
 
@@ -70,11 +82,14 @@ function parsePosition(value: unknown): WirePosition | null {
 
 function parseState(value: unknown): WireState | null {
   if (!isRecord(value)) return null;
-  const { name, color, file, cursor } = value;
+  const { name, color, file, cursor, id, joined } = value;
   // Check the length before cleaning, so a huge string isn't walked character by character.
   if (typeof name !== 'string' || name.length > MAX_DISPLAY_NAME_LENGTH * 2 || cleanDisplayName(name) !== name) return null;
   if (typeof color !== 'string' || !COLOR_SET.has(color)) return null;
   if (file !== null && (typeof file !== 'string' || !FILE_ID_PATTERN.test(file))) return null;
+  // Both or neither: an id without a join time (or the other way round) is junk.
+  const hasId = id !== undefined;
+  if (hasId !== (joined !== undefined) || (hasId && (!isPresenceId(id) || !isCount(joined)))) return null;
   let parsedCursor: WireState['cursor'] = null;
   if (cursor !== null) {
     if (!isRecord(cursor) || file === null) return null;
@@ -85,7 +100,9 @@ function parseState(value: unknown): WireState | null {
     if (!anchor || !head || anchor.tname !== tname || head.tname !== tname) return null;
     parsedCursor = { anchor, head };
   }
-  return { name, color, file, cursor: parsedCursor };
+  const state: WireState = { name, color, file, cursor: parsedCursor };
+  if (hasId) Object.assign(state, { id, joined });
+  return state;
 }
 
 /**
@@ -106,7 +123,43 @@ function hash(text: string): number {
   return h >>> 0;
 }
 
-export const colorForPeer = (peerId: string): string => PRESENCE_COLORS[hash(peerId) % PRESENCE_COLORS.length];
+/** The colour someone would like: from their presence id, or the peer id for builds without one. */
+export const colorForPeer = (id: string): string => PRESENCE_COLORS[hash(id) % PRESENCE_COLORS.length];
+
+/** Someone in the room, as far as colours go. `joined` and `presenceId` are null for builds from #163. */
+export type ColorCandidate = { peerId: string; presenceId: string | null; joined: number | null; preferred: string };
+
+/**
+ * Give everyone in the room a colour, keyed by peer id. Each person gets their preferred colour
+ * unless someone who joined earlier already has it; then they get the next free one in the
+ * palette. Only with more than eight people do colours repeat.
+ *
+ * The order only uses what every peer sends (join time, presence id, peer id), so every screen
+ * that sees the same people works out the same colours. Builds from #163 go first, since they
+ * keep their own colour on their own screen.
+ */
+export function assignColors(candidates: ColorCandidate[]): Map<string, string> {
+  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const order = [...candidates].sort(
+    (a, b) => (a.joined ?? -1) - (b.joined ?? -1) || compare(a.presenceId ?? '', b.presenceId ?? '') || compare(a.peerId, b.peerId),
+  );
+  const taken = new Set<string>();
+  const colors = new Map<string, string>();
+  for (const candidate of order) {
+    const start = Math.max(0, PRESENCE_COLORS.indexOf(candidate.preferred as (typeof PRESENCE_COLORS)[number]));
+    let color = PRESENCE_COLORS[start] as string;
+    for (let step = 0; step < PRESENCE_COLORS.length; step++) {
+      const next = PRESENCE_COLORS[(start + step) % PRESENCE_COLORS.length];
+      if (!taken.has(next)) {
+        color = next;
+        break;
+      }
+    }
+    taken.add(color);
+    colors.set(candidate.peerId, color);
+  }
+  return colors;
+}
 /** The selection highlight: the colour at 20% opacity, as y-codemirror.next does by default. */
 export const lightColor = (color: string) => `${color}33`;
 
@@ -169,6 +222,8 @@ export type PresencePeer = {
 
 type PresenceSyncOptions = {
   awareness: PresenceAwareness;
+  /** Our Trystero peer id and saved presence id, for working out colours the way peers do. */
+  self: { peerId: string; presenceId: string };
   /** Send on the document channel, to one peer or (without peerId) everyone. */
   send: (message: AwarenessMessage, peerId?: string) => void;
   /** Whether the shared doc has a root type with this name. Cursors into anything else are dropped. */
@@ -178,7 +233,7 @@ type PresenceSyncOptions = {
   now?: () => number;
 };
 
-type RemotePeer = PresencePeer & { clock: number; lastSeen: number };
+type RemotePeer = PresencePeer & { clock: number; lastSeen: number; presenceId: string | null; joined: number | null; sentColor: string };
 
 /** Turn our awareness state into what goes on the wire. Cursor positions become plain JSON. */
 export function toWireState(state: PresenceState): WireState {
@@ -213,6 +268,8 @@ export class PresenceSync {
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private sweeper: ReturnType<typeof setInterval> | undefined;
   private running = false;
+  /** When we started sharing. Peers that joined earlier keep their colour if ours clashes. */
+  private joined = 0;
   private readonly onLocalChange = (_change: unknown, origin: 'local' | 'remote') => {
     if (origin === 'local') this.scheduleSend();
   };
@@ -226,6 +283,8 @@ export class PresenceSync {
   start() {
     if (this.running) return;
     this.running = true;
+    this.joined = Math.floor(this.now());
+    this.recolor();
     this.options.awareness.on('change', this.onLocalChange);
     this.heartbeat = setInterval(() => this.sendNow(), HEARTBEAT_MS);
     this.sweeper = setInterval(() => this.removeQuiet(), PEER_TIMEOUT_MS / 6);
@@ -253,7 +312,7 @@ export class PresenceSync {
 
   peerLeft(peerId: string) {
     this.limiter.forget(peerId);
-    if (this.remove(peerId)) this.emit();
+    if (this.remove(peerId)) this.changed();
   }
 
   /** Handle `{ kind: 'awareness' }` from a peer. Anything over the rate limit or malformed is dropped. */
@@ -271,21 +330,43 @@ export class PresenceSync {
     const known = this.peers.get(peerId);
     if (known && message.clock <= known.clock) return;
     if (!message.state) {
-      if (this.remove(peerId)) this.emit();
+      if (this.remove(peerId)) this.changed();
       return;
     }
-    const { name, color, file } = message.state;
+    const { name, color: sentColor, file } = message.state;
+    const presenceId = message.state.id ?? null;
+    const joined = message.state.joined ?? null;
     let cursor: PresenceCursor | null = null;
     const wire = message.state.cursor;
     // Turning a position with an unknown root name into an absolute one would create that type, so check first.
     if (wire && this.options.hasType(wire.head.tname)) {
       cursor = { anchor: Y.createRelativePositionFromJSON(wire.anchor), head: Y.createRelativePositionFromJSON(wire.head) };
     }
-    const peer: RemotePeer = { peerId, clientId: known?.clientId ?? this.nextClientId++, name, color, file, cursor, clock: message.clock, lastSeen: this.now() };
+    const peer: RemotePeer = {
+      peerId,
+      clientId: known?.clientId ?? this.nextClientId++,
+      name,
+      // Recolouring below fixes this up; keep the old colour meanwhile so it doesn't flicker.
+      color: known?.color ?? sentColor,
+      file,
+      cursor,
+      clock: message.clock,
+      lastSeen: this.now(),
+      presenceId,
+      joined,
+      sentColor,
+    };
     this.peers.set(peerId, peer);
-    this.options.awareness.setRemoteState(peer.clientId, { user: { name, color, colorLight: lightColor(color) }, file, cursor });
+    // Someone new, or someone whose id or join time changed, can shift who gets which colour.
+    const reorder = !known || known.presenceId !== presenceId || known.joined !== joined || known.sentColor !== sentColor;
+    const recolored = reorder && this.recolor();
+    this.setAwareness(peer);
     // Cursor moves happen a lot and only the editor needs them; the avatars and tree care about the rest.
-    if (!known || known.name !== name || known.color !== color || known.file !== file) this.emit();
+    if (!known || recolored || known.name !== name || known.file !== file) this.emit();
+    // The first we hear from someone, answer them directly. Our join-time send can reach them
+    // before their presence has loaded, and they'd otherwise wait for our next heartbeat to learn
+    // our colour (and so may briefly show the same one).
+    if (!known) this.peerJoined(peerId);
   }
 
   /** Everyone else in the room who has said where they are, in the order they arrived. */
@@ -295,7 +376,53 @@ export class PresenceSync {
 
   private message(): AwarenessMessage {
     const local = this.options.awareness.getLocalState();
-    return { kind: 'awareness', clock: ++this.clock, state: local ? toWireState(local) : null };
+    const state = local ? { ...toWireState(local), id: this.options.self.presenceId, joined: this.joined } : null;
+    return { kind: 'awareness', clock: ++this.clock, state };
+  }
+
+  private setAwareness(peer: RemotePeer) {
+    const { name, color, file, cursor } = peer;
+    this.options.awareness.setRemoteState(peer.clientId, { user: { name, color, colorLight: lightColor(color) }, file, cursor });
+  }
+
+  /**
+   * Work out everyone's colour again (see assignColors), ours included. Updates the awareness for
+   * whoever changed; a change to ours goes out to peers. Returns whether any colour changed.
+   */
+  private recolor(): boolean {
+    const { self } = this.options;
+    const candidates: ColorCandidate[] = [
+      { peerId: self.peerId, presenceId: self.presenceId, joined: this.joined, preferred: colorForPeer(self.presenceId) },
+      ...[...this.peers.values()].map((peer) => ({
+        peerId: peer.peerId,
+        presenceId: peer.presenceId,
+        joined: peer.joined,
+        // A build from #163 picks its own colour from its peer id and sends it.
+        preferred: peer.presenceId ? colorForPeer(peer.presenceId) : peer.sentColor,
+      })),
+    ];
+    const colors = assignColors(candidates);
+    let changed = false;
+    for (const peer of this.peers.values()) {
+      const color = colors.get(peer.peerId) as string;
+      if (peer.color === color) continue;
+      peer.color = color;
+      this.setAwareness(peer);
+      changed = true;
+    }
+    const local = this.options.awareness.getLocalState();
+    const own = colors.get(self.peerId) as string;
+    if (local && local.user.color !== own) {
+      this.options.awareness.setLocalStateField('user', { ...local.user, color: own, colorLight: lightColor(own) });
+      changed = true;
+    }
+    return changed;
+  }
+
+  /** Someone left: the people after them might get their preferred colour back. */
+  private changed() {
+    this.recolor();
+    this.emit();
   }
 
   private scheduleSend() {
@@ -326,7 +453,7 @@ export class PresenceSync {
     for (const peer of [...this.peers.values()]) {
       if (peer.lastSeen < cutoff) changed = this.remove(peer.peerId) || changed;
     }
-    if (changed) this.emit();
+    if (changed) this.changed();
   }
 
   private remove(peerId: string): boolean {

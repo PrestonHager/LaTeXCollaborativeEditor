@@ -1,5 +1,7 @@
 import {
   cleanDisplayName,
+  isPresenceId,
+  newPresenceId,
   createSettingsStore,
   defaultSettings,
   LEGACY_KEYBINDS_KEY,
@@ -220,6 +222,16 @@ describe('moving old settings over', () => {
     // Characters, not UTF-16 units: an emoji counts once.
     expect([...cleanDisplayName('😀'.repeat(50))!]).toHaveLength(40);
     expect(cleanDisplayName(null)).toBeUndefined();
+    // The presence id is 16 lowercase hex characters or empty; anything else is refused.
+    expect(settings.get('presenceId')).toBe('');
+    expect(settings.set('presenceId', 'abcdef0123456789')).toBe(true);
+    expect(settings.set('presenceId', 'ABCDEF0123456789')).toBe(false);
+    expect(settings.set('presenceId', 'abc')).toBe(false);
+    expect(settings.set('presenceId', 5 as never)).toBe(false);
+    expect(settings.get('presenceId')).toBe('abcdef0123456789');
+    expect(isPresenceId(newPresenceId())).toBe(true);
+    expect(newPresenceId()).not.toBe(newPresenceId());
+    expect(newPresenceId((bytes) => bytes.fill(0xab))).toBe('abababababababab');
   });
 
   it('cleans up keybind rules', () => {

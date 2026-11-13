@@ -11,6 +11,7 @@ import {
   RateLimiter,
   SEND_INTERVAL_MS,
   anonymousName,
+  assignColors,
   colorForPeer,
   initials,
   lightColor,
@@ -23,6 +24,9 @@ import {
 const FILE = '3f2a9c4e-1b2d-4c6e-8f00-1234567890ab';
 const TNAME = `file:${FILE}`;
 const RED = PRESENCE_COLORS[0];
+// Presence ids whose preferred colour is the first and second palette colour.
+const RED_ID = 'aaaaaaaaaaaaaaa6';
+const ORANGE_ID = 'aaaaaaaaaaaaaaa5';
 
 const goodState = (overrides: Partial<WireState> = {}): WireState => ({
   name: 'Ada Lovelace',
@@ -88,9 +92,70 @@ describe('parseAwarenessMessage', () => {
     ['a position with a bad assoc', message(goodState({ cursor: { anchor: { tname: TNAME, assoc: 5 }, head: { tname: TNAME } } }))],
     ['a position with a negative clock', message(goodState({ cursor: { anchor: { tname: TNAME, item: { client: 1, clock: -1 } }, head: { tname: TNAME } } }))],
     ['a position with a client id over 32 bits', message(goodState({ cursor: { anchor: { tname: TNAME, item: { client: 2 ** 32, clock: 1 } }, head: { tname: TNAME } } }))],
+    ['a presence id without a join time', message(goodState({ id: RED_ID }))],
+    ['a join time without a presence id', message(goodState({ joined: 5 }))],
+    ['an uppercase presence id', message(goodState({ id: RED_ID.toUpperCase(), joined: 5 }))],
+    ['a short presence id', message(goodState({ id: RED_ID.slice(1), joined: 5 }))],
+    ['a long presence id', message(goodState({ id: `${RED_ID}0`, joined: 5 }))],
+    ['a presence id that is not hex', message(goodState({ id: 'gggggggggggggggg', joined: 5 }))],
+    ['a presence id that is a number', message(goodState({ id: 12 as never, joined: 5 }))],
+    ['a negative join time', message(goodState({ id: RED_ID, joined: -1 }))],
+    ['a fractional join time', message(goodState({ id: RED_ID, joined: 1.5 }))],
+    ['a join time that is a string', message(goodState({ id: RED_ID, joined: '5' as never }))],
     ['a position item that is a string', message(goodState({ cursor: { anchor: { tname: TNAME, item: 'x' as never }, head: { tname: TNAME } } }))],
   ])('drops %s', (_label, payload) => {
     expect(parseAwarenessMessage(payload)).toBeNull();
+  });
+});
+
+describe('parseAwarenessMessage with a presence id', () => {
+  it('keeps the id and join time when both are there', () => {
+    expect(parseAwarenessMessage(message(goodState({ id: RED_ID, joined: 1700000000000 })))?.state).toEqual(goodState({ id: RED_ID, joined: 1700000000000 }));
+    // A peer from before presence ids sends neither.
+    expect(parseAwarenessMessage(message())?.state).not.toHaveProperty('id');
+  });
+});
+
+describe('assignColors', () => {
+  const candidate = (peerId: string, joined: number | null, presenceId: string | null, preferred = presenceId ? colorForPeer(presenceId) : RED) => ({
+    peerId,
+    presenceId,
+    joined,
+    preferred,
+  });
+
+  it('gives everyone their preferred colour when nobody clashes', () => {
+    const colors = assignColors([candidate('a', 1, RED_ID), candidate('b', 2, ORANGE_ID)]);
+    expect(colors).toEqual(new Map([['a', RED], ['b', PRESENCE_COLORS[1]]]));
+  });
+
+  it('moves whoever joined later to the next free colour, wrapping round the palette', () => {
+    const colors = assignColors([candidate('late', 9, RED_ID), candidate('early', 1, RED_ID), candidate('orange', 5, ORANGE_ID)]);
+    expect(colors.get('early')).toBe(RED);
+    expect(colors.get('orange')).toBe(PRESENCE_COLORS[1]);
+    expect(colors.get('late')).toBe(PRESENCE_COLORS[2]);
+    const last = PRESENCE_COLORS[PRESENCE_COLORS.length - 1];
+    const wrapped = assignColors([candidate('a', 1, null, last), candidate('b', 2, null, last)]);
+    expect(wrapped.get('b')).toBe(RED);
+  });
+
+  it('gives the same answer whatever order the peers are listed in, so every screen agrees', () => {
+    const people = [candidate('p1', 3, RED_ID), candidate('p2', 3, RED_ID), candidate('p3', 3, ORANGE_ID), candidate('old', null, null), candidate('p4', 1, 'aaaaaaaaaaaaaaa0')];
+    const expected = assignColors(people);
+    expect(assignColors([...people].reverse())).toEqual(expected);
+    expect(assignColors([people[2], people[0], people[4], people[3], people[1]])).toEqual(expected);
+    // A build without presence ids goes first, since it keeps its own colour on its own screen.
+    expect(expected.get('old')).toBe(RED);
+    // Same join time and id (two tabs in one browser): the peer id breaks the tie.
+    expect(expected.get('p1')).not.toBe(expected.get('p2'));
+    expect(new Set(expected.values()).size).toBe(people.length);
+  });
+
+  it('repeats colours only past eight people', () => {
+    const people = Array.from({ length: 9 }, (_, i) => candidate(`p${i}`, i, RED_ID));
+    const colors = assignColors(people);
+    expect(new Set([...colors.values()].slice(0, 8)).size).toBe(8);
+    expect(colors.get('p8')).toBe(RED);
   });
 });
 
@@ -174,7 +239,7 @@ describe('PresenceSync', () => {
     const awareness = new PresenceAwareness({ name: 'Me', color: RED, colorLight: lightColor(RED) });
     const send = vi.fn<(message: AwarenessMessage, peerId?: string) => void>();
     const onPeersChange = vi.fn();
-    const sync = new PresenceSync({ awareness, send, hasType, onPeersChange });
+    const sync = new PresenceSync({ awareness, self: { peerId: 'me', presenceId: RED_ID }, send, hasType, onPeersChange });
     return { awareness, send, onPeersChange, sync };
   }
 
@@ -340,5 +405,93 @@ describe('PresenceSync', () => {
     // Through JSON, the way Trystero sends it.
     const wire = JSON.parse(JSON.stringify(send.mock.calls[0][0]));
     expect(parseAwarenessMessage(wire)?.state?.cursor).not.toBeNull();
+  });
+  it('sends our presence id and when we joined, and every peer works out the same distinct colours', () => {
+    vi.setSystemTime(1_000);
+    // Three tabs, two of whose ids prefer red, wired to each other like a room.
+    const tabs = ['tab-a', 'tab-b', 'tab-c'].map((peerId, i) => {
+      const awareness = new PresenceAwareness({ name: `Tab ${i}`, color: RED, colorLight: '' });
+      return { peerId, awareness, sync: null as unknown as PresenceSync, presenceId: i === 2 ? ORANGE_ID : RED_ID };
+    });
+    for (const tab of tabs) {
+      tab.sync = new PresenceSync({
+        awareness: tab.awareness,
+        self: { peerId: tab.peerId, presenceId: tab.presenceId },
+        hasType: () => true,
+        send: (wire, to) => {
+          for (const other of tabs) if (other !== tab && (!to || to === other.peerId)) other.sync.receive(JSON.parse(JSON.stringify(wire)), tab.peerId);
+        },
+      });
+    }
+    tabs[0].sync.start();
+    vi.advanceTimersByTime(5_000);
+    tabs[1].sync.start();
+    tabs[2].sync.start();
+    tabs[0].sync.peerJoined('tab-b');
+    tabs[0].sync.peerJoined('tab-c');
+    tabs[1].sync.peerJoined('tab-c');
+    vi.advanceTimersByTime(SEND_INTERVAL_MS * 2);
+
+    const view = (tab: (typeof tabs)[number]) =>
+      Object.fromEntries([[tab.peerId, tab.awareness.getLocalState()?.user.color], ...tab.sync.list().map((peer) => [peer.peerId, peer.color])]);
+    const first = view(tabs[0]);
+    // The first tab keeps red. The other two joined together, so the smaller presence id goes
+    // first: tab-c keeps orange, and tab-b, which also wanted red, gets the next free colour.
+    expect(first).toEqual({ 'tab-a': RED, 'tab-b': PRESENCE_COLORS[2], 'tab-c': PRESENCE_COLORS[1] });
+    expect(view(tabs[1])).toEqual(first);
+    expect(view(tabs[2])).toEqual(first);
+    // The editor gets the same colours as the avatars.
+    const remote = [...tabs[0].awareness.getStates().values()].map((state) => state.user.color);
+    expect(new Set(remote).size).toBe(3);
+
+    // When the first tab leaves, the others get their preferred colours back.
+    tabs[0].sync.stop();
+    vi.advanceTimersByTime(SEND_INTERVAL_MS * 2);
+    expect(view(tabs[1])).toEqual({ 'tab-b': RED, 'tab-c': PRESENCE_COLORS[1] });
+    expect(view(tabs[2])).toEqual(view(tabs[1]));
+  });
+
+  it('a peer from before presence ids keeps the colour it sends, and we move off it', () => {
+    const { awareness, onPeersChange, send, sync } = setup();
+    sync.start();
+    expect(send.mock.lastCall?.[0].state).toMatchObject({ color: RED, id: RED_ID, joined: expect.any(Number) });
+    sync.receive(message(goodState({ color: RED })), 'old-peer');
+    expect(sync.list()[0].color).toBe(RED);
+    expect(awareness.getLocalState()?.user.color).toBe(PRESENCE_COLORS[1]);
+    expect(onPeersChange).toHaveBeenCalledTimes(1);
+    // Our new colour goes out so the old peer sees it too.
+    vi.advanceTimersByTime(SEND_INTERVAL_MS);
+    expect(send.mock.lastCall?.[0].state?.color).toBe(PRESENCE_COLORS[1]);
+    // It goes quiet and is dropped: we get red back.
+    vi.advanceTimersByTime(PEER_TIMEOUT_MS * 2);
+    expect(sync.list()).toEqual([]);
+    expect(awareness.getLocalState()?.user.color).toBe(RED);
+  });
+
+  it('answers the first message from a peer directly, but not later ones', () => {
+    const { send, sync } = setup();
+    sync.start();
+    send.mockClear();
+    sync.receive(message(), 'peer-1');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0][1]).toBe('peer-1');
+    sync.receive(message(goodState(), 2), 'peer-1');
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('a peer that joined before us and shares our preferred colour keeps it', () => {
+    vi.setSystemTime(10_000);
+    const { awareness, sync } = setup();
+    sync.start();
+    sync.receive(message(goodState({ id: RED_ID, joined: 5_000 })), 'earlier');
+    sync.receive(message(goodState({ id: RED_ID, joined: 20_000 })), 'later');
+    expect(sync.list().map((peer) => peer.color)).toEqual([RED, PRESENCE_COLORS[2]]);
+    expect(awareness.getLocalState()?.user.color).toBe(PRESENCE_COLORS[1]);
+    // A cursor move doesn't change anyone's colour.
+    sync.receive(message(goodState({ id: RED_ID, joined: 20_000 }), 2), 'later');
+    expect(sync.list()[1].color).toBe(PRESENCE_COLORS[2]);
+    sync.peerLeft('earlier');
+    expect(awareness.getLocalState()?.user.color).toBe(RED);
+    expect(sync.list()[0].color).toBe(PRESENCE_COLORS[1]);
   });
 });

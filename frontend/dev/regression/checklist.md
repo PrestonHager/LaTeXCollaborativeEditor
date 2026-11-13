@@ -193,6 +193,8 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Presence: each window shows the other person's avatar in their colour. Its tooltip names them and the file they have open, and the file tree has a dot in their colour on that file.
 - [ ] Presence: clicking into the editor on one side shows a caret with the name label on the other, in the same colour, and selecting text highlights it there. Moving to another file moves the dot and the caret goes away in the old file.
 - [ ] Presence: clicking the other person's avatar opens their file and scrolls to their cursor. If they have no file open, a notice says so.
+- [ ] Presence: two windows of the same browser (which share settings) still get different colours, and both windows agree on who has which. Reloading the guest gives it the same colour as before.
+- [ ] Presence: with the other person's caret on line 1, its name label shows below the caret, not cut off at the top of the editor. On later lines it shows above.
 - [ ] Presence: in the light and dark themes the initials, carets and name labels are readable. With a touch screen (or dev tools' touch emulation) the avatars are 44px.
 - [ ] Presence: closing the guest window removes its avatar, dot and caret on the host right away. If the guest's network drops instead, they go within 30 seconds.
 - [ ] Presence: a guest on a build from before presence still syncs with this one (it ignores the presence messages), and just doesn't show up in the avatars.
