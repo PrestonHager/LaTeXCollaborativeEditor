@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 // A 1x1 PNG, small enough to send over WebRTC in one chunk.
 const PIXEL_PNG = Buffer.from(
@@ -22,10 +23,11 @@ async function typeAtEnd(page: Page, text: string) {
   await page.keyboard.type(`\n${text}`);
 }
 
-test('host and guest sync files and edits both ways', async ({ browser }) => {
+test('host and guest sync files and edits both ways', async ({ browser, guestBrowser }) => {
   // Each context has its own storage, like two separate browsers.
+  // In a mixed project the guest's context comes from a different engine.
   const hostContext = await browser.newContext();
-  const guestContext = await browser.newContext();
+  const guestContext = await guestBrowser.newContext();
   // Both are first visits, so mark the first-run tour as seen, or it would sit on top of the app.
   for (const context of [hostContext, guestContext]) {
     await context.addInitScript(() => localStorage.setItem('latex-editor.tour-seen', '1'));
