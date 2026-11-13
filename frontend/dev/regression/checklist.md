@@ -28,9 +28,13 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Text: the footnote text shows, inline after the curly quotes.
 - [ ] Lists: bullets, a nested bullet, a numbered list and a description list all render.
 - [ ] Blocks: the quote is indented and the centered text is centered.
-- [ ] Links: the repository link and the example.com link are clickable.
+- [ ] Links: clicking the repository link or the example.com link opens it in a new tab, and the preview stays where it was.
+- [ ] Links: clicking the email link opens your mail app (or the browser's mailto handler).
 - [ ] Links: the javascript and data links show as plain text with no `href` (inspect them in dev tools).
-- [ ] References: `\ref` in the Text section shows 1.5, not `??`.
+- [ ] References: "This is section 1.5" in the Text section shows 1.5, not `??`.
+- [ ] References: clicking the 4 in "Jump to section 4" scrolls the preview to the Citations section, and clicking the 1.5 there scrolls back up.
+- [ ] References: the missing label shows `??` as plain text, not a link.
+- [ ] Scroll the preview halfway down, then type in the editor. After the preview updates it stays at the same place instead of jumping to the top.
 - [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list doesn't mention `\vspace` or `\addcontentsline`.
 - [ ] Math: inline math, the integral and the sum are typeset, with limits above and below the sum.
 - [ ] Math: Greek letters, symbols and the matrix render.

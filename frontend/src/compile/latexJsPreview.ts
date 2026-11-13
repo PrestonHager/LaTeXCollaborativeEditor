@@ -34,6 +34,16 @@ export function stripDangerousUrls(doc: Document): void {
 }
 
 /**
+ * LaTeX.js turns a \ref to a label that doesn't exist into `<a href="#">??</a>`.
+ * Drop the href so `??` is plain text, not a link that goes nowhere.
+ */
+export function unlinkMissingRefs(doc: Document): void {
+  for (const a of Array.from(doc.querySelectorAll('a'))) {
+    if (a.getAttribute('href')?.trim() === '#') a.removeAttribute('href');
+  }
+}
+
+/**
  * Add a small note to the top of the preview listing what the adapter removed or rewrote,
  * so people know the preview isn't exact. It's a <details>, so it works without scripts.
  */
@@ -79,6 +89,7 @@ function typeset(source: string): { doc: Document | null; errors: EditorDiagnost
     const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
+    unlinkMissingRefs(doc);
     addKatexFontFallbacks(doc);
     addChangesNote(doc, adapted.changes);
     return { doc, errors: [], changes: adapted.changes };
