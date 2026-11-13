@@ -1,5 +1,4 @@
 import { commandIcon } from './icons';
-import { formatPrimaryChord } from './modifierShortcutLabels';
 
 export type CommandId =
   | 'app.commandPalette'
@@ -60,6 +59,7 @@ export type MenuEntry = {
   commandId: CommandId;
   label: string;
   section: string;
+  /** The command's keybind label, like "Ctrl+S" or "⌘S", from the shortcut table. */
   shortcut?: string;
   /** What the command does, from the item's data-description, for the palette. */
   description?: string;
@@ -70,6 +70,8 @@ export type MenuEntry = {
 type MenuBarOptions = {
   getCommandState: (commandId: CommandId) => CommandState;
   onCommand: (commandId: CommandId) => void;
+  /** The keybind label to show for a command, if it has one. */
+  shortcutLabel?: (commandId: CommandId) => string | undefined;
 };
 
 /**
@@ -81,6 +83,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
   const triggerButtons: HTMLButtonElement[] = [];
   const menuItemByLabel = new Map<string, HTMLButtonElement[]>();
   const entries: MenuEntry[] = [];
+  const shortcutEls: { commandId: CommandId; el: HTMLElement }[] = [];
   let openMenuLabel: string | null = null;
 
   const focusFirstEnabledItem = (menuLabel: string) => {
@@ -186,16 +189,20 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     items.forEach((itemButton) => {
       const commandId = itemButton.dataset.command as CommandId;
 
-      // First, fill in what the HTML leaves to us: the icon and the platform's shortcut text.
+      // First, fill in what the HTML leaves to us: the icon and a place for the shortcut text.
       itemButton.prepend(commandIcon(commandId));
-      const shortcutEl = itemButton.querySelector<HTMLElement>('[data-chord]');
-      const shortcut = shortcutEl ? formatPrimaryChord(shortcutEl.dataset.chord ?? '') : undefined;
-      if (shortcutEl && shortcut) shortcutEl.textContent = shortcut;
+      let shortcutEl = itemButton.querySelector<HTMLElement>('[data-shortcut]');
+      if (!shortcutEl) {
+        shortcutEl = document.createElement('span');
+        shortcutEl.className = 'menu-item-shortcut';
+        shortcutEl.dataset.shortcut = '';
+        itemButton.append(shortcutEl);
+      }
+      shortcutEls.push({ commandId, el: shortcutEl });
       entries.push({
         commandId,
         label: itemButton.querySelector('.menu-item-label')?.textContent?.trim() ?? commandId,
         section: menuLabel,
-        shortcut,
         description: itemButton.dataset.description,
         inPalette: itemButton.dataset.palette !== 'false',
       });
@@ -253,12 +260,21 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     });
   };
 
+  /** Show each item's keybind from the shortcut table. Call again when the keybinds change. */
+  const refreshShortcuts = () => {
+    shortcutEls.forEach(({ commandId, el }) => {
+      el.textContent = options.shortcutLabel?.(commandId) ?? '';
+    });
+  };
+
   refresh();
+  refreshShortcuts();
 
   return {
     refresh,
+    refreshShortcuts,
     /** Every menu item in page order, for building the command palette. */
-    entries: () => entries.slice(),
+    entries: (): MenuEntry[] => entries.map((entry) => ({ ...entry, shortcut: options.shortcutLabel?.(entry.commandId) })),
     destroy() {
       document.removeEventListener('click', onDocumentClick);
       document.removeEventListener('keydown', onDocumentKeyDown);

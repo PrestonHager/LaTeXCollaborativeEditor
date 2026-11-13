@@ -14,7 +14,7 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] The line number gutter matches the editor theme: light gutter with dark numbers on Light, dark gutter with light numbers on Dark. With Match system, it follows the OS (light or dark mode) and looks the same as picking that theme directly. The current line's number stays readable in all of them.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
-- [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts.
+- [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
 - [ ] The main file shows a "main" marker in the header and in the Files panel.
 
@@ -46,7 +46,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Pictures: the box with a diagonal line and a circle renders.
 - [ ] Typing stays smooth while the preview compiles, since the compile runs in a Web Worker.
 - [ ] Citations: the text shows [1] and [2], the repeated cite reuses [1], and a References list follows.
-- [ ] Compile Now (Ctrl+Shift+C) refreshes the preview.
+- [ ] Compile Now (Ctrl+Enter, ⌘↩ on a Mac) refreshes the preview, from the editor too. Ctrl+Shift+C does nothing in the app, so the browser keeps it for the inspector.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
 - [ ] The footer says Compiled, with no diagnostics.
 - [ ] The preview shows "Preview is approximate: N changes made for LaTeX.js", and its list includes showing figures in place and footnotes inline.
@@ -156,6 +156,8 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
 - [ ] The palette has the palette-only commands: Copy share link, Focus editor, and Switch to dark, light or system theme.
 - [ ] Ctrl+, opens Settings. Its theme selects, Pause Saving and Clear Local Projects all work.
+- [ ] On Windows and Linux every shortcut label (menus, toolbar tooltips, palette, first tour step) says Ctrl, and the Windows key plus P does not open the palette.
+- [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
 - [ ] With the app theme on Light and the OS in dark mode, a preview theme of Match system shows a dark preview with light text. "Match system" follows the OS, not the app theme.
 - [ ] Try each preview theme (Light, Dark, Match system) with the app theme on Light, Dark and Match system, in OS light and dark mode. The preview's text, links, math, picture lines and "Preview is approximate" note are always readable on its background.

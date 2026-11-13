@@ -1,4 +1,4 @@
-import { createTour, hasSeenTour, markTourSeen, placeTourCard, TOUR_SEEN_KEY } from './tour';
+import { createTour, fillShortcuts, hasSeenTour, markTourSeen, placeTourCard, TOUR_SEEN_KEY } from './tour';
 import { mountAppShell } from '../test/appShell';
 
 const memoryStore = () => {
@@ -151,6 +151,29 @@ describe('createTour', () => {
     expect(q('[data-tour-title]').textContent).toBe('Files');
     expect(q('[data-tour-count]').textContent).toBe(`2 of ${tour.stepCount() - 1}`);
     window.dispatchEvent(new Event('resize'));
+    tour.close();
+  });
+});
+
+describe('fillShortcuts', () => {
+  it("fills in each command's keybind for this platform", () => {
+    const labels: Record<string, string> = { 'app.commandPalette': '⌘P' };
+    expect(fillShortcuts('Use {shortcut:app.commandPalette} to search.', (id) => labels[id])).toBe('Use ⌘P to search.');
+  });
+
+  it('names the menu item when there is no keybind', () => {
+    expect(fillShortcuts('Use {shortcut:app.commandPalette} to search.')).toBe('Use Help > Command Palette to search.');
+    expect(fillShortcuts('Try {shortcut:file.newFile}.', () => undefined)).toBe('Try file.newFile.');
+  });
+
+  it('fills the first tour step from the shortcut table', () => {
+    mountAppShell();
+    const card = document.getElementById('tour')!;
+    const tour = createTour(card, document.getElementById('tour-steps')!, { store: memoryStore(), shortcutLabel: () => 'Ctrl+P' });
+    tour.start();
+    const body = card.querySelector('[data-tour-body]')!.textContent!;
+    expect(body).toContain('Use Ctrl+P to search them all.');
+    expect(body).not.toContain('Cmd');
     tour.close();
   });
 });

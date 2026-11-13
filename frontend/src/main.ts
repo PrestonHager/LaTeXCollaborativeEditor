@@ -31,7 +31,8 @@ import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
-import { createCommands } from './app/commands';
+import { createCommands, shortcuts } from './app/commands';
+import { createKeymap } from './app/keymap';
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -725,8 +726,13 @@ const switchToDrive = () => {
   if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
 
+// Every shortcut label and key press reads from this one table.
+const keymap = createKeymap(shortcuts);
+const shortcutLabel = (commandId: CommandId) => keymap.labelFor(commandId);
+
 const commands = createCommands({
   isClient,
+  keymap,
   projectState,
   themeState,
   layout,
@@ -809,6 +815,7 @@ const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, 
 
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
+  shortcutLabel,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
@@ -843,12 +850,14 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
 
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
   getCommandState,
+  shortcutLabel,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
 const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, APP_VERSION);
 
 const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
+  shortcutLabel,
   store: (() => {
     // Some browsers throw just for touching localStorage when site data is blocked.
     try {

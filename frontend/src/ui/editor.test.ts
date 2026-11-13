@@ -1,5 +1,11 @@
 import { EditorView } from '@codemirror/view';
-import { createEditorPane } from './editor';
+import { createEditorPane, editorKeymap } from './editor';
+
+// Scrolling the cursor into view measures text, which jsdom can't do, so give it empty boxes.
+beforeAll(() => {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+});
 
 describe('createEditorPane', () => {
   it('emits text changes from user input', () => {
@@ -77,5 +83,52 @@ describe('createEditorPane', () => {
     expect(editor.getView().hasFocus).toBe(true);
     editor.getView().destroy();
     container.remove();
+  });
+
+  describe('keys', () => {
+    const press = (editor: ReturnType<typeof createEditorPane>, init: KeyboardEventInit) => {
+      const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+      editor.getView().contentDOM.dispatchEvent(event);
+      return event;
+    };
+
+    it("leaves Ctrl+Enter to the app's Compile Now", () => {
+      expect(editorKeymap.some((binding) => binding.key === 'Mod-Enter')).toBe(false);
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = createEditorPane(container);
+      editor.setText('line');
+      const event = press(editor, { key: 'Enter', code: 'Enter', keyCode: 13, ctrlKey: true });
+      expect(event.defaultPrevented).toBe(false);
+      expect(editor.getText()).toBe('line');
+      editor.getView().destroy();
+      container.remove();
+    });
+
+    it('keeps its own keys, like Ctrl+] to indent', () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = createEditorPane(container);
+      editor.setText('x');
+      const event = press(editor, { key: ']', code: 'BracketRight', keyCode: 221, ctrlKey: true });
+      expect(event.defaultPrevented).toBe(true);
+      expect(editor.getText()).toBe('  x');
+      editor.getView().destroy();
+      container.remove();
+    });
+  });
+
+  it('inserts text in place of the selection, unless it is read-only', () => {
+    const container = document.createElement('div');
+    const editor = createEditorPane(container);
+    editor.setText('Hello world');
+    const view = editor.getView();
+    view.dispatch({ selection: { anchor: 6, head: 11 } });
+    expect(editor.insertText('there')).toBe(true);
+    expect(editor.getText()).toBe('Hello there');
+    expect(view.state.selection.main.head).toBe(11);
+    editor.setEditable(false);
+    expect(editor.insertText('!')).toBe(false);
+    expect(editor.getText()).toBe('Hello there');
   });
 });

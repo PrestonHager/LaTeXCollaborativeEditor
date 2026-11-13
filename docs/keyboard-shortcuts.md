@@ -1,7 +1,9 @@
 # Keyboard shortcuts
 
 Shortcuts use **Ctrl** on Windows and Linux, and **⌘** (Command) on macOS, iPhone, and iPad.
-The menus and the command palette show the right one for your computer.
+The menus, toolbar tooltips, command palette, and tour show the right one for your computer, with the Mac symbols on a Mac: **⌘** Command, **⇧** Shift, **⌥** Option, **⌃** Control, and **↩** Return.
+On Windows and Linux, the Windows key doesn't count as Ctrl.
+Shortcuts match exactly, so **Ctrl+Shift+S** downloads the project and never also saves it.
 
 While the command palette is open, the other app shortcuts are paused.
 A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when you're a guest.
@@ -10,37 +12,40 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| Open or close the **command palette** | **Ctrl+P** | **⌘+P** |
-| Open **Settings** | **Ctrl+,** | **⌘+,** |
+| Open or close the **command palette** | **Ctrl+P** | **⌘P** |
+| Open **Settings** | **Ctrl+,** | **⌘,** |
 
 ## File
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| **New Project** (after you confirm, host only) | **Ctrl+N** | **⌘+N** |
-| **Open Local Project** (host only) | **Ctrl+O** | **⌘+O** |
-| **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⌘+Shift+O** |
-| **Download Project .zip** | **Ctrl+Shift+S** | **⌘+Shift+S** |
-| **Save Now** (host only, unless saving is paused) | **Ctrl+S** | **⌘+S** |
+| **New Project** (after you confirm, host only) | **Ctrl+N** | **⌘N** |
+| **Open Local Project** (host only) | **Ctrl+O** | **⌘O** |
+| **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⇧⌘O** |
+| **Download Project .zip** | **Ctrl+Shift+S** | **⇧⌘S** |
+| **Save Now** (host only, unless saving is paused) | **Ctrl+S** | **⌘S** |
 
 ## Edit
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| **Undo** | **Ctrl+Z** | **⌘+Z** |
-| **Redo** | **Ctrl+Shift+Z** | **⌘+Shift+Z** |
-| **Redo** (other key) | **Ctrl+Y** | **⌘+Y** |
-| **Cut** | **Ctrl+X** | **⌘+X** |
-| **Copy** | **Ctrl+C** | **⌘+C** |
-| **Paste** | **Ctrl+V** | **⌘+V** |
-| **Select all** | **Ctrl+A** | **⌘+A** |
+| **Undo** | **Ctrl+Z** | **⌘Z** |
+| **Redo** | **Ctrl+Shift+Z** | **⇧⌘Z** |
+| **Redo** (other key) | **Ctrl+Y** | **⌘Y** |
+| **Cut** | **Ctrl+X** | **⌘X** |
+| **Copy** | **Ctrl+C** | **⌘C** |
+| **Paste** | **Ctrl+V** | **⌘V** |
+| **Select all** | **Ctrl+A** | **⌘A** |
 | Indent | **Tab** | **Tab** |
 
 ## View
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| **Compile Now** (refresh the preview) | **Ctrl+Shift+C** | **⌘+Shift+C** |
+| **Compile Now** (refresh the preview) | **Ctrl+Enter** | **⌘↩** |
+
+**Compile Now** used to be **Ctrl+Shift+C**, but Chrome and Edge open the element inspector on that key.
+In the editor, **Ctrl+Enter** compiles instead of inserting a blank line.
 
 ## Menus and the palette
 
@@ -55,6 +60,7 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 - In the toolbar, the arrow keys move between buttons, and **Home** and **End** jump to the ends.
 - The splitter between the editor and preview moves with the left and right arrow keys once it has focus.
 - Closing a dialog or the command palette puts focus back where you were.
+- **Edit > Paste** asks the browser to read the clipboard. If the browser says no, a notice tells you to press **Ctrl+V** (**⌘V**) instead.
 - During the first-run tour, Esc skips it.
 
 ## Menu-only actions

@@ -13,6 +13,16 @@ import { latexSyntaxHighlighting } from './syntaxHighlight';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
+/**
+ * The editor's own keys. Ctrl+Enter (Cmd+Enter on a Mac) is left out, since the app uses it
+ * for Compile Now, and inserting a blank line is just Enter at the end of the line.
+ */
+export const editorKeymap = [
+  ...defaultKeymap.filter((binding) => binding.key !== 'Mod-Enter'),
+  ...closeBracketsKeymap,
+  indentWithTab,
+];
+
 const DEFAULT_DOC = '\\documentclass{article}\n\\begin{document}\nHello, collaborative LaTeX!\n\\end{document}\n';
 
 export function createEditorPane(container: HTMLElement) {
@@ -43,11 +53,7 @@ export function createEditorPane(container: HTMLElement) {
         EditorView.editable.of(true),
         EditorState.readOnly.of(false),
       ]),
-      keymap.of([
-        ...defaultKeymap,
-        ...closeBracketsKeymap,
-        indentWithTab,
-      ]),
+      keymap.of(editorKeymap),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged || suppress) return;
         const text = update.state.doc.toString();
@@ -84,6 +90,13 @@ export function createEditorPane(container: HTMLElement) {
         selection: EditorSelection.range(0, view.state.doc.length),
       });
       view.focus();
+    },
+    /** Put text in place of the selection, like a paste. False when the editor is read-only. */
+    insertText(text: string) {
+      if (view.state.readOnly) return false;
+      view.dispatch(view.state.replaceSelection(text), { userEvent: 'input.paste', scrollIntoView: true });
+      view.focus();
+      return true;
     },
     setText(value: string, shouldSync = false) {
       suppress = true;
