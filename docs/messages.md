@@ -125,6 +125,7 @@ These show in the header, next to Share.
 | Downloaded, but still waiting on: ... | Some files haven't arrived from a peer, so they're not in the zip. |
 | path hasn't arrived from a peer yet. | You tried to download a file you don't have yet. |
 | Created name from file.zip | A .zip became a new project. |
+| The browser blocked the file picker. Choose Upload .zip again. | The host left the Upload .zip confirm open too long, so the browser stopped the file picker. The next try opens it without asking again. |
 | That .zip has no files in it. / That file is not a .zip archive. / The .zip archive is damaged. | The zip couldn't be read. |
 | Zip64 archives are not supported. / ... uses a compression method this app can't read. | The zip uses a format the app can't unpack. Re-zip it with a normal zip tool. |
 | name already exists. / name already exists here. | That path is taken. |
@@ -137,6 +138,19 @@ These show in the header, next to Share.
 | Could not load Google sign-in. / Could not load the Google Picker. | A script didn't load. Check your connection and blockers. |
 | Network request failed. Check your connection and try again. | A request didn't go through. |
 | Something went wrong. Check the browser console for details. | An error the app didn't expect. Please report it. |
+| A collaborator is on an older version of the app. Ask them to reload the page to keep editing together. | A peer runs an older build that speaks a different P2P protocol. |
+
+## Update card
+
+This card shows in the bottom corner. It never takes focus from the editor.
+
+| Text | What it means |
+| --- | --- |
+| A new version of the app is available. | A newer build was deployed since you opened the page. **Reload to update** saves, then reloads. **Later** hides it until the next version. |
+| A collaborator is on a newer version of the app. Reload to update so you can keep editing together. | A peer runs a build with a newer P2P protocol. |
+| Part of the app couldn't load because a new version is live. Reload to update. | A piece of the old version was removed by the new deploy. |
+| Your changes are saved first. | Under each of the above. If you're sharing, it also says guests are disconnected for a moment, or that you'll rejoin the room. |
+| Couldn't save: ... Your edits are still in this tab. | The save before the reload failed, so the page didn't reload. **Reload anyway** reloads without it. |
 
 ## Loading bar
 
@@ -157,6 +171,8 @@ More: [Diagnostics](editing-and-preview.md#diagnostics).
 ## Confirm and prompt boxes
 
 - **Start a new project? This clears the project for everyone in the room. The current one stays saved where it is.** From **New Project**.
+- **Open another project? This replaces the project for everyone in the room. The current one stays saved where it is.** From **Open Local Project** or **Open from Google Drive**, while a guest is connected.
+- **Upload a .zip as a new project? This replaces the project for everyone in the room. The current one stays saved where it is.** From **Upload .zip as New Project**, while a guest is connected.
 - **Name this project before saving:** From **Save Now** or **Save to Google Drive** on an unnamed project.
 - **Rename project:** From clicking the title or **Rename Project**.
 - **New file:** and **New folder:** From the Files panel or File menu.
@@ -164,7 +180,7 @@ More: [Diagnostics](editing-and-preview.md#diagnostics).
 - **Delete path? Collaborators lose it too.** From the trash can on a file row.
 - **Delete all N project(s) saved in this browser? This cannot be undone.** From **Clear Local Projects**.
 - **Start a new link? Anyone using the old link will be disconnected.** From **New link**.
-- The browser's own "Leave site?" box shows when you close the tab before the last save finished, or while a file is waiting on the conflict dialog.
+- The browser's own "Leave site?" box shows only when something could be lost: edits not yet in Google Drive, edits made while saving is paused, a failed save, a file waiting on the conflict dialog, files still uploading or arriving, or browser storage too full to keep the project. Edits saved to this browser are written right away when you leave, so they don't ask. See [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 
 ## Conflict dialog
 

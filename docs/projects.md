@@ -74,6 +74,11 @@ Some rules:
 - Uploading a file with the same path as an existing one replaces it.
 - A `.zip` isn't unpacked here. Use **File > Upload .zip as New Project** for that.
 
+When the project is saved in Google Drive, the bottom of the upload dialog has an **Add Files from Drive** button.
+Use it for files someone put in the project's Drive folder from Drive itself, since the app can't see those until you pick them.
+See [Adding files from Drive](saving-and-storage.md#adding-files-from-drive).
+When it's turned off, the line next to it says why: the project isn't on Drive yet, or you're a guest.
+
 When you're in a shared room, peers get your uploads over the direct WebRTC connection.
 While a file is on its way, its row shows a progress bar.
 Nothing goes through a server.
@@ -122,6 +127,8 @@ It's host only, and if you're sharing, it clears the project for everyone in the
 ![The Open a project dialog](assets/screenshots/projects-light.png#only-light)
 ![The Open a project dialog](assets/screenshots/projects-dark.png#only-dark)
 
+These are host only. While a guest is connected, each one asks first, since it replaces the project for everyone in the room.
+
 Before switching, the app saves anything still pending on the current project.
 
 If every file in a `.zip` sits in one folder, that folder becomes the project root.
@@ -133,7 +140,7 @@ The new project isn't saved until the first autosave, which needs a name.
 - **File > Download Current File** saves just the open file.
 
 If a peer hasn't finished sending you an image yet, the zip leaves it out and the notice says which files it's still waiting on.
-Empty folders aren't written into the zip.
+Empty folders are kept in the zip, so uploading it again gives back the same folder tree.
 
 ## Projects with collaborators
 

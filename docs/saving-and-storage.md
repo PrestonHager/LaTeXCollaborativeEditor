@@ -20,7 +20,25 @@ When you're the host, the app autosaves your project.
   The setting is remembered after a reload.
 - If a save fails, it tries again a few times before showing **Save Error** in the autosave pill.
 - A file a guest uploads gets saved once its bytes reach the host.
-- If you try to close the tab before the last save is done, or while a file is waiting on the [conflict dialog](#when-a-file-changed-somewhere-else), the browser asks if you want to leave.
+- When you close or reload the tab, the app first writes the open project to this browser right away. So closing it a second after typing doesn't lose anything, and the next time you open the app it finishes the save.
+- The browser only asks "Leave site?" when something really could be lost:
+  - edits that haven't reached Google Drive yet;
+  - edits made while saving is paused;
+  - a save that failed;
+  - a file waiting on the [conflict dialog](#when-a-file-changed-somewhere-else);
+  - files still uploading or arriving from a peer;
+  - or browser storage too full to hold the project.
+
+### Updating to a new version
+
+When a new version of the app is deployed, a small card in the bottom corner says **A new version of the app is available**.
+It doesn't take focus, so you can keep typing.
+
+- **Reload to update** saves first: the pending autosave runs right away, to this browser or Google Drive, then the page reloads. While saving is paused, it skips the save and keeps your edits in this browser instead.
+- If the save fails, the page doesn't reload. The card says why and offers **Reload anyway**.
+- **Later** hides the card until the next version.
+- If you're sharing, guests are disconnected for a moment and rejoin on their own. A guest who reloads rejoins the room.
+- The card also shows when a collaborator is on a newer version that this one can't fully talk to, or when part of the app can't load because a new version replaced it.
 
 **File > Save Now** (**Ctrl+S**) saves right away.
 
@@ -41,6 +59,20 @@ By default, projects are saved in this browser's storage (IndexedDB) for this si
 Local data is per browser and per site.
 It doesn't follow you to another browser or device, and clearing site data deletes it.
 Download a `.zip` now and then if browser storage is your only copy.
+
+## Your settings
+
+Your settings are kept apart from your projects: the app and preview themes, the layout (split, editor only or preview only, and where the splitter sits), your keyboard shortcuts, and whether you've seen the tour.
+
+- They're saved in this browser's `localStorage` under one key, `latex-editor.settings`, with a version number so later versions can move them forward.
+- Guests save their own settings too. Settings are never sent to people in your room: a room only shares the project.
+- Change a setting in one tab and your other open tabs of the app pick it up right away.
+- **Settings > Export settings** downloads them as a `.json` file. **Import settings** loads one, in another browser or on another device. Anything in the file that isn't a known setting with a valid value is skipped, and the dialog says what it skipped.
+- **Settings > Reset to defaults** resets all settings, or just one part: themes, layout, keyboard shortcuts, or the tour. It asks for a second click first.
+- If browser storage is blocked, settings still work but only last until you close the tab. Settings says so, and you can export them to keep a copy.
+- Settings saved by older versions (shortcuts, the tour flag, and themes kept with the open project) move over the first time you open this version, so nothing is lost.
+
+Settings don't sync through Google Drive yet. To move them to another device, export them and import the file there.
 
 ## Download and upload a .zip
 
@@ -64,6 +96,7 @@ The File menu has these Drive commands, all host-only:
 - **Save to Google Drive**: asks for a name if needed, signs in if needed, and saves right away.
 - **Open from Google Drive** (**Ctrl+Shift+O**): pick a project folder, or an old single `.tex` file.
 - **Move to Drive Folder**: pick a Drive folder to move the project folder into. Only works once the project is saved in Drive.
+- **Add Files from Drive**: pick files that were put in the project folder from Drive itself, so the app can see them. See [Adding files from Drive](#adding-files-from-drive). Only works once the project is saved in Drive.
 - **Rename Project**: renames the project. The next save renames the Drive folder too.
 - **Disconnect Google Drive**: signs out and revokes the app's Drive token. Your edits keep saving in this browser as a new local project.
 
@@ -77,7 +110,35 @@ How a project looks in Drive:
 What the app can see:
 
 - The app asks only for the `drive.file` permission. It can see files it made and files you pick, nothing else.
-- If you add a file to the project folder in Drive itself, the app won't see it. Upload it from the editor instead.
+- If you add a file to the project folder in Drive itself, the app won't see it until you pick it with **File > Add Files from Drive**.
+
+### Adding files from Drive
+
+Say someone drops `figures/plot.png` into the project folder on drive.google.com.
+The app doesn't see it, because `drive.file` only covers files the app made or you picked.
+Picking the project folder when you opened it doesn't count: that grants the folder, not the files already in it.
+Full Drive access would fix this, but it needs a Google security review, so the app doesn't ask for it.
+
+To bring the file in:
+
+1. Use **File > Add Files from Drive**, or the **Add Files from Drive** button in the upload dialog.
+2. The Google Picker opens in the project folder. Select every file you want; you can pick several at once.
+3. If a file is in a subfolder that was also made in Drive, pick that subfolder too, so the app can see where the file goes.
+4. The app lists the folder again and adds each new file at the same path it has in Drive.
+
+A notice says what was added. Some things are left out, and the notice says so:
+
+- A file outside this project's folder.
+- A Google Doc or Sheet. They have no file to download.
+
+If the project already has a file at the same path that was never saved to Drive, the app doesn't just pick one:
+
+- Same content on both sides: nothing to do, the file just counts as saved.
+- Different content: saving that file pauses and the [conflict dialog](#when-a-file-changed-somewhere-else) asks which copy to keep. **Keep mine** writes the project's copy over Drive's. **Use Drive's copy** loads Drive's copy into the project. **Save mine as a copy** keeps yours under a new name and loads Drive's.
+
+If the preview says **Not found in the project** while the project is on Drive, it adds a reminder to use **Add Files from Drive**, in case the file is in the Drive folder but not picked yet.
+
+Only the host can do this, since it uses the host's Drive. Guests see the command turned off.
 
 Sign-in:
 

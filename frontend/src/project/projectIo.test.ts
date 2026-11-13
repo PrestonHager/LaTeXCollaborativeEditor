@@ -61,6 +61,30 @@ describe('project import and export', () => {
     ]);
   });
 
+  it('keeps empty folders through a .zip round trip', async () => {
+    const project = new ProjectDoc(new Y.Doc());
+    const blobs = new BlobStore();
+    project.createTextFile('main.tex', '\\documentclass{article}');
+    project.createFolder('figures');
+    project.createFolder('parts/drafts');
+    project.createFolder('chapters');
+    project.createTextFile('chapters/one.tex', 'one');
+    // A folder whose only file is still on its way from a peer is kept too.
+    project.putBinaryFile('pending/a.png', 'not-here', 3);
+
+    const { zip } = await projectToZip(project, blobs);
+    const read = await readZip(zip);
+    // Only folders nothing else implies get an entry: not chapters/ (it has a file) or parts/ (it has drafts/).
+    expect(read.folders).toEqual(['figures', 'parts/drafts', 'pending']);
+    expect(read.files.map((file) => file.path)).toEqual(['chapters/one.tex', 'main.tex']);
+
+    const content = await projectFromZip('paper.zip', zip, new BlobStore());
+    const copy = new ProjectDoc(new Y.Doc());
+    copy.replaceAll(content);
+    expect(copy.folderPaths()).toEqual(['chapters', 'figures', 'parts', 'parts/drafts', 'pending']);
+    expect(copy.findByPath('figures')?.kind).toBe('folder');
+  });
+
   it('refuses an empty .zip', async () => {
     await expect(projectFromZip('x.zip', await createZip([]), new BlobStore())).rejects.toThrow(/no files/);
     const named = await projectFromZip('.zip', await createZip([{ path: 'a.tex', data: enc('a') }]), new BlobStore());

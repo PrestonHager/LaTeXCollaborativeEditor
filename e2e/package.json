@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "install-browsers": "playwright install --with-deps chromium"
+    "load-time": "playwright test -c playwright.load-time.config.ts",
+    "install-browsers": "playwright install --with-deps chromium firefox webkit"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0"

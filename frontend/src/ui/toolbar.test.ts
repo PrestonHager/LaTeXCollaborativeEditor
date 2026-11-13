@@ -1,15 +1,19 @@
 import { createToolbar } from './toolbar';
 import { mountAppShell } from '../test/appShell';
 import type { CommandId } from './menuBar';
+import { createKeymap } from '../app/keymap';
+import { shortcuts } from '../app/commands';
 
 describe('createToolbar', () => {
-  const setup = (disabled: CommandId[] = []) => {
+  const setup = (disabled: CommandId[] = [], platform: 'mac' | 'other' = 'other') => {
     mountAppShell();
+    const keymap = createKeymap(shortcuts, () => platform);
     const root = document.getElementById('toolbar')!;
     const calls: CommandId[] = [];
     const toolbar = createToolbar(root, {
       getCommandState: (id) => ({ enabled: !disabled.includes(id), checked: id === 'view.layoutSplit' ? true : undefined }),
       onCommand: (id) => calls.push(id),
+      shortcutLabel: (id) => keymap.labelFor(id),
     });
     const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('button[data-command]'));
     return { root, toolbar, calls, buttons };
@@ -25,7 +29,20 @@ describe('createToolbar', () => {
       expect(button.querySelector('svg')).toBeTruthy();
     });
     const save = buttons.find((button) => button.dataset.command === 'file.saveNow')!;
-    expect(save.dataset.tooltip).toMatch(/^Save now \((Ctrl|⌘)\+S\)$/);
+    expect(save.dataset.tooltip).toBe('Save now (Ctrl+S)');
+    const compile = buttons.find((button) => button.dataset.command === 'view.compileNow')!;
+    expect(compile.dataset.tooltip).toBe('Compile now (Ctrl+Enter)');
+    // Buttons without a keybind keep just their text.
+    const upload = buttons.find((button) => button.dataset.command === 'file.upload')!;
+    expect(upload.dataset.tooltip).not.toContain('(');
+  });
+
+  it('shows Mac keybinds on a Mac, and refreshes them when asked', () => {
+    const { buttons, toolbar } = setup([], 'mac');
+    const save = buttons.find((button) => button.dataset.command === 'file.saveNow')!;
+    expect(save.dataset.tooltip).toBe('Save now (⌘S)');
+    toolbar.refreshShortcuts();
+    expect(save.dataset.tooltip).toBe('Save now (⌘S)');
   });
 
   it('runs commands, but not disabled ones', () => {

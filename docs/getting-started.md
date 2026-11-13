@@ -21,7 +21,7 @@ While the page loads, a bar under the header says "Loading compiler assets...".
 - **Editor** (middle): the open text file. Images and PDFs open in a viewer here instead.
 - **Preview** (right): the rendered document.
 - **Splitter**: drag the bar between the editor and preview to resize them.
-- **Footer**: preview diagnostics, plus links to Privacy, Terms, and the repository.
+- **Footer**: preview diagnostics, plus links to Privacy, Terms, the repository, and the app version.
 
 For a diagram of how these fit together, see [How the app fits together](how-it-fits.md).
 

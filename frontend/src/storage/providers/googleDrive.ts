@@ -62,7 +62,7 @@ const OLD_TOKEN_KEY = 'drive_access_token';
  * Projects in Google Drive. A project is a Drive folder and every project file is a real
  * Drive file in it, with subfolders kept as they are.
  * NOTE: the drive.file scope only lets us see files this app made or the person picked.
- * Files added to the folder from Drive itself stay hidden until they're picked.
+ * Files added to the folder from Drive itself stay hidden until they're picked, see app/driveAddFiles.ts.
  */
 export class GoogleDriveProvider implements StorageProvider {
   readonly label = 'Google Drive';
@@ -410,6 +410,25 @@ export class GoogleDriveProvider implements StorageProvider {
     if (details.parents?.length) url.searchParams.set('removeParents', details.parents.join(','));
     await this.driveFetch(url.toString(), { method: 'PATCH' }, 'move the project');
     if (index.legacy) index.legacy.parentId = targetFolderId;
+  }
+
+  /**
+   * The Drive id of the project's root folder, or null for an old single-file project that has
+   * no folder yet.
+   */
+  async projectFolderId(projectId: string): Promise<string | null> {
+    const index = await this.ensureIndex(projectId);
+    return index.legacy ? null : index.rootId;
+  }
+
+  /** The project path of a Drive file or folder we can see, if it's in this project. */
+  pathOfDriveId(projectId: string, driveId: string): string | undefined {
+    const index = this.indexes.get(this.currentProjectId(projectId)) ?? this.indexes.get(projectId);
+    if (!index) return undefined;
+    for (const [path, item] of index.paths) {
+      if (item.id === driveId) return path;
+    }
+    return undefined;
   }
 
   private async openLegacyFile(projectId: string): Promise<ProjectListing> {

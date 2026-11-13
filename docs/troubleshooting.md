@@ -55,7 +55,8 @@ If a Drive save fails:
 The app only asks for the `drive.file` permission.
 That means it can see files it made and files you pick, but nothing else in your Drive.
 If you add a file to a project folder from Drive itself, the app won't see it.
-Upload it from the editor instead.
+Use **File > Add Files from Drive** and pick it, or upload it from the editor instead.
+See [Adding files from Drive](saving-and-storage.md#adding-files-from-drive).
 
 ## Popups blocked
 
@@ -110,7 +111,7 @@ Things to try:
 - If an image file is there but the preview shows a note instead, it might be a PDF or EPS. The preview can't show those yet. Use PNG, JPG, or SVG.
 - If a package isn't supported, try the preview without it, or wrap package-specific code so it only runs in real LaTeX.
 - If the compile pill says **No main file**, click the star next to the `.tex` file that has `\documentclass`.
-- Use **View > Compile Now** (**Ctrl+Shift+C**) to force a fresh preview.
+- Use **View > Compile Now** (**Ctrl+Enter**) to force a fresh preview.
 
 The preview pulls its fonts and styles from a CDN (`cdn.jsdelivr.net`).
 If that's blocked, the preview may look unstyled.
@@ -119,4 +120,5 @@ If that's blocked, the preview may look unstyled.
 
 - **The share link didn't copy.** The notice says "Could not copy automatically." Copy the link shown next to **Share** by hand. Clipboard access needs HTTPS and a focused page.
 - **Something went wrong. Check the browser console for details.** An error the app didn't expect. Open your browser's developer tools to see more, and please report it.
-- **The page warns me when I close it.** The last save hasn't finished, or a file is waiting on the conflict dialog. Wait for the autosave pill to say Saved, or answer the dialog.
+- **The page warns me when I close it.** Something could still be lost: edits that haven't reached Google Drive, saving is paused, the last save failed, a file is waiting on the conflict dialog, files are still uploading or arriving, or browser storage is full. Wait for the autosave pill to say Saved, resume saving, or answer the dialog.
+- **"A new version of the app is available" keeps showing.** It shows once per new version. Click **Reload to update**. If it says "Couldn't save", fix the save first (see the autosave pill), or use **Reload anyway** if you're sure. A part of the page that fails to load after a deploy shows the same card, and reloading fixes it.

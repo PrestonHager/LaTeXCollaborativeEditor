@@ -61,7 +61,8 @@ See [When a file changed somewhere else](saving-and-storage.md#when-a-file-chang
 
 The app only has permission to see files it made or that you picked.
 That keeps it out of the rest of your Drive.
-Upload the file from the editor instead.
+Use **File > Add Files from Drive** and pick the file, so the app can see it.
+See [Adding files from Drive](saving-and-storage.md#adding-files-from-drive).
 
 ## Can a guest save the project?
 

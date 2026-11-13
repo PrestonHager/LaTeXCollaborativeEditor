@@ -4,7 +4,38 @@ import type { TransportState } from '../net/p2pTransport';
 import { YjsDocSync, isWellFormedUpdate } from './yjsSync';
 import { FileTransfer } from './fileTransfer';
 import type { BlobStore } from '../project/blobStore';
-import { dropMessage, parseChunk, parseSyncMessage, type SyncMessage } from './messages';
+import { dropMessage, parseChunk, parseSyncMessage, PROTOCOL_VERSION, type HelloMessage, type SyncMessage } from './messages';
+import { BUILD_INFO, type BuildInfo } from '../app/buildInfo';
+
+/**
+ * How a peer's build compares with ours, from its hello message.
+ * - same-build: same protocol, version and commit.
+ * - different-build: same protocol, so it works, but another version or commit.
+ * - incompatible-protocol: the peer speaks another protocol version. Nothing is blocked yet;
+ *   the update prompt (issue #121) uses this to ask someone to reload.
+ * Peers on builds from before the hello message never send one, so they don't show up at all.
+ */
+export type PeerCompatibility = 'same-build' | 'different-build' | 'incompatible-protocol';
+
+export type PeerVersion = {
+  peerId: string;
+  protocol: number;
+  appVersion: string;
+  commit?: string;
+  compatibility: PeerCompatibility;
+};
+
+/** Compare a peer's hello with our own build. */
+export function comparePeerBuild(
+  hello: Pick<HelloMessage, 'protocol' | 'appVersion' | 'commit'>,
+  local: Pick<BuildInfo, 'version' | 'commit'>,
+  localProtocol = PROTOCOL_VERSION,
+): PeerCompatibility {
+  if (hello.protocol !== localProtocol) return 'incompatible-protocol';
+  if (hello.appVersion !== local.version) return 'different-build';
+  if (hello.commit && local.commit !== 'dev' && hello.commit !== 'dev' && hello.commit !== local.commit) return 'different-build';
+  return 'same-build';
+}
 
 type SessionConfig = {
   isHost: boolean;
@@ -19,6 +50,10 @@ type SessionConfig = {
   /** A guest got a whole new doc from the host, so anything bound to the old one has to rebind. */
   onDocReplaced?: () => void;
   onFileProgress?: (hash: string, fraction: number | null) => void;
+  /** Our build, sent in the hello message. Defaults to the one baked into the bundle. */
+  build?: Pick<BuildInfo, 'version' | 'commit'>;
+  /** A peer said which build it runs. Fires for every hello, matching or not. */
+  onPeerVersion?: (peer: PeerVersion) => void;
 };
 
 export type PersistedDocState = { docId: string; state: Uint8Array };
@@ -40,6 +75,7 @@ export class SessionController {
   private hostPeerId: string | null = null;
   private connectionState: TransportState = 'Not sharing';
   private peerCount = 0;
+  private readonly peerVersions = new Map<string, PeerVersion>();
 
   constructor(config: SessionConfig) {
     this.config = config;
@@ -79,6 +115,7 @@ export class SessionController {
         this.config.onConnectionState(this.connectionState, count);
       },
       onPeerJoin: (peerId) => {
+        this.sendHello(peerId);
         this.transfer.peerJoined(peerId);
         if (!this.config.isHost) return;
         this.session.sendMessage(this.snapshotMessage(), peerId);
@@ -93,6 +130,7 @@ export class SessionController {
       },
       onPeerLeave: (peerId) => {
         this.transfer.peerLeft(peerId);
+        this.peerVersions.delete(peerId);
         // When the host leaves, take the next snapshot from whoever comes back as host.
         if (peerId === this.hostPeerId) this.hostPeerId = null;
       },
@@ -143,6 +181,37 @@ export class SessionController {
     if (!this.config.isHost) return;
     const message: SyncMessage = { kind: 'metadata', metadata };
     this.session.sendMessage(message);
+  }
+
+  /** What each connected peer said in its hello. Peers on older builds that don't send one are left out. */
+  getPeerVersions(): PeerVersion[] {
+    return [...this.peerVersions.values()];
+  }
+
+  private get build() {
+    return this.config.build ?? BUILD_INFO;
+  }
+
+  private sendHello(peerId: string) {
+    const { version, commit } = this.build;
+    const hello: HelloMessage = { kind: 'hello', protocol: PROTOCOL_VERSION, appVersion: version, commit };
+    this.session.sendMessage(hello, peerId);
+  }
+
+  private onHello(message: HelloMessage, peerId: string) {
+    const compatibility = comparePeerBuild(message, this.build);
+    const peer: PeerVersion = { peerId, protocol: message.protocol, appVersion: message.appVersion, commit: message.commit, compatibility };
+    this.peerVersions.set(peerId, peer);
+    // Log it, but keep going: a different build usually still works, and blocking would cut people off mid-edit.
+    if (compatibility === 'incompatible-protocol') {
+      console.warn(
+        `A peer uses P2P protocol ${message.protocol}, this tab uses ${PROTOCOL_VERSION} (app ${message.appVersion} vs ${this.build.version}). Reload to update.`,
+      );
+    } else if (compatibility === 'different-build') {
+      const theirs = message.commit ? `${message.appVersion}+${message.commit}` : message.appVersion;
+      console.info(`A peer runs app ${theirs}, this tab runs ${this.build.version}+${this.build.commit}.`);
+    }
+    this.config.onPeerVersion?.(peer);
   }
 
   private scheduleReconnect() {
@@ -232,6 +301,11 @@ export class SessionController {
         return;
       }
       this.config.onRemoteMetadata?.(message.metadata);
+      return;
+    }
+
+    if (message.kind === 'hello') {
+      if (peerId) this.onHello(message, peerId);
       return;
     }
 

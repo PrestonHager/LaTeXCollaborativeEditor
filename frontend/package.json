@@ -1,11 +1,12 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/check-bundle-size.mjs",
+    "build": "tsc && vite build && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
+    "check:pages": "node scripts/check-build-pages.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
@@ -26,19 +27,20 @@
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
-    "@codemirror/commands": "^6.10.3",
+    "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.12.3",
     "@codemirror/legacy-modes": "^6.5.2",
-    "@codemirror/lint": "^6.9.5",
+    "@codemirror/lint": "^6.9.7",
     "@codemirror/search": "^6.7.0",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.1",
-    "@trystero-p2p/torrent": "^0.24.0",
+    "@lezer/highlight": "^1.2.5",
+    "@trystero-p2p/torrent": "^0.26.0",
     "basecoat-css": "^1.1.0",
     "diff-match-patch": "^1.0.5",
     "latex.js": "^0.12.6",
     "lucide": "^1.70.0",
     "y-codemirror.next": "^0.3.5",
-    "yjs": "^13.6.30"
+    "yjs": "^13.6.33"
   }
 }

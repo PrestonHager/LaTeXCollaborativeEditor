@@ -11,8 +11,7 @@ https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new
 Only the maintainers can see a private report.
 You can also get there from the editor with **Help > Report a Security Issue**.
 
-Backup contact (for people without a GitHub account): _to be added_.
-Until then, please use the private advisory form above.
+Backup contact (for people without a GitHub account): email [latex@prestonhager.com](mailto:latex@prestonhager.com).
 
 ## Supported versions
 
@@ -34,7 +33,11 @@ For example:
 - Bugs in third-party services, such as Google, public WebTorrent trackers, or TURN providers.
   Please report those to the service.
 - Missing best-practice headers or settings without a working attack.
+  GitHub Pages can't send headers, so the Content Security Policy is a meta tag and can't set `frame-ancestors`.
+  A way around the CSP that loads or runs something it should block is in scope.
 - The known TURN credential exposure, tracked in [#24](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues/24).
+  The app is static, so any TURN username and credential it's built with are readable by anyone who opens the site.
+  That's by design, and [docs/deployment.md](docs/deployment.md) ("TURN credentials are public") says to use short-lived credentials and rotate them.
 
 ## What to include
 

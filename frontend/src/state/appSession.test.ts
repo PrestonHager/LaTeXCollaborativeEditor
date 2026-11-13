@@ -11,8 +11,6 @@ describe('appSession state', () => {
       content: 'hello',
       providerMode: 'drive',
       saveNowEnabled: false,
-      editorTheme: 'system',
-      previewTheme: 'system',
     });
 
     const loaded = readAppSessionState();
@@ -60,7 +58,7 @@ describe('appSession state', () => {
     expect(readAppSessionState()).toBeNull();
   });
 
-  it('falls back to system themes when stored theme values are invalid', () => {
+  it('ignores the theme fields older builds stored here, since themes are settings now', () => {
     localStorage.setItem(
       'latex_editor_app_session_v1',
       JSON.stringify({
@@ -74,8 +72,8 @@ describe('appSession state', () => {
       }),
     );
     const loaded = readAppSessionState();
-    expect(loaded?.editorTheme).toBe('system');
-    expect(loaded?.previewTheme).toBe('system');
+    expect(loaded).not.toHaveProperty('editorTheme');
+    expect(loaded).not.toHaveProperty('previewTheme');
     expect(loaded?.updatedAt).toBe(42);
   });
 
@@ -96,7 +94,7 @@ describe('appSession state', () => {
     nowSpy.mockRestore();
   });
 
-  it('writeAppSessionState fills default themes when omitted', () => {
+  it('writeAppSessionState leaves themes out of the session', () => {
     writeAppSessionState({
       documentName: 'n',
       content: 'c',
@@ -104,8 +102,8 @@ describe('appSession state', () => {
       saveNowEnabled: false,
     });
     const raw = JSON.parse(localStorage.getItem('latex_editor_app_session_v1')!);
-    expect(raw.editorTheme).toBe('system');
-    expect(raw.previewTheme).toBe('system');
+    expect(raw).not.toHaveProperty('editorTheme');
+    expect(raw).not.toHaveProperty('previewTheme');
   });
 
   it('writeAppSessionState returns false instead of throwing when storage is full', () => {
@@ -114,19 +112,27 @@ describe('appSession state', () => {
       throw new DOMException('full', 'QuotaExceededError');
     });
     const ok = writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true });
-    expect(ok).toBe(false);
+    expect(ok).toBe('failed');
     spy.mockRestore();
+  });
+
+  it('keeps the pending-save flag only when it is set', () => {
+    writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true, pendingSave: true });
+    expect(readAppSessionState()?.pendingSave).toBe(true);
+    writeAppSessionState({ documentName: 'n', content: 'c', providerMode: 'local', saveNowEnabled: true });
+    expect(readAppSessionState()?.pendingSave).toBeUndefined();
   });
 
   it('round trips the host Yjs state', () => {
     const bytes = new Uint8Array([0, 1, 2, 250, 255]);
-    writeAppSessionState({
+    const result = writeAppSessionState({
       documentName: 'n',
       content: 'c',
       providerMode: 'local',
       saveNowEnabled: true,
       yjs: { docId: 'doc-1', state: encodeYjsState(bytes) },
     });
+    expect(result).toBe('full');
     const loaded = readAppSessionState();
     expect(loaded?.yjs?.docId).toBe('doc-1');
     expect(decodeYjsState(loaded!.yjs!.state)).toEqual(bytes);
@@ -155,7 +161,7 @@ describe('appSession state', () => {
       yjs: { docId: 'doc-1', state: 'AAAA' },
     });
     spy.mockRestore();
-    expect(ok).toBe(true);
+    expect(ok).toBe('text-only');
     expect(readAppSessionState()?.content).toBe('kept');
     expect(readAppSessionState()?.yjs).toBeUndefined();
   });

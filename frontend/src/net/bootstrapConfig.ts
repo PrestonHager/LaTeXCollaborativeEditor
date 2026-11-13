@@ -11,9 +11,24 @@ const parseCsv = (value?: string) =>
     .map((v) => v.trim())
     .filter(Boolean);
 
+/** Hostnames that always mean this machine: `localhost`, any 127.x.x.x address, and IPv6 `::1`. */
+export function isLocalhostOrigin(origin: string): boolean {
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '[::1]' ||
+    /^127(?:\.\d{1,3}){3}$/.test(hostname)
+  );
+}
+
 export function getBootstrapConfig(origin = window.location.origin): BootstrapConfig {
-  const isLocalhost = origin.includes('localhost');
-  const environment = isLocalhost ? 'localhost' : 'production';
+  const environment = isLocalhostOrigin(origin) ? 'localhost' : 'production';
 
   // These are WebTorrent trackers for Trystero's torrent strategy. Nostr relays won't work here.
   const defaultRendezvous = [

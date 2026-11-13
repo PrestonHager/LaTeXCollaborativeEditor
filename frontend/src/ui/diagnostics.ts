@@ -30,7 +30,8 @@ const lineDecorationsField = StateField.define<DecorationSet>({
   update(_decorations, transaction) {
     const diagnostics = transaction.state.field(diagnosticsField);
     const builder = new RangeSetBuilder<Decoration>();
-    for (const diagnostic of diagnostics) {
+    // RangeSetBuilder needs ranges in order, and diagnostics can come in any order.
+    for (const diagnostic of [...diagnostics].sort((a, b) => a.line - b.line)) {
       const line = transaction.state.doc.line(Math.min(Math.max(diagnostic.line, 1), transaction.state.doc.lines));
       const className =
         diagnostic.severity === 'error'

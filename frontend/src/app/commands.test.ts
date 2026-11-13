@@ -7,11 +7,14 @@ import { mountAppShell } from '../test/appShell';
 import { MemoryProvider } from '../test/memoryProvider';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { StorageProvider } from '../storage/providers/types';
-import { NEW_PROJECT_CONFIRM } from '../state/guestCommands';
+import { NEW_PROJECT_CONFIRM, replaceProjectConfirm } from '../state/guestCommands';
 import { ProjectState, type DriveLike } from './projectState';
 import { createThemeController } from './theme';
 import { createLayout } from './layout';
-import { createCommands, shortcutCommand, shortcuts, type CommandContext } from './commands';
+import { IMPORT_PICKER_BLOCKED, createCommands, shortcuts, type CommandContext } from './commands';
+import { createKeymap, type Keymap } from './keymap';
+import { normalizeKeybind } from '../ui/modifierShortcutLabels';
+import { createEditorPane } from '../ui/editor';
 import { paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 
 class FakeLocal extends MemoryProvider {
@@ -37,7 +40,7 @@ class FakeDrive extends MemoryProvider {
   }
 }
 
-function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
+function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Keymap } = {}) {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => undefined }));
   const local = new FakeLocal();
   const drive = new FakeDrive();
@@ -68,7 +71,8 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
       enqueue: vi.fn((task: () => Promise<void>) => task()),
     },
     session: { broadcastMetadata: vi.fn() },
-    editor: { focus: vi.fn(), selectAll: vi.fn() },
+    editor: { focus: vi.fn(), selectAll: vi.fn(), insertText: vi.fn(() => true) },
+    keymap: options.keymap ?? createKeymap(shortcuts, () => 'other'),
     fileTree: { currentFolder: vi.fn(() => '') },
     projectsDialog: { open: vi.fn() },
     uploadDialog: { open: vi.fn() },
@@ -88,6 +92,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
       },
     },
     settingsDialog: { open: vi.fn() },
+    guestCount: vi.fn(() => 0),
     projectName: () => project.getName() || 'Untitled',
     setStatus: vi.fn(),
     showNotice: vi.fn(),
@@ -105,6 +110,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
     ensureDriveConnected: vi.fn(async () => true),
     pickFromDrive: vi.fn(async () => ({ id: 'f1', name: 'Folder', isFolder: true }) as never),
     showDriveAccount: vi.fn(),
+    addFilesFromDrive: vi.fn(async () => {}),
     toolbar: { refresh: vi.fn() },
     openDocs: vi.fn(),
     openBugForm: vi.fn(),
@@ -132,31 +138,34 @@ describe('commands', () => {
   });
 
   describe('shortcuts', () => {
-    it('maps Ctrl and Cmd keys to commands', () => {
-      expect(shortcutCommand({ key: 'z', ctrlKey: true, metaKey: false, shiftKey: false })).toBe('edit.undo');
-      expect(shortcutCommand({ key: 'Z', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('edit.redo');
-      expect(shortcutCommand({ key: 'y', ctrlKey: false, metaKey: true, shiftKey: false })).toBe('edit.redo');
-      expect(shortcutCommand({ key: 'O', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('file.openDrive');
-      expect(shortcutCommand({ key: 'o', ctrlKey: true, metaKey: false, shiftKey: false })).toBe('file.openLocal');
-      expect(shortcutCommand({ key: 'S', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('file.download');
-      expect(shortcutCommand({ key: 'n', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('file.new');
-      expect(shortcutCommand({ key: 'c', ctrlKey: true, metaKey: false, shiftKey: false })).toBeNull();
-      expect(shortcutCommand({ key: 's', ctrlKey: false, metaKey: false, shiftKey: false })).toBeNull();
+    it('lists every built-in keybind in its stored form, once', () => {
+      const keys = shortcuts.map((shortcut) => shortcut.keybind);
+      for (const keybind of keys) expect(normalizeKeybind(keybind, 'other'), keybind).toBe(keybind);
+      expect(new Set(keys).size).toBe(keys.length);
     });
 
-    it('matches the shortcuts the menus show in index.html', () => {
+    it('keeps Compile Now off Ctrl+Shift+C, which opens the inspector (#21)', () => {
+      expect(shortcuts.find((shortcut) => shortcut.id === 'view.compileNow')?.keybind).toBe('Mod+Enter');
+      expect(shortcuts.some((shortcut) => shortcut.keybind === 'Mod+Shift+C')).toBe(false);
+    });
+
+    it('fills the menu shortcut labels from the table', () => {
       mountAppShell();
-      // The browser handles these, and Ctrl+P is handled before the table.
-      const native = new Set(['X', 'C', 'V', 'A', 'P']);
-      const chords = Array.from(document.querySelectorAll<HTMLElement>('.menu-item[data-command]'))
-        .map((item) => ({ id: item.dataset.command, chord: item.querySelector<HTMLElement>('[data-chord]')?.dataset.chord }))
-        .filter((item): item is { id: string; chord: string } => Boolean(item.chord) && !native.has(item.chord!));
-      expect(chords.length).toBeGreaterThan(0);
-      for (const { id, chord } of chords) {
-        const shift = chord.startsWith('Shift+');
-        const k = chord.replace('Shift+', '').toLowerCase();
-        expect(shortcutCommand({ key: k, ctrlKey: true, metaKey: false, shiftKey: shift }), chord).toBe(id);
-      }
+      const keymap = createKeymap(shortcuts, () => 'other');
+      createMenuBar(document.getElementById('menu-bar')!, {
+        getCommandState: () => ({ enabled: true }),
+        onCommand: () => undefined,
+        shortcutLabel: (id) => keymap.labelFor(id),
+      }).destroy();
+      const label = (id: string) => document.querySelector(`.menu-item[data-command="${id}"] [data-shortcut]`)?.textContent;
+      expect(label('file.saveNow')).toBe('Ctrl+S');
+      expect(label('file.openDrive')).toBe('Ctrl+Shift+O');
+      expect(label('edit.redo')).toBe('Ctrl+Shift+Z');
+      expect(label('view.compileNow')).toBe('Ctrl+Enter');
+      expect(label('app.commandPalette')).toBe('Ctrl+P');
+      expect(label('file.newFile')).toBe('');
+      // No keybind lives in the HTML any more.
+      expect(document.querySelector('[data-chord]')).toBeNull();
     });
   });
 
@@ -207,8 +216,10 @@ describe('commands', () => {
     it('follows the provider, open file, undo stack, and layout', () => {
       const { commands, app, projectState, drive, layout } = setup();
       expect(commands.getCommandState('file.moveDrive').enabled).toBe(false);
+      expect(commands.getCommandState('file.addFromDrive').enabled).toBe(false);
       projectState.use(drive, 'folder');
       expect(commands.getCommandState('file.moveDrive').enabled).toBe(true);
+      expect(commands.getCommandState('file.addFromDrive').enabled).toBe(true);
       expect(commands.getCommandState('file.downloadFile').enabled).toBe(true);
       app.activeFileId = null;
       expect(commands.getCommandState('file.downloadFile').enabled).toBe(false);
@@ -255,9 +266,10 @@ describe('commands', () => {
 
     it('skips host-only commands for guests', async () => {
       const { app, run } = setup({ isClient: true });
-      for (const id of ['file.new', 'file.openLocal', 'file.openDrive', 'file.importZip', 'file.connectDrive', 'file.saveToDrive', 'file.moveDrive', 'file.saveNow', 'file.clearLocalDocs'] as CommandId[]) {
+      for (const id of ['file.new', 'file.openLocal', 'file.openDrive', 'file.importZip', 'file.connectDrive', 'file.saveToDrive', 'file.moveDrive', 'file.addFromDrive', 'file.saveNow', 'file.clearLocalDocs'] as CommandId[]) {
         await run(id);
       }
+      expect(app.addFilesFromDrive).not.toHaveBeenCalled();
       expect(app.switchProject).not.toHaveBeenCalled();
       expect(app.projectsDialog.open).not.toHaveBeenCalled();
       expect(app.zipInput.click).not.toHaveBeenCalled();
@@ -303,6 +315,100 @@ describe('commands', () => {
       expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Old' })]);
       await run('file.importZip');
       expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('opens and imports without asking when no guest is in the room', async () => {
+      const { app, run } = setup();
+      const confirm = vi.spyOn(window, 'confirm');
+      await run('file.openLocal');
+      await run('file.openDrive');
+      await run('file.importZip');
+      expect(confirm).not.toHaveBeenCalled();
+      expect(app.projectsDialog.open).toHaveBeenCalled();
+      expect(app.openStoredProject).toHaveBeenCalled();
+      expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('asks the host before opening or importing while guests are in the room', async () => {
+      const { app, run, drive } = setup();
+      app.guestCount.mockReturnValue(2);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await run('file.openLocal');
+      await run('file.openDrive');
+      await run('file.importZip');
+      // Cancel stops before any dialog, sign-in, or file picker opens.
+      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')], [replaceProjectConfirm('open')], [replaceProjectConfirm('import')]]);
+      expect(app.projectsDialog.open).not.toHaveBeenCalled();
+      expect(app.ensureDriveConnected).not.toHaveBeenCalled();
+      expect(app.pickFromDrive).not.toHaveBeenCalled();
+      expect(app.openStoredProject).not.toHaveBeenCalled();
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+      expect(app.switchProject).not.toHaveBeenCalled();
+      expect(app.setStatus).not.toHaveBeenCalled();
+      // OK goes ahead as before.
+      confirm.mockReturnValue(true);
+      await run('file.openLocal');
+      await run('file.openDrive');
+      await run('file.importZip');
+      expect(app.projectsDialog.open).toHaveBeenCalled();
+      expect(app.openStoredProject).toHaveBeenCalledWith(drive, 'f1');
+      expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('asks once for Upload .zip in the Open dialog after the host OKs Open', async () => {
+      const { app, run, commands } = setup();
+      app.guestCount.mockReturnValue(1);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      await run('file.openLocal');
+      commands.importZipFromOpenDialog();
+      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')]]);
+      expect(app.zipInput.click).toHaveBeenCalledTimes(1);
+      // The other ways in still ask.
+      await run('file.importZip');
+      expect(confirm).toHaveBeenLastCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).toHaveBeenCalledTimes(2);
+      // A canceled Open doesn't count as a yes.
+      confirm.mockReturnValue(false);
+      await run('file.openLocal');
+      confirm.mockClear();
+      commands.importZipFromOpenDialog();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).toHaveBeenCalledTimes(2);
+    });
+
+    it('asks in the Open dialog when a guest joined after it opened', async () => {
+      const { app, run, commands } = setup();
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await run('file.openLocal');
+      expect(confirm).not.toHaveBeenCalled();
+      app.guestCount.mockReturnValue(1);
+      commands.importZipFromOpenDialog();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+    });
+
+    it('never imports from the Open dialog in a guest tab', () => {
+      const { app, commands } = setup({ isClient: true });
+      commands.importZipFromOpenDialog();
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+    });
+
+    it('says so when a slow confirm used up the click, and skips the confirm on the retry', async () => {
+      const { app, run } = setup();
+      app.guestCount.mockReturnValue(1);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.stubGlobal('navigator', { userActivation: { isActive: false } });
+      await run('file.importZip');
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+      expect(app.showNotice).toHaveBeenCalledWith(IMPORT_PICKER_BLOCKED);
+      // The retry is a fresh click, so the picker opens without asking again.
+      vi.stubGlobal('navigator', { userActivation: { isActive: true } });
+      await run('file.importZip');
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(app.zipInput.click).toHaveBeenCalledTimes(1);
+      // That OK only counts once.
+      await run('file.importZip');
+      expect(confirm).toHaveBeenCalledTimes(2);
     });
 
     it('opens a Drive folder or a single legacy file', async () => {
@@ -373,6 +479,17 @@ describe('commands', () => {
       expect(app.autosave.saveNow).toHaveBeenCalledTimes(1);
     });
 
+    it('runs Add Files from Drive for the host, and keeps it off for guests on Drive', async () => {
+      const { app, run, commands, projectState, drive } = setup();
+      projectState.use(drive, 'p1');
+      await run('file.addFromDrive');
+      expect(app.addFilesFromDrive).toHaveBeenCalledTimes(1);
+      const guest = setup({ isClient: true });
+      guest.projectState.use(guest.drive, 'p1');
+      expect(guest.commands.getCommandState('file.addFromDrive').enabled).toBe(false);
+      expect(commands.getCommandState('file.addFromDrive').enabled).toBe(true);
+    });
+
     it('moves a Drive project only once it is on Drive', async () => {
       const { app, run, projectState, drive } = setup();
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -420,17 +537,41 @@ describe('commands', () => {
 
     it('runs the edit commands against the editor and undo stack', async () => {
       const { app, run, undo } = setup();
-      // jsdom has no execCommand, so we give it one.
+      // jsdom has no execCommand or clipboard, so we give it both.
       const exec = vi.fn();
       document.execCommand = exec;
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn(async () => '\\section{Pasted}') } });
       for (const id of ['edit.undo', 'edit.redo', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.selectAll', 'view.focusEditor'] as CommandId[]) {
         await run(id);
       }
       expect(undo.undo).toHaveBeenCalled();
       expect(undo.redo).toHaveBeenCalled();
-      expect(exec.mock.calls.map(([name]) => name)).toEqual(['cut', 'copy', 'paste']);
+      // Paste reads the clipboard itself, since browsers block execCommand('paste') (#21).
+      expect(exec.mock.calls.map(([name]) => name)).toEqual(['cut', 'copy']);
+      expect(app.editor.insertText).toHaveBeenCalledWith('\\section{Pasted}');
       expect(app.editor.selectAll).toHaveBeenCalled();
       expect(app.editor.focus).toHaveBeenCalledTimes(4);
+    });
+
+    it('says so when the browser will not let Paste read the clipboard', async () => {
+      const { app, run } = setup();
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn(async () => Promise.reject(new DOMException('Denied', 'NotAllowedError'))) } });
+      await run('edit.paste');
+      expect(app.editor.insertText).not.toHaveBeenCalled();
+      expect(app.showNotice).toHaveBeenCalledWith("The browser didn't allow reading the clipboard. Press Ctrl+V to paste instead.", true);
+      // Older browsers have no clipboard API at all.
+      vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+      await run('edit.paste');
+      expect(app.showNotice).toHaveBeenCalledTimes(2);
+    });
+
+    it('says so when there is no text file to paste into', async () => {
+      const { app, run } = setup();
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn(async () => 'x') } });
+      vi.mocked(app.editor.insertText).mockReturnValue(false);
+      await run('edit.paste');
+      expect(app.showNotice).toHaveBeenCalledWith('Open a text file to paste into it.');
     });
 
     it('cycles and sets themes', async () => {
@@ -557,6 +698,115 @@ describe('commands', () => {
       handled.preventDefault();
       commands.handleKeydown(handled);
       expect(undo.undo).not.toHaveBeenCalled();
+    });
+
+    it('matches keybinds exactly, so Ctrl+Shift+S is not Ctrl+S', () => {
+      const { commands, app } = setup();
+      commands.handleKeydown(key('S', { shiftKey: true }));
+      expect(app.localDownload.download).not.toHaveBeenCalled();
+      expect(app.autosave.saveNow).not.toHaveBeenCalled();
+      const shiftC = key('C', { shiftKey: true });
+      commands.handleKeydown(shiftC);
+      expect(shiftC.defaultPrevented).toBe(false);
+    });
+
+    it('runs Compile Now on Ctrl+Enter', () => {
+      const { commands, app } = setup();
+      const event = key('Enter');
+      commands.handleKeydown(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(app.compile.compileNow).toHaveBeenCalled();
+    });
+
+    it('leaves native keys like Ctrl+C and Ctrl+V to the browser', () => {
+      const { commands } = setup();
+      const exec = vi.fn();
+      document.execCommand = exec;
+      for (const k of ['c', 'v', 'x', 'a']) {
+        const event = key(k);
+        commands.handleKeydown(event);
+        expect(event.defaultPrevented, k).toBe(false);
+      }
+      expect(exec).not.toHaveBeenCalled();
+    });
+
+    it('does not take the Windows key for Ctrl', () => {
+      const { commands, app } = setup();
+      const event = key('p', { ctrlKey: false, metaKey: true });
+      commands.handleKeydown(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(app.commandPalette.isOpen()).toBe(false);
+    });
+
+    it('uses Cmd, not Ctrl, on a Mac', () => {
+      const { commands, app } = setup({ keymap: createKeymap(shortcuts, () => 'mac') });
+      commands.handleKeydown(key('p', { ctrlKey: true }));
+      expect(app.commandPalette.isOpen()).toBe(false);
+      commands.handleKeydown(key('p', { ctrlKey: false, metaKey: true }));
+      expect(app.commandPalette.isOpen()).toBe(true);
+    });
+
+    it("lets the editor keep its own keys while you type, even when a rule wants one", async () => {
+      // Scrolling the cursor into view measures text, which jsdom can't do.
+      Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+      Range.prototype.getBoundingClientRect = () => new DOMRect();
+      const keymap = createKeymap(shortcuts, () => 'other', {
+        rules: [
+          { id: 'file.download', keybind: 'Mod+]' },
+          { id: 'view.compileNow', keybind: 'Alt+K' },
+        ],
+        disabled: [],
+      });
+      const { commands, app } = setup({ keymap });
+      const container = document.createElement('div');
+      document.body.append(container);
+      const editor = createEditorPane(container);
+      editor.setText('x');
+      window.addEventListener('keydown', commands.handleKeydown);
+      const press = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+        editor.getView().contentDOM.dispatchEvent(event);
+        return event;
+      };
+      try {
+        // Ctrl+] indents in the editor, so the rule giving it to Download doesn't fire there.
+        press({ key: ']', code: 'BracketRight', keyCode: 221, ctrlKey: true });
+        expect(editor.getText()).toBe('  x');
+        expect(app.localDownload.download).not.toHaveBeenCalled();
+        // Plain typing never reaches a command.
+        for (const key of ['a', 'K', ' ']) expect(press({ key }).defaultPrevented, key).toBe(false);
+        press({ key: 'Enter', keyCode: 13 });
+        expect(editor.getText()).toContain('\n');
+        expect(app.compile.compileNow).not.toHaveBeenCalled();
+        // A rule on a key the editor doesn't use works from the editor too.
+        press({ key: 'k', code: 'KeyK', altKey: true });
+        expect(app.compile.compileNow).toHaveBeenCalledTimes(1);
+        // Outside the editor, the rule gets Ctrl+].
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ']', code: 'BracketRight', ctrlKey: true, cancelable: true }));
+        await vi.waitFor(() => expect(app.localDownload.download).toHaveBeenCalled());
+      } finally {
+        window.removeEventListener('keydown', commands.handleKeydown);
+        container.remove();
+      }
+    });
+
+    it('lists every command once for Settings, menus first', () => {
+      mountAppShell();
+      const menuBar = createMenuBar(document.getElementById('menu-bar')!, { getCommandState: () => ({ enabled: true }), onCommand: () => undefined });
+      const { commands } = setup({ entries: menuBar.entries() });
+      const list = commands.listCommands();
+      const ids = list.map((command) => command.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids[0]).toBe('file.new');
+      expect(ids).toEqual(expect.arrayContaining(['share.copyLink', 'view.darkMode', 'view.toggleEditorTheme', 'edit.paste']));
+      expect(list.find((command) => command.id === 'file.saveNow')).toMatchObject({ label: 'Save Now', section: 'File' });
+      menuBar.destroy();
+    });
+
+    it('puts keybind labels on palette-only commands too', () => {
+      const keymap = createKeymap([...shortcuts, { id: 'share.copyLink', keybind: 'Alt+L' }], () => 'other');
+      const { commands } = setup({ keymap });
+      expect(commands.buildPaletteCommands().find((command) => command.id === 'share.copyLink')?.shortcut).toBe('Alt+L');
     });
   });
 });

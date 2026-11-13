@@ -210,6 +210,16 @@ describe('AutosaveController', () => {
     expect(statuses).toContain('Save Error: Drive: Session expired.');
   });
 
+  it('remembers why the last save failed until a save goes through', async () => {
+    const save = vi.fn().mockRejectedValueOnce(new StorageError('Drive: Session expired.', { retryable: false })).mockResolvedValue(undefined);
+    const autosave = new AutosaveController({ save, onStatus: () => undefined });
+    expect(autosave.lastSaveError()).toBeNull();
+    expect(await autosave.saveNow()).toBe(false);
+    expect(autosave.lastSaveError()).toBe('Drive: Session expired.');
+    expect(await autosave.saveNow()).toBe(true);
+    expect(autosave.lastSaveError()).toBeNull();
+  });
+
   it('markDirty is a no-op when disabled', () => {
     const onStatus = vi.fn();
     const autosave = new AutosaveController({ save: vi.fn(), onStatus });

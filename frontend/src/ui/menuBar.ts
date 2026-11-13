@@ -1,5 +1,4 @@
 import { commandIcon } from './icons';
-import { formatPrimaryChord } from './modifierShortcutLabels';
 
 export type CommandId =
   | 'app.commandPalette'
@@ -13,6 +12,7 @@ export type CommandId =
   | 'file.disconnectDrive'
   | 'file.saveToDrive'
   | 'file.moveDrive'
+  | 'file.addFromDrive'
   | 'file.renameDrive'
   | 'file.saveNow'
   | 'file.clearLocalDocs'
@@ -59,6 +59,7 @@ export type MenuEntry = {
   commandId: CommandId;
   label: string;
   section: string;
+  /** The command's keybind label, like "Ctrl+S" or "⌘S", from the shortcut table. */
   shortcut?: string;
   /** What the command does, from the item's data-description, for the palette. */
   description?: string;
@@ -69,6 +70,8 @@ export type MenuEntry = {
 type MenuBarOptions = {
   getCommandState: (commandId: CommandId) => CommandState;
   onCommand: (commandId: CommandId) => void;
+  /** The keybind label to show for a command, if it has one. */
+  shortcutLabel?: (commandId: CommandId) => string | undefined;
 };
 
 /**
@@ -80,6 +83,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
   const triggerButtons: HTMLButtonElement[] = [];
   const menuItemByLabel = new Map<string, HTMLButtonElement[]>();
   const entries: MenuEntry[] = [];
+  const shortcutEls: { commandId: CommandId; el: HTMLElement }[] = [];
   let openMenuLabel: string | null = null;
 
   const focusFirstEnabledItem = (menuLabel: string) => {
@@ -122,32 +126,60 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     updateOpenState();
   };
 
+  /**
+   * Open one menu and close the rest. `focus` says where keyboard focus goes:
+   * the first enabled item (click or keyboard), or the menu's trigger (hover).
+   */
+  const openMenu = (menuLabel: string, focus: 'firstItem' | 'trigger') => {
+    openMenuLabel = menuLabel;
+    updateOpenState();
+    if (focus === 'firstItem') {
+      focusFirstEnabledItem(menuLabel);
+      return;
+    }
+    // Hover only moves focus when it is already in the menu bar, so it never steals it from the editor.
+    if (root.contains(document.activeElement)) {
+      triggerButtons.find((button) => button.closest<HTMLElement>('.menu-root')?.dataset.menuLabel === menuLabel)?.focus();
+    }
+  };
+
+  /** Arrow keys between menus: move to the next trigger, and keep a menu open if one was. */
+  const stepMenu = (offset: number, currentTrigger: HTMLButtonElement) => {
+    const wasOpen = openMenuLabel !== null;
+    moveTriggerFocus(offset, currentTrigger);
+    const focused = document.activeElement;
+    const nextLabel = focused instanceof HTMLElement && focused.classList.contains('menu-trigger')
+      ? focused.closest<HTMLElement>('.menu-root')?.dataset.menuLabel
+      : undefined;
+    if (wasOpen && nextLabel !== undefined) openMenu(nextLabel, 'firstItem');
+  };
+
   root.querySelectorAll<HTMLElement>('.menu-root').forEach((menuRoot) => {
     const menuLabel = menuRoot.dataset.menuLabel ?? '';
     const trigger = menuRoot.querySelector<HTMLButtonElement>('.menu-trigger');
     if (!trigger) return;
 
     trigger.addEventListener('click', () => {
-      openMenuLabel = openMenuLabel === menuLabel ? null : menuLabel;
-      updateOpenState();
-      if (openMenuLabel === menuLabel) focusFirstEnabledItem(menuLabel);
+      if (openMenuLabel === menuLabel) closeMenus();
+      else openMenu(menuLabel, 'firstItem');
+    });
+    // Once the menu bar is active (a menu is open), hovering another menu switches to it.
+    // Hover only opens menus, it never runs a command. Touch is left to the click handler,
+    // since a tap fires pointerenter right before click and would toggle the menu shut.
+    trigger.addEventListener('pointerenter', (event) => {
+      if ((event as PointerEvent).pointerType === 'touch') return;
+      if (openMenuLabel === null || openMenuLabel === menuLabel) return;
+      openMenu(menuLabel, 'trigger');
     });
     trigger.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowRight') {
+      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
         event.preventDefault();
-        moveTriggerFocus(1, trigger);
-        return;
-      }
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        moveTriggerFocus(-1, trigger);
+        stepMenu(event.key === 'ArrowRight' ? 1 : -1, trigger);
         return;
       }
       if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openMenuLabel = menuLabel;
-        updateOpenState();
-        focusFirstEnabledItem(menuLabel);
+        openMenu(menuLabel, 'firstItem');
       }
     });
     triggerButtons.push(trigger);
@@ -157,16 +189,20 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     items.forEach((itemButton) => {
       const commandId = itemButton.dataset.command as CommandId;
 
-      // First, fill in what the HTML leaves to us: the icon and the platform's shortcut text.
+      // First, fill in what the HTML leaves to us: the icon and a place for the shortcut text.
       itemButton.prepend(commandIcon(commandId));
-      const shortcutEl = itemButton.querySelector<HTMLElement>('[data-chord]');
-      const shortcut = shortcutEl ? formatPrimaryChord(shortcutEl.dataset.chord ?? '') : undefined;
-      if (shortcutEl && shortcut) shortcutEl.textContent = shortcut;
+      let shortcutEl = itemButton.querySelector<HTMLElement>('[data-shortcut]');
+      if (!shortcutEl) {
+        shortcutEl = document.createElement('span');
+        shortcutEl.className = 'menu-item-shortcut';
+        shortcutEl.dataset.shortcut = '';
+        itemButton.append(shortcutEl);
+      }
+      shortcutEls.push({ commandId, el: shortcutEl });
       entries.push({
         commandId,
         label: itemButton.querySelector('.menu-item-label')?.textContent?.trim() ?? commandId,
         section: menuLabel,
-        shortcut,
         description: itemButton.dataset.description,
         inPalette: itemButton.dataset.palette !== 'false',
       });
@@ -191,9 +227,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
         }
         if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
           event.preventDefault();
-          moveTriggerFocus(event.key === 'ArrowRight' ? 1 : -1, trigger);
-          const focused = document.activeElement as HTMLButtonElement | null;
-          if (focused?.classList.contains('menu-trigger')) focused.click();
+          stepMenu(event.key === 'ArrowRight' ? 1 : -1, trigger);
         }
       });
 
@@ -226,12 +260,21 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     });
   };
 
+  /** Show each item's keybind from the shortcut table. Call again when the keybinds change. */
+  const refreshShortcuts = () => {
+    shortcutEls.forEach(({ commandId, el }) => {
+      el.textContent = options.shortcutLabel?.(commandId) ?? '';
+    });
+  };
+
   refresh();
+  refreshShortcuts();
 
   return {
     refresh,
+    refreshShortcuts,
     /** Every menu item in page order, for building the command palette. */
-    entries: () => entries.slice(),
+    entries: (): MenuEntry[] => entries.map((entry) => ({ ...entry, shortcut: options.shortcutLabel?.(entry.commandId) })),
     destroy() {
       document.removeEventListener('click', onDocumentClick);
       document.removeEventListener('keydown', onDocumentKeyDown);

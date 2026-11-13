@@ -1,0 +1,11 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\begin{document}
+\section*{abbrv}
+% Expect: [2], [3], [4], [1], since the list is sorted by author like plain.
+% Expect: first names are initials ("D. E. Knuth", "O. Patashnik, L. Lamport, and D. E. Knuth").
+\input{styles/citations}
+\bibliographystyle{abbrv}
+\bibliography{refs}
+\end{document}

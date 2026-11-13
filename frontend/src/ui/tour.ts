@@ -1,28 +1,78 @@
-export const TOUR_SEEN_KEY = 'latex-editor.tour-seen';
+import type { CommandId } from './menuBar';
 
-type KeyValueStore = Pick<Storage, 'getItem' | 'setItem'>;
+/** Whether this person has seen the tour. Settings keeps the flag (see state/settings.ts). */
+export type TourSeen = { has: () => boolean; mark: () => void };
 
-/** Check if the first-run tour was already shown. Storage can throw (private mode), so treat that as seen. */
-export function hasSeenTour(store: KeyValueStore | undefined): boolean {
-  try {
-    return store?.getItem(TOUR_SEEN_KEY) === '1';
-  } catch {
-    return true;
+type Box = { top: number; left: number; right: number; bottom: number };
+type Size = { width: number; height: number };
+export type TourPlacement = 'below' | 'above' | 'right' | 'left';
+
+/**
+ * Work out where the tour card goes so it doesn't cover what it points at. Try below, above,
+ * right, then left of the target, and take the first spot that fits on screen. Tall panes like
+ * the file list or editor have no room above or below, so the card ends up beside them. If no
+ * spot fits (a small window), keep the card on screen where it covers the least of the target.
+ */
+export function placeTourCard(
+  target: Box,
+  card: Size,
+  viewport: Size,
+  margin = 12,
+): { top: number; left: number; placement: TourPlacement } {
+  // Only the part of the target that's on screen matters, some panes run past the edge.
+  const t = {
+    top: Math.max(target.top, 0),
+    left: Math.max(target.left, 0),
+    right: Math.min(target.right, viewport.width),
+    bottom: Math.min(target.bottom, viewport.height),
+  };
+  const maxTop = viewport.height - card.height - margin;
+  const maxLeft = viewport.width - card.width - margin;
+  // Math.max last, so a card bigger than the window still starts at the top left.
+  const onScreenTop = (top: number) => Math.max(margin, Math.min(top, maxTop));
+  const onScreenLeft = (left: number) => Math.max(margin, Math.min(left, maxLeft));
+  const spots: { placement: TourPlacement; top: number; left: number }[] = [
+    { placement: 'below', top: t.bottom + margin, left: onScreenLeft(t.left) },
+    { placement: 'above', top: t.top - card.height - margin, left: onScreenLeft(t.left) },
+    { placement: 'right', top: onScreenTop(t.top), left: t.right + margin },
+    { placement: 'left', top: onScreenTop(t.top), left: t.left - card.width - margin },
+  ];
+  const fits = spots.find((s) => s.top >= margin && s.left >= margin && s.top <= maxTop && s.left <= maxLeft);
+  if (fits) return fits;
+
+  // Nothing fits, so pull each spot onto the screen and pick the one that hides the least.
+  const covered = (top: number, left: number) =>
+    Math.max(0, Math.min(t.right, left + card.width) - Math.max(t.left, left)) *
+    Math.max(0, Math.min(t.bottom, top + card.height) - Math.max(t.top, top));
+  let best = { placement: spots[0].placement, top: 0, left: 0 };
+  let bestCovered = Infinity;
+  for (const spot of spots) {
+    const top = onScreenTop(spot.top);
+    const left = onScreenLeft(spot.left);
+    const area = covered(top, left);
+    if (area < bestCovered) {
+      best = { placement: spot.placement, top, left };
+      bestCovered = area;
+    }
   }
-}
-
-export function markTourSeen(store: KeyValueStore | undefined) {
-  try {
-    store?.setItem(TOUR_SEEN_KEY, '1');
-  } catch {
-    // Nothing to do, the tour just shows again next time.
-  }
+  return best;
 }
 
 type TourStep = { target: string; title: string; body: string };
 
+// Where a command has no keybind, the step names its menu item instead.
+const SHORTCUT_FALLBACK: Partial<Record<CommandId, string>> = { 'app.commandPalette': 'Help > Command Palette' };
+
+/** Fill each `{shortcut:<command id>}` in a step's text with that command's keybind for this platform. */
+export function fillShortcuts(text: string, shortcutLabel?: (commandId: CommandId) => string | undefined): string {
+  return text.replace(/\{shortcut:([\w.]+)\}/g, (_match, id: CommandId) => shortcutLabel?.(id) ?? SHORTCUT_FALLBACK[id] ?? id);
+}
+
 type TourOptions = {
-  store?: KeyValueStore;
+  /** With none, the tour counts as unseen every time. */
+  seen?: TourSeen;
+  /** The keybind label for a command, to fill `{shortcut:<command id>}` in the step text. */
+  shortcutLabel?: (commandId: CommandId) => string | undefined;
   /** Called when the tour closes, whether it finished or got skipped. */
   onClose?: () => void;
 };
@@ -54,19 +104,13 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
       return el && !el.closest('[hidden]') && getComputedStyle(el).display !== 'none';
     });
 
-  /** Put the card next to the target: below it if there's room, otherwise above, kept on screen. */
   const position = (target: HTMLElement) => {
-    const rect = target.getBoundingClientRect();
-    const cardRect = card.getBoundingClientRect();
-    const margin = 12;
-    const below = rect.bottom + margin;
-    const fitsBelow = below + cardRect.height < window.innerHeight;
-    let top = fitsBelow ? below : rect.top - cardRect.height - margin;
-    // Big targets like the editor leave no room either way, so sit inside them instead.
-    if (top < margin) top = Math.min(rect.top + margin, window.innerHeight - cardRect.height - margin);
-    const left = Math.min(Math.max(margin, rect.left), window.innerWidth - cardRect.width - margin);
-    card.style.top = `${Math.max(margin, top)}px`;
-    card.style.left = `${Math.max(margin, left)}px`;
+    const { width, height } = card.getBoundingClientRect();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const spot = placeTourCard(target.getBoundingClientRect(), { width, height }, viewport);
+    card.style.top = `${spot.top}px`;
+    card.style.left = `${spot.left}px`;
+    card.dataset.placement = spot.placement;
   };
 
   const show = () => {
@@ -77,7 +121,8 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
     highlighted = document.querySelector<HTMLElement>(step.target);
     highlighted?.classList.add('tour-highlight');
     titleEl.textContent = step.title;
-    bodyEl.textContent = step.body;
+    // Fill the keybinds in each time, so a changed keybind shows up here too.
+    bodyEl.textContent = fillShortcuts(step.body, options.shortcutLabel);
     countEl.textContent = `${index + 1} of ${list.length}`;
     backBtn.disabled = index === 0;
     nextBtn.textContent = index === list.length - 1 ? 'Done' : 'Next';
@@ -91,7 +136,7 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
     card.hidden = true;
     highlighted?.classList.remove('tour-highlight');
     highlighted = null;
-    markTourSeen(options.store);
+    options.seen?.mark();
     // Put focus back where it was, so keyboard users don't end up at the top of the page.
     if (returnFocus?.isConnected) returnFocus.focus();
     returnFocus = null;
@@ -127,7 +172,7 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
     },
     /** Start the tour only if this browser hasn't seen it. */
     startIfNew() {
-      if (hasSeenTour(options.store)) return false;
+      if (options.seen?.has()) return false;
       this.start();
       return true;
     },

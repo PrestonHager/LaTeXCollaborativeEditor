@@ -32,7 +32,7 @@ const input = (text = 'Hi'): ProjectPreviewInput => ({
   imageUrls: new Map(),
 });
 
-const result = (html: string): ProjectPreviewResult => ({ html, errors: [], missing: [] });
+const result = (html: string): ProjectPreviewResult => ({ html, errors: [], missing: [], changes: [] });
 
 /** A scheduler with fake workers, so tests can answer for them. */
 function setup() {

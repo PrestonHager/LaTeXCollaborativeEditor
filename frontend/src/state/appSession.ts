@@ -3,14 +3,15 @@ import type { SavedManifest } from '../storage/projectSaver';
 export type ProviderMode = 'local' | 'drive';
 export type ThemeMode = 'dark' | 'light' | 'system';
 
+// Themes used to live in this session blob too. They're settings now (see settings.ts), which
+// reads them from here once and moves them over.
+
 export type AppSessionState = {
   documentName: string;
   content: string;
   providerMode: ProviderMode;
   // False when saving is paused. It keeps its old name so saved sessions still load.
   saveNowEnabled: boolean;
-  editorTheme: ThemeMode;
-  previewTheme: ThemeMode;
   updatedAt: number;
   // Stable id for the open document, so a linked Drive file survives a rename.
   documentId?: string;
@@ -20,6 +21,8 @@ export type AppSessionState = {
   projectId?: string;
   activeFileId?: string;
   manifest?: SavedManifest;
+  // Set when the tab closed with edits the autosave hadn't written yet, so the next load saves them.
+  pendingSave?: boolean;
 };
 
 // The state is a base64 encoded Yjs update.
@@ -40,14 +43,11 @@ export function readAppSessionState(): AppSessionState | null {
     ) {
       return null;
     }
-    const validTheme = (t: unknown): t is ThemeMode => t === 'dark' || t === 'light' || t === 'system';
     return {
       documentName: parsed.documentName,
       content: parsed.content,
       providerMode: parsed.providerMode,
       saveNowEnabled: parsed.saveNowEnabled,
-      editorTheme: validTheme(parsed.editorTheme) ? parsed.editorTheme : 'system',
-      previewTheme: validTheme(parsed.previewTheme) ? parsed.previewTheme : 'system',
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
       documentId: typeof parsed.documentId === 'string' && parsed.documentId ? parsed.documentId : undefined,
       yjs:
@@ -57,6 +57,7 @@ export function readAppSessionState(): AppSessionState | null {
       projectId: typeof parsed.projectId === 'string' && parsed.projectId ? parsed.projectId : undefined,
       activeFileId: typeof parsed.activeFileId === 'string' && parsed.activeFileId ? parsed.activeFileId : undefined,
       manifest: isManifest(parsed.manifest) ? parsed.manifest : undefined,
+      pendingSave: parsed.pendingSave === true ? true : undefined,
     };
   } catch {
     return null;
@@ -74,10 +75,7 @@ function isManifest(value: unknown): value is SavedManifest {
   );
 }
 
-export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt' | 'editorTheme' | 'previewTheme'> & {
-  editorTheme?: ThemeMode;
-  previewTheme?: ThemeMode;
-};
+export type WriteAppSessionPayload = Omit<AppSessionState, 'updatedAt'>;
 
 /** Make a new id for a document. Falls back to a random string where crypto.randomUUID is missing. */
 export function createDocumentId(): string {
@@ -85,29 +83,33 @@ export function createDocumentId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function writeAppSessionState(state: WriteAppSessionPayload): boolean {
+/**
+ * How a session write went: 'full' kept the whole Yjs doc, 'text-only' had to drop it to fit
+ * (only the open file's text is kept), and 'failed' wrote nothing.
+ */
+export type SessionWriteResult = 'full' | 'text-only' | 'failed';
+
+export function writeAppSessionState(state: WriteAppSessionPayload): SessionWriteResult {
   const payload: AppSessionState = {
     ...state,
-    editorTheme: state.editorTheme ?? 'system',
-    previewTheme: state.previewTheme ?? 'system',
     updatedAt: Date.now(),
   };
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
-    return true;
+    return payload.yjs ? 'full' : 'text-only';
   } catch (error) {
     // The Yjs state is the biggest part, so if storage is full try again without it to keep the text safe.
     if (payload.yjs) {
       try {
         localStorage.setItem(SESSION_KEY, JSON.stringify({ ...payload, yjs: undefined }));
-        return true;
+        return 'text-only';
       } catch {
         // Fall through to the warning below.
       }
     }
     // This runs on every keystroke, so a full or blocked storage must never throw into the editor.
     console.warn('Could not save the app session to browser storage', error);
-    return false;
+    return 'failed';
   }
 }
 

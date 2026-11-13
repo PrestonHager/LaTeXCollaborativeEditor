@@ -30,7 +30,7 @@ flowchart TB
         Viewer["File viewer<br/>(images, PDFs)"]
         Preview["Preview"]
     end
-    Footer["Footer<br/>diagnostics, Privacy, ToS, Repository"]
+    Footer["Footer<br/>diagnostics, Privacy, ToS, Repository, version"]
 
     subgraph Dialogs
         Palette["Command palette"]

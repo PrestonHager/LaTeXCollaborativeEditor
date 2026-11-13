@@ -5,6 +5,10 @@ For a picture of how it all connects, see [How the app fits together](how-it-fit
 
 ## Menu bar
 
+The shortcuts on this page are the Windows and Linux defaults.
+On a Mac, the menus show the Mac keys instead, like **⌘S** for **Ctrl+S** and **⇧⌘O** for **Ctrl+Shift+O**.
+If you change a shortcut in [Settings](#settings), the menus, toolbar tooltips, and command palette show your keybind instead.
+
 Click a menu to open it, or focus it with **Tab** and use the arrow keys.
 **Escape** closes it.
 Items that don't apply right now are grayed out, for example host-only items when you're a guest.
@@ -41,7 +45,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | --- | --- | --- |
 | Undo | Ctrl+Z | Undoes your last typing in this file. |
 | Redo | Ctrl+Shift+Z or Ctrl+Y | Redoes it. |
-| Cut, Copy, Paste | Ctrl+X, Ctrl+C, Ctrl+V | The usual. From the menu, Paste may be blocked by the browser, so use the shortcut. |
+| Cut, Copy, Paste | Ctrl+X, Ctrl+C, Ctrl+V | The usual. The first time you choose **Paste** from the menu, the browser asks to let the page read the clipboard. If you say no, a notice tells you to use the shortcut instead. |
 | Select All | Ctrl+A | Selects the whole file. |
 | Settings | Ctrl+, | Opens [Settings](#settings). |
 
@@ -52,7 +56,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Toggle Editor Theme | | Cycles the app and editor theme: dark, light, system. |
 | Toggle Preview Theme | | Cycles the preview theme the same way. |
 | Pause Saving | | Stops autosave and Save Now until you turn it off. A check means saving is paused. |
-| Compile Now | Ctrl+Shift+C | Rebuilds the preview right away. |
+| Compile Now | Ctrl+Enter | Rebuilds the preview right away. |
 | Split View | | Editor and preview side by side. |
 | Editor Only | | Hides the preview. |
 | Preview Only | | Hides the editor. |
@@ -68,7 +72,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Report a Bug | | Opens the GitHub bug form. |
 | Report a Security Issue | | Opens GitHub's private vulnerability form. |
 | Request a Feature | | Opens the GitHub feature request form. |
-| About | | Shows the app version and links. |
+| About | | Shows the app version, commit, and links. |
 
 **Report a Bug** and **Request a Feature** open the GitHub issue forms in a new tab.
 The bug form comes with your browser, OS, and the app version filled in.
@@ -78,7 +82,8 @@ It never includes your document, file names, or the room link, and nothing is se
 Only the maintainers see what you send there, so use it for anything that could hurt other people if it were posted publicly.
 The [security policy](https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/SECURITY.md) says what to include.
 
-**About** shows the app version, with links to the docs, the source code, and the policies.
+**About** shows the app version, the commit it was built from (linked to GitHub), and the build date, with links to the docs, the source code, and the policies.
+Include the version when you report a problem. The bug form fills it in for you.
 
 ## Toolbar
 
@@ -102,7 +107,7 @@ It only shows once per browser, and you can take it again from **Help > Show Tou
 
 ## Command palette
 
-Press **Ctrl+P** (**⌘+P** on macOS), or choose **Help > Command Palette**.
+Press **Ctrl+P** (**⌘P** on macOS), or choose **Help > Command Palette**.
 It lists every menu command with its shortcut, plus a few that only live here.
 Each entry has a one-line description under it, and search matches those words too, so typing "github" finds **Report a Bug**.
 
@@ -128,7 +133,7 @@ While the palette is open, other shortcuts are paused so the palette can use the
 
 ## Settings
 
-Open **Edit > Settings**, press **Ctrl+,** (**⌘+,** on macOS), or search the palette for "settings".
+Open **Edit > Settings**, press **Ctrl+,** (**⌘,** on macOS), or search the palette for "settings".
 Changes apply right away, so there's no save button.
 **Done**, the X, or **Escape** close it.
 
@@ -138,15 +143,22 @@ Changes apply right away, so there's no save button.
 - **App and editor theme** and **Preview theme**: match system, dark, or light.
 - **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
 - **Google Drive**: who's signed in, like "Signed in as you@example.com", or "Not connected".
+- **Keyboard shortcuts**: every command with its keybinds. See [Changing shortcuts](keyboard-shortcuts.md#changing-shortcuts).
+- **Your settings**:
+  - **Export settings** downloads your themes, layout and shortcuts as a `.json` file.
+  - **Import settings** loads such a file. Settings it doesn't know, or values that don't fit, are skipped, and the dialog says which.
+  - **Reset to defaults** resets all settings, or just themes, layout, keyboard shortcuts, or the tour (so it shows again). Click it twice: the first click turns it red and says **Click again to reset**.
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
-Guests can change themes, but the saving options are turned off since the host decides how the project is saved.
+Your settings are saved in this browser and shared with its other open tabs, for guests as well as hosts. They're never sent to people in your room. See [Your settings](saving-and-storage.md#your-settings).
+
+Guests can change themes, layout and shortcuts, but the saving options are turned off since the host decides how the project is saved.
 
 ## Themes
 
 - **Toggle Editor Theme** cycles dark, light, and system for the app and the editor. System follows your computer's light or dark setting.
 - **Toggle Preview Theme** does the same for the preview only, so you can mix, like a dark editor with a light preview.
-- As the host, your theme choices are remembered in this browser. Guests' choices only last until they close the tab.
+- Your theme choices are remembered in this browser, whether you're the host or a guest, and your other open tabs switch too.
 
 ## Layout modes
 
@@ -157,6 +169,7 @@ Under **View**:
 - **Preview Only**: hides the editor.
 
 The active layout has a check mark in the menu.
+The layout and the splitter position are remembered in this browser, like your other [settings](saving-and-storage.md#your-settings).
 
 ## Header status pills
 
@@ -171,7 +184,8 @@ Every message they can show is in [Status and error messages](messages.md).
 ## Footer
 
 The footer shows [preview diagnostics](editing-and-preview.md#diagnostics) on the left.
-On the right are links to the Privacy policy, the Terms of Service, and the repository.
+On the right are links to the Privacy policy, the Terms of Service, and the repository, then the app version, like `v0.1.0`.
+Hover the version to see the commit and build date, or click it to open that commit on GitHub.
 
 ## Related topics
 

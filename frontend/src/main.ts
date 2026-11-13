@@ -12,7 +12,11 @@ import { createUploadDialog } from './ui/uploadDialog';
 import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
-import { createAboutDialog } from './ui/aboutDialog';
+import { createAboutDialog, renderFooterVersion } from './ui/aboutDialog';
+import { BUILD_INFO, formatVersion } from './app/buildInfo';
+import { flushBeforeReload } from './app/updateCheck';
+import { setupUpdateFlow } from './app/updateFlow';
+import { shouldConfirmLeave } from './app/leaveGuard';
 import { createTour } from './ui/tour';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -25,12 +29,20 @@ import { GoogleDriveProvider } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
-import { openGooglePicker } from './storage/providers/googlePicker';
+import { openGooglePicker, pickProjectFiles } from './storage/providers/googlePicker';
+import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFilesFromDrive, addFromDriveNote } from './app/driveAddFiles';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
-import { createCommands } from './app/commands';
+import { createCommands, shortcuts } from './app/commands';
+import { createKeymap } from './app/keymap';
+import { createSettingsStore } from './state/settings';
+import { bindSettings, importSettingsFile, resetSettings, settingsFileName } from './app/settingsBinding';
+import { createKeybindSettings } from './ui/keybindSettings';
+import { editorKeybinds } from './ui/editor';
+import { detectPlatform } from './ui/modifierShortcutLabels';
+import { createPreviewChanges, previewChangesElements } from './ui/previewChanges';
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -39,6 +51,7 @@ import { createCollabUndo } from './collab/undo';
 import {
   readAppSessionState,
   writeAppSessionState,
+  type SessionWriteResult,
   encodeYjsState,
   decodeYjsState,
   type PersistedYjsState,
@@ -59,6 +72,7 @@ renderStaticIcons();
 const editorPane = document.getElementById('editor-pane') as HTMLElement;
 const editor = createEditorPane(editorPane);
 const preview = createPreviewPane(document.getElementById('preview-pane')!);
+const previewChanges = createPreviewChanges(previewChangesElements());
 const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
 const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
@@ -77,11 +91,12 @@ const appNoticeEl = document.getElementById('app-notice') as HTMLElement;
 const activeFileNameEl = document.getElementById('active-file-name') as HTMLElement;
 const activeFileMainEl = document.getElementById('active-file-main') as HTMLElement;
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
-const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
+// The person's own settings (themes, layout, keybinds). Kept apart from the session, never sent to peers.
+const settings = createSettingsStore();
+const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange: ({ mode, splitRatio }) => settings.update({ layoutMode: mode, splitRatio }) });
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
-const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev';
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
 
 // Now point every [data-help] link in the page at its docs section.
@@ -89,7 +104,7 @@ wireHelpLinks(document, docsBase);
 
 /** The prefilled bug form. It only carries the browser, app version, and a fixed summary. */
 const makeBugUrl = (area?: IssueArea, summary?: string) =>
-  bugReportUrl({ appVersion: APP_VERSION, userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
+  bugReportUrl({ appVersion: formatVersion(BUILD_INFO), userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 
@@ -102,6 +117,8 @@ const { conflicts, overwrite } = projectState;
 let activeFileId: string | null = null;
 const themeState = createThemeController();
 const { applyEditorTheme, applyPreviewTheme } = themeState;
+// The rendered document sets its own colors, so keep it on the same preview theme as the frame around it.
+window.addEventListener('previewthemechange', () => preview.setTheme(themeState.previewDisplayTheme));
 let hostStorageText = 'Saved on host local storage';
 const fileProgress = new Map<string, number>();
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
@@ -181,13 +198,17 @@ function restoredDocState() {
   return state ? { docId: restored.yjs.docId, state } : undefined;
 }
 
-applyEditorTheme(restored?.editorTheme ?? 'system');
-applyPreviewTheme(restored?.previewTheme ?? 'system');
+applyEditorTheme(settings.get('editorTheme'));
+applyPreviewTheme(settings.get('previewTheme'));
 themeState.watchSystemTheme();
+
+// Set up at the end of this file. Peers only say hello once the page is running, so it's ready by then.
+let updateFlow: ReturnType<typeof setupUpdateFlow> | null = null;
 
 const session: SessionController = new SessionController({
   isHost: !isClient,
   blobs,
+  build: BUILD_INFO,
   onConnectionState: (state, peers) => {
     transportState = state;
     peerCount = peers;
@@ -200,6 +221,7 @@ const session: SessionController = new SessionController({
   getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
   onDocReplaced: () => bindProject(),
+  onPeerVersion: (peer) => updateFlow?.onPeerVersion(peer),
   onFileProgress: (hash, fraction) => {
     if (fraction === null) fileProgress.delete(hash);
     else fileProgress.set(hash, fraction);
@@ -214,18 +236,18 @@ let unbindDoc: (() => void) | null = null;
 
 const projectName = () => project.getName() || 'Untitled';
 
-const persistAppSession = () => {
-  if (isClient) return;
+/** Write the session to localStorage. pendingSave tells the next load to save edits the autosave hadn't. */
+const persistAppSession = (pendingSave = false): SessionWriteResult => {
+  if (isClient) return 'failed';
   const active = activeFileId ? project.get(activeFileId) : undefined;
   const persisted = session.getPersistedState();
-  writeAppSessionState({
+  return writeAppSessionState({
     documentName: projectName(),
     ...projectState.sessionFields(),
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
-    editorTheme: themeState.editorTheme,
-    previewTheme: themeState.previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
     activeFileId: activeFileId ?? undefined,
+    pendingSave: pendingSave || undefined,
   });
 };
 
@@ -296,10 +318,10 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
 const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
 
 /** Hold a file that changed in storage under us, and ask the person which copy to keep. */
-function holdConflict(conflict: FileConflict) {
+function holdConflict(conflict: FileConflict, wording?: Parameters<typeof conflictDialog.ask>[2]) {
   if (conflicts.has(conflict.id)) return;
   conflicts.set(conflict.id, conflict);
-  void conflictDialog.ask(conflict.path, projectState.activeProvider.label).then((choice) => resolveConflict(conflict, choice));
+  void conflictDialog.ask(conflict.path, projectState.activeProvider.label, wording).then((choice) => resolveConflict(conflict, choice));
 }
 
 /** Act on the person's pick for a held file, then let saves pick it up again. */
@@ -351,6 +373,10 @@ const compile = createPreviewCompile({
   onEmpty: (empty) => {
     previewEmptyEl.hidden = !empty || (isClient && project.isEmpty());
   },
+  // The info button in the preview bar lists what the preview changed for LaTeX.js.
+  onChanges: (changes) => previewChanges.setChanges(changes),
+  // With drive.file we can't see files added to the folder from Drive, so point at the fix.
+  missingHint: () => (!isClient && projectState.isDrive() ? DRIVE_MISSING_HINT : ''),
   onCompiled: () => {
     if (noticeKind !== 'compile') return;
     notice.clear();
@@ -585,9 +611,15 @@ async function uploadFile(file: File, folder: string): Promise<{ name: string; o
   }
 }
 
+let uploadsInFlight = 0;
 async function uploadFiles(files: File[], folder: string) {
   const results = [];
-  for (const file of files) results.push(await uploadFile(file, folder));
+  uploadsInFlight += 1;
+  try {
+    for (const file of files) results.push(await uploadFile(file, folder));
+  } finally {
+    uploadsInFlight -= 1;
+  }
   const failed = results.filter((result) => !result.ok);
   if (failed.length) showNotice(failed.map((result) => `${result.name}: ${result.message}`).join('; '), true);
   else showNotice(`Uploaded ${results.length} file(s)`);
@@ -596,13 +628,18 @@ async function uploadFiles(files: File[], folder: string) {
 const uploadDialog = createUploadDialog(document.getElementById('upload-dialog') as HTMLDialogElement, {
   getFolders: () => project.folderPaths(),
   upload: uploadFile,
+  fromDrive: {
+    state: () => ({ enabled: getCommandState('file.addFromDrive').enabled, note: addFromDriveNote({ isClient, isDrive: projectState.isDrive() }) }),
+    run: () => executeCommand('file.addFromDrive'),
+  },
 });
 
 const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
   onPick: (summary) => {
     if (!isClient) void openStoredProject(localAppProvider, summary.id);
   },
-  onImportZip: () => executeCommand('file.importZip'),
+  // The host already OK'd Open to get here, so this doesn't ask again.
+  onImportZip: () => commands.importZipFromOpenDialog(),
 });
 
 async function openStoredProject(provider: StorageProvider, id: string) {
@@ -715,8 +752,13 @@ const switchToDrive = () => {
   if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
 
+// Every shortcut label and key press reads from this one table.
+const keymap = createKeymap(shortcuts);
+const shortcutLabel = (commandId: CommandId) => keymap.labelFor(commandId);
+
 const commands = createCommands({
   isClient,
+  keymap,
   projectState,
   themeState,
   layout,
@@ -754,6 +796,8 @@ const commands = createCommands({
   get toolbar() {
     return toolbar;
   },
+  // Only the host's own room counts. A guest never replaces the project.
+  guestCount: () => (isClient || !inRoom ? 0 : peerCount),
   projectName,
   setStatus,
   showNotice,
@@ -771,6 +815,21 @@ const commands = createCommands({
   ensureDriveConnected,
   pickFromDrive,
   showDriveAccount,
+  addFilesFromDrive: () =>
+    addFilesFromDrive({
+      isClient,
+      projectState,
+      provider: driveProvider,
+      getProject: () => project,
+      blobs,
+      autosave,
+      ensureDrivePickerConfig,
+      ensureDriveConnected,
+      holdConflict: (conflict) => holdConflict(conflict, DRIVE_PICK_CONFLICT),
+      pickFiles: (folderId) => pickProjectFiles({ accessToken: driveProvider.getAccessToken(), apiKey: driveApiKey!, appId: driveAppId, folderId }),
+      setStatus,
+      showNotice,
+    }),
   openDocs: (topic) => openExternal(docsUrl(docsBase, topic)),
   openBugForm: () => openExternal(makeBugUrl()),
   openSecurityReport: () => openExternal(SECURITY_REPORT_URL),
@@ -778,10 +837,31 @@ const commands = createCommands({
   startTour: () => tour.start(),
   openAbout: () => aboutDialog.open(),
 });
-const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, handleKeydown, setSavingPaused } = commands;
+const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, listCommands, handleKeydown, setSavingPaused } = commands;
+
+// Saved themes, layout and keybinds go on screen now, and changes from other tabs, imports and resets follow.
+bindSettings({
+  settings,
+  themeState,
+  layout,
+  keymap,
+  isCommand: (id) => id in commands.commandRegistry,
+  onApplied: (changed) => {
+    if (changed.includes('keybinds')) {
+      menuBar.refreshShortcuts();
+      toolbar.refreshShortcuts();
+    }
+    refreshCommands();
+    if (settingsDialog.isOpen()) {
+      settingsDialog.refresh();
+      keybindSettings.refresh();
+    }
+  },
+});
 
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
+  shortcutLabel,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
@@ -796,15 +876,14 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
     savingPaused: projectState.savingPaused,
     canChangeSaving: !isClient,
     driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
+    settingsPersistent: settings.isPersistent(),
   }),
   onEditorTheme: (theme) => {
     applyEditorTheme(theme);
-    persistAppSession();
     refreshCommands();
   },
   onPreviewTheme: (theme) => {
     applyPreviewTheme(theme);
-    persistAppSession();
     refreshCommands();
   },
   onSavingPaused: (paused) => {
@@ -812,24 +891,39 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
     refreshCommands();
   },
   onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
+  onOpen: () => keybindSettings.refresh(),
+  onExportSettings: () => localDownload.download(settingsFileName(), settings.exportJson(), 'application/json'),
+  onImportSettings: (file) => importSettingsFile(settings, file),
+  onResetSettings: (scope) => resetSettings(settings, scope),
+});
+
+const keybindSettings = createKeybindSettings(document.getElementById('settings-keybinds')!, {
+  keymap,
+  builtins: shortcuts,
+  commands: listCommands,
+  editorKeybinds: editorKeybinds(detectPlatform()),
+  onChange: (next) => {
+    settings.set('keybinds', next);
+    // A changed keybind shows up everywhere right away.
+    menuBar.refreshShortcuts();
+    toolbar.refreshShortcuts();
+    refreshCommands();
+  },
 });
 
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
   getCommandState,
+  shortcutLabel,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, APP_VERSION);
+const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO);
+renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorElement, BUILD_INFO);
 
 const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
-  store: (() => {
-    // Some browsers throw just for touching localStorage when site data is blocked.
-    try {
-      return window.localStorage;
-    } catch {
-      return undefined;
-    }
-  })(),
+  shortcutLabel,
+  // With storage blocked, count the tour as seen so it doesn't pop up on every visit.
+  seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
 });
 
 // The empty states have their own buttons for the next step, like New file.
@@ -861,6 +955,8 @@ if (!isClient) {
       }
       autosave.enable();
       setStatus(driveRestoreMessage ?? savingStatus());
+      // The tab closed before the last edits were saved, so save them now.
+      if (restored?.pendingSave && project.getName()) autosave.markDirty();
       if (driveProvider.hasUsableToken()) void driveProvider.loadAccount().then(showDriveAccount);
     })
     .catch((error) => {
@@ -924,11 +1020,45 @@ document.querySelector('.skip-link')?.addEventListener('click', (event) => {
 // Finally, show the tour to first-time visitors once the page has settled.
 setTimeout(() => tour.startIfNew(), 600);
 
+let reloadingForUpdate = false;
+// Write the session right away, then only warn for work that write can't keep (see app/leaveGuard.ts).
 window.addEventListener('beforeunload', (event) => {
-  persistAppSession();
-  // Warn before closing if the last save hasn't gone through yet, or a file is held by a conflict.
-  if (autosave.hasUnsavedChanges() || conflicts.size > 0) {
+  const unsavedEdits = autosave.hasUnsavedChanges();
+  const sessionWrite = persistAppSession(unsavedEdits);
+  const confirm = shouldConfirmLeave({
+    reloadingForUpdate,
+    unsavedEdits,
+    savingPaused: autosave.isPaused(),
+    provider: projectState.isDrive() ? 'drive' : 'local',
+    sessionWrite,
+    saveFailed: autosave.lastSaveError() !== null,
+    heldConflicts: conflicts.size,
+    filesInFlight: fileProgress.size + uploadsInFlight,
+  });
+  if (confirm) {
     event.preventDefault();
     event.returnValue = '';
   }
+});
+
+// Offer to reload when a new build is deployed, or a peer runs a newer protocol (app/updateFlow.ts).
+updateFlow = setupUpdateFlow({
+  root: document.getElementById('update-prompt') as HTMLElement,
+  current: BUILD_INFO,
+  poll: import.meta.env.PROD,
+  baseUrl: document.baseURI,
+  room: () => ({ isHost: !isClient, inRoom }),
+  flush: () =>
+    flushBeforeReload({
+      isClient,
+      persist: () => persistAppSession(),
+      autosave,
+      blocker: () =>
+        conflicts.size ? `${conflicts.size} file(s) are waiting for you to pick a version.` : fileProgress.size + uploadsInFlight ? 'Files are still uploading or arriving.' : null,
+    }),
+  beforeReload: () => {
+    reloadingForUpdate = true;
+  },
+  reload: () => location.reload(),
+  showNotice: (message) => showNotice(message),
 });

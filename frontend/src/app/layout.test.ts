@@ -1,6 +1,6 @@
 import { createLayout } from './layout';
 
-function setup() {
+function setup(onChange?: Parameters<typeof createLayout>[0]['onChange']) {
   const splitRoot = document.createElement('div');
   const splitter = document.createElement('div');
   const editorPane = document.createElement('div');
@@ -10,7 +10,7 @@ function setup() {
   // jsdom doesn't lay anything out, so give the split a fixed 1000px width.
   splitRoot.getBoundingClientRect = () => ({ left: 0, width: 1000 }) as DOMRect;
   splitter.setPointerCapture = () => undefined;
-  const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
+  const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange });
   return { layout, splitRoot, splitter, editorPane, previewPane };
 }
 
@@ -65,5 +65,30 @@ describe('layout', () => {
     layout.setMode('editor-only');
     splitter.dispatchEvent(pointer('pointerdown'));
     expect(document.body.classList.contains('is-resizing')).toBe(false);
+  });
+
+  it('reports changes so they can be saved, and restores a saved layout quietly', () => {
+    const onChange = vi.fn();
+    const { layout, splitRoot, splitter } = setup(onChange);
+    layout.installSplitter();
+    layout.restore({ mode: 'split', splitRatio: 0.95 });
+    expect(layout.splitRatio).toBe(0.8);
+    expect(splitRoot.style.gridTemplateColumns).toBe('80% 8px 20%');
+    expect(onChange).not.toHaveBeenCalled();
+
+    splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    expect(onChange).toHaveBeenLastCalledWith({ mode: 'split', splitRatio: 0.75 });
+    splitter.dispatchEvent(pointer('pointerdown', 500));
+    window.dispatchEvent(pointer('pointermove', 400));
+    window.dispatchEvent(pointer('pointerup'));
+    expect(onChange).toHaveBeenLastCalledWith({ mode: 'split', splitRatio: 0.4 });
+    // A stray pointerup with no drag isn't a change.
+    window.dispatchEvent(pointer('pointerup'));
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    layout.setMode('preview-only');
+    expect(onChange).toHaveBeenLastCalledWith({ mode: 'preview-only', splitRatio: 0.4 });
+    layout.setMode('preview-only');
+    expect(onChange).toHaveBeenCalledTimes(3);
   });
 });

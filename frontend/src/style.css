@@ -40,11 +40,6 @@
   --preview-text: #e0e0e0;
   --preview-loading-bg: rgba(0, 0, 0, 0.82);
   --preview-loading-text: #e0e0e0;
-  /* Line-number gutter (CodeMirror `.cm-gutters`): defaults so gutter is always dark unless overridden below. */
-  --editor-gutter-bg: #141820;
-  --editor-gutter-active-bg: #1e2430;
-  --editor-line-number: #8b95a8;
-  --editor-line-number-active: #d1d5db;
 }
 
 .dark {
@@ -52,18 +47,25 @@
   --diag-text: #f6c177;
 }
 
+/*
+ * Editor colors. The dark set is also the :root default, so the "system" editor theme on a dark OS
+ * looks the same as the explicit dark theme. The light set is repeated in the prefers-color-scheme
+ * block below; keep the two light copies identical (src/style.test.ts checks this and the contrast).
+ * Line numbers must stay at least 4.5:1 against their gutter background.
+ */
+:root,
 [data-editor-theme="dark"] {
+  --editor-text: #d4d4d4;
+  --editor-bg: #1e1e1e;
+  --editor-gutter-bg: #0f1218;
+  --editor-gutter-active-bg: #1a1f2a;
   --editor-line-number: #8b95a8;
   --editor-line-number-active: #e5e7eb;
-  --editor-gutter-bg: #0f1218;
   --editor-keyword: #7ab8ff;
   --editor-string: #9ddf7d;
   --editor-number: #f4ba6e;
   --editor-comment: #8b949e;
   --editor-operator: #d2d8e0;
-  --editor-text: #d4d4d4;
-  --editor-bg: #1e1e1e;
-  --editor-gutter-active-bg: #1a1f2a;
 }
 
 [data-editor-theme="light"] {
@@ -74,11 +76,10 @@
   --editor-operator: #2d3c4f;
   --editor-text: #1f2a3d;
   --editor-bg: #ffffff;
-  /* Keep gutter rail dark so line numbers stay readable; tweak these to taste. */
-  --editor-gutter-bg: #141820;
-  --editor-gutter-active-bg: #1c2230;
-  --editor-line-number: #8b95a8;
-  --editor-line-number-active: #f3f4f6;
+  --editor-gutter-bg: #f3f4f6;
+  --editor-gutter-active-bg: #e5e7eb;
+  --editor-line-number: #5f6b7d;
+  --editor-line-number-active: #1f2a3d;
 }
 
 [data-preview-theme="dark"] {
@@ -104,10 +105,10 @@
     --editor-operator: #2d3c4f;
     --editor-text: #1f2a3d;
     --editor-bg: #ffffff;
-    --editor-gutter-bg: #141820;
-    --editor-gutter-active-bg: #1c2230;
-    --editor-line-number: #8b95a8;
-    --editor-line-number-active: #f3f4f6;
+    --editor-gutter-bg: #f3f4f6;
+    --editor-gutter-active-bg: #e5e7eb;
+    --editor-line-number: #5f6b7d;
+    --editor-line-number-active: #1f2a3d;
   }
   :root:not([data-preview-theme="dark"]) {
     --preview-bg: #ffffff;
@@ -169,6 +170,9 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 /* Menu bar. Basecoat styles the dropdowns, we only set sizes and the check spacing. */
 .menu-bar { display: inline-flex; align-items: center; gap: 0.125rem; }
 .menu-popover { min-width: 15rem; }
+/* Basecoat fades `visibility` too, so an opening menu stays invisible for its first frame and
+   focus() on its first item is dropped. Show it at once on open; closing still fades out. */
+.menu-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
 .menu-list { display: flex; flex-direction: column; }
 .menu-item-label { flex: 1; text-align: left; }
 .menu-item-indicator { display: inline-flex; }
@@ -188,11 +192,40 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .command-palette-empty { color: var(--muted-text); padding: 1.5rem 0.65rem; font-size: 13px; text-align: center; }
 
 /* Settings dialog. Basecoat handles the box, we lay out the rows. */
-.settings-dialog-body { display: grid; gap: 1rem; }
+/* The body scrolls when the dialog is taller than the window, so the footer stays in view. Padding keeps focus rings unclipped. */
+.settings-dialog-body { display: grid; gap: 1rem; min-height: 0; overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 label.settings-row { justify-content: flex-start; }
 .settings-dialog footer { justify-content: space-between; align-items: center; }
+.settings-keybinds { display: grid; gap: 0.5rem; min-width: 0; }
+.settings-keybinds h3 { margin: 0; }
+.settings-data { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; min-width: 0; }
+.settings-data h3 { margin: 0; }
+.settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+#settings-storage-note { color: var(--destructive, inherit); }
+.settings-hint { margin: 0; max-width: none; font-size: 0.8125rem; white-space: normal; overflow: visible; text-overflow: clip; }
+.keybind-search { width: 100%; height: 2rem; padding: 0 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: 0.875rem; }
+.keybind-search:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.keybind-list { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.keybind-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 0.75rem; padding: 0.375rem 0.5rem; border-bottom: 1px solid var(--border); }
+.keybind-row:last-child { border-bottom: 0; }
+.keybind-name { display: flex; flex-direction: column; font-size: 0.875rem; min-width: 0; }
+.keybind-section { font-size: 0.75rem; color: var(--muted-foreground); }
+.keybind-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.25rem; }
+.keybind-chip { display: inline-flex; align-items: center; gap: 0.125rem; padding-left: 0.375rem; border: 1px solid var(--border); border-radius: calc(var(--radius-md) - 2px); background: var(--muted); font-size: 0.8125rem; }
+.keybind-chip kbd { font-family: inherit; white-space: nowrap; }
+.keybind-chip[data-source="rule"] { border-color: var(--primary); }
+.keybind-chip[data-off] { background: transparent; color: var(--muted-foreground); }
+.keybind-chip[data-off] kbd { text-decoration: line-through; }
+.keybind-chip .keybind-chip-button { height: 1.5rem; min-width: 1.5rem; width: auto; padding: 0 0.25rem; font-size: 0.75rem; }
+.keybind-recorder { font-size: 0.8125rem; }
+.keybind-notes { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 0.125rem; }
+.keybind-note { display: flex; align-items: flex-start; gap: 0.375rem; font-size: 0.75rem; line-height: 1.25rem; color: var(--muted-foreground); }
+.keybind-note > svg { color: var(--destructive); flex: none; margin-top: 0.25rem; }
+.keybind-note .btn { height: auto; padding: 0; margin-left: 0.375rem; font-size: 0.75rem; vertical-align: baseline; }
+.keybind-empty { padding: 0.5rem; font-size: 0.875rem; }
 .about-dialog-body { display: grid; gap: 0.5rem; font-size: 14px; }
+#about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .dialog-help-links { display: inline-flex; margin-left: auto; }
 
@@ -204,6 +237,14 @@ label.settings-row { justify-content: flex-start; }
 .tour-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem; }
 .tour-buttons { display: inline-flex; gap: 0.25rem; margin-left: auto; }
 .tour-highlight { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--radius-sm); }
+
+/* "New version" prompt: a small card in the bottom corner, styled like the tour card but out of the way. */
+.update-prompt { position: fixed; z-index: 390; right: 0.75rem; bottom: 2.5rem; width: min(22rem, calc(100vw - 1.5rem)); padding: 0.75rem 1rem; display: grid; gap: 0.35rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
+.update-prompt[hidden] { display: none; }
+.update-prompt-text { margin: 0; font-size: 14px; font-weight: 600; }
+.update-prompt-detail { margin: 0; font-size: 13px; color: var(--muted-text); }
+.update-prompt.is-error .update-prompt-detail { color: var(--diag-text); }
+.update-prompt-buttons { display: flex; justify-content: flex-end; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.25rem; }
 
 /* Workspace: the file tree, then the editor and preview split. */
 .workspace { flex: 1; display: flex; min-height: 0; }
@@ -238,6 +279,20 @@ label.settings-row { justify-content: flex-start; }
 .preview-pane { position: relative; display: flex; flex-direction: column; }
 .preview-pane > .preview { flex: 1; min-height: 0; height: auto; }
 .pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 0.5rem 0 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
+.pane-bar-actions { display: inline-flex; align-items: center; gap: 0.125rem; }
+/* Info button for "Preview is approximate": an icon and a small count, then a popover listing the changes. */
+.preview-changes[hidden] { display: none; }
+.preview-changes-btn { gap: 0.2rem; color: var(--muted-text); font-variant-numeric: tabular-nums; }
+.preview-changes-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
+/* The tooltip says the same as the popover, so don't stack it on top while it's open. */
+.preview-changes-btn[aria-expanded="true"]::before { display: none; }
+.preview-changes-count { font-size: 11px; line-height: 1; }
+.preview-changes-popover { width: min(22rem, calc(100vw - 2rem)); min-width: 0; max-height: min(24rem, 60vh); margin-top: 0.25rem; padding: 0.75rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
+.preview-changes-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
+.preview-changes-title { margin: 0; font-size: 13px; font-weight: 600; }
+.preview-changes-summary { margin: 0; color: var(--muted-text); }
+.preview-changes-list { margin: 0; padding-left: 1.1rem; list-style: disc; display: grid; gap: 0.2rem; overflow-wrap: anywhere; }
+.preview-changes-learn { justify-self: start; color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .preview-empty { position: absolute; inset: 2rem 0 0 0; z-index: 1; border: 0; background: var(--surface); }
 .editor-file-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
 .editor-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -254,6 +309,10 @@ label.settings-row { justify-content: flex-start; }
 .upload-drop:hover, .upload-drop.is-dragging { border-color: var(--brand); color: var(--text); }
 .upload-results { list-style: none; margin: 0; padding: 0; font-size: 13px; display: grid; gap: 0.25rem; max-height: 10rem; overflow-y: auto; }
 .upload-results .is-error { color: var(--diag-text); }
+.upload-from-drive { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--panel-border); }
+.upload-from-drive[hidden] { display: none; }
+.upload-from-drive-note { margin: 0; font-size: 12px; color: var(--muted-text); }
+.upload-from-drive .btn { flex-shrink: 0; }
 .projects-list { display: flex; flex-direction: column; max-height: 50vh; overflow-y: auto; }
 .project-item { width: 100%; text-align: left; }
 .project-item:hover { background: var(--surface-3); }
@@ -291,16 +350,12 @@ label.settings-row { justify-content: flex-start; }
 .editor .cm-editor .cm-lineNumbers .cm-gutterElement {
   color: var(--editor-line-number) !important;
 }
-.editor .cm-editor .cm-activeLineGutter .cm-gutterElement {
+/* CodeMirror puts cm-activeLineGutter on the gutter element itself, so match both classes on one node. */
+.editor .cm-editor .cm-lineNumbers .cm-gutterElement.cm-activeLineGutter {
   color: var(--editor-line-number-active) !important;
 }
 .cm-content, .cm-line { color: var(--editor-text); }
-.cm-keyword { color: var(--editor-keyword); }
-.cm-atom, .cm-meta { color: var(--editor-keyword); }
-.cm-string { color: var(--editor-string); }
-.cm-number { color: var(--editor-number); }
-.cm-comment { color: var(--editor-comment); }
-.cm-operator, .cm-punctuation { color: var(--editor-operator); }
+/* Syntax token colors are set in src/ui/syntaxHighlight.ts from the --editor-* variables above. */
 .cm-error-line { background: rgba(239, 68, 68, 0.18); }
 .cm-warning-line { background: rgba(234, 179, 8, 0.15); }
 .cm-info-line { background: rgba(59, 130, 246, 0.12); }

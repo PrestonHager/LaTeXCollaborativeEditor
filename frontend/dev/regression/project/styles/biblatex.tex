@@ -1,0 +1,12 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\usepackage[style=alphabetic]{biblatex}
+\addbibresource{refs.bib}
+\begin{document}
+\section*{biblatex, style=alphabetic}
+% Expect: [Knu84b], [Lam94], [PLK88], [Knu84a], like the alpha file.
+\input{styles/citations}
+% Expect: a References list here, from \printbibliography.
+\printbibliography
+\end{document}

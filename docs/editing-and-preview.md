@@ -29,15 +29,15 @@ What it reads:
 
 - It starts from the [main file](projects.md#main-file).
 - It pulls in `\input` and `\include` files from the project.
-- `\includegraphics` shows PNG, JPG, GIF, WebP, and SVG images from the project. It follows `\graphicspath`, and widths like `width=0.5\textwidth`.
-- `\cite` and `\bibliography` become a numbered reference list built from your `.bib` files.
+- `\includegraphics` shows PNG, JPG, GIF, WebP, and SVG images from the project. It follows `\graphicspath` and the size options `width`, `height`, `scale` and `keepaspectratio`, with relative sizes like `0.5\textwidth` and absolute ones like `5cm` or `2in`. With only a width or a height, the image keeps its proportions. A height relative to `\textheight` is ignored, since the preview has no page height.
+- `\cite` and `\bibliography` become citations and a reference list built from your `.bib` files, in the style set by `\bibliographystyle`. See [Bibliography](#bibliography).
 
 When it runs:
 
 - After you stop typing for half a second.
 - At most about once a second while you keep typing, so the page stays smooth.
 - When an image arrives from a peer.
-- When you choose **View > Compile Now** (**Ctrl+Shift+C**).
+- When you choose **View > Compile Now** (**Ctrl+Enter**).
 
 The compile pill in the header says **Waiting**, **Compiling**, then **Compiled**.
 While it runs, the preview shows "Updating preview...".
@@ -51,7 +51,25 @@ The preview runs in a locked-down frame, so a collaborator's links or code can't
 Its fonts and styles load from a CDN.
 Your LaTeX stays in your browser.
 
-For what doesn't work, like PDF figures and BibTeX styles, see [What's supported](whats-supported.md).
+When the preview updates, it keeps your scroll position instead of jumping back to the top.
+
+### Links in the preview
+
+- Clicking a cross-reference made with `\ref` scrolls the preview to that section, figure or equation.
+  It works across files too, since the preview is one combined document.
+- A `\ref` to a label that doesn't exist shows `??` as plain text, not a link.
+- Clicking an `\href` or `\url` link to an `http`, `https` or `mailto` address opens it in a new tab (or your mail app).
+  The new tab has no connection back to the editor.
+- Links with any other scheme do nothing when clicked.
+  `javascript:` and `data:` links are removed before the preview shows, so they appear as plain text.
+
+How it works: the editor adds a small script of its own to the preview frame.
+Clicks on in-page links scroll inside the frame.
+Clicks on other links never load anything in the frame.
+The frame asks the editor to open the link. The editor checks that the request came from the preview frame, that the address is `http`, `https` or `mailto`, and that you just clicked (the browser's user activation). Without a click, nothing opens. Browsers without user activation tracking open at most one link every 1.5 seconds.
+The frame itself still can't open windows or reach the app.
+
+For what doesn't work, like PDF figures, see [What's supported](whats-supported.md).
 
 ## What the preview supports
 
@@ -59,8 +77,15 @@ The preview uses [LaTeX.js](https://latex.js.org/), which covers the basics of t
 It can't load most packages, so before typesetting, the editor strips or rewrites the things below.
 Your source isn't changed, only the copy sent to the preview.
 
-When something gets stripped or rewritten, a small "Preview is approximate" note shows at the top of the preview.
-Click it to see the list.
+When something gets stripped or rewritten, a small info button (ⓘ) shows in the preview's bar, next to the `?` help link, with the number of changes.
+Its tooltip says "Preview is approximate: 3 changes" (or however many there are).
+Click it, or press Enter on it, to see the list, with a link to [What's supported](whats-supported.md).
+Esc, or a click anywhere else, closes it.
+The document itself stays as it is, with no note on top.
+When nothing needed changing, the button isn't there.
+
+![The preview's info button, open, listing one change](assets/screenshots/preview-changes-light.png#only-light)
+![The preview's info button, open, listing one change](assets/screenshots/preview-changes-dark.png#only-dark)
 
 Stripped:
 
@@ -83,12 +108,47 @@ Rewritten:
 Comments, `\verb`, and the `verbatim`, `verbatim*`, `Verbatim`, `lstlisting`, `minted`, and `comment` environments are left alone.
 Anything not listed here goes to LaTeX.js as is, and if it doesn't know a command, the error shows up in the diagnostics.
 
+## Bibliography
+
+LaTeX.js has no BibTeX, so the preview reads your `.bib` files and formats the references itself.
+It looks for `\bibliography{refs}` (or biblatex's `\addbibresource{refs.bib}`) next to the main file first, then at the top of the project.
+The reference list goes where `\bibliography` or `\printbibliography` is.
+
+`\bibliographystyle` picks the style:
+
+| Style | Order | Labels | Names |
+| --- | --- | --- | --- |
+| `plain` | Sorted by author, year, title | `[1]` | Donald E. Knuth |
+| `unsrt` | Order of first citation | `[1]` | Donald E. Knuth |
+| `abbrv` | Sorted | `[1]` | D. E. Knuth |
+| `alpha` | Sorted | `[Knu84]` | Donald E. Knuth |
+| `ieeetr`, `IEEEtran` | Order of first citation | `[1]` | D. E. Knuth, with the title in quotes |
+| `apalike` | Sorted | `[Knuth, 1984]` | Knuth, D. E. (1984) |
+| `plainnat`, `abbrvnat`, `unsrtnat` | Like `plain`, `abbrv`, `unsrt` | `Knuth (1984)`, or `[1]` with `\usepackage[numbers]{natbib}` | As in `plain` or `abbrv` |
+
+With biblatex, `style=numeric`, `alphabetic`, `authoryear` and `ieee` map to `plain`, `alpha`, `apalike` and `ieeetr`, and `sorting=none` keeps citation order.
+With no style at all, the preview uses `plain`.
+Any other style also uses `plain`, and an info note on the `\bibliographystyle` line says so.
+
+Article and paper titles are lowercased after the first word, like BibTeX does, so put braces around words that must keep their capitals, like `{BibTeX}`.
+`@string` abbreviations and `#` joins work, and month names like `jan` become full or short month names.
+
+Cite commands:
+
+- `\cite`, `\citep`, `\parencite`, `\autocite` and `\footcite` give `[1]` (or `(Knuth, 1984)` for `\citep` in author-year styles).
+- `\citet` and `\textcite` give `Knuth [1]` or `Knuth (1984)`.
+- `\citealp`, `\citealt`, `\citeauthor` and `\citeyear`, and capitalized forms like `\Citet`.
+- Notes, like `\cite[p.~5]{knuth}` for `[1, p. 5]` and `\citep[see][ch.~2]{knuth}` for a note before and after.
+- `\nocite{key}` adds an entry to the list without citing it, and `\nocite{*}` adds every entry.
+
+A key that isn't in any `.bib` file shows as `[?]`, with a warning on that line.
+
 ## Diagnostics
 
 When the preview hits a problem, you see it in two places:
 
 - The **footer** says how many problems there are and shows the first one, with its file and line, like `1 diagnostic(s). ... (chapters/intro.tex line 4)`.
-- The **editor** puts a red mark on that line, if that file is open.
+- The **editor** puts a red mark on that line, if that file is open. Warnings, like a cite key that isn't in the bibliography, and notes, like an unsupported bibliography style, get their own colors.
 
 If a file named in `\input`, `\includegraphics`, or `\bibliography` isn't in the project, the footer says **Not found in the project:** and lists it.
 

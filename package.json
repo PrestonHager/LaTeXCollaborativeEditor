@@ -1,6 +1,7 @@
 {
   "name": "latex-collaborative-editor",
   "private": true,
+  "version": "0.1.0",
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
@@ -8,6 +9,7 @@
     "coverage:frontend": "npm --prefix frontend run test:coverage",
     "test:coverage": "npm run coverage:frontend",
     "test:e2e": "npm --prefix e2e test",
+    "test:load-time": "npm --prefix e2e run load-time",
     "screenshots": "npm run build && npm --prefix tools/screenshots install --no-audit --no-fund && npm --prefix tools/screenshots run shoot"
   }
 }

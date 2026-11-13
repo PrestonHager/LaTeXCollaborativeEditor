@@ -8,19 +8,19 @@ let inboundHandler: ((value: unknown, peerId?: string) => void) | undefined;
 vi.mock('@trystero-p2p/torrent', () => ({
   joinRoom: (...args: unknown[]) => {
     joinRoomSpy(...args);
-    return {
-      makeAction: (name: string) => [
-        vi.fn(),
-        (cb: (value: unknown, peerId?: string) => void) => {
-          if (name === 'doc-msg') inboundHandler = cb;
-        },
-      ],
-      onPeerJoin: (cb: (peerId: string) => void) => {
-        peerJoinHandler = cb;
+    // Trystero 0.25+ shape: action objects and settable peer handlers.
+    const room = {
+      makeAction: (name: string, config?: { onMessage?: (value: unknown, context: { peerId: string }) => void }) => {
+        if (name === 'doc-msg') inboundHandler = (value, peerId) => config?.onMessage?.(value, { peerId: peerId ?? '' });
+        return { send: vi.fn(() => Promise.resolve()), onMessage: config?.onMessage ?? null };
       },
-      onPeerLeave: vi.fn(),
-      leave: vi.fn(),
+      onPeerJoin: null as ((peerId: string) => void) | null,
+      onPeerLeave: null as ((peerId: string) => void) | null,
+      getPeers: () => ({}),
+      leave: vi.fn(() => Promise.resolve()),
     };
+    peerJoinHandler = (peerId) => room.onPeerJoin?.(peerId);
+    return room;
   },
 }));
 

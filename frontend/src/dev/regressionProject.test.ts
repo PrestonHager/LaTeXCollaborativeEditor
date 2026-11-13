@@ -1,5 +1,6 @@
 import { BlobStore } from '../project/blobStore';
 import { REGRESSION_PROJECT_NAME, dataUrlBytes, regressionProject } from './regressionProject';
+import { projectToPreviewHtml } from '../compile/latexJsPreview';
 
 describe('regressionProject', () => {
   it('loads every file in dev/regression/project with main.tex as the main file', async () => {
@@ -15,6 +16,7 @@ describe('regressionProject', () => {
       'figures/quadrants.png',
       'main.tex',
       'refs.bib',
+      ...['abbrv', 'alpha', 'apalike', 'biblatex', 'citations', 'ieeetr', 'natbib', 'unknown', 'unsrt'].map((name) => `styles/${name}.tex`),
     ]);
   });
 
@@ -39,6 +41,18 @@ describe('regressionProject', () => {
       for (const [, name] of line.matchAll(/\\(?:input|include)\{([^}]+)\}/g)) {
         expect(paths.has(name.endsWith('.tex') ? name : `${name}.tex`)).toBe(true);
       }
+    }
+  });
+
+  it('compiles every bibliography style file, with notes only in unknown.tex', async () => {
+    const content = await regressionProject(new BlobStore());
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    const binaryPaths = content.files.filter((file) => file.kind === 'binary').map((file) => file.path);
+    for (const mainPath of [...texts.keys()].filter((path) => path.startsWith('styles/') && path !== 'styles/citations.tex')) {
+      const result = projectToPreviewHtml({ mainPath, texts, binaryPaths, imageUrls: new Map() });
+      expect(result.html, mainPath).toContain('References');
+      expect(result.missing, mainPath).toEqual([]);
+      expect(result.errors.map((error) => error.severity), mainPath).toEqual(mainPath === 'styles/unknown.tex' ? ['warning', 'info'] : []);
     }
   });
 });

@@ -1,6 +1,7 @@
 import { HtmlGenerator, parse } from 'latex.js';
 import { adaptLatexSource } from './latexJsAdapt';
-import { expandProjectSource } from './projectSource';
+import { expandProjectSource, type ProjectDiagnostic } from './projectSource';
+import { addKatexFontFallbacks } from './katexFonts';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** LaTeX.js static assets (CSS, fonts, JS) — same version as the `latex.js` npm dependency. */
@@ -33,30 +34,13 @@ export function stripDangerousUrls(doc: Document): void {
 }
 
 /**
- * Add a small note to the top of the preview listing what the adapter removed or rewrote,
- * so people know the preview isn't exact. It's a <details>, so it works without scripts.
+ * LaTeX.js turns a \ref to a label that doesn't exist into `<a href="#">??</a>`.
+ * Drop the href so `??` is plain text, not a link that goes nowhere.
  */
-export function addChangesNote(doc: Document, changes: string[]): void {
-  if (!changes.length) return;
-  const note = doc.createElement('details');
-  note.className = 'lc-preview-note';
-  note.setAttribute(
-    'style',
-    'font:12px/1.4 system-ui,sans-serif;color:#555;background:#f6f6f6;border:1px solid #ddd;border-radius:4px;padding:4px 8px;margin:8px;',
-  );
-  const summary = doc.createElement('summary');
-  summary.setAttribute('style', 'cursor:pointer;');
-  summary.textContent = `Preview is approximate: ${changes.length} change${changes.length === 1 ? '' : 's'} made for LaTeX.js.`;
-  const list = doc.createElement('ul');
-  list.setAttribute('style', 'margin:4px 0;padding-left:20px;');
-  for (const change of changes) {
-    const item = doc.createElement('li');
-    item.textContent = change;
-    list.appendChild(item);
+export function unlinkMissingRefs(doc: Document): void {
+  for (const a of Array.from(doc.querySelectorAll('a'))) {
+    if (a.getAttribute('href')?.trim() === '#') a.removeAttribute('href');
   }
-  note.append(summary, list);
-  // The worker's mini DOM has no prepend, so we insert before the first child instead.
-  doc.body.insertBefore(note, doc.body.firstChild);
 }
 
 /**
@@ -67,7 +51,10 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
   return { html: doc ? doc.documentElement.outerHTML : null, errors, changes };
 }
 
-/** Typeset LaTeX into a document, with dangerous URLs stripped and the changes note added. */
+/**
+ * Typeset LaTeX into a document, with dangerous URLs stripped. `changes` lists what the adapter
+ * removed or rewrote; the preview pane shows it next to the preview, not inside the document.
+ */
 function typeset(source: string): { doc: Document | null; errors: EditorDiagnostic[]; changes: string[] } {
   const adapted = adaptLatexSource(source);
   try {
@@ -77,7 +64,8 @@ function typeset(source: string): { doc: Document | null; errors: EditorDiagnost
     const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
-    addChangesNote(doc, adapted.changes);
+    unlinkMissingRefs(doc);
+    addKatexFontFallbacks(doc);
     return { doc, errors: [], changes: adapted.changes };
   } catch (err) {
     return {
@@ -99,7 +87,7 @@ function errorLine(err: unknown, source: string): number {
   return Math.min(line, source.split('\n').length);
 }
 
-export type ProjectDiagnostic = EditorDiagnostic & { path: string };
+export type { ProjectDiagnostic };
 
 export type ProjectPreviewInput = {
   mainPath: string;
@@ -109,7 +97,13 @@ export type ProjectPreviewInput = {
   imageUrls: Map<string, string>;
 };
 
-export type ProjectPreviewResult = { html: string | null; errors: ProjectDiagnostic[]; missing: string[] };
+export type ProjectPreviewResult = {
+  html: string | null;
+  errors: ProjectDiagnostic[];
+  missing: string[];
+  /** What the preview removed or rewrote for LaTeX.js, as plain text. It can quote the document. */
+  changes: string[];
+};
 
 /**
  * Typeset the whole project, starting at the main file. \input files, images and the
@@ -117,12 +111,16 @@ export type ProjectPreviewResult = { html: string | null; errors: ProjectDiagnos
  */
 export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreviewResult {
   const expanded = expandProjectSource(input.mainPath, input.texts, input.binaryPaths);
-  const { doc, errors: sourceErrors } = typeset(expanded.source);
-  const errors = sourceErrors.map((error) => {
-    const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
-    return { ...error, path: origin.path, line: origin.line };
-  });
-  if (!doc) return { html: null, errors, missing: expanded.missing };
+  const { doc, errors: sourceErrors, changes } = typeset(expanded.source);
+  // LaTeX.js errors come first, since they stop the preview. Bibliography notes follow.
+  const errors: ProjectDiagnostic[] = [
+    ...sourceErrors.map((error) => {
+      const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
+      return { ...error, path: origin.path, line: origin.line };
+    }),
+    ...expanded.diagnostics,
+  ];
+  if (!doc) return { html: null, errors, missing: expanded.missing, changes };
 
   // Images go in after the URL check, since it would strip our data: URLs along with a peer's.
   for (const img of Array.from(doc.querySelectorAll('img'))) {
@@ -132,9 +130,9 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.setAttribute('alt', image.path);
-    img.setAttribute('style', `max-width:100%;${image.widthPercent ? `width:${image.widthPercent}%;` : ''}`);
+    img.setAttribute('style', image.style);
     if (url) img.setAttribute('src', url);
     else img.removeAttribute('src');
   }
-  return { html: doc.documentElement.outerHTML, errors, missing: expanded.missing };
+  return { html: doc.documentElement.outerHTML, errors, missing: expanded.missing, changes };
 }

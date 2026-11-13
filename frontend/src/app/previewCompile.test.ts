@@ -4,9 +4,9 @@ import { starterProject } from '../project/projectIo';
 import type { ProjectPreviewInput, ProjectPreviewResult } from '../compile/latexJsPreview';
 import { COMPILE_DEBOUNCE_MS, COMPILE_MIN_INTERVAL_MS, createPreviewCompile } from './previewCompile';
 
-const ok = (overrides: Partial<ProjectPreviewResult> = {}): ProjectPreviewResult => ({ html: '<p>ok</p>', errors: [], missing: [], ...overrides });
+const ok = (overrides: Partial<ProjectPreviewResult> = {}): ProjectPreviewResult => ({ html: '<p>ok</p>', errors: [], missing: [], changes: [], ...overrides });
 
-type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onCompiled' | 'onCompileError'>;
+type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onChanges' | 'onCompiled' | 'onCompileError' | 'missingHint'>;
 
 function setup(content: ProjectContent = starterProject('Paper'), hooks: Hooks = {}) {
   const project = new ProjectDoc(new Y.Doc());
@@ -134,6 +134,18 @@ describe('preview compile', () => {
     expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png');
   });
 
+  it('adds a hint after missing files when there is one', async () => {
+    let hint = 'Look in Drive.';
+    const { compile, compiler, diagnosticsEl } = setup(starterProject('Paper'), { missingHint: () => hint });
+    compiler.compile.mockResolvedValue(ok({ missing: ['fig.png'] }));
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png. Look in Drive.');
+    hint = '';
+    compile.invalidate();
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png');
+  });
+
   it('reports a compile that fails', async () => {
     const { compile, compiler, editor, compileStatusEl, diagnosticsEl } = setup();
     compiler.compile.mockRejectedValue(new Error('boom'));
@@ -207,5 +219,31 @@ describe('preview compile', () => {
     await compile.runCompile();
     expect(hooks.onEmpty).toHaveBeenLastCalledWith(true);
     expect(hooks.onDiagnostics).toHaveBeenLastCalledWith('', 'diagnostics');
+  });
+
+  it('passes the changes on with each rendered document, and clears them with no main file', async () => {
+    const hooks = { onChanges: vi.fn() };
+    const { compile, compiler } = setup(starterProject('Paper'), hooks);
+    compiler.compile.mockResolvedValueOnce(ok({ changes: ['Removed \\vspace.', 'Footnotes show inline.'] }));
+    await compile.runCompile();
+    expect(hooks.onChanges).toHaveBeenLastCalledWith(['Removed \\vspace.', 'Footnotes show inline.']);
+
+    // A failed parse keeps the last document up, so its list stays as well.
+    compiler.compile.mockResolvedValueOnce(ok({ html: null, changes: ['Something else.'] }));
+    compile.invalidate();
+    await compile.runCompile();
+    expect(hooks.onChanges).toHaveBeenCalledTimes(1);
+
+    compiler.compile.mockResolvedValueOnce(ok());
+    compile.invalidate();
+    await compile.runCompile();
+    expect(hooks.onChanges).toHaveBeenLastCalledWith([]);
+
+    expect(hooks.onChanges).toHaveBeenCalledTimes(2);
+
+    const noMainHooks = { onChanges: vi.fn() };
+    const noMain = setup({ name: 'Paper', files: [{ path: 'notes.txt', kind: 'text', text: 'hi' }] }, noMainHooks);
+    await noMain.compile.runCompile();
+    expect(noMainHooks.onChanges).toHaveBeenCalledWith([]);
   });
 });

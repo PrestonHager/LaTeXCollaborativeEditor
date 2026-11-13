@@ -12,8 +12,8 @@
     </style>
   </head>
   <!--
-    Dev-only page. Vite serves it during npm run dev, but vite build only builds index.html,
-    so it never ships. The checklist itself lives in dev/regression/checklist.md.
+    Dev-only page. Vite serves it during npm run dev, but vite build only builds the pages in
+    BUILD_PAGES in vite.config.ts, so it never ships (scripts/check-build-pages.mjs checks this). The checklist itself lives in dev/regression/checklist.md.
   -->
   <body class="regression-page">
     <main id="checklist" class="mx-auto max-w-3xl space-y-8 px-4 py-8"></main>

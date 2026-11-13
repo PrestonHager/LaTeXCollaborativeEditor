@@ -34,13 +34,27 @@ Centered text.
 \end{center}
 
 \subsection{Links}
-% Expect: the first two are clickable links.
+% Expect: the first three are links. Clicking the first two opens them in a new tab, and the
+% preview itself stays put. Clicking the email link hands it to your mail app.
 % The last two must show as text with no href, since the preview strips unsafe links.
 \href{https://github.com/PrestonHager/LaTeXCollaborativeEditor}{The repository},
 \url{https://example.com},
+\href{mailto:someone@example.com}{an email link},
 \href{javascript:alert(1)}{a javascript link},
 and \href{data:text/html,hi}{a data link}.
 
 \subsection{References}
 \label{sec:refs}
 This is section~\ref{sec:refs}.
+% Expect: clicking the 4 in the next line scrolls the preview down to the Citations section.
+Jump to section~\ref{sec:citations}.
+% Expect: ?? as plain text, not a link, since the label doesn't exist.
+A missing label: \ref{sec:does-not-exist}.
+
+\subsection{Verbatim}
+% Expect: the \verb text shows in monospace exactly as typed, backslashes and braces included.
+% Expect: nothing from the comment block shows, and "Before" and "after" stay in one paragraph.
+% Expect: the "Preview is approximate" list (the info button above the preview) doesn't mention \vspace or \addcontentsline,
+% since both only appear inside verbatim-like text.
+Inline code: \verb|\vspace{1em}| and \verb+\footnote{not a footnote}+.
+Before \begin{comment}\addcontentsline{toc}{section}{Hidden}\end{comment} after.
