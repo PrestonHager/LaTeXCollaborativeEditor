@@ -1,0 +1,41 @@
+/*
+ * Template dialogs (#74): the New Project picker (dialog-lg), Save as Template and the profile
+ * (dialog-md). This file loads with templatesUi.ts, not with the page.
+ */
+.template-dialog-body { display: grid; gap: 1rem; min-width: 0; }
+.template-dialog footer { justify-content: space-between; align-items: center; }
+.template-footer-tools, .template-footer-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.template-footer-actions { margin-left: auto; }
+
+/* Picker: the list on the left, the chosen template's details on the right, like Settings. */
+@media (min-width: 48rem) {
+  .template-dialog-picker .template-dialog-body { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); column-gap: 1.5rem; }
+  .template-dialog-picker .template-details { padding-left: 1.5rem; border-left: 1px solid var(--border); }
+}
+.template-list { display: grid; gap: 1rem; align-content: start; max-height: min(60vh, 34rem); overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
+.template-group { display: grid; gap: 0.25rem; }
+.template-group-title { margin: 0 0 0.125rem; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted-foreground); }
+.template-group-note { margin: 0; font-size: 0.8125rem; color: var(--muted-foreground); }
+.template-group-note.is-error { color: var(--destructive); }
+.template-item { display: grid; gap: 0.125rem; padding: 0.5rem 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; text-align: left; }
+.template-item:hover { background: var(--accent); }
+.template-item[aria-selected="true"] { border-color: var(--primary); background: var(--accent); box-shadow: inset 3px 0 0 var(--primary); }
+.template-item:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.template-item-name { font-size: 0.875rem; font-weight: 500; }
+.template-item-description { font-size: 0.8125rem; color: var(--muted-foreground); }
+
+.template-details { display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
+.template-details-heading h3 { margin: 0; font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+.template-description { margin: 0; font-size: 0.875rem; }
+.template-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.template-actions .template-delete { color: var(--destructive); }
+.template-warning { margin: 0; padding: 0.5rem 0.75rem; border: 1px solid var(--destructive); border-radius: var(--radius-md); font-size: 0.8125rem; }
+
+/* Forms: one field per row, label above. Inputs reuse the prompt dialog's style (.app-dialog-input). */
+.template-form { display: grid; gap: 0.75rem; }
+.template-field { display: grid; gap: 0.375rem; min-width: 0; }
+.template-field .select { width: 100%; }
+.template-textarea { height: auto; min-height: 4.5rem; padding: 0.375rem 0.625rem; resize: vertical; line-height: 1.4; }
+.template-hint { margin: 0; font-size: 0.8125rem; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.template-check { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; }
+.template-shared-name { padding-bottom: 0.75rem; border-bottom: 1px solid var(--border); }

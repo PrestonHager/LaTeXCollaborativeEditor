@@ -63,6 +63,8 @@ import {
   CircleHelp,
   Plus,
   TriangleAlert,
+  LayoutTemplate,
+  UserPen,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -71,8 +73,10 @@ import type { CommandId } from './menuBar';
 const commandIcons: Record<CommandId, IconNode> = {
   'app.commandPalette': Command,
   'app.openSettings': Settings,
+  'app.editProfile': UserPen,
   'file.new': FilePlus,
   'file.rename': SquarePen,
+  'file.saveAsTemplate': LayoutTemplate,
   'share.copyLink': Share2,
   'view.darkMode': Moon,
   'view.lightMode': Sun,

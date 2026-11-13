@@ -1,6 +1,7 @@
 import type { KeybindRule, KeybindSettings } from '../app/keymap';
 import type { LayoutMode } from '../app/layout';
 import type { ThemeMode } from './appSession';
+import { emptyProfile, sanitizeProfile, type Profile } from './profile';
 
 /**
  * The person's own settings: themes, layout, keybinds and the like. They live in this browser,
@@ -41,6 +42,8 @@ export type Settings = {
    * made on the first share). It says nothing about you and is only used to pick the colour.
    */
   presenceId: string;
+  /** Your details for templates (state/profile.ts). Personal data: never sent to peers. */
+  profile: Profile;
 };
 export type ExportDestinationId = 'download' | 'drive';
 export type SettingKey = keyof Settings;
@@ -55,6 +58,7 @@ export const defaultSettings = (): Settings => ({
   exportDestination: 'download',
   displayName: '',
   presenceId: '',
+  profile: emptyProfile(),
 });
 
 /** Groups that Reset can act on one at a time. */
@@ -64,6 +68,7 @@ export const settingSections = {
   keybinds: ['keybinds'],
   tour: ['tourSeen'],
   export: ['exportDestination'],
+  profile: ['profile'],
 } as const satisfies Record<string, readonly SettingKey[]>;
 export type SettingSection = keyof typeof settingSections;
 
@@ -80,6 +85,7 @@ const sanitizers: { [K in SettingKey]: (value: unknown) => Settings[K] | undefin
   exportDestination: (value) => (value === 'download' || value === 'drive' ? value : undefined),
   displayName: (value) => (value === '' ? '' : cleanDisplayName(value)),
   presenceId: (value) => (value === '' || isPresenceId(value) ? value : undefined),
+  profile: sanitizeProfile,
 };
 
 const PRESENCE_ID_PATTERN = /^[0-9a-f]{16}$/;

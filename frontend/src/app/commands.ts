@@ -65,6 +65,11 @@ export type CommandContext = {
   fileTree: { currentFolder(): string };
   projectsDialog: { open(projects: ProjectSummary[]): void };
   uploadDialog: { open(folder?: string): void };
+  /**
+   * The template dialogs (templates/templatesUi.ts), which load on first use. Each resolves once its
+   * dialog closes, and rejects with a load failure when the code couldn't load.
+   */
+  templates: { openNew(): Promise<void>; saveAsTemplate(): Promise<void>; editProfile(): Promise<void> };
   zipInput: HTMLInputElement;
   shareButtonEl: HTMLElement;
   // These get swapped out or made later, so we read them each time we need them.
@@ -234,9 +239,22 @@ export function createCommands(app: CommandContext) {
     },
     'file.new': async () => {
       if (isClient) return;
+      // The template picker asks for itself, and warns when guests are in the room.
+      try {
+        await app.templates.openNew();
+        return;
+      } catch (error) {
+        if (!isLoadFailure(error)) throw error;
+        console.warn('The template picker did not load, so New Project offers an empty project', error);
+      }
+      // Offline before the picker ever loaded: an empty project still works, as it did before templates.
       if (!(await confirmDialog(replaceProjectDialog('new', guestCount() > 0)))) return;
       await switchProject(starterProject(''), projectState.activeProvider, null);
     },
+    'file.saveAsTemplate': () => {
+      if (!isClient) return app.templates.saveAsTemplate();
+    },
+    'app.editProfile': () => app.templates.editProfile(),
     'file.openLocal': async () => {
       if (isClient) return;
       // Only an OK on a real confirm counts. With nobody connected there's nothing to carry over.
@@ -381,7 +399,7 @@ export function createCommands(app: CommandContext) {
       }
       const deleteAll = await confirmDialog({
         title: 'Delete all local projects?',
-        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in this browser. Projects on Google Drive stay. This cannot be undone.`,
+        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in this browser. Your templates and projects on Google Drive stay. This cannot be undone.`,
         confirmLabel: count === 1 ? 'Delete 1 project' : `Delete ${count} projects`,
         destructive: true,
       });
@@ -529,6 +547,7 @@ export function createCommands(app: CommandContext) {
   const getCommandState = (commandId: CommandId): CommandState => {
     switch (commandId) {
       case 'file.new':
+      case 'file.saveAsTemplate':
       case 'file.openLocal':
       case 'file.openDrive':
       case 'file.importZip':

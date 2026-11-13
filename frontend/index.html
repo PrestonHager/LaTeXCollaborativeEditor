@@ -43,10 +43,11 @@
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-file" aria-expanded="false">File</button>
             <div id="menu-file" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="File">
-                <button type="button" class="menu-item" role="menuitem" data-command="file.new" data-description="Start a fresh project. The current one stays saved."><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.new" data-description="Start a project from a template, or an empty one. The current one stays saved."><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal" data-description="Open a project saved in this browser."><span class="menu-item-label">Open Local Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive" data-description="Pick a project folder or .tex file from Google Drive."><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.importZip" data-description="Turn a .zip of files into a new project."><span class="menu-item-label">Upload .zip as New Project</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.saveAsTemplate" data-description="Save this project's files as a template for new projects."><span class="menu-item-label">Save as Template…</span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="file.newFile" data-description="Add an empty text file to the project."><span class="menu-item-label">New File</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.newFolder" data-description="Add a folder to the project."><span class="menu-item-label">New Folder</span></button>
@@ -82,6 +83,7 @@
                 <button type="button" class="menu-item" role="menuitem" data-command="edit.selectAll" data-description="Select everything in the open file."><span class="menu-item-label">Select All</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="app.openSettings" data-description="Change themes and how saving works."><span class="menu-item-label">Settings</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="app.editProfile" data-description="Your name, affiliation and email, which templates fill in. Never sent to your room."><span class="menu-item-label">Profile…</span></button>
               </div>
             </div>
           </div>
@@ -324,6 +326,10 @@
             <span class="label">Google Drive</span>
             <span id="settings-drive-account" class="muted">Not connected</span>
           </div>
+          <div class="settings-row">
+            <span class="label" id="settings-profile-label">Profile</span>
+            <button id="settings-profile" type="button" class="btn" data-variant="outline" data-size="sm" aria-describedby="settings-profile-label">Edit profile</button>
+          </div>
           <!-- Keybinds. keybindSettings.ts draws one row per command into the list. -->
           <section id="settings-keybinds" class="settings-keybinds" aria-labelledby="settings-keybinds-title">
             <div class="settings-row">
@@ -337,7 +343,7 @@
           <!-- Your settings: export, import and reset. settingsDialog.ts wires these to state/settings.ts. -->
           <section class="settings-data" aria-labelledby="settings-data-title">
             <h3 id="settings-data-title" class="label">Your settings</h3>
-            <p class="muted settings-hint">Themes, layout and shortcuts are saved in this browser and shared with its other tabs. They are never sent to people in your room.</p>
+            <p class="muted settings-hint">Themes, layout, shortcuts and your profile are saved in this browser and shared with its other tabs. They are never sent to people in your room.</p>
             <p id="settings-storage-note" class="settings-hint" hidden>This browser is blocking storage, so settings only last until you close this tab. Export them to keep a copy.</p>
             <div class="settings-actions">
               <button id="settings-export" type="button" class="btn" data-variant="outline" data-size="sm">Export settings</button>
@@ -352,6 +358,7 @@
                 <option value="keybinds">Keyboard shortcuts</option>
                 <option value="tour">Tour (show it again)</option>
                 <option value="export">Where exports go</option>
+                <option value="profile">Profile (this browser only)</option>
               </select>
               <button id="settings-reset" type="button" class="btn" data-variant="outline" data-size="sm">Reset to defaults</button>
             </div>

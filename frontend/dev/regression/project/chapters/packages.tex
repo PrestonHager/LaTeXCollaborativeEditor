@@ -1,0 +1,38 @@
+\section{Modern packages}
+\label{sec:packages}
+% These come from the built-in templates (#74). The preview stands in for each package, and
+% the "Preview is approximate" list (the info button above the preview) names each stand-in.
+
+% Expect: curly double quotes around "quoted", then "section 6" as a link (cleveref's name, guessed from sec:).
+Some \enquote{quoted} text, and a reference to \cref{sec:packages}.
+
+% Expect: "9.81 m/s²", "6.022 × 10²³" and "10–20 °C", in plain text.
+A quantity \qty{9.81}{\metre\per\second\squared}, a number \num{6.022e23}, and a range \qtyrange{10}{20}{\celsius}.
+
+% Expect: the equation and the two aligned lines typeset with KaTeX, without equation numbers.
+\begin{equation}
+  E = mc^2 \label{eq:energy}
+\end{equation}
+\begin{align}
+  a &= b + c \\
+  d &= e
+\end{align}
+
+% Expect: a bold "Theorem (Pythagoras)." heading, then an italic "Proof." ending in a small square.
+\begin{theorem}[Pythagoras]
+  $a^2 + b^2 = c^2$.
+\end{theorem}
+\begin{proof}
+  Draw it.
+\end{proof}
+
+% Expect: an italic note "(A table goes here. The preview can't show tables yet.)" under a bold caption, and no "[htbp]".
+\begin{table}[htbp]
+  \centering
+  \caption{A booktabs table}
+  \begin{tabular}{ll}
+    \toprule
+    A & B \\
+    \bottomrule
+  \end{tabular}
+\end{table}

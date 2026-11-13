@@ -67,7 +67,9 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
 - [ ] Code in `verbatim`, `lstlisting`, `minted` or `comment` blocks, and in environments the document defines with `\lstnewenvironment`, `\DefineVerbatimEnvironment`, `\newminted` or a `\newenvironment` around one of those, is left alone, even when `\begin` or `\end` is in the middle of a line. The unit tests in `src/compile/latexJsAdapt.test.ts` and `src/compile/verbatimBlocks.test.ts` cover them.
 
-Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio`, plus `page`, `trim`, `viewport` and `clip` for PDF figures (a height relative to `\textheight` is ignored, and `trim` or `viewport` always clips). EPS figures are boxes, not drawings.
+- [ ] Modern packages (the last section): `\enquote`, `\cref`, siunitx, `equation` and `align`, the theorem and proof, and the booktabs table each match their `% Expect:` comment, and the ⓘ list names each stand-in (theorems, equations, `\cref`, siunitx, tables, and the ignored `\newtheorem`).
+
+Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref` of its own (the preview stands in for the first three), footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio`, plus `page`, `trim`, `viewport` and `clip` for PDF figures (a height relative to `\textheight` is ignored, and `trim` or `viewport` always clips). EPS figures are boxes, not drawings.
 
 ## Diagnostics
 
@@ -138,11 +140,32 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] An error from a library in the background (dev tools console: `Promise.reject(new Error('test'))`) only shows in the console. No red notice replaces the one in the header. A failed command (like a Drive action with the network blocked) still shows its red notice.
 - [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
 - [ ] Open Local Project (Ctrl+O) lists saved projects and opens the one you pick.
-- [ ] Clear Local Projects asks first, then removes the saved projects.
+- [ ] Clear Local Projects asks first, then removes the saved projects. Templates saved in this browser stay.
+
+## Templates and profile
+
+- [ ] File > New Project (Ctrl+Shift+N, or Alt+Shift+N in a browser tab) opens the New project picker: Built-in (Empty project, Blank article, Technical report, Letter, Beamer slides, Thesis), My templates in this browser, and My templates in Google Drive ("Connect Google Drive..." when it isn't).
+- [ ] Empty project is picked at first. Create project gives the old starter `main.tex`, unnamed.
+- [ ] Arrow keys, Home and End move through the list. Enter only picks; it never creates a project.
+- [ ] Each built-in template, created from the picker, previews with no error in the footer, in light and dark. The ⓘ list says what the preview approximated (Beamer: one page per frame).
+- [ ] Edit > Profile… saves your name, affiliation and email. The picker fills them in, and typing `R&D_#1` as a name puts `R\&D\_\#1` in the new `main.tex`.
+- [ ] Ticking "Save changed details to my profile" saves what you typed back into the profile.
+- [ ] A project name typed in the picker names the new project and it saves right away; left empty, the project waits for a name.
+- [ ] With a guest in the room, the picker says everyone gets the new project, and Create project is red.
+- [ ] File > Save as Template… saves the project (with an image and a `.bib`) as a template. With your name in the project, "Turn my profile details into placeholders" is ticked, and the template has `{{name}}` where your name was.
+- [ ] The saved template shows under My templates, and a project made from it has every file, image included.
+- [ ] Edit opens the template like a project, and edits save into the template. Rename and Delete (with a confirm) work.
+- [ ] Export .zip downloads `name.template.zip` with a `template.json`. Import .zip in the picker adds it back.
+- [ ] Customize on a built-in template saves "My letter" (or similar) and opens it.
+- [ ] The profile dialog's "Name in shared rooms" changes the name peers see. Clear profile empties the profile but leaves that name.
+- [ ] Offline before the picker ever loaded (dev tools, Network: Offline, on a fresh load), New Project asks to start an empty project instead.
 
 ## Google Drive
 
 These need Google dev keys in `.env.development.local` and a Google sign-in.
+
+- [ ] Save as Template with Save to: Google Drive makes a `Templates` folder at the top of My Drive with the template in a subfolder and a `template.json`. It shows under My templates in Google Drive, and not in Open from Google Drive's project list.
+- [ ] Saving the profile with Drive connected makes `Templates/profile.json`. Clear profile deletes it (not just to the trash).
 
 - [ ] Connect Google Drive opens a sign-in popup and the status says Drive is connected.
 - [ ] Settings, and hovering the save status, show which Google account is signed in.

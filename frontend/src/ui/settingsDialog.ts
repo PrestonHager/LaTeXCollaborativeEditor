@@ -23,6 +23,8 @@ type SettingsDialogOptions = {
   onPreviewTheme: (theme: ThemeMode) => void;
   onSavingPaused: (paused: boolean) => void;
   onClearLocalDocs: () => void;
+  /** Open the profile dialog (templates/templatesUi.ts). */
+  onEditProfile?: () => void;
   /** Called each time the dialog opens, so parts drawn elsewhere (like the keybind list) can catch up. */
   onOpen?: () => void;
   /** Download the settings as a JSON file. */
@@ -66,6 +68,7 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
   previewSelect.addEventListener('change', () => options.onPreviewTheme(previewSelect.value as ThemeMode));
   pauseToggle.addEventListener('change', () => options.onSavingPaused(pauseToggle.checked));
   clearButton.addEventListener('click', () => options.onClearLocalDocs());
+  dialog.querySelector('#settings-profile')?.addEventListener('click', () => options.onEditProfile?.());
   const say = (message: string) => {
     dataStatus.textContent = message;
   };

@@ -8,6 +8,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Added
 
+- **Project templates.** File > New Project opens a template picker: an empty project, a blank article, a technical report, a letter, Beamer slides and a thesis with chapters, plus your own templates. File > Save as Template saves any project, with all its files, as a template in this browser or in a `Templates` folder in Google Drive. Templates can be edited, renamed, deleted, and shared as a `.zip`. The built-in templates use current packages (microtype, csquotes, siunitx, biblatex, cleveref and friends), each with a comment saying why it's there.
+- **Your profile fills in templates.** Edit > Profile… keeps your name, affiliation, email, ORCID iD, address, language and paper size, and templates fill `{{name}}`, `{{email}}` and the rest from it, escaped so special characters print as typed. It's saved in this browser and, with Drive connected, in your Drive `Templates` folder. It's never sent to people in your room, and Clear profile removes it everywhere. The same dialog edits the name people in a shared room see.
+- The preview now handles more of what modern documents use, instead of stopping with an error: `\cref`, `\enquote`, siunitx quantities, `equation` and `align` (without numbers), theorems and proofs, the `appendices` environment, and Beamer slides (one page per frame). Tables show a note in their place. Each approximation is listed under the preview's info button.
+
 - **What's new.** Help → About → View changelog shows this changelog in the app, newest first, and marks the version you're on. The update prompt's What's new shows the new version's changelog, with what's new in it marked.
 - **Update prompt.** When a new version is deployed, a small card offers to reload. It saves your changes first, and won't reload if the save fails. It also shows when a collaborator is on a newer, incompatible version.
 - **Export dialog.** File > Export… (Ctrl+Shift+E, also on the toolbar and in the palette) saves the project as a `.zip`, a preview-quality PDF through the browser's print dialog, a standalone HTML file that works offline, a flattened `.tex` with every `\input` and `\include` in place, or a single file. It shows progress, can be canceled, and runs entirely in the browser. Formats come from a registry, so new ones are easy to add.
@@ -22,6 +26,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Changed
 
+- **File > New Project** opens the template picker instead of a confirm box. **Empty project** is still first, and the picker warns when it would replace the project for people in your room.
+- Figures with placement options like `[htbp]` no longer show the options as text in the preview, and a `\newpage` right after a list now breaks the page.
 - **Your colour in a shared room stays the same when you reload,** and two people in a room no longer get the same colour (up to eight people): whoever joined later gets the next free one. A remote cursor's name label on the first line now shows below the cursor instead of being cut off.
 - **The live site only changes with a release.** It updates to numbered versions listed here, not with every change, so the update prompt shows up less often and always has release notes.
 - **Faster first load.** The page downloads about 33 kB less (gzipped) before the editor shows. Sharing, the lint gutter, the command palette, Settings, About, the Open, Upload and conflict dialogs, the tour, Add Files from Drive and the zip code now load just after the page, when you point at them, or on first use. If a part can't load because a new version was deployed, the update prompt offers a reload.

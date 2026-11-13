@@ -106,6 +106,10 @@ File transfer
 - File bytes only travel between peers over WebRTC, the same as document text. Nothing is uploaded to a server.
 - Peers keep files they've seen in IndexedDB by hash, so a reload doesn't have to ask again.
 
+Templates and the profile (#74)
+- Nothing about templates goes over the wire. A project made from a template is an ordinary project, sent the same way as any other; the template, its `template.json` and the template list stay in the creator's storage.
+- The profile (name, affiliation, email, ORCID, address) is never sent to peers. It only reaches a room as text that a template already put into a project the host created. The only thing about a person a room gets is the separate display name in presence (above).
+
 Message validation and limits
 - Anyone with the room link can join and send anything, so every incoming message is checked before it's used.
 - The checks live in `frontend/src/collab/messages.ts`. They're small hand-written type checks, not a schema library.

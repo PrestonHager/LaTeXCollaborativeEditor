@@ -7,6 +7,18 @@
  * is still line N of the editor. LaTeX.js error locations can then be used as-is.
  */
 
+import {
+  placeholderTables,
+  rewriteAppendices,
+  rewriteBeamer,
+  rewriteCleveref,
+  rewriteDisplayMath,
+  rewriteEnquote,
+  rewriteSiunitx,
+  rewriteTheorems,
+  stripSetupCommands,
+} from './packageShims';
+
 const UNSUPPORTED_USEPACKAGES = new Set([
   'geometry',
   'indentfirst',
@@ -112,10 +124,10 @@ function replaceAffilCommands(source: string): string {
   return s;
 }
 
-/** float package [H] -> default figure (LaTeX.js has no float package). */
+/** Placement options like [H] or [htbp] -> default figure (LaTeX.js has no floats, so they'd show as text). */
 function normalizeFigurePlacement(source: string): string {
   return source.replace(
-    /\\begin\s*\{\s*figure\s*\}\s*\[\s*H\s*]/gi,
+    /\\begin\s*\{\s*figure\s*\}\s*\[\s*[htbpH!]*\s*]/g,
     (m) => `\\begin{figure}${keepLineBreaks(m)}`,
   );
 }
@@ -407,6 +419,15 @@ type Rewrite = { note: string | null; apply: (source: string) => string };
 
 // Each rewrite in order, with the note to show in the preview when it changes something.
 const REWRITES: Rewrite[] = [
+  // Stand-ins for packages LaTeX.js lacks (packageShims.ts). Theorems go before their \newtheorem lines are dropped.
+  { note: 'Showed Beamer frames as pages, without the theme.', apply: rewriteBeamer },
+  { note: 'Showed theorems and proofs without numbers.', apply: rewriteTheorems },
+  { note: 'Showed numbered equations without their numbers.', apply: rewriteDisplayMath },
+  { note: 'Showed \\cref as a plain reference.', apply: rewriteCleveref },
+  { note: null, apply: rewriteEnquote },
+  { note: 'Wrote siunitx quantities as plain text.', apply: rewriteSiunitx },
+  { note: "Put a note in place of tables the preview can't show.", apply: placeholderTables },
+  { note: null, apply: rewriteAppendices },
   { note: 'Removed fancyhdr and nomencl setup commands.', apply: (s) => stripRenewcommandNomname(stripLinesMatching(s, LINE_REMOVE_PATTERNS)) },
   { note: 'Removed \\hypersetup.', apply: (s) => stripAllMacroGroups(s, 'hypersetup') },
   { note: 'Removed \\geometry.', apply: (s) => stripAllMacroGroups(s, 'geometry') },
@@ -450,6 +471,11 @@ export function adaptLatexSource(source: string): AdaptedSource {
     if (next !== s && rewrite.note) changes.push(rewrite.note);
     s = next;
   }
+
+  // Setup commands with nothing to show, like \sisetup, go last, after the theorems were read from \newtheorem.
+  const dropped = new Set<string>();
+  s = stripSetupCommands(s, dropped);
+  if (dropped.size) changes.push(`Ignored commands the preview has no use for: ${[...dropped].join(', ')}.`);
 
   // Finally, put the hidden text back.
   return { source: unmask(s), changes };

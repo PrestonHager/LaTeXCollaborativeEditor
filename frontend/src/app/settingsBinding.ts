@@ -47,6 +47,7 @@ const resetMessages: Record<ResetScope, string> = {
   keybinds: 'Keyboard shortcuts are back to their defaults.',
   tour: 'The tour will show again next time you open the editor.',
   export: 'Exports go back to Download.',
+  profile: 'Your profile is cleared here. A copy in Google Drive is deleted the next time you open New Project or Profile with Drive connected.',
 };
 
 /** Reset settings for the dialog, and say what happened. */

@@ -12,6 +12,7 @@ import type { createTour, TourSeen } from '../ui/tour';
 import type { createProjectsDialog } from '../ui/projectsDialog';
 import type { createUploadDialog } from '../ui/uploadDialog';
 import type { createAboutDialog } from '../ui/aboutDialog';
+import type { TemplatesUiDeps } from '../templates/templatesUi';
 import type { BuildInfo } from './buildInfo';
 import type { ProjectSummary } from '../storage/providers/types';
 
@@ -130,6 +131,21 @@ export function lazyUploadDialog(
   return {
     open: (folder?: string) => withInstance(upload.get, 'The upload dialog', onError, (instance) => instance.open(folder)),
     preload: upload.preload,
+  };
+}
+
+/**
+ * The template picker, Save as Template and the profile (#74), with the built-in templates. Unlike
+ * the others, a failed load rejects instead of going to onError: New Project falls back to an
+ * empty project when offline, and the command runner reports the rest (app/commands.ts).
+ */
+export function lazyTemplates(options: TemplatesUiDeps, deps: Loader<typeof import('../templates/templatesUi')> = {}) {
+  const ui = lazyModule(() => (deps.load ?? (() => import('../templates/templatesUi')))().then(({ createTemplatesUi }) => createTemplatesUi(options)));
+  return {
+    openNew: () => ui.get().then((instance) => instance.openNew()),
+    saveAsTemplate: () => ui.get().then((instance) => instance.saveAsTemplate()),
+    editProfile: () => ui.get().then((instance) => instance.editProfile()),
+    preload: ui.preload,
   };
 }
 

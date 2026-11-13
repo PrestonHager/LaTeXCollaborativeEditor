@@ -53,7 +53,7 @@ Guests see the host's storage in the pill instead, like "Saved on host Google Dr
 By default, projects are saved in this browser's storage (IndexedDB) for this site.
 
 - **File > Open Local Project** (**Ctrl+O**) lists your saved projects, newest first. Click one to open it.
-- **File > Clear Local Projects** deletes every project saved in this browser. It asks first, since this can't be undone. The same button is in Settings.
+- **File > Clear Local Projects** deletes every project saved in this browser. It asks first, since this can't be undone. The same button is in Settings. Your [templates](#templates) stay.
 - If browser storage is full or blocked (some private browsing modes), the autosave pill says so. See [Storage full](troubleshooting.md#storage-full).
 - Documents saved by older versions of the app get moved into one-file projects the first time you open the new version.
 
@@ -63,13 +63,14 @@ Download a `.zip` now and then if browser storage is your only copy.
 
 ## Your settings
 
-Your settings are kept apart from your projects: the app and preview themes, the layout (split, editor only or preview only, and where the splitter sits), your keyboard shortcuts, and whether you've seen the tour.
+Your settings are kept apart from your projects: the app and preview themes, the layout (split, editor only or preview only, and where the splitter sits), your keyboard shortcuts, whether you've seen the tour, your display name in shared rooms, and your [profile](#your-profile).
 
 - They're saved in this browser's `localStorage` under one key, `latex-editor.settings`, with a version number so later versions can move them forward.
 - Guests save their own settings too. Settings are never sent to people in your room: a room only shares the project.
 - Change a setting in one tab and your other open tabs of the app pick it up right away.
 - **Settings > Export settings** downloads them as a `.json` file. **Import settings** loads one, in another browser or on another device. Anything in the file that isn't a known setting with a valid value is skipped, and the dialog says what it skipped.
-- **Settings > Reset to defaults** resets all settings, or just one part: themes, layout, keyboard shortcuts, or the tour. It asks for a second click first.
+- **Settings > Reset to defaults** resets all settings, or just one part: themes, layout, keyboard shortcuts, the tour, where exports go, or your profile. It asks for a second click first.
+- An exported settings file includes your profile, so treat it like any file with your name and email in it.
 - If browser storage is blocked, settings still work but only last until you close the tab. Settings says so, and you can export them to keep a copy.
 - Settings saved by older versions (shortcuts, the tour flag, and themes kept with the open project) move over the first time you open this version, so nothing is lost.
 
@@ -227,10 +228,91 @@ If someone changed the file in the meantime (in the Drive web UI, on another dev
 
 ## New project
 
-**File > New Project** (**Ctrl+Shift+N**, or **Alt+Shift+N** in a browser tab) starts a fresh project with a starter `main.tex`, after you confirm.
+**File > New Project** (**Ctrl+Shift+N**, or **Alt+Shift+N** in a browser tab) opens the template picker. Pick a template, check the details, and press **Create project**. See [Templates](#templates).
+**Empty project**, first in the list, gives the old starter: one `main.tex` with a document class and nothing else.
 The project you were on stays saved where it was.
-New projects save to wherever you were saving before, browser or Drive.
-If you're sharing, the new project replaces the old one for everyone in the room.
+New projects save to wherever you were saving before, browser or Drive. Name the project in the picker and it saves right away; leave the name empty and it waits for one, like before.
+If you're sharing, the new project replaces the old one for everyone in the room. The picker says so, and its button turns red.
+
+If the picker can't load (say you're offline and it never loaded), New Project offers an empty project instead, after you confirm.
+
+## Templates
+
+![The New project picker with the Technical report template chosen](assets/screenshots/templates-picker-light.png#only-light)
+![The New project picker with the Technical report template chosen](assets/screenshots/templates-picker-dark.png#only-dark)
+
+The picker lists:
+
+- **Built-in**: Empty project, Blank article, Technical report, Letter, Beamer slides and Thesis (with chapters in their own files). Their preambles use current packages only, with a comment on each line saying why it's there.
+- **My templates in this browser**: templates you saved here.
+- **My templates in Google Drive**: templates in your Drive `Templates` folder. Connect Drive to see them.
+
+Pick one with the mouse or the arrow keys. Enter only picks; **Create project** makes the project.
+The right side shows what the template asks for, already filled in from your [profile](#your-profile). Change anything for just this project, or tick **Save changed details to my profile**.
+
+For a saved template the picker also has **Edit**, **Rename**, **Export .zip** and **Delete**. Built-in ones have **Export .zip** and **Customize**, which saves a copy in My templates and opens it.
+
+### Save a project as a template
+
+**File > Save as Template…** copies every file and folder of the open project, text and binary (images, `.bib`, `.sty`, `.cls` and the rest), into a new template. Give it a name, a short description, and where to save it: this browser, or Google Drive once Drive is connected.
+If your profile details appear in the project, **Turn my profile details into placeholders** swaps them for `{{name}}`, `{{email}}` and so on, so the template fills in whoever uses it.
+Files still arriving from a peer are left out, and the message says which.
+
+### Placeholders
+
+Write a placeholder in any text file of a template. A new project gets the value in its place.
+
+| Placeholder | Filled with |
+|---|---|
+| `{{name}}`, `{{affiliation}}`, `{{email}}`, `{{orcid}}` | Your profile |
+| `{{address}}` | Your profile's postal address, its lines joined by `\\` |
+| `{{date}}` | Today's date, like "13 November 2026" |
+| `{{language}}` | A babel language like `english` or `ngerman`, from your profile or the browser |
+| `{{paper}}` | `letterpaper` or `a4paper`, from your profile or the browser |
+
+- Values are escaped, so `R&D_1` goes in as `R\&D\_1` and prints as typed. The characters `& % $ # _ { } ~ ^ \` are all escaped.
+- Only these names and the ones in the template's `template.json` are placeholders. Other `{{...}}` text, like `\frac{{a}}{b}`, is left alone.
+- To keep a literal `{{name}}` in a template, write `{{\relax name}}`. TeX reads it the same way, and the app leaves it alone.
+
+Each template folder has a `template.json`, which you can edit like any file while editing the template:
+
+```json
+{
+  "format": "latex-editor-template",
+  "version": 1,
+  "name": "Lab report",
+  "description": "Weekly lab report for PHYS 201.",
+  "mainFile": "main.tex",
+  "placeholders": [
+    { "key": "course", "label": "Course", "default": "PHYS 201" },
+    { "key": "report_number", "label": "Report number" },
+    { "key": "partners", "label": "Lab partners", "multiline": true }
+  ]
+}
+```
+
+A placeholder can have a `label`, a `default`, a `hint`, `multiline: true`, `options` (a list to pick from) or `raw: true` (put in without escaping, for values that are LaTeX on purpose).
+
+### Where templates are kept
+
+- **This browser**: in IndexedDB, next to your projects. They don't show in **Open Local Project**, and **Clear Local Projects** keeps them.
+- **Google Drive**: in a `Templates` folder at the top of My Drive, made by the app. Each template is a subfolder with its files and its `template.json`. The folders are tagged, so they don't show as projects, and opening the `Templates` folder itself as a project is refused.
+- **Edit** opens a template like a project. Changes autosave back into the template, not into a new project.
+- Deleting a Drive template moves its folder to the Drive trash.
+
+### Share a template as a .zip
+
+**Export .zip** saves a template, with its `template.json`, as `name.template.zip`. **Import .zip** in the picker adds one to My templates (in Drive if the open project is on Drive and Drive is connected, otherwise in this browser). A `.zip` without a `template.json` works too: the zip's name names the template.
+Templates can carry their own `.sty`, `.cls` or `.bst` files, which go into every project made from them.
+
+## Your profile
+
+**Edit > Profile…** (also **Settings > Profile > Edit profile**, and **Edit profile** in the picker) holds your name, affiliation, email, ORCID iD, postal address, document language and paper size. Templates fill placeholders from it.
+
+- It's saved in this browser with your settings, and in your Drive `Templates` folder as `profile.json` while Drive is connected, so it follows you to other devices. The newer copy wins.
+- It's never sent to people in your room. Only text that a template already put into a project you made travels with that project.
+- **Clear profile** removes it from this browser and deletes the Drive copy for good. If Drive isn't connected then, the Drive copy is deleted the next time you open New Project or Profile with Drive connected.
+- The dialog also has **Name in shared rooms**: the one thing people in a shared room see about you, next to your cursor. It's a separate setting. Your profile name is never shared unless you type it there yourself.
 
 ## Related topics
 

@@ -145,6 +145,11 @@ Runtime architecture (summary)
   A project that isn't in Drive uploads to the top of My Drive. **Choose folder…** uses the Picker in folder mode, so it needs `VITE_GOOGLE_API_KEY` and `VITE_GOOGLE_APP_ID`; picking the folder is what gives `drive.file` access to it.
   Guests never see the host's Drive. The PDF export prints instead of making a file, so it can't go to Drive.
 - Local projects live in IndexedDB (the `latex-editor` database). Old documents in localStorage get moved into one-file projects the first time the app starts.
+- **Templates (#74)** need no new scope, CSP host or setting.
+  In the browser a template is a row in the same `projects` store marked `template: true`, so no database upgrade is needed; the project list and Clear Local Projects skip those rows.
+  In Drive the app makes a `Templates` folder at the top of My Drive tagged `appProperties` `latexTemplates=1`, and each template is a subfolder tagged `latexTemplate=1` with a `template.json`. Template folders aren't tagged `latexProject`, so they never show as projects, and opening the `Templates` folder itself as a project is refused.
+  The profile is a `profile.json` in that folder, tagged `latexProfile=1`. Clearing the profile deletes it with `files.delete` (not the trash), which `drive.file` allows for files the app made.
+  All of it uses `www.googleapis.com`, already in `connect-src`. The template dialogs and built-in templates are a lazy chunk (`templatesUi-*.js`, about 15 kB gzipped, plus its CSS), so the initial load only grows by the menu items, the commands and the profile setting.
 
 Networking (STUN/TURN)
 - Start with a public STUN server such as `stun:stun.l.google.com:19302`.

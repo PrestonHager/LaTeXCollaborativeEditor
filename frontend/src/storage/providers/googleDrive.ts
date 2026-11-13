@@ -47,6 +47,10 @@ const PROJECT_PROPERTY = 'latexProject';
 // The exports folder the Export dialog makes inside a project folder. openProject skips it, so
 // exports never become project files.
 export const EXPORTS_PROPERTY = 'latexExports';
+// The Templates folder (#74) at the top of My Drive, and each template folder in it. Templates aren't
+// tagged as projects, so they stay out of the project list; see templates/driveTemplates.ts.
+export const TEMPLATES_FOLDER_PROPERTY = 'latexTemplates';
+export const TEMPLATE_PROPERTY = 'latexTemplate';
 // Old single-file projects use ids like "file:<drive file id>".
 export const LEGACY_PREFIX = 'file:';
 const LEGACY_FILE_KEY = 'drive_active_file_ref';
@@ -259,6 +263,9 @@ export class GoogleDriveProvider implements StorageProvider {
     const res = await this.driveFetch(`${DRIVE_API}/${id}?fields=id,name,mimeType,appProperties`, {}, 'open the project folder');
     const folder = (await res.json()) as DriveItem;
     if (folder.mimeType !== FOLDER_MIME) throw new StorageError('Drive: That is not a folder.', { retryable: false });
+    if (folder.appProperties?.[TEMPLATES_FOLDER_PROPERTY] === '1') {
+      throw new StorageError('Drive: That is your Templates folder. Use File > New Project to start from a template.', { retryable: false });
+    }
 
     // Walk the folder tree one level at a time.
     const index: ProjectIndex = { rootId: folder.id, paths: new Map() };
