@@ -6,7 +6,7 @@
 |------|------------------|
 | **File** | New project, open (local, Drive, or .zip), new file or folder, upload, download (.zip or one file), Drive connect/save/move/rename, Save Now, clear local projects |
 | **Edit** | Undo, redo, cut, copy, paste, select all, **Settings** |
-| **View** | Toggle **editor** theme, toggle **preview** theme, toggle autosave / Save Now, **Compile Now**, layout modes |
+| **View** | Toggle **editor** theme, toggle **preview** theme, **Pause Saving**, **Compile Now**, layout modes |
 | **Help** | Command palette, **Documentation** (this site), link to the **repository** |
 
 Some File entries are **disabled** when you are a **guest** in a shared room (`?room=` in the URL).
@@ -29,7 +29,7 @@ Open **Edit > Settings**, press **Ctrl+,** (**⌘+,** on macOS), or search the p
 Changes apply right away, there's no save button.
 
 - **App and editor theme** and **Preview theme**: match system, dark, or light.
-- **Disable Save Now**: same as the View menu toggle.
+- **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
 Guests in a shared room can change themes, but the saving options are turned off since the host decides how the project is saved.

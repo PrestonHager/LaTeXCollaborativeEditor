@@ -98,7 +98,7 @@ const overwrite = new Set<string>();
 let activeFileId: string | null = null;
 // Only used to match an old single-file Drive link from before projects.
 let documentId = createDocumentId();
-let saveNowEnabled = true;
+let savingPaused = false;
 let editorTheme: ThemeMode = 'system';
 let previewTheme: ThemeMode = 'system';
 let layoutMode: 'split' | 'editor-only' | 'preview-only' = 'split';
@@ -210,7 +210,8 @@ const restored = isClient ? null : readAppSessionState();
 let driveRestoreMessage: string | null = null;
 if (restored) {
   if (restored.documentId) documentId = restored.documentId;
-  saveNowEnabled = restored.saveNowEnabled;
+  // The saved flag kept its old name, so false there means saving is paused.
+  savingPaused = !restored.saveNowEnabled;
   editorTheme = restored.editorTheme;
   previewTheme = restored.previewTheme;
   projectId = restored.projectId ?? null;
@@ -282,7 +283,7 @@ const persistAppSession = () => {
     documentId,
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
     providerMode: getProviderMode(),
-    saveNowEnabled,
+    saveNowEnabled: !savingPaused,
     editorTheme,
     previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
@@ -338,6 +339,9 @@ const autosave = new AutosaveController({
   },
   onStatus: setStatus,
 });
+// Keep saving paused if it was paused in the last session.
+autosave.setPaused(savingPaused);
+const savingStatus = () => (savingPaused ? 'Saving paused' : 'Autosave On');
 
 // When Drive can't get a new token, switch to local saves so no edits are lost.
 driveProvider.onSessionLost(() => {
@@ -345,7 +349,7 @@ driveProvider.onSessionLost(() => {
   if (activeProvider !== driveProvider) return;
   useProvider(localAppProvider, null);
   showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true);
-  void autosave.saveNow();
+  if (!savingPaused) void autosave.saveNow();
 });
 
 /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
@@ -647,7 +651,7 @@ async function switchProject(content: ProjectContent, provider: StorageProvider,
   });
   ensureActiveFile();
   renderFiles();
-  setStatus(id ? `Opened ${projectName()}` : 'Autosave On');
+  setStatus(id ? `Opened ${projectName()}` : savingStatus());
 }
 
 /** Ask for a project name before the first save, since storage needs one. */
@@ -942,7 +946,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   },
   'file.renameDrive': () => renameProject(),
   'file.saveNow': async () => {
-    if (isClient || !saveNowEnabled) return;
+    if (isClient || savingPaused) return;
     if (!promptForProjectName()) return;
     if (activeProvider === driveProvider && !driveProvider.isSignedIn()) {
       setStatus('Drive: Session expired. Use File > Connect Google Drive to sign in again.');
@@ -994,7 +998,7 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
   'view.darkMode': () => setAllThemes('dark'),
   'view.lightMode': () => setAllThemes('light'),
   'view.systemTheme': () => setAllThemes('system'),
-  'view.toggleSaveNow': () => setSaveNowEnabled(!saveNowEnabled),
+  'view.togglePauseSaving': () => setSavingPaused(!savingPaused),
   'view.focusEditor': () => editor.focus(),
   'app.openSettings': () => settingsDialog.open(),
   'file.rename': () => renameProject(),
@@ -1037,10 +1041,11 @@ function setAllThemes(theme: ThemeMode) {
   persistAppSession();
 }
 
-function setSaveNowEnabled(enabled: boolean) {
+function setSavingPaused(paused: boolean) {
   if (isClient) return;
-  saveNowEnabled = enabled;
-  setStatus(saveNowEnabled ? 'Autosave On' : 'Save Now Disabled');
+  savingPaused = paused;
+  // Autosave sets the status line, and resuming saves whatever changed while paused.
+  autosave.setPaused(paused);
   menuBar.refresh();
   persistAppSession();
 }
@@ -1097,13 +1102,13 @@ const getCommandState = (commandId: CommandId): CommandState => {
     case 'file.downloadFile':
       return { enabled: Boolean(activeFileId) };
     case 'file.saveNow':
-      return { enabled: !isClient && saveNowEnabled };
+      return { enabled: !isClient && !savingPaused };
     case 'edit.undo':
       return { enabled: undo.canUndo() };
     case 'edit.redo':
       return { enabled: undo.canRedo() };
-    case 'view.toggleSaveNow':
-      return { enabled: !isClient, checked: !saveNowEnabled };
+    case 'view.togglePauseSaving':
+      return { enabled: !isClient, checked: savingPaused };
     case 'view.layoutSplit':
       return { enabled: true, checked: layoutMode === 'split' };
     case 'view.layoutEditorOnly':
@@ -1128,7 +1133,7 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
   getState: () => ({
     editorTheme,
     previewTheme,
-    saveNowEnabled,
+    savingPaused,
     canChangeSaving: !isClient,
     driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
   }),
@@ -1142,8 +1147,8 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
     persistAppSession();
     refreshCommands();
   },
-  onSaveNowEnabled: (enabled) => {
-    setSaveNowEnabled(enabled);
+  onSavingPaused: (paused) => {
+    setSavingPaused(paused);
     refreshCommands();
   },
   onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
@@ -1169,7 +1174,7 @@ function buildPaletteCommands(): PaletteCommand[] {
       id: entry.commandId,
       section: entry.section,
       // The menu shows a checkmark for this one, but the palette has to say which way it goes.
-      label: entry.commandId === 'view.toggleSaveNow' && !saveNowEnabled ? 'Enable Save Now' : entry.label,
+      label: entry.commandId === 'view.togglePauseSaving' && savingPaused ? 'Resume Saving' : entry.label,
       shortcut: entry.shortcut,
       enabled: getCommandState(entry.commandId).enabled,
     }));
@@ -1232,7 +1237,7 @@ if (!isClient) {
         if (mainPath) projectId = await localAppProvider.findLegacyProject(mainPath);
       }
       autosave.enable();
-      setStatus(driveRestoreMessage ?? 'Autosave On');
+      setStatus(driveRestoreMessage ?? savingStatus());
       if (driveProvider.hasUsableToken()) void driveProvider.loadAccount().then(showDriveAccount);
     })
     .catch((error) => {

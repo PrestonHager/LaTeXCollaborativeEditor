@@ -50,13 +50,13 @@ describe('App integration behavior', () => {
   it('wires the settings dialog in index.html', () => {
     mountAppShell();
     const onEditorTheme = vi.fn();
-    const onSaveNowEnabled = vi.fn();
+    const onSavingPaused = vi.fn();
     const onClearLocalDocs = vi.fn();
     const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
-      getState: () => ({ editorTheme: 'dark', previewTheme: 'light', saveNowEnabled: true, canChangeSaving: true }),
+      getState: () => ({ editorTheme: 'dark', previewTheme: 'light', savingPaused: false, canChangeSaving: true }),
       onEditorTheme,
       onPreviewTheme: () => undefined,
-      onSaveNowEnabled,
+      onSavingPaused,
       onClearLocalDocs,
     });
     dialog.open();
@@ -67,10 +67,11 @@ describe('App integration behavior', () => {
     editorSelect.value = 'light';
     editorSelect.dispatchEvent(new Event('change'));
     expect(onEditorTheme).toHaveBeenCalledWith('light');
-    const toggle = document.getElementById('settings-disable-save-now') as HTMLInputElement;
+    const toggle = document.getElementById('settings-pause-saving') as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
     toggle.checked = true;
     toggle.dispatchEvent(new Event('change'));
-    expect(onSaveNowEnabled).toHaveBeenCalledWith(false);
+    expect(onSavingPaused).toHaveBeenCalledWith(true);
     (document.getElementById('settings-clear-local') as HTMLButtonElement).click();
     expect(onClearLocalDocs).toHaveBeenCalled();
     (document.getElementById('settings-done') as HTMLButtonElement).click();
@@ -80,14 +81,14 @@ describe('App integration behavior', () => {
   it('disables saving controls in settings for guests', () => {
     mountAppShell();
     const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
-      getState: () => ({ editorTheme: 'system', previewTheme: 'system', saveNowEnabled: true, canChangeSaving: false }),
+      getState: () => ({ editorTheme: 'system', previewTheme: 'system', savingPaused: false, canChangeSaving: false }),
       onEditorTheme: () => undefined,
       onPreviewTheme: () => undefined,
-      onSaveNowEnabled: () => undefined,
+      onSavingPaused: () => undefined,
       onClearLocalDocs: () => undefined,
     });
     dialog.open();
-    expect((document.getElementById('settings-disable-save-now') as HTMLInputElement).disabled).toBe(true);
+    expect((document.getElementById('settings-pause-saving') as HTMLInputElement).disabled).toBe(true);
     expect((document.getElementById('settings-clear-local') as HTMLButtonElement).disabled).toBe(true);
     (document.getElementById('settings-close') as HTMLButtonElement).click();
     expect(dialog.isOpen()).toBe(false);
@@ -97,10 +98,10 @@ describe('App integration behavior', () => {
     mountAppShell();
     let driveAccount: string | null = null;
     const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
-      getState: () => ({ editorTheme: 'system', previewTheme: 'system', saveNowEnabled: true, canChangeSaving: true, driveAccount }),
+      getState: () => ({ editorTheme: 'system', previewTheme: 'system', savingPaused: false, canChangeSaving: true, driveAccount }),
       onEditorTheme: () => undefined,
       onPreviewTheme: () => undefined,
-      onSaveNowEnabled: () => undefined,
+      onSavingPaused: () => undefined,
       onClearLocalDocs: () => undefined,
     });
     const label = document.getElementById('settings-drive-account')!;

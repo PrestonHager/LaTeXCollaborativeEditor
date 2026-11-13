@@ -67,7 +67,7 @@
               <div class="menu-list" role="menu" aria-label="View">
                 <button type="button" class="menu-item" role="menuitem" data-command="view.toggleEditorTheme" data-palette="false"><span class="menu-item-label">Toggle Editor Theme</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="view.togglePreviewTheme" data-palette="false"><span class="menu-item-label">Toggle Preview Theme</span></button>
-                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.toggleSaveNow"><span class="menu-item-label">Disable Save Now</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.togglePauseSaving"><span class="menu-item-label">Pause Saving</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="view.compileNow"><span class="menu-item-label">Compile Now</span><span class="menu-item-shortcut" data-shortcut data-chord="Shift+C"></span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutSplit"><span class="menu-item-label">Split View</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
@@ -205,8 +205,8 @@
             </select>
           </div>
           <label class="label settings-row">
-            <input id="settings-disable-save-now" type="checkbox" class="input" />
-            Disable Save Now
+            <input id="settings-pause-saving" type="checkbox" class="input" />
+            Pause saving
           </label>
           <div class="settings-row">
             <span class="label">Google Drive</span>

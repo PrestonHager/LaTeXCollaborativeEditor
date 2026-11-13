@@ -21,6 +21,7 @@ Checklist
 - [ ] Migration: documents saved before projects (local docs, a linked Drive file, and saved sessions) still open as one-file projects.
 - [ ] Drive projects: a project saved to Google Drive shows up as a folder with the same file tree.
 - [ ] Cloud integration: Google Drive Connect, autosave, and Save Now features work as expected.
+- [ ] Pause Saving: while paused, nothing is written by autosave or Save Now, the status says "Saving paused", leaving the page warns about unsaved edits, and resuming saves them.
 - [ ] Local Drive testing: Drive connect and the Picker work on `http://localhost:5173` with development keys from `.env.development.local`.
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
 - [ ] Drive save errors: a full Drive shows "Google Drive is full" right away without retries, and a Drive rate limit gets retried.

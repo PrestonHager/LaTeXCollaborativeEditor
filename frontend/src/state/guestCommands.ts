@@ -14,7 +14,7 @@ export const HOST_ONLY_COMMANDS: ReadonlySet<CommandId> = new Set<CommandId>([
   'file.saveNow',
   'file.clearLocalDocs',
   'file.rename',
-  'view.toggleSaveNow',
+  'view.togglePauseSaving',
 ]);
 
 /** Check if this tab may run a command. Guests can't run host-only ones. */

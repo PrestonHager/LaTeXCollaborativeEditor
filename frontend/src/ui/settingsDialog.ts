@@ -3,7 +3,7 @@ import type { ThemeMode } from '../state/appSession';
 export type SettingsState = {
   editorTheme: ThemeMode;
   previewTheme: ThemeMode;
-  saveNowEnabled: boolean;
+  savingPaused: boolean;
   /** Guests can't change how the host saves, so those controls get disabled. */
   canChangeSaving: boolean;
   /** Who's signed in to Drive. An empty string means signed in but we don't know who yet. */
@@ -14,7 +14,7 @@ type SettingsDialogOptions = {
   getState: () => SettingsState;
   onEditorTheme: (theme: ThemeMode) => void;
   onPreviewTheme: (theme: ThemeMode) => void;
-  onSaveNowEnabled: (enabled: boolean) => void;
+  onSavingPaused: (paused: boolean) => void;
   onClearLocalDocs: () => void;
 };
 
@@ -27,7 +27,7 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
   };
   const editorSelect = find<HTMLSelectElement>('#settings-editor-theme');
   const previewSelect = find<HTMLSelectElement>('#settings-preview-theme');
-  const saveNowToggle = find<HTMLInputElement>('#settings-disable-save-now');
+  const pauseToggle = find<HTMLInputElement>('#settings-pause-saving');
   const clearButton = find<HTMLButtonElement>('#settings-clear-local');
   const driveAccount = find<HTMLElement>('#settings-drive-account');
 
@@ -39,7 +39,7 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
 
   editorSelect.addEventListener('change', () => options.onEditorTheme(editorSelect.value as ThemeMode));
   previewSelect.addEventListener('change', () => options.onPreviewTheme(previewSelect.value as ThemeMode));
-  saveNowToggle.addEventListener('change', () => options.onSaveNowEnabled(!saveNowToggle.checked));
+  pauseToggle.addEventListener('change', () => options.onSavingPaused(pauseToggle.checked));
   clearButton.addEventListener('click', () => options.onClearLocalDocs());
   find('#settings-done').addEventListener('click', close);
   find('#settings-close').addEventListener('click', (event) => {
@@ -60,8 +60,8 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
     const state = options.getState();
     editorSelect.value = state.editorTheme;
     previewSelect.value = state.previewTheme;
-    saveNowToggle.checked = !state.saveNowEnabled;
-    saveNowToggle.disabled = !state.canChangeSaving;
+    pauseToggle.checked = state.savingPaused;
+    pauseToggle.disabled = !state.canChangeSaving;
     clearButton.disabled = !state.canChangeSaving;
     const account = state.driveAccount;
     driveAccount.textContent = account == null ? 'Not connected' : account ? `Signed in as ${account}` : 'Connected';
