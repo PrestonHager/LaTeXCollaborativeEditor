@@ -1,4 +1,4 @@
-import { adaptLatexSourceForLatexJs } from './latexJsAdapt';
+import { adaptLatexSource, adaptLatexSourceForLatexJs } from './latexJsAdapt';
 import { latexSourceToPreviewHtml } from './latexJsPreview';
 // A made-up paper that uses every package and command the adapter handles.
 import academicPaperTex from './__fixtures__/academic-paper.tex?raw';
@@ -77,5 +77,171 @@ describe('adaptLatexSourceForLatexJs', () => {
     expect(errors).toEqual([]);
     expect(html).toBeTruthy();
     expect(html).toContain('Crimson Comet');
+  });
+});
+
+// Wrap a body in a small document, so line 1 is the \documentclass.
+const doc = (...body: string[]) => ['\\documentclass{article}', ...body].join('\n');
+
+describe('adaptLatexSource rewrites', () => {
+  it('strips each unsupported package and lists them in one note', () => {
+    const { source, changes } = adaptLatexSource(
+      doc('\\usepackage[margin=1in]{geometry}', '\\usepackage{float} % for [H]', '\\usepackage{amsmath}'),
+    );
+    expect(source).toBe(doc('', '', '\\usepackage{amsmath}'));
+    expect(changes).toEqual(["Removed packages the preview can't load: geometry, float."]);
+  });
+
+  it('strips fancyhdr and nomencl setup lines', () => {
+    const { source, changes } = adaptLatexSource(
+      doc(
+        '\\makenomenclature',
+        '\\pagestyle{fancy}',
+        '\\fancyhf{}',
+        '\\fancyhead[L]{Left}',
+        '\\renewcommand{\\headrulewidth}{0.4pt}',
+        '\\renewcommand{\\nomname}{\\large{Symbols}}',
+        'Kept.',
+      ),
+    );
+    expect(source).toBe(doc('', '', '', '', '', '', 'Kept.'));
+    expect(changes).toEqual(['Removed fancyhdr and nomencl setup commands.']);
+  });
+
+  it('strips \\hypersetup, \\geometry, and \\setmainfont groups', () => {
+    const { source, changes } = adaptLatexSource(
+      doc('\\hypersetup{colorlinks={true}}', '\\geometry{a4paper}', '\\setmainfont{Times}', 'Kept.'),
+    );
+    expect(source).toBe(doc('', '', '', 'Kept.'));
+    expect(changes).toEqual(['Removed \\hypersetup.', 'Removed \\geometry.', 'Removed \\setmainfont.']);
+  });
+
+  it('turns authblk \\author and \\affil into plain text', () => {
+    const { source, changes } = adaptLatexSource(doc('\\author[1,2]{Ada}', '\\affil[1]{Lab}'));
+    expect(source).toBe(doc('\\author {Ada}', '\\par {\\small Lab}\\par '));
+    expect(changes).toEqual(['Showed authblk \\author and \\affil as plain text.']);
+  });
+
+  it('turns figure and [H] into a center block', () => {
+    const { source, changes } = adaptLatexSource(doc('\\begin{figure}[H]', 'x', '\\end{figure}'));
+    expect(source).toBe(doc('\\begin{center}', 'x', '\\end{center}'));
+    expect(changes).toEqual(['Showed figures in place instead of floating.']);
+  });
+
+  it('expands \\nomenclature and drops \\printnomenclature', () => {
+    const { source, changes } = adaptLatexSource(doc('\\printnomenclature', 'Use \\nomenclature{$v$}{speed} here.'));
+    expect(source).toBe(doc('', 'Use $v$ here.'));
+    expect(changes).toEqual(['Showed \\nomenclature entries as plain text and dropped \\printnomenclature.']);
+  });
+
+  it('swaps \\textcopyright for the sign without a note', () => {
+    const { source, changes } = adaptLatexSource(doc('\\textcopyright{} 2024 and \\textcopyright'));
+    expect(source).toBe(doc('© 2024 and ©'));
+    expect(changes).toEqual([]);
+  });
+
+  it('puts a note in place of images that are not project images', () => {
+    const { source, changes } = adaptLatexSource(doc('\\includegraphics[width=2in]{plot_1.pdf}', '\\includegraphics{lcimg0}'));
+    expect(source).toBe(
+      doc("\\par\\noindent\\textit{Figure \\texttt{plot1.pdf} can't be shown in the browser preview.}\\par", '\\includegraphics{lcimg0}'),
+    );
+    expect(changes).toEqual(["Put a note in place of images the browser can't show."]);
+  });
+
+  it('leaves project images alone without a note', () => {
+    const { changes } = adaptLatexSource(doc('\\includegraphics{lcimg3}'));
+    expect(changes).toEqual([]);
+  });
+
+  it('turns \\caption into bold text', () => {
+    const { source, changes } = adaptLatexSource(doc('\\caption{A cat}'));
+    expect(source).toBe(doc('\\par\\noindent\\textbf{A cat}\\par'));
+    expect(changes).toEqual(['Showed \\caption as bold text.']);
+  });
+
+  it('inlines footnotes in parentheses', () => {
+    const { source, changes } = adaptLatexSource(doc('Text\\footnote{a {b} c}.'));
+    expect(source).toBe(doc('Text\\textit{(a {b} c)}.'));
+    expect(changes).toEqual(['Showed footnotes inline in parentheses.']);
+  });
+
+  it('strips \\vspace and \\vspace*', () => {
+    const { source, changes } = adaptLatexSource(doc('a\\vspace{1em}b\\vspace*{2cm}c'));
+    expect(source).toBe(doc('abc'));
+    expect(changes).toEqual(['Removed \\vspace.']);
+  });
+
+  it('strips \\addcontentsline', () => {
+    const { source, changes } = adaptLatexSource(doc('\\addcontentsline{toc}{section}{Intro}Kept.'));
+    expect(source).toBe(doc('Kept.'));
+    expect(changes).toEqual(['Removed \\addcontentsline.']);
+  });
+
+  it('makes no notes for a document that needs no changes', () => {
+    const src = doc('\\usepackage{amsmath}', '\\begin{document}', 'Hi.', '\\end{document}');
+    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [] });
+  });
+});
+
+describe('adaptLatexSource protected text', () => {
+  it('leaves commented-out commands alone', () => {
+    const src = doc(
+      '% \\usepackage{geometry}',
+      'Text % \\footnote{not a footnote} \\vspace{1em}',
+      '%\\begin{figure}',
+      '50\\% off\\footnote{real}',
+    );
+    const { source, changes } = adaptLatexSource(src);
+    expect(source).toBe(
+      doc('% \\usepackage{geometry}', 'Text % \\footnote{not a footnote} \\vspace{1em}', '%\\begin{figure}', '50\\% off\\textit{(real)}'),
+    );
+    expect(changes).toEqual(['Showed footnotes inline in parentheses.']);
+  });
+
+  it('keeps a trailing comment on a stripped package line from blocking the strip', () => {
+    const { source } = adaptLatexSource(doc('\\usepackage{geometry} % margins {'));
+    expect(source).toBe(doc(''));
+  });
+
+  it('ignores braces inside comments when matching groups', () => {
+    const { source } = adaptLatexSource(doc('A\\footnote{one % }', 'two}B'));
+    expect(source).toBe(doc('A\\textit{(one % }', 'two)}B'));
+  });
+
+  it('leaves verbatim-like environments alone', () => {
+    for (const env of ['verbatim', 'verbatim*', 'lstlisting', 'comment']) {
+      const src = doc(
+        `\\begin{${env}}`,
+        '\\usepackage{geometry}',
+        '\\footnote{x} \\vspace{1em} \\begin{figure}',
+        `\\end{${env}} after\\vspace{1em}`,
+      );
+      const { source, changes } = adaptLatexSource(src);
+      expect(source).toBe(doc(`\\begin{${env}}`, '\\usepackage{geometry}', '\\footnote{x} \\vspace{1em} \\begin{figure}', `\\end{${env}} after`));
+      expect(changes).toEqual(['Removed \\vspace.']);
+    }
+  });
+
+  it('leaves a one-line verbatim block alone', () => {
+    const src = doc('\\begin{verbatim}\\caption{x}\\end{verbatim}\\caption{y}');
+    expect(adaptLatexSource(src).source).toBe(doc('\\begin{verbatim}\\caption{x}\\end{verbatim}\\par\\noindent\\textbf{y}\\par'));
+  });
+
+  it('leaves \\verb text alone', () => {
+    const src = doc('\\verb|\\footnote{x}| and \\verb*+%\\vspace{1em}+ and \\footnote{y}');
+    const { source } = adaptLatexSource(src);
+    expect(source).toBe(doc('\\verb|\\footnote{x}| and \\verb*+%\\vspace{1em}+ and \\textit{(y)}'));
+  });
+
+  it('hides the rest of the line after an unclosed \\verb', () => {
+    const src = doc('\\verb|\\footnote{x}', '\\footnote{y}');
+    expect(adaptLatexSource(src).source).toBe(doc('\\verb|\\footnote{x}', '\\textit{(y)}'));
+  });
+
+  it('keeps line numbers when verbatim and comments mix with rewrites', () => {
+    const src = doc('\\begin{verbatim}', '% not a comment', '\\end{verbatim}', '\\hypersetup{', '% x }', '}', 'End.');
+    const { source } = adaptLatexSource(src);
+    expect(source.split('\n')).toHaveLength(src.split('\n').length);
+    expect(source).toBe(doc('\\begin{verbatim}', '% not a comment', '\\end{verbatim}', '', '', '', 'End.'));
   });
 });
