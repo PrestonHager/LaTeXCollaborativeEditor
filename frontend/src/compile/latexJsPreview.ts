@@ -43,7 +43,8 @@ export function addChangesNote(doc: Document, changes: string[]): void {
   note.className = 'lc-preview-note';
   note.setAttribute(
     'style',
-    'font:12px/1.4 system-ui,sans-serif;color:#555;background:#f6f6f6;border:1px solid #ddd;border-radius:4px;padding:4px 8px;margin:8px;',
+    // Colors come from the preview theme style (src/ui/preview.ts), with light fallbacks.
+    'font:12px/1.4 system-ui,sans-serif;color:var(--lc-note-text,#555);background:var(--lc-note-bg,#f6f6f6);border:1px solid var(--lc-note-border,#ddd);border-radius:4px;padding:4px 8px;margin:8px;',
   );
   const summary = doc.createElement('summary');
   summary.setAttribute('style', 'cursor:pointer;');
