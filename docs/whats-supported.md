@@ -18,7 +18,7 @@ Editing and preview:
 - A LaTeX editor with syntax highlighting, line numbers, bracket matching, and auto-closing brackets.
 - A live preview in the browser, built with LaTeX.js.
 - `\input` and `\include` from the main file.
-- `\includegraphics` for PNG, JPG, GIF, WebP, and SVG, with `\graphicspath` and widths like `width=0.5\textwidth`.
+- `\includegraphics` for PNG, JPG, GIF, WebP, and SVG, with `\graphicspath` and the size options `width`, `height`, `scale` and `keepaspectratio`. Sizes can be relative, like `0.5\textwidth`, or absolute, like `5cm`, `30mm`, `2in`, `72pt` or `10em`.
 - `\cite` with `\bibliography`, turned into a simple numbered reference list.
 - Errors with the file and line they came from.
 

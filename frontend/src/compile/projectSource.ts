@@ -1,3 +1,4 @@
+import { graphicsOptionsToCss } from './graphicsOptions';
 import { dirname, isPreviewableImage, joinPath, normalizePath } from '../project/paths';
 
 /** Where a line of the expanded source came from, so errors point at the right file. */
@@ -7,8 +8,8 @@ export type ExpandedSource = {
   source: string;
   /** lineMap[i] is where line i + 1 of `source` came from. */
   lineMap: SourceLine[];
-  /** Image tokens put into the source, mapped to the project file they stand for. */
-  images: Map<string, { path: string; widthPercent: number | null }>;
+  /** Image tokens put into the source, mapped to the project file they stand for and the CSS for their size. */
+  images: Map<string, { path: string; style: string }>;
   /** Files the source asked for that aren't in the project. */
   missing: string[];
 };
@@ -86,14 +87,6 @@ function expandInputs(path: string, texts: Map<string, string>, missing: Set<str
   return { lines, map };
 }
 
-/** Read width=0.8\textwidth (or \linewidth) as a percent. Other widths just fit the page. */
-function widthPercent(options: string | undefined): number | null {
-  const match = options && /width\s*=\s*([\d.]*)\s*\\(?:textwidth|linewidth|columnwidth)/.exec(options);
-  if (!match) return null;
-  const factor = match[1] ? Number.parseFloat(match[1]) : 1;
-  return Number.isFinite(factor) ? Math.max(1, Math.min(100, Math.round(factor * 100))) : null;
-}
-
 /** Swap \includegraphics paths for tokens, so the preview can put the real image back in. */
 function replaceGraphics(source: string, has: (path: string) => boolean, missing: Set<string>, images: ExpandedSource['images']) {
   const graphicsPaths: string[] = [];
@@ -116,7 +109,7 @@ function replaceGraphics(source: string, has: (path: string) => boolean, missing
       }
       if (!isPreviewableImage(found)) return whole;
       const token = `${IMAGE_TOKEN_PREFIX}${images.size + 1}`;
-      images.set(token, { path: found, widthPercent: widthPercent(options) });
+      images.set(token, { path: found, style: graphicsOptionsToCss(options?.slice(1, -1)) });
       // LaTeX.js needs the options group, even an empty one, or it crashes on a missing width.
       return `\\includegraphics[]{${token}}`;
     });

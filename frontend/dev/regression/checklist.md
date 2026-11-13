@@ -34,7 +34,8 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Math: Greek letters, symbols and the matrix render.
 - [ ] `\input`: the Text and Math sections show up, and the commented-out `\input` causes no error.
 - [ ] `\include`: the Figures section shows up.
-- [ ] Images: the four-color image shows twice, with a caption under the first one.
+- [ ] Images: the four-color image shows full size, with a caption under it.
+- [ ] Image sizes: `width=0.5\textwidth` is half the column, `width=2cm` and `height=1in` keep their proportions, `width=4cm,height=1cm` stretches, adding `keepaspectratio` doesn't, and `scale=0.5` is half size.
 - [ ] Pictures: the box with a diagonal line and a circle renders.
 - [ ] Typing stays smooth while the preview compiles, since the compile runs in a Web Worker.
 - [ ] Citations: the text shows [1] and [2], the repeated cite reuses [1], and a References list follows.
@@ -44,7 +45,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] The preview shows "Preview is approximate: N changes made for LaTeX.js", and its list includes showing figures in place and footnotes inline.
 - [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
 
-Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` ignores `width` and other options.
+Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio` (a height relative to `\textheight` is ignored).
 
 ## Diagnostics
 
