@@ -55,7 +55,8 @@ If a Drive save fails:
 The app only asks for the `drive.file` permission.
 That means it can see files it made and files you pick, but nothing else in your Drive.
 If you add a file to a project folder from Drive itself, the app won't see it.
-Upload it from the editor instead.
+Use **File > Add Files from Drive** and pick it, or upload it from the editor instead.
+See [Adding files from Drive](saving-and-storage.md#adding-files-from-drive).
 
 ## Popups blocked
 

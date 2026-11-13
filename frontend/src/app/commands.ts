@@ -81,6 +81,8 @@ export type CommandContext = {
   ensureDriveConnected(): Promise<boolean>;
   pickFromDrive(kind: 'project' | 'folder'): Promise<PickerSelection | undefined>;
   showDriveAccount(): void;
+  /** File > Add Files from Drive, see driveAddFiles.ts. */
+  addFilesFromDrive(): Promise<void>;
   // The Help menu. These open a docs page, a GitHub form, the tour, or the About dialog.
   openDocs(topic: 'gettingStarted' | 'shortcuts'): void;
   openBugForm(): void;
@@ -299,6 +301,7 @@ export function createCommands(app: CommandContext) {
         setStatus(describeError(error));
       }
     },
+    'file.addFromDrive': () => app.addFilesFromDrive(),
     'file.renameDrive': () => renameProject(),
     'file.saveNow': async () => {
       if (isClient || projectState.savingPaused) return;
@@ -452,6 +455,7 @@ export function createCommands(app: CommandContext) {
       case 'dev.openTestProject':
         return { enabled: !isClient };
       case 'file.moveDrive':
+      case 'file.addFromDrive':
         return { enabled: !isClient && projectState.isDrive() };
       case 'file.disconnectDrive':
         return { enabled: !isClient && driveProvider.isSignedIn() };

@@ -53,6 +53,37 @@ describe('upload dialog', () => {
   });
 });
 
+describe('upload dialog Drive button', () => {
+  it('hides the row without a Drive hook', () => {
+    mountAppShell();
+    const dialogEl = document.getElementById('upload-dialog') as HTMLDialogElement;
+    createUploadDialog(dialogEl, { getFolders: () => [], upload: vi.fn() }).open();
+    expect(document.getElementById('upload-from-drive')!.parentElement!.hidden).toBe(true);
+  });
+
+  it('explains why it is off, and closes the dialog before running', () => {
+    mountAppShell();
+    const state = { enabled: false, note: 'Save the project to Google Drive first.' };
+    const run = vi.fn();
+    const dialogEl = document.getElementById('upload-dialog') as HTMLDialogElement;
+    const dialog = createUploadDialog(dialogEl, { getFolders: () => [], upload: vi.fn(), fromDrive: { state: () => state, run } });
+    dialog.open();
+    const button = document.getElementById('upload-from-drive') as HTMLButtonElement;
+    expect(button.parentElement!.hidden).toBe(false);
+    expect(button.disabled).toBe(true);
+    expect(document.getElementById('upload-from-drive-note')!.textContent).toBe(state.note);
+    button.click();
+    expect(run).not.toHaveBeenCalled();
+
+    state.enabled = true;
+    dialog.open();
+    expect(button.disabled).toBe(false);
+    button.click();
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(dialogEl.open).toBe(false);
+  });
+});
+
 describe('projects dialog', () => {
   it('lists projects newest first and opens the one picked', () => {
     mountAppShell();

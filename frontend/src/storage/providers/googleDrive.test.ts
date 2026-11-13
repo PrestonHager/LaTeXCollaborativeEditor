@@ -317,7 +317,7 @@ describe('GoogleDriveProvider', () => {
   });
 
   describe('projects as Drive folders', () => {
-    type FakeFile = { id: string; name: string; mimeType: string; parents: string[]; appProperties?: Record<string, string | null>; content?: Uint8Array; trashed?: boolean; version?: number };
+    type FakeFile = { id: string; name: string; mimeType: string; parents: string[]; appProperties?: Record<string, string | null>; content?: Uint8Array; trashed?: boolean; version?: number; hidden?: boolean };
     const FOLDER = 'application/vnd.google-apps.folder';
 
     const readBlob = async (blob: Blob): Promise<Uint8Array> => {
@@ -347,7 +347,8 @@ describe('GoogleDriveProvider', () => {
           const q = url.searchParams.get('q') ?? '';
           const parent = /'([^']+)' in parents/.exec(q)?.[1];
           const list = [...files.values()].filter((file) => {
-            if (file.trashed) return false;
+            // Like the drive.file scope: files added from Drive itself stay out of lists until picked.
+            if (file.trashed || file.hidden) return false;
             if (parent) return file.parents.includes(parent);
             return file.mimeType === FOLDER && file.appProperties?.latexProject === '1';
           });
@@ -452,6 +453,35 @@ describe('GoogleDriveProvider', () => {
       });
       expect(Array.from(await provider.readFile('root1', 'img/x.png'))).toEqual([9]);
       await expect(provider.readFile('root1', 'missing.tex')).rejects.toThrow(/was not found/);
+    });
+
+    it('sees files added from Drive once they are picked, at their subfolder path', async () => {
+      const drive = fakeDrive([
+        { id: 'root1', name: 'Paper', mimeType: FOLDER, parents: ['root'], appProperties: { latexProject: '1' } },
+        { id: 'a', name: 'paper.tex', mimeType: 'text/x-tex', parents: ['root1'], content: bytes('hi') },
+        { id: 'figs', name: 'figs', mimeType: FOLDER, parents: ['root1'], hidden: true },
+        { id: 'plot', name: 'plot.png', mimeType: 'image/png', parents: ['figs'], content: new Uint8Array([7]), hidden: true },
+      ]);
+      const provider = connectedProvider();
+      expect(await provider.projectFolderId('root1')).toBe('root1');
+      expect((await provider.openProject('root1')).entries.map((entry) => entry.path)).toEqual(['paper.tex']);
+      expect(provider.pathOfDriveId('root1', 'plot')).toBeUndefined();
+      expect(provider.pathOfDriveId('nope', 'plot')).toBeUndefined();
+
+      // Picking the subfolder and the file grants access to both.
+      drive.files.get('figs')!.hidden = false;
+      drive.files.get('plot')!.hidden = false;
+      const listing = await provider.openProject('root1');
+      expect(listing.entries.map((entry) => entry.path)).toEqual(['figs', 'figs/plot.png', 'paper.tex']);
+      expect(provider.pathOfDriveId('root1', 'plot')).toBe('figs/plot.png');
+      expect(provider.pathOfDriveId('root1', 'figs')).toBe('figs');
+      expect(provider.fileVersion('root1', 'figs/plot.png')).toBeTruthy();
+    });
+
+    it('has no project folder for an old single-file project', async () => {
+      fakeDrive([{ id: 'old', name: 'essay.tex', mimeType: 'text/plain', parents: ['mine'], content: bytes('text') }]);
+      const provider = connectedProvider();
+      expect(await provider.projectFolderId(`${LEGACY_PREFIX}old`)).toBeNull();
     });
 
     it('moves, renames and trashes files and folders', async () => {

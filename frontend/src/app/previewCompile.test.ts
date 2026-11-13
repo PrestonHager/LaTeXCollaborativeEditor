@@ -6,7 +6,7 @@ import { COMPILE_DEBOUNCE_MS, COMPILE_MIN_INTERVAL_MS, createPreviewCompile } fr
 
 const ok = (overrides: Partial<ProjectPreviewResult> = {}): ProjectPreviewResult => ({ html: '<p>ok</p>', errors: [], missing: [], ...overrides });
 
-type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onCompiled' | 'onCompileError'>;
+type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onCompiled' | 'onCompileError' | 'missingHint'>;
 
 function setup(content: ProjectContent = starterProject('Paper'), hooks: Hooks = {}) {
   const project = new ProjectDoc(new Y.Doc());
@@ -130,6 +130,18 @@ describe('preview compile', () => {
   it('lists files the document asked for that are not in the project', async () => {
     const { compile, compiler, diagnosticsEl } = setup();
     compiler.compile.mockResolvedValue(ok({ missing: ['fig.png'] }));
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png');
+  });
+
+  it('adds a hint after missing files when there is one', async () => {
+    let hint = 'Look in Drive.';
+    const { compile, compiler, diagnosticsEl } = setup(starterProject('Paper'), { missingHint: () => hint });
+    compiler.compile.mockResolvedValue(ok({ missing: ['fig.png'] }));
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png. Look in Drive.');
+    hint = '';
+    compile.invalidate();
     await compile.runCompile();
     expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png');
   });

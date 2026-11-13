@@ -74,6 +74,11 @@ Some rules:
 - Uploading a file with the same path as an existing one replaces it.
 - A `.zip` isn't unpacked here. Use **File > Upload .zip as New Project** for that.
 
+When the project is saved in Google Drive, the bottom of the upload dialog has an **Add Files from Drive** button.
+Use it for files someone put in the project's Drive folder from Drive itself, since the app can't see those until you pick them.
+See [Adding files from Drive](saving-and-storage.md#adding-files-from-drive).
+When it's turned off, the line next to it says why: the project isn't on Drive yet, or you're a guest.
+
 When you're in a shared room, peers get your uploads over the direct WebRTC connection.
 While a file is on its way, its row shows a progress bar.
 Nothing goes through a server.

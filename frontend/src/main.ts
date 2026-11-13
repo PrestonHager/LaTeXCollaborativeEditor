@@ -25,7 +25,8 @@ import { GoogleDriveProvider } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
-import { openGooglePicker } from './storage/providers/googlePicker';
+import { openGooglePicker, pickProjectFiles } from './storage/providers/googlePicker';
+import { DRIVE_MISSING_HINT, addFilesFromDrive, addFromDriveNote } from './app/driveAddFiles';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
@@ -353,6 +354,8 @@ const compile = createPreviewCompile({
   onEmpty: (empty) => {
     previewEmptyEl.hidden = !empty || (isClient && project.isEmpty());
   },
+  // With drive.file we can't see files added to the folder from Drive, so point at the fix.
+  missingHint: () => (!isClient && projectState.isDrive() ? DRIVE_MISSING_HINT : ''),
   onCompiled: () => {
     if (noticeKind !== 'compile') return;
     notice.clear();
@@ -598,6 +601,10 @@ async function uploadFiles(files: File[], folder: string) {
 const uploadDialog = createUploadDialog(document.getElementById('upload-dialog') as HTMLDialogElement, {
   getFolders: () => project.folderPaths(),
   upload: uploadFile,
+  fromDrive: {
+    state: () => ({ enabled: getCommandState('file.addFromDrive').enabled, note: addFromDriveNote({ isClient, isDrive: projectState.isDrive() }) }),
+    run: () => executeCommand('file.addFromDrive'),
+  },
 });
 
 const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
@@ -776,6 +783,20 @@ const commands = createCommands({
   ensureDriveConnected,
   pickFromDrive,
   showDriveAccount,
+  addFilesFromDrive: () =>
+    addFilesFromDrive({
+      isClient,
+      projectState,
+      provider: driveProvider,
+      getProject: () => project,
+      blobs,
+      autosave,
+      ensureDrivePickerConfig,
+      ensureDriveConnected,
+      pickFiles: (folderId) => pickProjectFiles({ accessToken: driveProvider.getAccessToken(), apiKey: driveApiKey!, appId: driveAppId, folderId }),
+      setStatus,
+      showNotice,
+    }),
   openDocs: (topic) => openExternal(docsUrl(docsBase, topic)),
   openBugForm: () => openExternal(makeBugUrl()),
   openSecurityReport: () => openExternal(SECURITY_REPORT_URL),

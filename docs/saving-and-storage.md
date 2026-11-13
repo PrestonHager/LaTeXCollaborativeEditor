@@ -64,6 +64,7 @@ The File menu has these Drive commands, all host-only:
 - **Save to Google Drive**: asks for a name if needed, signs in if needed, and saves right away.
 - **Open from Google Drive** (**Ctrl+Shift+O**): pick a project folder, or an old single `.tex` file.
 - **Move to Drive Folder**: pick a Drive folder to move the project folder into. Only works once the project is saved in Drive.
+- **Add Files from Drive**: pick files that were put in the project folder from Drive itself, so the app can see them. See [Adding files from Drive](#adding-files-from-drive). Only works once the project is saved in Drive.
 - **Rename Project**: renames the project. The next save renames the Drive folder too.
 - **Disconnect Google Drive**: signs out and revokes the app's Drive token. Your edits keep saving in this browser as a new local project.
 
@@ -77,7 +78,31 @@ How a project looks in Drive:
 What the app can see:
 
 - The app asks only for the `drive.file` permission. It can see files it made and files you pick, nothing else.
-- If you add a file to the project folder in Drive itself, the app won't see it. Upload it from the editor instead.
+- If you add a file to the project folder in Drive itself, the app won't see it until you pick it with **File > Add Files from Drive**.
+
+### Adding files from Drive
+
+Say someone drops `figures/plot.png` into the project folder on drive.google.com.
+The app doesn't see it, because `drive.file` only covers files the app made or you picked.
+Picking the project folder when you opened it doesn't count: that grants the folder, not the files already in it.
+Full Drive access would fix this, but it needs a Google security review, so the app doesn't ask for it.
+
+To bring the file in:
+
+1. Use **File > Add Files from Drive**, or the **Add Files from Drive** button in the upload dialog.
+2. The Google Picker opens in the project folder. Select every file you want; you can pick several at once.
+3. If a file is in a subfolder that was also made in Drive, pick that subfolder too, so the app can see where the file goes.
+4. The app lists the folder again and adds each new file at the same path it has in Drive.
+
+A notice says what was added. Some things are left out, and the notice says so:
+
+- A file outside this project's folder.
+- A Google Doc or Sheet. They have no file to download.
+- A file at a path the project already has. The project's copy is kept, and the next save writes it to Drive.
+
+If the preview says **Not found in the project** while the project is on Drive, it adds a reminder to use **Add Files from Drive**, in case the file is in the Drive folder but not picked yet.
+
+Only the host can do this, since it uses the host's Drive. Guests see the command turned off.
 
 Sign-in:
 

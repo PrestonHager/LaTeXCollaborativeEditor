@@ -7,6 +7,11 @@ type UploadDialogOptions = {
   getFolders: () => string[];
   /** Add one file to the project and say how it went. */
   upload: (file: File, folder: string) => Promise<UploadResult>;
+  /**
+   * The "Add Files from Drive" button. state() says if it can run and what to tell the person,
+   * and run() starts it after the dialog closes.
+   */
+  fromDrive?: { state(): { enabled: boolean; note: string }; run(): void };
 };
 
 /** Wire up the upload dialog in index.html. Files are added as soon as they're picked or dropped. */
@@ -45,6 +50,23 @@ export function createUploadDialog(dialog: HTMLDialogElement, options: UploadDia
     void addFiles(Array.from(event.dataTransfer?.files ?? []));
   });
   const close = () => dialog.close();
+  const driveButton = dialog.querySelector<HTMLButtonElement>('#upload-from-drive');
+  const driveNote = dialog.querySelector<HTMLElement>('#upload-from-drive-note');
+  const driveRow = driveButton?.parentElement;
+  const refreshDrive = () => {
+    if (!driveButton || !driveRow) return;
+    driveRow.hidden = !options.fromDrive;
+    if (!options.fromDrive) return;
+    const { enabled, note } = options.fromDrive.state();
+    driveButton.disabled = !enabled;
+    if (driveNote) driveNote.textContent = note;
+  };
+  driveButton?.addEventListener('click', () => {
+    if (!options.fromDrive?.state().enabled) return;
+    // The Picker opens over the page, so get the dialog out of its way first.
+    close();
+    options.fromDrive.run();
+  });
   const focusReturn = returnFocusOnClose(dialog);
   dialog.querySelector('#upload-done')!.addEventListener('click', close);
   dialog.querySelector('#upload-close')!.addEventListener('click', close);
@@ -66,6 +88,7 @@ export function createUploadDialog(dialog: HTMLDialogElement, options: UploadDia
       );
       folderSelect.value = folders.includes(folder) ? folder : '';
       results.replaceChildren();
+      refreshDrive();
       focusReturn.remember();
       dialog.showModal();
     },

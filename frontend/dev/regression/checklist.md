@@ -68,6 +68,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Set main file on another `.tex` file. The preview compiles from that file instead.
 - [ ] Upload Files adds a file, and an image you upload can be used with `\includegraphics`.
 - [ ] A file over 10 MB is refused with a message.
+- [ ] On a project saved in the browser, the upload dialog shows Add Files from Drive turned off, with a line saying to save to Drive first. File > Add Files from Drive is turned off too.
 - [ ] Download Current File saves the open file.
 - [ ] Download Project .zip (Ctrl+Shift+S) saves a zip with every file and folder.
 - [ ] Add an empty folder (like `figures/`), download the .zip, and upload it as a new project: the empty folder is still in the file tree.
@@ -100,6 +101,9 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 - [ ] Edits autosave to Drive.
 - [ ] Open from Google Drive (Ctrl+Shift+O) opens a project folder, and an old single `.tex` file.
 - [ ] Move to Drive Folder moves the project folder.
+- [ ] Add a file to the project folder on drive.google.com (also one in a new subfolder made there). File > Add Files from Drive opens the Picker in the project folder, lets you pick several, and adds them at the same paths. The next save doesn't write them back to Drive.
+- [ ] Picking a Google Doc or a file outside the project folder in Add Files from Drive says it couldn't be added.
+- [ ] With the project on Drive, an `\includegraphics` of a file that isn't in the project says "Not found in the project" plus a hint to use Add Files from Drive.
 - [ ] Renaming the project renames the Drive folder on the next save, with no duplicate left behind.
 - [ ] Deleting a file in the app sends it to the Drive trash.
 - [ ] When Google limits requests, the app waits and retries on its own.
@@ -122,7 +126,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] New link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
-- [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands, from the menus, the palette or shortcuts.
+- [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
 - [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first, saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
 - [ ] With a guest connected, OK on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.

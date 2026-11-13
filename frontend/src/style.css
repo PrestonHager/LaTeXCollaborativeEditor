@@ -258,6 +258,10 @@ label.settings-row { justify-content: flex-start; }
 .upload-drop:hover, .upload-drop.is-dragging { border-color: var(--brand); color: var(--text); }
 .upload-results { list-style: none; margin: 0; padding: 0; font-size: 13px; display: grid; gap: 0.25rem; max-height: 10rem; overflow-y: auto; }
 .upload-results .is-error { color: var(--diag-text); }
+.upload-from-drive { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--panel-border); }
+.upload-from-drive[hidden] { display: none; }
+.upload-from-drive-note { margin: 0; font-size: 12px; color: var(--muted-text); }
+.upload-from-drive .btn { flex-shrink: 0; }
 .projects-list { display: flex; flex-direction: column; max-height: 50vh; overflow-y: auto; }
 .project-item { width: 100%; text-align: left; }
 .project-item:hover { background: var(--surface-3); }

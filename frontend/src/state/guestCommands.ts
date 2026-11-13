@@ -10,6 +10,7 @@ export const HOST_ONLY_COMMANDS: ReadonlySet<CommandId> = new Set<CommandId>([
   'file.connectDrive',
   'file.saveToDrive',
   'file.moveDrive',
+  'file.addFromDrive',
   'file.renameDrive',
   'file.saveNow',
   'file.clearLocalDocs',
