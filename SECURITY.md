@@ -11,8 +11,7 @@ https://github.com/PrestonHager/LaTeXCollaborativeEditor/security/advisories/new
 Only the maintainers can see a private report.
 You can also get there from the editor with **Help > Report a Security Issue**.
 
-Backup contact (for people without a GitHub account): _to be added_.
-Until then, please use the private advisory form above.
+Backup contact (for people without a GitHub account): email [latex@prestonhager.com](mailto:latex@prestonhager.com).
 
 ## Supported versions
 
