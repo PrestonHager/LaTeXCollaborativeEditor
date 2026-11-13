@@ -1,43 +1,75 @@
 # Sharing and collaboration
 
+You can edit a project with other people at the same time.
+Their browsers connect straight to yours over WebRTC.
+
+![The Share button and the link it makes](assets/screenshots/share-light.png#only-light)
+![The Share button and the link it makes](assets/screenshots/share-dark.png#only-dark)
+
 ## Share button
 
 1. Click **Share** in the header.
-2. The app builds a link to the **same page** you are on, with a **`room`** query parameter set to the current room id.
-3. The link is typically **copied to your clipboard** and also shown next to the button so you can copy it manually if needed.
+2. The app makes a room and builds a link to this page with `?room=...` on the end.
+3. It copies the link to your clipboard and shows it next to the button. The notice says "Share link copied to clipboard".
+4. Send the link to the people you want to work with.
 
-Send that link to people you want in the session. They should open it in a **modern browser** with WebRTC allowed (same requirements as other real-time web apps).
+If the copy fails, the notice says "Could not copy automatically."
+Copy the link shown next to Share by hand.
 
-If you reload the host tab, it rejoins the same room and the link keeps working.
-The room is remembered per tab, so closing the tab or opening a new one starts fresh.
-To drop everyone on the old link, click **New link** next to Share.
+The **Copy share link** command in the command palette does the same thing as the button.
+
+Some things to know:
+
+- Clicking Share again keeps the same room and link.
+- If you reload the host tab, it rejoins the same room, so the link keeps working.
+- The room is remembered per tab. Closing the tab, or opening the app in a new one, starts fresh.
+- To drop everyone on the old link, click **New link** next to Share. The app asks first, then makes a new room and copies the new link.
+
+## Joining a room
+
+Open the link in a recent browser.
+You join as a guest.
+
+- The Files panel says "Waiting for the host" until you're connected.
+- Then you get the whole project: the file tree, the text, and any images.
+- Images come from whoever has them, in 64 KB pieces, with a progress bar on the file.
+- The project name and the host's storage show up in your header.
 
 ## Connection status
 
-The connection badge in the header shows who you're editing with.
+The connection badge in the header says who you're editing with.
 
-- **Not shared**: you haven't clicked Share and you're not in a room.
-- **Shared, waiting for others**: you're the host and nobody else has joined yet.
-  This is normal right after sharing.
-- **Looking for the host**: you opened a link and the host hasn't shown up yet.
-- **Connected with 2 other people**: you're talking to peers directly.
-- **Connected with 1 other person (relayed)**: at least one peer is connected through a **TURN** relay server instead of directly.
-  It still works, it's just a longer path.
-- **Can't reach the host**: you're a guest, the host dropped off, and the app is rejoining the room.
-  A notice with help links shows up too.
+| Text | What it means |
+| --- | --- |
+| Not shared | You haven't clicked Share and you're not in a room. |
+| Shared, waiting for others | You're the host and nobody else has joined yet. This is normal right after sharing. |
+| Looking for the host | You opened a link and the host hasn't shown up yet. |
+| Connected with 2 other people | You're talking to peers directly. |
+| Connected with 1 other person (relayed) | At least one peer goes through a TURN relay server instead of directly. It still works, it's just a longer path. |
+| Can't reach the host | You're a guest, the host dropped off, and the app is rejoining the room. It retries after 1 second, then 2, 4, and so on, up to every 20 seconds. A notice with help links shows up too. |
 
-If someone cannot join, check firewalls, VPNs, and whether a **TURN** server is required on restrictive networks (that is configured by whoever deployed the app).
+If someone can't join, see [P2P connection problems](troubleshooting.md#p2p-connection-problems).
 
-## What is shared vs not shared
+## What's shared and what isn't
 
-- **After you are in a room**, the **document text** and collaboration sync happen **directly between peers** (peer-to-peer), not through a custom “document server” shipped with this project.
-- **Joining** a room still uses whatever **rendezvous / bootstrap** endpoints the deployment configured (for example public WebTorrent-style trackers). Those paths carry **session metadata** needed to connect, not the ongoing document payload as a central archive.
+- Browsers find each other through public trackers (WebTorrent trackers by default). The trackers see the room id, but not your document.
+- After that, the document text, file changes, and images go straight between browsers.
+- There's no server of ours in the middle, and nothing is stored anywhere but the browsers in the room and wherever the host saves.
 
-In practical terms: treat the collaboration link like a **live session key**. Only share it with people who should edit with you.
+Treat the link like a key.
+Only share it with people who should edit with you.
 
-## Host responsibilities
+## Host and guests
 
-The **host** is the tab that started the room (no `room` in the URL before sharing). Guests follow the host’s document title and storage context message. For saving to Drive or local lists, the **host** performs those actions; guests edit the shared buffer.
+The host is the tab that started the room, the one without `?room=` in the address.
+
+- The host saves the project. Guests don't save, but their edits and uploads get saved by the host.
+- The host can open, start, and save projects, and connect or disconnect Drive. Those are grayed out for guests.
+- Guests can edit, add, rename, move, delete, and upload files, and download a `.zip`.
+- If the host switches to another project, guests switch with it.
+- If the host leaves, guests keep their copy and can keep typing. Their edits reach the host when it comes back to the same project.
+
+For a diagram of these states, see [How the app fits together](how-it-fits.md#host-and-guest).
 
 ## What guests can and can't do
 
@@ -46,6 +78,8 @@ Those changes show up for everyone in the room.
 
 Guests can't replace the whole project.
 **New Project**, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** are turned off in a guest tab.
+So are the Drive commands, **Save Now**, **Rename Project**, **Clear Local Projects**, and **Pause Saving**, since they touch the host's storage.
+Their shortcuts do nothing in a guest tab either.
 If you're a guest and want your own project, open the editor in a new tab without the `room` link.
 
 When the host picks **New Project**, the confirm says it clears the project for everyone in the room.
@@ -53,5 +87,6 @@ Opening or importing another project as the host also swaps it out for every gue
 
 ## Related topics
 
-- [Getting started](getting-started.md) — host vs guest  
-- [Saving and storage](saving-and-storage.md) — where the file lives for the host  
+- [Getting started](getting-started.md)
+- [Projects and files](projects.md#projects-with-collaborators)
+- [Saving and storage](saving-and-storage.md)

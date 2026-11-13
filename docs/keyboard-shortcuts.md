@@ -1,43 +1,52 @@
 # Keyboard shortcuts
 
-Shortcuts use the **Ctrl** key on Windows and Linux, and **⌘** (Command) on macOS, iPhone, and iPad. The tables list both where they differ.
+Shortcuts use **Ctrl** on Windows and Linux, and **⌘** (Command) on macOS, iPhone, and iPad.
+The menus and the command palette show the right one for your computer.
 
-While the command palette is focused, other app shortcuts are not active.
+While the command palette is open, the other app shortcuts are paused.
+A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when you're a guest.
 
 ## General
 
 | Action | Windows / Linux | macOS |
-|--------|-----------------|-------|
+| --- | --- | --- |
 | Open or close the **command palette** | **Ctrl+P** | **⌘+P** |
 | Open **Settings** | **Ctrl+,** | **⌘+,** |
 
 ## File
 
 | Action | Windows / Linux | macOS |
-|--------|-----------------|-------|
-| **New Project** (after confirmation) | **Ctrl+N** | **⌘+N** |
+| --- | --- | --- |
+| **New Project** (after you confirm, host only) | **Ctrl+N** | **⌘+N** |
 | **Open Local Project** (host only) | **Ctrl+O** | **⌘+O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⌘+Shift+O** |
 | **Download Project .zip** | **Ctrl+Shift+S** | **⌘+Shift+S** |
-| **Save Now** (unless saving is paused) | **Ctrl+S** | **⌘+S** |
+| **Save Now** (host only, unless saving is paused) | **Ctrl+S** | **⌘+S** |
 
 ## Edit
 
 | Action | Windows / Linux | macOS |
-|--------|-----------------|-------|
+| --- | --- | --- |
 | **Undo** | **Ctrl+Z** | **⌘+Z** |
 | **Redo** | **Ctrl+Shift+Z** | **⌘+Shift+Z** |
-| **Redo** (alternate) | **Ctrl+Y** | **⌘+Y** |
+| **Redo** (other key) | **Ctrl+Y** | **⌘+Y** |
 | **Cut** | **Ctrl+X** | **⌘+X** |
 | **Copy** | **Ctrl+C** | **⌘+C** |
 | **Paste** | **Ctrl+V** | **⌘+V** |
 | **Select all** | **Ctrl+A** | **⌘+A** |
+| Indent | **Tab** | **Tab** |
 
 ## View
 
 | Action | Windows / Linux | macOS |
-|--------|-----------------|-------|
-| **Compile Now** (preview refresh) | **Ctrl+Shift+C** | **⌘+Shift+C** |
+| --- | --- | --- |
+| **Compile Now** (refresh the preview) | **Ctrl+Shift+C** | **⌘+Shift+C** |
+
+## Menus and the palette
+
+- In the menu bar, **Left** and **Right** move between menus, **Down**, **Enter**, or **Space** open one, and **Up** and **Down** move through its items.
+- **Escape** closes a menu, a dialog, or the command palette. The save conflict dialog is the exception, you have to pick a button.
+- In the palette, **Up** and **Down** pick a command and **Enter** runs it.
 
 ## Moving around without a mouse
 
@@ -50,9 +59,14 @@ While the command palette is focused, other app shortcuts are not active.
 
 ## Menu-only actions
 
-Drive connect/save/move/rename, theme toggles, layout modes, and **Pause Saving** are available from the **View** and **File** menus or the command palette; they do not all have dedicated global shortcuts.
-The **Help** menu items (Keyboard Shortcuts, Show Tour, Report a Bug, Request a Feature, About) don't have shortcuts either, but you can find them all in the command palette.
+These don't have shortcuts.
+Use the menus or the command palette.
+
+- New File, New Folder, Upload Files, Download Current File, and Upload .zip as New Project.
+- Connect Google Drive, Disconnect Google Drive, Save to Google Drive, Move to Drive Folder, Rename Project, and Clear Local Projects.
+- The theme toggles, the layout modes, and Pause Saving.
+- The **Help** menu items: Keyboard Shortcuts, Show Tour, Report a Bug, Request a Feature, and About.
 
 ## Related topics
 
-- [Interface and layout](interface-layout.md)  
+- [Interface and layout](interface-layout.md)

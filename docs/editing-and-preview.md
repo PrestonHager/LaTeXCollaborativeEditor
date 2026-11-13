@@ -2,19 +2,56 @@
 
 ## Editor
 
-The editor is built for **LaTeX source**: environments, macros, and plain text. Standard **Edit** menu actions apply: undo, redo, cut, copy, paste, and select all. Undo history is kept in memory for your session (up to a limited depth).
+The editor is made for LaTeX source.
+It has syntax highlighting, line numbers, bracket matching, and auto-closing brackets.
+**Tab** indents the line.
 
-Collaborative sessions use a shared text model: edits from other participants appear in the same buffer you are editing.
+The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
+
+- Undo and redo only undo your own typing, not a collaborator's.
+- Each file has its own undo history, and it starts over when you switch files.
+- File operations like delete and rename can't be undone.
+
+The bar above the editor shows the open file's path, and a **main** badge if it's the main file.
+Images and PDFs open in a viewer instead of the editor. See [Projects and files](projects.md#viewing-images-and-pdfs).
+
+In a shared room, everyone types into the same files, and you see their edits as they happen.
 
 ## Live preview
 
-The **preview** turns your source into **HTML** using a LaTeX-oriented renderer in the browser. It is meant for a quick, readable approximation of your document—not a full TeX engine with every package and font your thesis might rely on.
+The preview turns your project into a web page, right in your browser, using LaTeX.js.
+It's a quick, readable version of your document, not a full TeX engine.
 
-- Preview updates on a **short delay** after you stop typing so the UI stays responsive.
-- There is also a **minimum interval** between heavy preview passes so rapid changes do not queue unbounded work.
-- While a pass is running, the preview may show a **loading** state.
+![The preview next to the editor](assets/screenshots/overview-light.png#only-light)
+![The preview next to the editor](assets/screenshots/overview-dark.png#only-dark)
 
-Use **View → Compile Now** (or the shortcut in [Keyboard shortcuts](keyboard-shortcuts.md)) if you want to trigger a refresh without waiting for the debounced run.
+What it reads:
+
+- It starts from the [main file](projects.md#main-file).
+- It pulls in `\input` and `\include` files from the project.
+- `\includegraphics` shows PNG, JPG, GIF, WebP, and SVG images from the project. It follows `\graphicspath`, and widths like `width=0.5\textwidth`.
+- `\cite` and `\bibliography` become a numbered reference list built from your `.bib` files.
+
+When it runs:
+
+- After you stop typing for half a second.
+- At most about once a second while you keep typing, so the page stays smooth.
+- When an image arrives from a peer.
+- When you choose **View > Compile Now** (**Ctrl+Shift+C**).
+
+The compile pill in the header says **Waiting**, **Compiling**, then **Compiled**.
+While it runs, the preview shows "Updating preview...".
+
+The preview builds in a background worker, so typing doesn't freeze on a big document.
+If you type again while it's still building, the old build gets thrown away and a new one starts.
+If the browser can't start the worker, or the project uses the `picture` environment (it needs real page layout), the build runs on the page itself instead.
+The pill text is the same either way.
+
+The preview runs in a locked-down frame, so a collaborator's links or code can't reach the app.
+Its fonts and styles load from a CDN.
+Your LaTeX stays in your browser.
+
+For what doesn't work, like PDF figures and BibTeX styles, see [What's supported](whats-supported.md).
 
 ## What the preview supports
 
@@ -48,15 +85,27 @@ Anything not listed here goes to LaTeX.js as is, and if it doesn't know a comman
 
 ## Diagnostics
 
-When the preview step reports problems (for example parse issues), the editor can show **diagnostics** tied to lines in your source, and the **footer** may summarize the first issue.
+When the preview hits a problem, you see it in two places:
 
-If there are no problems, the diagnostics line in the footer stays **empty** so it does not clutter the UI.
+- The **footer** says how many problems there are and shows the first one, with its file and line, like `1 diagnostic(s). ... (chapters/intro.tex line 4)`.
+- The **editor** puts a red mark on that line, if that file is open.
+
+If a file named in `\input`, `\includegraphics`, or `\bibliography` isn't in the project, the footer says **Not found in the project:** and lists it.
+
+If there are no problems, the footer is empty.
+
+![A preview error in the footer and the editor](assets/screenshots/diagnostics-light.png#only-light)
+![A preview error in the footer and the editor](assets/screenshots/diagnostics-dark.png#only-dark)
+
+For help fixing errors, see [Preview errors](troubleshooting.md#preview-errors).
 
 ## Layout
 
-You can show **only the editor**, **only the preview**, or **split** both—see [Interface and layout](interface-layout.md).
+You can show only the editor, only the preview, or both side by side.
+See [Interface and layout](interface-layout.md#layout-modes).
 
 ## Tips
 
-- Start from a minimal `\documentclass` … `\begin{document}` … `\end{document}` block and grow your file.
-- Very large documents may feel slower in preview; consider splitting work or compiling heavy sections elsewhere if you hit limits.
+- Start from a small `\documentclass` ... `\begin{document}` ... `\end{document}` file and grow it.
+- Split big documents into chapters with `\input`, so each file stays easy to work on.
+- Very large documents can make the preview slow.

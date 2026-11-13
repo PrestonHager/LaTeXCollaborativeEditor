@@ -1,15 +1,73 @@
 # Interface and layout
 
+This page goes through every menu item, the command palette, settings, themes, and layouts.
+For a picture of how it all connects, see [How the app fits together](how-it-fits.md).
+
 ## Menu bar
 
-| Menu | Typical actions |
-|------|------------------|
-| **File** | New project, open (local, Drive, or .zip), new file or folder, upload, download (.zip or one file), Drive connect/save/move/rename, Save Now, clear local projects |
-| **Edit** | Undo, redo, cut, copy, paste, select all, **Settings** |
-| **View** | Toggle **editor** theme, toggle **preview** theme, **Pause Saving**, **Compile Now**, layout modes |
-| **Help** | Command palette, **Documentation** (this site), **Keyboard Shortcuts**, **Show Tour**, **Report a Bug**, **Request a Feature**, **About** |
+Click a menu to open it, or focus it with **Tab** and use the arrow keys.
+**Escape** closes it.
+Items that don't apply right now are grayed out, for example host-only items when you're a guest.
 
-Some File entries are **disabled** when you are a **guest** in a shared room (`?room=` in the URL).
+### File
+
+![The File menu](assets/screenshots/file-menu-light.png#only-light)
+![The File menu](assets/screenshots/file-menu-dark.png#only-dark)
+
+| Item | Shortcut | What it does |
+| --- | --- | --- |
+| New Project | Ctrl+N | Starts a fresh project after you confirm. Host only. |
+| Open Local Project | Ctrl+O | Lists projects saved in this browser. Host only. |
+| Open from Google Drive | Ctrl+Shift+O | Opens the Drive picker. Host only. |
+| Upload .zip as New Project | | Makes a new project from a `.zip`. Host only. |
+| New File | | Adds a text file to the current folder. |
+| New Folder | | Adds a folder to the current folder. |
+| Upload Files | | Opens the upload dialog. |
+| Download Project .zip | Ctrl+Shift+S | Saves the project as a `.zip`. |
+| Download Current File | | Saves the open file. |
+| Connect Google Drive | | Signs in and sends autosave to Drive. Host only. |
+| Disconnect Google Drive | | Signs out, revokes the token, and saves to this browser from then on. Host only, when signed in. |
+| Save to Google Drive | | Saves the project to Drive now. Host only. |
+| Move to Drive Folder | | Moves the Drive project folder. Host only, Drive projects only. |
+| Rename Project | | Renames the project. Host only. |
+| Save Now | Ctrl+S | Saves right away. Host only, and off if Save Now is disabled. |
+| Clear Local Projects | | Deletes every project saved in this browser, after you confirm. Host only. |
+
+Details: [Projects and files](projects.md) and [Saving and storage](saving-and-storage.md).
+
+### Edit
+
+| Item | Shortcut | What it does |
+| --- | --- | --- |
+| Undo | Ctrl+Z | Undoes your last typing in this file. |
+| Redo | Ctrl+Shift+Z or Ctrl+Y | Redoes it. |
+| Cut, Copy, Paste | Ctrl+X, Ctrl+C, Ctrl+V | The usual. From the menu, Paste may be blocked by the browser, so use the shortcut. |
+| Select All | Ctrl+A | Selects the whole file. |
+| Settings | Ctrl+, | Opens [Settings](#settings). |
+
+### View
+
+| Item | Shortcut | What it does |
+| --- | --- | --- |
+| Toggle Editor Theme | | Cycles the app and editor theme: dark, light, system. |
+| Toggle Preview Theme | | Cycles the preview theme the same way. |
+| Pause Saving | | Stops autosave and Save Now until you turn it off. A check means saving is paused. |
+| Compile Now | Ctrl+Shift+C | Rebuilds the preview right away. |
+| Split View | | Editor and preview side by side. |
+| Editor Only | | Hides the preview. |
+| Preview Only | | Hides the editor. |
+
+### Help
+
+| Item | Shortcut | What it does |
+| --- | --- | --- |
+| Command Palette | Ctrl+P | Opens the [command palette](#command-palette). |
+| Documentation | | Opens this site in a new tab. |
+| Keyboard Shortcuts | | Opens the [keyboard shortcuts](keyboard-shortcuts.md) page. |
+| Show Tour | | Runs the [first-run tour](#first-run-tour) again. |
+| Report a Bug | | Opens the GitHub bug form. |
+| Request a Feature | | Opens the GitHub feature request form. |
+| About | | Shows the app version and links. |
 
 **Report a Bug** and **Request a Feature** open the GitHub issue forms in a new tab.
 The bug form comes with your browser, OS, and the app version filled in.
@@ -39,53 +97,78 @@ It only shows once per browser, and you can take it again from **Help > Show Tou
 
 ## Command palette
 
-Press **Ctrl+P** on Windows/Linux or **⌘+P** on macOS to open the **command palette**. It lists the menu commands, with shortcut hints, plus a few that only live in the palette. Type to filter, then choose an action.
+Press **Ctrl+P** (**⌘+P** on macOS), or choose **Help > Command Palette**.
+It lists every menu command with its shortcut, plus a few that only live here.
 Each entry has a one-line description under it, and search matches those words too, so typing "github" finds **Report a Bug**.
+
+![The command palette](assets/screenshots/palette-light.png#only-light)
+![The command palette](assets/screenshots/palette-dark.png#only-dark)
+
+- Type to filter.
+- **Up** and **Down** move through the list.
+- **Enter** runs the highlighted command.
+- **Escape** or **Ctrl+P** closes it.
+
+Commands that don't apply right now are grayed out.
 
 Palette-only commands:
 
-- **Switch to dark mode**, **Switch to light mode**, and **Switch to system theme** set the app, editor, and preview theme in one go. The one you're already using is hidden. (The menu's theme toggles aren't in the palette, since these replace them.)
+- **Switch to dark mode**, **Switch to light mode**, and **Switch to system theme** set the app, editor, and preview theme in one go. The one you're already using is hidden. The menu's theme toggles aren't in the palette, since these replace them.
 - **Copy share link** does the same thing as the **Share** button.
 - **Focus editor** puts the cursor back in the editor.
 
-While the palette is open, other global shortcuts are not handled so the palette can use the keyboard.
+The Pause Saving toggle shows up as **Resume Saving** while saving is paused.
+
+While the palette is open, other shortcuts are paused so the palette can use the keyboard.
 
 ## Settings
 
 Open **Edit > Settings**, press **Ctrl+,** (**⌘+,** on macOS), or search the palette for "settings".
-Changes apply right away, there's no save button.
+Changes apply right away, so there's no save button.
+**Done**, the X, or **Escape** close it.
+
+![The settings dialog](assets/screenshots/settings-light.png#only-light)
+![The settings dialog](assets/screenshots/settings-dark.png#only-dark)
 
 - **App and editor theme** and **Preview theme**: match system, dark, or light.
 - **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
+- **Google Drive**: who's signed in, like "Signed in as you@example.com", or "Not connected".
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
-Guests in a shared room can change themes, but the saving options are turned off since the host decides how the project is saved.
+Guests can change themes, but the saving options are turned off since the host decides how the project is saved.
 
 ## Themes
 
-- **Toggle Editor Theme** cycles **dark → light → system** for the chrome and editor styling. **System** follows your OS light/dark preference.
-- **Toggle Preview Theme** does the same for the preview pane only, so you can mix—for example a dark editor and a light preview.
+- **Toggle Editor Theme** cycles dark, light, and system for the app and the editor. System follows your computer's light or dark setting.
+- **Toggle Preview Theme** does the same for the preview only, so you can mix, like a dark editor with a light preview.
+- As the host, your theme choices are remembered in this browser. Guests' choices only last until they close the tab.
 
 ## Layout modes
 
 Under **View**:
 
-- **Split View** — editor and preview side by side; drag the **splitter** to change the ratio (within sensible bounds). You can also focus the splitter with Tab and use the left and right arrow keys.
-- **Editor Only** — maximizes source editing; preview is hidden.
-- **Preview Only** — maximizes the rendered view; editor is hidden.
+- **Split View**: editor and preview side by side. Drag the splitter between them to resize, from 20% to 80%. You can also focus the splitter with **Tab** and use the left and right arrow keys.
+- **Editor Only**: hides the preview.
+- **Preview Only**: hides the editor.
 
-The active layout mode is indicated with a check mark in the menu.
+The active layout has a check mark in the menu.
 
 ## Header status pills
 
-Use **Connection**, **Compile**, and **Autosave** (or related text) as quick reads on what the app is doing.
+The three pills at the top right are connection, compile, and autosave.
 
-- **Connection** says who you're editing with, like "Not shared", "Shared, waiting for others", or "Connected with 2 other people".
-- **Compile** says whether the preview is up to date.
-- **Autosave** says where and when the project last saved, like "Saved to Browser storage at 3:41 PM".
+- Connection: see [Connection status](collaboration.md#connection-status).
+- Compile: see [Live preview](editing-and-preview.md#live-preview).
+- Autosave: see [Autosave and Save Now](saving-and-storage.md#autosave-and-save-now). When you're signed in to Drive, hover it to see the account.
 
-Details for each are covered in [Collaboration](collaboration.md), [Editing and preview](editing-and-preview.md), and [Saving and storage](saving-and-storage.md).
+Every message they can show is in [Status and error messages](messages.md).
+
+## Footer
+
+The footer shows [preview diagnostics](editing-and-preview.md#diagnostics) on the left.
+On the right are links to the Privacy policy, the Terms of Service, and the repository.
 
 ## Related topics
 
-- [Keyboard shortcuts](keyboard-shortcuts.md)  
+- [Keyboard shortcuts](keyboard-shortcuts.md)
+- [Projects and files](projects.md)
