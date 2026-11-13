@@ -186,7 +186,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
  */
 :root {
   --dialog-sm: 28rem;      /* Confirm, prompt and notice: one question, one or two buttons. */
-  --dialog-md: 36rem;      /* Short forms and info: Upload, About, Open a project, Conflict. */
+  --dialog-md: 36rem;      /* Short forms and info: Upload, Export, About, Open a project, Conflict. */
   --dialog-lg: 52rem;      /* Dense content with lists or sections side by side: Settings, Changelog. */
   --dialog-palette: 40rem; /* The command palette (640px). */
   --popover-card: 22rem;   /* Floating cards that point at something: tour, update prompt, preview changes. */
@@ -201,7 +201,8 @@ body.is-resizing { cursor: col-resize; user-select: none; }
  * Height: Basecoat caps the box at the window height minus 2rem. The header and footer keep their size and
  * the body (<section>) scrolls, so the buttons stay in view. The padding keeps focus rings from being clipped.
  */
-.dialog > * > section { min-height: 0; overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
+/* :where() keeps this at one class, so a dialog's own body rule further down can change the padding or scroll. */
+.dialog > * > :where(section) { min-height: 0; overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
 /* Footers wrap instead of pushing buttons past the edge when they're wider than the box. */
 @media (min-width: 40rem) {
   .dialog > * > footer { flex-wrap: wrap; }
@@ -267,8 +268,7 @@ label.settings-row { justify-content: flex-start; }
 #about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .dialog-help-links { display: inline-flex; margin-left: auto; }
-/* Changelog dialog (issue #140). The body scrolls so a long changelog keeps the footer in view. */
-.changelog-dialog > div { max-width: min(44rem, calc(100vw - 2rem)); }
+/* Changelog dialog (issue #140, dialog-lg). The body scrolls so a long changelog keeps the footer in view. */
 .changelog-body { display: grid; gap: 1.25rem; min-height: 0; max-height: min(60vh, 36rem); overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.5rem 0.125rem 0.25rem; font-size: 14px; line-height: 1.5; }
 .changelog-body:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--radius-md); }
 .changelog-release { display: grid; gap: 0.5rem; padding-left: 0.75rem; border-left: 2px solid var(--panel-border); }

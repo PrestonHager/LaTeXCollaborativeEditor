@@ -13,8 +13,8 @@ Put one size class on the `<dialog class="dialog ...">` element. It sizes the bo
 | Class | Token | Width | Use it for | Used by |
 |-------|-------|-------|------------|---------|
 | `dialog-sm` | `--dialog-sm` | 28rem (448px) | One question with one or two buttons: confirm, prompt, notice. | `confirmDialog`, `promptDialog` and `noticeDialog` in `frontend/src/ui/dialogs.ts` |
-| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, About, Open a project, Conflict |
-| `dialog-lg` | `--dialog-lg` | 52rem (832px) | Dense content: long lists, sections side by side, long text to read. | Settings, the changelog (#140) |
+| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Conflict |
+| `dialog-lg` | `--dialog-lg` | 52rem (832px) | Dense content: long lists, sections side by side, long text to read. | Settings, What's new (changelog, #140) |
 | `dialog-palette` | `--dialog-palette` | 40rem (640px) | The command palette. | `.command-palette` uses the token. The palette is a `div`, not a `<dialog>`. |
 
 Floating UI that isn't a dialog uses two more tokens:
@@ -39,7 +39,7 @@ A dialog with no size class gets Basecoat's default (`sm:max-w-md`, which is 28r
 ## Height and scrolling
 
 - Basecoat caps the dialog box at the window height minus 2rem (`max-h-[calc(100%_-_2rem)]`).
-- The box is a flex column: `header`, `section`, `footer`. The header and footer keep their size and the `section` scrolls (`.dialog > * > section` in `style.css`). The footer buttons stay in view at any height.
+- The box is a flex column: `header`, `section`, `footer`. The header and footer keep their size and the `section` scrolls (`.dialog > * > :where(section)` in `style.css`, kept at low specificity so a dialog's own body rule can override it). The footer buttons stay in view at any height.
 - The section has `margin: 0 -0.25rem; padding: 0.125rem 0.25rem` so focus rings on its edges aren't clipped by the scroll box.
 - Lists inside a dialog can have their own `max-height` when they'd otherwise push everything else out of view: the keybind list (18rem, 22rem in the wide Settings layout), the project list (50vh), the upload results (10rem), the palette list (48vh).
 - At 640px and wider, dialog footers wrap instead of overflowing. Below that, Basecoat stacks them in a column.
