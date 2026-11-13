@@ -4,7 +4,6 @@ import {
   formatKeybind,
   hasModKey,
   isAssignableKeybind,
-  isMac,
   keybindFromEvent,
   normalizeKeybind,
 } from './modifierShortcutLabels';
@@ -68,9 +67,9 @@ describe('detectPlatform', () => {
 
   it('reads the global navigator by default', () => {
     vi.stubGlobal('navigator', navigators.mac);
-    expect(isMac()).toBe(true);
+    expect(detectPlatform()).toBe('mac');
     vi.stubGlobal('navigator', navigators.windows);
-    expect(isMac()).toBe(false);
+    expect(detectPlatform()).toBe('other');
   });
 });
 

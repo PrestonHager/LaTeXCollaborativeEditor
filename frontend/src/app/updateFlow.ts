@@ -1,7 +1,7 @@
 // Ties the update check, the prompt and the reload together (issue #121), so main.ts only passes in
 // how to save and reload. See docs/versioning.md for the version.json side.
 import type { BuildInfo } from './buildInfo';
-import { createUpdateChecker, isStaleChunkError, updatePromptText, type UpdateReason } from './updateCheck';
+import { createUpdateChecker, updatePromptText, type UpdateReason } from './updateCheck';
 import { createUpdatePrompt } from '../ui/updatePrompt';
 import { PROTOCOL_VERSION } from '../collab/messages';
 import type { PeerVersion } from '../collab/session';
@@ -63,13 +63,6 @@ export function setupUpdateFlow(deps: UpdateFlowDeps) {
     else deps.showNotice('A collaborator is on an older version of the app. Ask them to reload the page to keep editing together.');
   }
 
-  // After a deploy, an old tab can fail to load a lazy chunk the new build removed.
-  const onStaleChunk = (event: Event) => {
-    if (event.type === 'vite:preloadError' || isStaleChunkError((event as Event & { reason?: unknown }).reason)) offer('stale-chunk');
-  };
-  win.addEventListener('vite:preloadError', onStaleChunk);
-  win.addEventListener('unhandledrejection', onStaleChunk);
-
   const checker = createUpdateChecker({
     current: deps.current,
     baseUrl: deps.baseUrl,
@@ -80,5 +73,16 @@ export function setupUpdateFlow(deps: UpdateFlowDeps) {
   });
   if (deps.poll) checker.start();
 
-  return { checker, prompt, offer, onPeerVersion, reload };
+  /**
+   * A part of the app failed to load while online. True (and the prompt is up) when version.json
+   * names another build, which means a deploy removed the old chunk. Offline, or with no new build,
+   * it's the network, and main.ts says so instead of claiming an update.
+   */
+  async function newerBuildLive(): Promise<boolean> {
+    if (!(await checker.check())) return false;
+    offer('stale-chunk');
+    return true;
+  }
+
+  return { checker, prompt, offer, onPeerVersion, reload, newerBuildLive };
 }

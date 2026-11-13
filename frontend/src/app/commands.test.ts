@@ -13,6 +13,7 @@ import { ProjectState, type DriveLike } from './projectState';
 import { createThemeController } from './theme';
 import { createLayout } from './layout';
 import { IMPORT_PICKER_BLOCKED, createCommands, shortcuts, type CommandContext } from './commands';
+import { OfflineError } from './lazy';
 import { createKeymap, type Keymap } from './keymap';
 import { normalizeKeybind } from '../ui/modifierShortcutLabels';
 import { createEditorPane } from '../ui/editor';
@@ -273,6 +274,44 @@ describe('commands', () => {
       await run('file.rename');
       expect(app.showNotice).toHaveBeenCalledWith('async failure', true);
       expect(app.menuBar.refresh).toHaveBeenCalled();
+    });
+
+    it('redraws the menus, toolbar and palette once per command, after it finishes', async () => {
+      const { commands, app } = setup();
+      const palette = vi.spyOn(app.commandPalette, 'setCommands');
+      commands.executeCommand('help.about');
+      expect(app.menuBar.refresh).toHaveBeenCalledTimes(1);
+      expect(app.toolbar.refresh).toHaveBeenCalledTimes(1);
+      expect(palette).toHaveBeenCalledTimes(1);
+
+      let finish = () => {};
+      app.renameProject.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+      app.menuBar.refresh.mockClear();
+      commands.executeCommand('file.rename');
+      // Still running, so nothing to redraw yet.
+      expect(app.menuBar.refresh).not.toHaveBeenCalled();
+      finish();
+      await settle();
+      expect(app.menuBar.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('hands a part of the app that did not load to loadFailed, named after the command', async () => {
+      const entries = [{ commandId: 'file.rename', label: 'Rename Project', section: 'File' }] as MenuEntry[];
+      const { app, run } = setup({ entries });
+      const loadFailed = vi.fn();
+      Object.assign(app, { loadFailed });
+      const offline = new OfflineError();
+      app.renameProject.mockRejectedValue(offline);
+      await run('file.rename');
+      expect(loadFailed).toHaveBeenCalledWith('Rename Project', offline);
+      expect(app.showNotice).not.toHaveBeenCalled();
+
+      const chunk = new TypeError('Failed to fetch dynamically imported module: https://x/assets/zip-abc.js');
+      app.openAbout.mockImplementation(() => {
+        throw chunk;
+      });
+      await run('help.about');
+      expect(loadFailed).toHaveBeenCalledWith('That command', chunk);
     });
 
     it('skips host-only commands for guests', async () => {

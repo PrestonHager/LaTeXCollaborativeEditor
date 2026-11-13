@@ -1,4 +1,4 @@
-import { lazyLoadProblem, lazyModule, preloadOnIntent, whenIdle } from './lazy';
+import { OfflineError, browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './lazy';
 
 describe('lazyModule', () => {
   it('loads once and remembers the module', async () => {
@@ -72,15 +72,97 @@ describe('preloadOnIntent', () => {
   });
 });
 
-describe('lazyLoadProblem', () => {
-  it('asks for a reload when a deploy removed the chunk', () => {
-    const problem = lazyLoadProblem('Settings', new TypeError('Failed to fetch dynamically imported module: https://x/assets/settingsDialog-abc.js'));
-    expect(problem.staleChunk).toBe(true);
-    expect(problem.message).toMatch(/^Settings couldn't load because a new version.*Reload to update\.$/);
+describe('loading while offline', () => {
+  const chunkError = () => new TypeError('Failed to fetch dynamically imported module: https://x/assets/settingsDialog-abc.js');
+
+  it('does not start a load while offline, so it still works once back online', async () => {
+    let online = false;
+    const load = vi.fn(async () => 'module');
+    const lazy = lazyModule(load, () => online);
+    lazy.preload();
+    await expect(lazy.get()).rejects.toBeInstanceOf(OfflineError);
+    expect(load).not.toHaveBeenCalled();
+    online = true;
+    await expect(lazy.get()).resolves.toBe('module');
+    // Once loaded, going offline again doesn't matter.
+    online = false;
+    await expect(lazy.get()).resolves.toBe('module');
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
-  it('points at the connection otherwise', () => {
-    const problem = lazyLoadProblem('The tour', new Error('boom'));
-    expect(problem).toEqual({ message: "The tour couldn't load. Check your connection and try again.", staleChunk: false });
+  it('preloads only while online', async () => {
+    const load = vi.fn(async () => 'module');
+    lazyModule(load, () => true).preload();
+    expect(load).toHaveBeenCalledTimes(1);
+  });
+
+  it('whenOnline runs the load only while online', async () => {
+    const load = vi.fn(async () => 1);
+    await expect(whenOnline(load, () => false)).rejects.toBeInstanceOf(OfflineError);
+    expect(load).not.toHaveBeenCalled();
+    await expect(whenOnline(load, () => true)).resolves.toBe(1);
+    await expect(whenOnline(load)).resolves.toBe(1);
+  });
+
+  it('reads navigator.onLine', () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    expect(browserOnline()).toBe(false);
+    vi.stubGlobal('navigator', { onLine: true });
+    expect(browserOnline()).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it('knows a load failure from other errors', () => {
+    expect(isLoadFailure(new OfflineError())).toBe(true);
+    expect(isLoadFailure(chunkError())).toBe(true);
+    expect(isLoadFailure(new Error('quota exceeded'))).toBe(false);
+  });
+
+  it('calls it offline, never an update, while the browser is offline', async () => {
+    const newerBuildLive = vi.fn(async () => true);
+    await expect(classifyLoadFailure(chunkError(), { isOnline: () => false, newerBuildLive })).resolves.toBe('offline');
+    await expect(classifyLoadFailure(new OfflineError(), { isOnline: () => true, newerBuildLive })).resolves.toBe('offline');
+    expect(newerBuildLive).not.toHaveBeenCalled();
+  });
+
+  it('calls a missing chunk an update only when a newer build is live', async () => {
+    await expect(classifyLoadFailure(chunkError(), { isOnline: () => true, newerBuildLive: async () => true })).resolves.toBe('update');
+    await expect(classifyLoadFailure(chunkError(), { isOnline: () => true, newerBuildLive: async () => false })).resolves.toBe('network');
+    await expect(classifyLoadFailure(new Error('boom'), { isOnline: () => true, newerBuildLive: async () => true })).resolves.toBe('error');
+  });
+
+  it('words each case', () => {
+    expect(loadFailureMessage('offline', 'Settings', true)).toBe("You're offline. Settings will load when you're back online.");
+    expect(loadFailureMessage('offline', 'Import .zip')).toBe("You're offline. Import .zip will work once you're back online.");
+    expect(loadFailureMessage('network', 'Export')).toBe("Export couldn't load. Check your connection, then reload the page.");
+    expect(loadFailureMessage('error', 'Export')).toBe("Export couldn't load. Try again, or reload the page.");
+  });
+});
+
+describe('createOnlineRetry', () => {
+  it('runs what was asked for while offline once back online, one per key', () => {
+    const win = new EventTarget() as unknown as Window;
+    const onOnline = vi.fn();
+    const retry = createOnlineRetry(onOnline, win);
+    const first = vi.fn();
+    const second = vi.fn();
+    const other = vi.fn();
+    retry.add('Settings', first);
+    retry.add('Settings', second);
+    retry.add('Export', other);
+    win.dispatchEvent(new Event('online'));
+    expect(onOnline).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+    expect(other).toHaveBeenCalledTimes(1);
+    win.dispatchEvent(new Event('online'));
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('listens on the real window by default', () => {
+    const run = vi.fn();
+    createOnlineRetry().add('Settings', run);
+    window.dispatchEvent(new Event('online'));
+    expect(run).toHaveBeenCalled();
   });
 });

@@ -2,7 +2,8 @@
 // bundle. Each one has the same methods main.ts and commands.ts call on the real thing; the
 // markup is already in index.html, so nothing is shown until the code arrives. preload() is
 // called when the browser is idle and when the pointer reaches the menus, so a first click or
-// shortcut normally finds the code loaded. A failed load goes to onError (main.ts offers a reload).
+// shortcut normally finds the code loaded. A failed load goes to onError with a retry, which main.ts
+// runs when the browser comes back online, or it offers a reload after a deploy.
 import { lazyModule } from './lazy';
 import type { createCommandPalette, PaletteCommand } from '../ui/commandPalette';
 import type { createSettingsDialog } from '../ui/settingsDialog';
@@ -10,16 +11,21 @@ import type { createKeybindSettings } from '../ui/keybindSettings';
 import type { createTour, TourSeen } from '../ui/tour';
 import type { createProjectsDialog } from '../ui/projectsDialog';
 import type { createUploadDialog } from '../ui/uploadDialog';
+import type { createAboutDialog } from '../ui/aboutDialog';
+import type { BuildInfo } from './buildInfo';
 import type { ProjectSummary } from '../storage/providers/types';
 
-/** Says a lazy feature didn't load. `feature` reads as the start of a sentence, like "Settings". */
-export type LazyLoadError = (feature: string, error: unknown) => void;
+/**
+ * Says a lazy feature didn't load. `feature` reads as the start of a sentence, like "Settings".
+ * `retry` does what was asked again, for when the load failed only because the browser was offline.
+ */
+export type LazyLoadError = (feature: string, error: unknown, retry?: () => void) => void;
 
 type Loader<T> = { load?: () => Promise<T> };
 
-/** Run `use` on the loaded instance, or report why it couldn't load. */
+/** Run `use` on the loaded instance, or report why it couldn't load and how to try again. */
 function withInstance<T>(get: () => Promise<T>, feature: string, onError: LazyLoadError, use: (instance: T) => void) {
-  void get().then(use, (error: unknown) => onError(feature, error));
+  void get().then(use, (error: unknown) => onError(feature, error, () => withInstance(get, feature, onError, use)));
 }
 
 export function lazyCommandPalette(
@@ -124,5 +130,19 @@ export function lazyUploadDialog(
   return {
     open: (folder?: string) => withInstance(upload.get, 'The upload dialog', onError, (instance) => instance.open(folder)),
     preload: upload.preload,
+  };
+}
+
+export function lazyAboutDialog(
+  dialog: HTMLDialogElement,
+  info: BuildInfo,
+  actions: Parameters<typeof createAboutDialog>[2],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/aboutDialog')> = {},
+) {
+  const about = lazyModule(() => (deps.load ?? (() => import('../ui/aboutDialog')))().then(({ createAboutDialog }) => createAboutDialog(dialog, info, actions)));
+  return {
+    open: () => withInstance(about.get, 'About', onError, (instance) => instance.open()),
+    preload: about.preload,
   };
 }

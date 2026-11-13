@@ -9,13 +9,13 @@ import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
-import { createAboutDialog, renderFooterVersion } from './ui/aboutDialog';
+import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
-import { lazyLoadProblem, preloadOnIntent, whenIdle } from './app/lazy';
-import { lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle } from './app/lazy';
+import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -43,7 +43,7 @@ import { detectPlatform } from './ui/modifierShortcutLabels';
 import { createPreviewChanges, previewChangesElements } from './ui/previewChanges';
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
-import { createConflictDialog } from './ui/conflictDialog';
+import type { createConflictDialog } from './ui/conflictDialog';
 import { confirmDialog, promptDialog } from './ui/dialogs';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
@@ -127,7 +127,7 @@ const notice = createNotice(appNoticeEl, {
   getBugUrl: (help) => makeBugUrl(help.report, help.summary),
 });
 // Which kind of problem the notice shows right now, so we can clear it once that's fixed.
-let noticeKind: 'save' | 'connection' | 'compile' | null = null;
+let noticeKind: 'save' | 'connection' | 'compile' | 'offline' | null = null;
 let lastSavedAt: Date | null = null;
 let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
@@ -177,18 +177,39 @@ function renderConnection() {
   }
 }
 
-/** A part of the app that loads on first use didn't load. After a deploy, offer the reload. */
-function lazyLoadFailed(feature: string, error: unknown) {
-  console.error(`${feature} failed to load`, error);
-  const { message, staleChunk } = lazyLoadProblem(feature, error);
-  if (staleChunk && updateFlow) updateFlow.offer('stale-chunk');
-  else showNotice(message, true);
+// What was opened while offline runs when the browser is back online, and the deferred preloads start then.
+const onlineRetry = createOnlineRetry(() => {
+  if (noticeKind === 'offline') {
+    notice.clear();
+    noticeKind = null;
+  }
+  preloadDialogs();
+});
+
+/**
+ * A part of the app that loads on first use didn't load. Offline, say so and run `retry` once back
+ * online. Online, only call it an update when version.json names a newer build (app/updateFlow.ts);
+ * otherwise it's the network.
+ */
+function lazyLoadFailed(feature: string, error: unknown, retry?: () => void) {
+  void classifyLoadFailure(error, { isOnline: browserOnline, newerBuildLive: async () => Boolean(await updateFlow?.newerBuildLive()) }).then((kind) => {
+    if (kind === 'offline') {
+      if (retry) onlineRetry.add(feature, retry);
+      showNotice(loadFailureMessage(kind, feature, Boolean(retry)), false, true);
+      noticeKind = 'offline';
+      return;
+    }
+    console.error(`${feature} failed to load`, error);
+    if (kind !== 'update') showNotice(loadFailureMessage(kind, feature), true);
+  });
 }
 
-// Catch anything a command forgot to handle, so failures never just vanish into the console.
+// Commands show their own errors (app/commands.ts). Anything else unhandled is background noise from
+// a library, like Trystero or Google sign-in, that the person can't act on, so it only goes to the
+// console. A part of the app that failed to load is the exception.
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled error', event.reason);
-  showNotice(describeError(event.reason), true);
+  if (isLoadFailure(event.reason)) lazyLoadFailed('Part of the app', event.reason);
+  else console.error('Unhandled error', event.reason);
 });
 
 // First, restore the last session, so we know which doc, project and provider to pick up.
@@ -323,13 +344,23 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
-const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
+// Loads on first use, or with the other dialogs once the page is idle (see preloadDialogs).
+const conflictDialog = lazyModule(() =>
+  import('./ui/conflictDialog').then(({ createConflictDialog }) => createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement)),
+);
 
 /** Hold a file that changed in storage under us, and ask the person which copy to keep. */
-function holdConflict(conflict: FileConflict, wording?: Parameters<typeof conflictDialog.ask>[2]) {
+function holdConflict(conflict: FileConflict, wording?: Parameters<ReturnType<typeof createConflictDialog>['ask']>[2]) {
   if (conflicts.has(conflict.id)) return;
   conflicts.set(conflict.id, conflict);
-  void conflictDialog.ask(conflict.path, projectState.activeProvider.label, wording).then((choice) => resolveConflict(conflict, choice));
+  // The file stays held until there's an answer, so if the dialog can't load yet, ask again once it can.
+  const ask = (): void =>
+    void conflictDialog.get().then(
+      (dialog) => dialog.ask(conflict.path, projectState.activeProvider.label, wording).then((choice) => resolveConflict(conflict, choice)),
+      // One retry per file: the feature name is also the retry's key.
+      (error: unknown) => lazyLoadFailed(`The conflict dialog for ${conflict.path}`, error, ask),
+    );
+  ask();
 }
 
 /** Act on the person's pick for a held file, then let saves pick it up again. */
@@ -693,9 +724,8 @@ const uploadDialog = lazyUploadDialog(document.getElementById('upload-dialog') a
 
 // File > Export. The formats come from the exporter registry in src/export/registry.ts. The dialog,
 // the exporters and the Drive upload load on first use, to keep them out of the initial bundle.
-let exportDialogLoad: Promise<ExportDialog> | null = null;
-function loadExportDialog(): Promise<ExportDialog> {
-  exportDialogLoad ??= Promise.all([import('./ui/exportDialog'), import('./export/browserServices'), import('./export/destinations')]).then(
+const exportDialogModule = lazyModule<ExportDialog>(() =>
+  Promise.all([import('./ui/exportDialog'), import('./export/browserServices'), import('./export/destinations')]).then(
     ([{ createExportDialog }, { createBrowserExportServices }, { downloadChoice, driveChoice }]) =>
       createExportDialog(document.getElementById('export-dialog') as HTMLDialogElement, {
         getSource: () => ({ project, blobs, name: projectName(), activePath: (activeFileId && project.get(activeFileId)?.path) || null }),
@@ -724,18 +754,19 @@ function loadExportDialog(): Promise<ExportDialog> {
         rememberDestination: { get: () => settings.get('exportDestination'), set: (id) => settings.set('exportDestination', id === 'drive' ? 'drive' : 'download') },
         notify: (message, isError) => showNotice(message, isError),
       }),
-  );
-  // Let the next try load it again, like after a deploy replaced the chunk.
-  exportDialogLoad.catch(() => (exportDialogLoad = null));
-  return exportDialogLoad;
-}
-const exportLoadFailed = (error: unknown) => showNotice(`Couldn't load Export. Reload the page and try again. (${describeError(error)})`, true);
+  ),
+);
 const exportDialog = {
-  open: (exporterId?: string) => void loadExportDialog().then((dialog) => dialog.open(exporterId), exportLoadFailed),
+  open: (exporterId?: string): void =>
+    void exportDialogModule.get().then(
+      (dialog) => dialog.open(exporterId),
+      (error: unknown) => lazyLoadFailed('Export', error, () => exportDialog.open(exporterId)),
+    ),
+  // A quick download that couldn't start isn't rerun later: a file arriving out of nowhere would be odd.
   runNow: (exporterId: string) =>
-    loadExportDialog().then(
+    exportDialogModule.get().then(
       (dialog) => dialog.runNow(exporterId),
-      (error) => (exportLoadFailed(error), false),
+      (error: unknown) => (lazyLoadFailed('Export', error), false),
     ),
 };
 
@@ -775,7 +806,8 @@ zipInput.addEventListener('change', () => {
       autosave.markDirty();
       showNotice(`Created ${projectName()} from ${file.name}`);
     } catch (error) {
-      showNotice(describeError(error), true);
+      if (isLoadFailure(error)) lazyLoadFailed('Import .zip', error);
+      else showNotice(describeError(error), true);
     } finally {
       hideLoading();
     }
@@ -916,6 +948,7 @@ const commands = createCommands({
   projectName,
   setStatus,
   showNotice,
+  loadFailed: (feature, error) => lazyLoadFailed(feature, error),
   persistAppSession,
   runFileOp,
   openFile,
@@ -1045,7 +1078,7 @@ const changelogDialog = createChangelogDialog(document.getElementById('changelog
   updateUrl: `${import.meta.env.BASE_URL}CHANGELOG.md`,
 });
 const openChangelog = () => void changelogDialog.open();
-const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO, { onViewChangelog: openChangelog });
+const aboutDialog = lazyAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO, { onViewChangelog: openChangelog }, lazyLoadFailed);
 renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorElement, BUILD_INFO);
 
 const tour = lazyTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
@@ -1054,7 +1087,7 @@ const tour = lazyTour(document.getElementById('tour')!, document.getElementById(
   seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
 }, lazyLoadFailed);
 
-// The palette, Settings and the Open and Upload dialogs load on first use. Fetch them once the page
+// The palette, Settings, About and the Open and Upload dialogs load on first use. Fetch them once the page
 // is idle, or as soon as the pointer or focus reaches the menus or toolbar, so they open at once.
 const preloadDialogs = () => {
   commandPalette.preload();
@@ -1062,6 +1095,8 @@ const preloadDialogs = () => {
   projectsDialog.preload();
   uploadDialog.preload();
   tour.preload();
+  aboutDialog.preload();
+  conflictDialog.preload();
 };
 preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
 preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);

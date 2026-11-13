@@ -20,6 +20,7 @@ import type { Layout } from './layout';
 import type { PreviewCompile } from './previewCompile';
 import type { Keymap, Shortcut } from './keymap';
 import { formatKeybind, keybindFromEvent } from '../ui/modifierShortcutLabels';
+import { isLoadFailure } from './lazy';
 
 export type CommandHandler = () => Promise<void> | void;
 
@@ -80,6 +81,11 @@ export type CommandContext = {
   projectName(): string;
   setStatus(message: string): void;
   showNotice(message: string, isError?: boolean): void;
+  /**
+   * A command needed a part of the app that didn't load (offline, or a deploy removed it).
+   * `feature` is the command's label. main.ts says why, instead of a raw "Failed to fetch" error.
+   */
+  loadFailed?(feature: string, error: unknown): void;
   persistAppSession(): void;
   runFileOp(op: () => void): void;
   openFile(id: string | null): void;
@@ -490,20 +496,27 @@ export function createCommands(app: CommandContext) {
    */
   function executeCommand(commandId: CommandId) {
     const report = (error: unknown) => {
+      if (isLoadFailure(error) && app.loadFailed) {
+        const label = app.menuBar.entries().find((entry) => entry.commandId === commandId)?.label ?? 'That command';
+        app.loadFailed(label, error);
+        return;
+      }
       console.error(`Command ${commandId} failed`, error);
       showNotice(describeError(error), true);
     };
     // Guests can't run commands that replace the shared project, however they get triggered.
     if (!canRunCommand(commandId, isClient)) return;
+    // Menus, toolbar and palette are redrawn once, after the command is done (async ones when they settle).
+    let result: ReturnType<CommandHandler>;
     try {
-      const result = commandRegistry[commandId]();
-      if (result instanceof Promise) {
-        void result.catch(report).finally(refreshCommands);
-      }
+      result = commandRegistry[commandId]();
     } catch (error) {
       report(error);
+      refreshCommands();
+      return;
     }
-    refreshCommands();
+    if (result instanceof Promise) void result.catch(report).finally(refreshCommands);
+    else refreshCommands();
   }
 
   // Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
@@ -619,7 +632,6 @@ export function createCommands(app: CommandContext) {
   function importZipFromOpenDialog() {
     if (!canRunCommand('file.importZip', isClient)) return;
     void importZip(openDialogConfirmed).catch((error: unknown) => showNotice(describeError(error), true)).finally(refreshCommands);
-    refreshCommands();
   }
 
   return {

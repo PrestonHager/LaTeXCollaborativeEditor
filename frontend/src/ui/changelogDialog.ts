@@ -5,6 +5,7 @@
 // This file is small and in the initial load; the changelog text and its renderer (changelogView.ts)
 // are imported only when the dialog first opens.
 import { returnFocusOnClose } from './focusReturn';
+import { whenOnline } from '../app/lazy';
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<{ ok: boolean; text: () => Promise<string> }>;
 
@@ -40,7 +41,7 @@ export function createChangelogDialog(dialog: HTMLDialogElement, options: Change
   };
   const body = find<HTMLElement>('#changelog-body');
   const description = find<HTMLElement>('#changelog-dialog-description');
-  const importView = options.load ?? (() => import('./changelogView'));
+  const importView = options.load ?? (() => whenOnline(() => import('./changelogView')));
   // Keep the loaded module, and forget a failed load so the next open tries again.
   let viewPromise: Promise<ChangelogView> | null = null;
   const load = () => {

@@ -72,7 +72,7 @@ The update check fetches it, checks it with `parseVersionInfo`, and compares it 
 - Any build that `isDifferentBuild` says differs counts as new, a rollback included. Each build is announced once, so **Later** holds until the next one.
 - Failures are silent. Being offline, a network error, a bad status or malformed JSON double the wait, up to an hour. A 404 stops polling for the session.
 - `frontend/src/app/updateFlow.ts` shows the card (`#update-prompt`, `ui/updatePrompt.ts`). **Reload to update** calls `flushBeforeReload`: it writes the session to localStorage, then runs `autosave.saveNow()` unless saving is paused. A failed save, a held conflict or files in flight stop the reload and offer **Reload anyway**. Guests only write their local state, since their edits are already in the host's doc.
-- A `vite:preloadError`, or an unhandled "Failed to fetch dynamically imported module", shows the same card, since that's an old tab missing a chunk the new deploy removed.
+- A lazy chunk that fails to load ("Failed to fetch dynamically imported module") shows the same card only when the browser is online and `version.json` names a newer build: that's an old tab missing a chunk the new deploy removed. Offline, or with the same build still live, it's the network, and a notice says so instead (see `lazyLoadFailed` in `main.ts` and `classifyLoadFailure` in `app/lazy.ts`).
 - The leave prompt (`beforeunload`) is decided by `frontend/src/app/leaveGuard.ts` and is skipped for the update reload.
 
 ## Protocol and storage versions

@@ -21,8 +21,6 @@ export function detectPlatform(nav: Navigator | undefined = globalThis.navigator
   return 'other';
 }
 
-export const isMac = () => detectPlatform() === 'mac';
-
 const MODIFIERS = ['Mod', 'Ctrl', 'Meta', 'Alt', 'Shift'] as const;
 type Modifier = (typeof MODIFIERS)[number];
 

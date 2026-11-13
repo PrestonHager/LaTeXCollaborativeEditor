@@ -1,5 +1,6 @@
 import type { BinaryData, P2pTransport, TransportState } from './p2pTransport';
 import type { BootstrapConfig } from './bootstrapConfig';
+import { whenOnline } from '../app/lazy';
 
 type PeerSessionCallbacks = {
   onMessage: (payload: unknown, peerId?: string) => void;
@@ -32,7 +33,7 @@ export class PeerSession {
   private readonly callbacks: PeerSessionCallbacks;
   private readonly load: LoadTransport;
 
-  constructor(bootstrap: BootstrapConfig, callbacks: PeerSessionCallbacks, load: LoadTransport = () => import('./p2pTransport')) {
+  constructor(bootstrap: BootstrapConfig, callbacks: PeerSessionCallbacks, load: LoadTransport = () => whenOnline(() => import('./p2pTransport'))) {
     this.bootstrap = bootstrap;
     this.callbacks = callbacks;
     this.load = load;
