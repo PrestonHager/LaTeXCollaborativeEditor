@@ -1,6 +1,6 @@
 // Take the docs screenshots in light and dark themes, with callouts on the parts each page talks about.
 // Run it from the repo root with `npm run screenshots`, which builds the app first.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -79,6 +79,8 @@ async function annotate(page, callouts) {
     layer.style.cssText =
       'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;pointer-events:none;overflow:visible;';
     document.body.append(layer);
+    // Show it before placing labels. A hidden popover has no layout, so labels would measure 0×0.
+    layer.showPopover();
     const color = '#e11d48';
     items.forEach((item, i) => {
       const target = document.querySelector(item.selector);
@@ -124,7 +126,6 @@ async function annotate(page, callouts) {
       label.style.left = `${x}px`;
       label.style.top = `${y}px`;
     });
-    layer.showPopover();
   }, callouts);
 }
 
@@ -139,6 +140,15 @@ async function shot(page, name, theme, options = {}) {
   await sharp(raw).png({ palette: true, quality: 90, effort: 10, compressionLevel: 9 }).toFile(file);
   console.log(`  ${path.relative(repoRoot, file)} (${Math.round(statSync(file).size / 1024)} KB)`);
   await clearCallouts(page);
+}
+
+/** Click something that opens the app's prompt dialog, type the answer, and submit it. */
+async function clickAndAnswer(page, selector, answer) {
+  await page.click(selector);
+  const prompt = page.locator('dialog.app-dialog-prompt[open]');
+  await prompt.locator('input').fill(answer);
+  await prompt.locator('button[type="submit"]').click();
+  await prompt.waitFor({ state: 'detached' });
 }
 
 /** Replace the open file's text, the way a paste would. */
@@ -189,27 +199,21 @@ async function shootTheme(browser, theme) {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE_URL });
   const page = await context.newPage();
 
-  // Answer the app's prompts and confirms. Prompts take the next queued answer, or their default.
-  const answers = [];
-  page.on('dialog', (dialog) => {
-    if (dialog.type() === 'prompt') return dialog.accept(answers.shift() ?? dialog.defaultValue());
-    if (dialog.type() === 'beforeunload') return dialog.accept();
-    return dialog.accept();
-  });
+  // The app asks with its own dialogs (ui/dialogs.ts), so only beforeunload comes through here.
+  page.on('dialog', (dialog) => dialog.accept());
 
   await page.goto(BASE_URL);
   await page.waitForSelector('#app-loading:not(.is-active)', { state: 'attached' });
   await page.waitForSelector('.cm-content');
 
   // First, build a small project: a name, two folders, a chapter, and a figure.
-  answers.push('Field Notes');
-  await page.click('#doc-title');
-  answers.push('figures');
-  await page.click('.file-pane-actions [data-command="file.newFolder"]');
-  answers.push('chapters');
-  await page.click('.file-pane-actions [data-command="file.newFolder"]');
-  answers.push('chapters/intro.tex');
-  await page.click('.file-pane-actions [data-command="file.newFile"]');
+  await clickAndAnswer(page, '#doc-title', 'Field Notes');
+  // Naming the first project starts the welcome tour. Skip it so it doesn't cover the buttons.
+  const skipTour = page.locator('#tour:not([hidden]) [data-tour-skip]');
+  await skipTour.waitFor({ timeout: 5000 }).then(() => skipTour.click(), () => {});
+  await clickAndAnswer(page, '.file-pane-actions [data-command="file.newFolder"]', 'figures');
+  await clickAndAnswer(page, '.file-pane-actions [data-command="file.newFolder"]', 'chapters');
+  await clickAndAnswer(page, '.file-pane-actions [data-command="file.newFile"]', 'chapters/intro.tex');
   await setEditorText(page, INTRO_TEX);
 
   // Upload the figure through the dialog, and keep the dialog open for its screenshot.
@@ -339,10 +343,12 @@ async function shootTheme(browser, theme) {
   await page.keyboard.press('ControlOrMeta+,');
   await page.waitForSelector('#settings-dialog[open] #settings-editor-theme');
   await annotate(page, [
-    { selector: '#settings-editor-theme', label: 'App and editor theme', side: 'right' },
-    { selector: '#settings-preview-theme', label: 'Preview theme', side: 'right' },
-    { selector: '#settings-disable-save-now', label: 'Save Now on or off', side: 'right', dx: 140 },
-    { selector: '#settings-clear-local', label: 'Deletes every local project', side: 'below' },
+    // At 1280px Settings is two columns, so the labels sit in the margins outside the box, not over it.
+    { selector: '.settings-row:has(#settings-editor-theme)', label: 'App and editor theme', side: 'left', dx: -12 },
+    { selector: '.settings-row:has(#settings-preview-theme)', label: 'Preview theme', side: 'left', dx: -12 },
+    { selector: '.settings-row:has(#settings-pause-saving)', label: 'Pause saving', side: 'left', dx: -12 },
+    { selector: '#settings-keybinds', label: 'Keyboard shortcuts', side: 'right', dx: 12 },
+    { selector: '#settings-clear-local', label: 'Deletes every local project', side: 'left', dx: -12 },
   ]);
   await shot(page, 'settings', theme);
   await page.click('#settings-done');
@@ -366,7 +372,8 @@ async function shootTheme(browser, theme) {
 
   // The status pills and notice, cropped to the header.
   await annotate(page, [
-    { selector: '#app-notice', label: 'Notices', side: 'below', dy: 8 },
+    // The pills wrap under the share link at 1280px, so the notice label goes beside it, not below.
+    { selector: '#app-notice', label: 'Notices', side: 'right' },
     { selector: '#connection-status', label: 'Connection', side: 'below', dy: 8 },
     { selector: '#compile-status', label: 'Compile', side: 'below', dy: 44 },
     { selector: '#autosave-status', label: 'Autosave', side: 'below', dy: 80 },
@@ -376,10 +383,23 @@ async function shootTheme(browser, theme) {
   await context.close();
 }
 
+/** Download Playwright's Chromium if it's missing, unless we were told to use a browser that's already installed. */
+function installChromium() {
+  if (process.env.SCREENSHOT_CHANNEL || process.env.SCREENSHOT_CHROMIUM) return;
+  const cli = path.join(here, 'node_modules', 'playwright', 'cli.js');
+  const result = spawnSync(process.execPath, [cli, 'install', 'chromium'], { stdio: 'inherit' });
+  if (result.status !== 0) throw new Error('playwright install chromium failed. Set SCREENSHOT_CHROMIUM or SCREENSHOT_CHANNEL to use an installed browser.');
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
+  installChromium();
   const server = await startPreview();
-  const browser = await chromium.launch({ channel: process.env.SCREENSHOT_CHANNEL || undefined });
+  // SCREENSHOT_CHROMIUM points at a Chromium already on the machine, for when `playwright install` can't download one.
+  const browser = await chromium.launch({
+    channel: process.env.SCREENSHOT_CHANNEL || undefined,
+    executablePath: process.env.SCREENSHOT_CHROMIUM || undefined,
+  });
   try {
     for (const theme of THEMES) await shootTheme(browser, theme);
   } finally {

@@ -218,7 +218,7 @@ Screenshots
 - They're made by a Playwright script in `tools/screenshots/`. It has its own `package.json`, so Playwright never lands in the frontend's dependencies or bundle.
 - To regenerate them, install the frontend once (`npm --prefix frontend ci`), then run `npm run screenshots` from the repo root.
 - That builds the app, installs the screenshot tool, downloads Playwright's Chromium if it's missing, starts `vite preview` on port 4183, and writes the PNGs.
-- Set `SCREENSHOT_PORT` if 4183 is taken (pick a port browsers allow, 4190 is on their blocked list), `SCREENSHOT_THEMES=light` to do one theme, or `SCREENSHOT_CHANNEL=msedge` (or `chrome`) to use an installed browser instead of downloading Chromium.
+- Set `SCREENSHOT_PORT` if 4183 is taken (pick a port browsers allow, 4190 is on their blocked list), `SCREENSHOT_THEMES=light` to do one theme, `SCREENSHOT_CHANNEL=msedge` (or `chrome`) to use an installed browser instead of downloading Chromium, or `SCREENSHOT_CHROMIUM=/path/to/chrome` to use a Chromium binary already on the machine (for when the download is blocked).
 - The script builds a small sample project, opens each dialog, and draws numbered callouts over the buttons each docs page talks about. The PNGs are palette-compressed with `sharp` to keep them small.
 - The Share shot joins a real room through the public trackers, so it needs a network connection. The room id is blanked out of the picture.
 - Rerun it when the UI changes, and before a release. It's not in CI yet.
