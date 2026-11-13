@@ -26,6 +26,7 @@ Items that don't apply right now are grayed out, for example host-only items whe
 | Download Project .zip | Ctrl+Shift+S | Saves the project as a `.zip`. |
 | Download Current File | | Saves the open file. |
 | Connect Google Drive | | Signs in and sends autosave to Drive. Host only. |
+| Disconnect Google Drive | | Signs out, revokes the token, and saves to this browser from then on. Host only, when signed in. |
 | Save to Google Drive | | Saves the project to Drive now. Host only. |
 | Move to Drive Folder | | Moves the Drive project folder. Host only, Drive projects only. |
 | Rename Project | | Renames the project. Host only. |
@@ -131,6 +132,7 @@ Changes apply right away, so there's no save button.
 
 - **App and editor theme** and **Preview theme**: match system, dark, or light.
 - **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
+- **Google Drive**: who's signed in, like "Signed in as you@example.com", or "Not connected".
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
 Guests can change themes, but the saving options are turned off since the host decides how the project is saved.
@@ -157,7 +159,7 @@ The three pills at the top right are connection, compile, and autosave.
 
 - Connection: see [Connection status](collaboration.md#connection-status).
 - Compile: see [Live preview](editing-and-preview.md#live-preview).
-- Autosave: see [Autosave and Save Now](saving-and-storage.md#autosave-and-save-now).
+- Autosave: see [Autosave and Save Now](saving-and-storage.md#autosave-and-save-now). When you're signed in to Drive, hover it to see the account.
 
 Every message they can show is in [Status and error messages](messages.md).
 

@@ -42,6 +42,11 @@ When it runs:
 The compile pill in the header says **Waiting**, **Compiling**, then **Compiled**.
 While it runs, the preview shows "Updating preview...".
 
+The preview builds in a background worker, so typing doesn't freeze on a big document.
+If you type again while it's still building, the old build gets thrown away and a new one starts.
+If the browser can't start the worker, or the project uses the `picture` environment (it needs real page layout), the build runs on the page itself instead.
+The pill text is the same either way.
+
 The preview runs in a locked-down frame, so a collaborator's links or code can't reach the app.
 Its fonts and styles load from a CDN.
 Your LaTeX stays in your browser.

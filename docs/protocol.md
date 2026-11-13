@@ -213,6 +213,8 @@ sequenceDiagram
 ```
 
 Files over 10 MB are never sent, and a chunk header claiming more than that ends the transfer.
+At most 4 files come in at once, and each side serves at most 4 requests at once.
+Every message and chunk in these diagrams goes through the checks in "Message validation and limits" above before it's used.
 
 Security and privacy notes
 - All document payloads are exchanged directly between peers.

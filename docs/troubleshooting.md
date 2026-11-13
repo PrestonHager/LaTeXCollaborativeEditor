@@ -18,7 +18,7 @@ Things to try:
 
 - Make sure the host tab is still open. Guests can only sync while a host or another guest is in the room.
 - Make sure everyone has the same link, with the same `?room=` value. If the host clicked **New link**, the old link stops working.
-- Wait a bit. The app retries on its own, up to every 20 seconds.
+- Wait a bit. On **Reconnecting**, the app rejoins on its own after 1 second, then 2, 4, and so on, up to every 20 seconds.
 - Reload the guest tab. The host can reload too, it rejoins the same room.
 - Turn off a VPN, or try another network. Some company, school, and hotel networks block WebRTC.
 - Check that an ad or tracker blocker isn't blocking the tracker sites (`tracker.openwebtorrent.com` and similar).
@@ -33,7 +33,7 @@ The app asks again a few times, then gives up until someone with the file joins.
 
 ## Drive sign-in
 
-What you see: a status like **Drive: Connection failed**, **Drive: Sign-in was canceled**, **Drive: Access was denied**, or **Drive: Session expired**.
+What you see: a status like **Drive: Connection failed**, **Drive: Sign-in was canceled**, **Drive: Access was denied**, **Drive: Session expired**, or **Drive needs you to reconnect; saving locally**.
 
 Things to try:
 
@@ -42,6 +42,14 @@ Things to try:
 - **Access was denied** means you said no to Drive access. Try again and allow it, or the app can't save there.
 - **Connection failed** usually means the Google sign-in script couldn't load. Check your connection and any script blockers.
 - **Session expired** means your Google sign-in ran out. Sign-ins last about an hour. The app tries to renew quietly, and if that fails, it saves to this browser so nothing is lost. Use **File > Connect Google Drive** to switch back.
+- **Drive needs you to reconnect; saving locally** shows when you open the app in a new tab or a restarted browser. The sign-in is kept per tab in `sessionStorage`, so only a reload of the same tab stays signed in. Use **File > Connect Google Drive**.
+- To sign out on purpose, use **File > Disconnect Google Drive**. It revokes the token, and edits keep saving in this browser.
+
+If a Drive save fails:
+
+- **Google Drive is full** means your Drive is out of space. The app stops retrying. Free up space in Drive, or download a `.zip` so you don't lose work.
+- **Google is limiting requests** means Google wants the app to slow down. The app retries a few times, then the next autosave tries again. Wait a minute.
+- **Permission denied** usually means the file's sharing settings don't let you change it.
 
 The app only asks for the `drive.file` permission.
 That means it can see files it made and files you pick, but nothing else in your Drive.
@@ -76,6 +84,16 @@ Things to try:
 Private browsing windows often have very little storage, or none.
 Some browsers also clear site storage after a while, so don't use browser storage as your only copy.
 
+## A file changed somewhere else
+
+What you see: a dialog titled **File changed somewhere else**, and the autosave pill says **Saving paused for N file(s) changed in ...**.
+
+A file changed in storage since the app last saved it, maybe in the Drive web UI, on another device, or in another tab.
+The app won't overwrite it without asking.
+Pick **Keep mine**, **Take theirs**, or **Save mine as a copy**.
+Only that file waits, the rest keep saving.
+See [When a file changed somewhere else](saving-and-storage.md#when-a-file-changed-somewhere-else).
+
 ## Preview errors
 
 What you see: the compile pill says **Compile Error**, the footer shows something like "1 diagnostic(s). ... (main.tex line 12)", or the footer says **Not found in the project: ...**.
@@ -100,4 +118,4 @@ If that's blocked, the preview may look unstyled.
 
 - **The share link didn't copy.** The notice says "Could not copy automatically." Copy the link shown next to **Share** by hand. Clipboard access needs HTTPS and a focused page.
 - **Something went wrong. Check the browser console for details.** An error the app didn't expect. Open your browser's developer tools to see more, and please report it.
-- **The page warns me when I close it.** The last save hasn't finished. Wait for the autosave pill to say Saved.
+- **The page warns me when I close it.** The last save hasn't finished, or a file is waiting on the conflict dialog. Wait for the autosave pill to say Saved, or answer the dialog.

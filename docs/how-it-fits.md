@@ -38,6 +38,7 @@ flowchart TB
         Upload["Upload files"]
         Projects["Open a project"]
         DrivePicker["Google Drive picker"]
+        Conflict["File changed somewhere else"]
     end
 
     Menus -- "Help > Command Palette<br/>or Ctrl+P" --> Palette
@@ -50,6 +51,7 @@ flowchart TB
     Files -- "click an image or PDF" --> Viewer
     Editor -- "typing (after a short pause)" --> Preview
     Preview -- "errors" --> Footer
+    Editor -- "autosave finds a file<br/>changed in storage" --> Conflict
     Menus -- "View > Split / Editor Only / Preview Only" --> Workspace
 ```
 
@@ -67,6 +69,7 @@ Where to read more about each area:
 
 A new tab gives you a starter project with one `main.tex`.
 It isn't saved until it has a name.
+New Project is host only, and its confirm warns that it clears the project for everyone in the room.
 
 ```mermaid
 flowchart TD
@@ -75,7 +78,7 @@ flowchart TD
     B -- no --> D[Starter project<br/>with main.tex]
     C --> E[Edit]
     D --> E
-    N([File > New Project<br/>or Ctrl+N]) --> F{Confirm?}
+    N([File > New Project<br/>or Ctrl+N, host only]) --> F{Confirm?<br/>clears it for the room}
     F -- no --> E
     F -- yes --> G[Save what's pending<br/>on the old project]
     G --> D
@@ -131,6 +134,11 @@ flowchart TD
 ```
 
 **File > Connect Google Drive** does the same sign-in, then switches autosave over to Drive without saving right away.
+**File > Disconnect Google Drive** signs out, revokes the token, and sends saves back to this browser.
+
+If a save finds that a file changed in Drive since the app last saved it, the app doesn't overwrite it.
+Saving pauses for that file, and the conflict dialog asks you to pick **Keep mine**, **Take theirs**, or **Save mine as a copy**.
+See [When a file changed somewhere else](saving-and-storage.md#when-a-file-changed-somewhere-else).
 
 ### Opening a project
 
@@ -202,6 +210,7 @@ flowchart TD
 
 Autosave turns on for the host once browser storage is ready.
 It only writes a project that has a name.
+A file that changed in storage since the last save is held back until you answer the conflict dialog, while the other files keep saving.
 Guests never save, the host does.
 **Disable Save Now** only turns off the Save Now command and **Ctrl+S**.
 Autosave still runs.
@@ -219,6 +228,8 @@ stateDiagram-v2
         Saving --> Saved: write worked
         Saving --> Pending: edits came in during the save
         Saving --> SaveError: failed after retries
+        Saving --> Held: a file changed in storage<br/>(only that file)
+        Held --> Pending: you picked in the conflict dialog
         Saved --> Pending: edit
         SaveError --> Pending: edit
     }
@@ -228,6 +239,9 @@ stateDiagram-v2
 The pill text for each state is in [Status and error messages](messages.md#autosave-pill).
 
 ### Google Drive connected and expired
+
+The Drive sign-in lives in the tab's `sessionStorage`.
+A reload in the same tab keeps it, but a new tab or a restarted browser starts signed out.
 
 ```mermaid
 stateDiagram-v2
@@ -240,7 +254,8 @@ stateDiagram-v2
     Refreshing --> Expired: Google said no
     Expired --> Local: saves fall back to this browser,<br/>notice in the header
     Local --> Connecting: File > Connect Google Drive
-    Connected --> Expired: reload after the token ran out
+    Connected --> Local: File > Disconnect Google Drive<br/>(token revoked)
+    Connected --> Local: new tab, or reload after the token ran out<br/>("Drive needs you to reconnect")
 ```
 
 ### Host and guest

@@ -111,6 +111,7 @@ The name is shared with everyone in the room, and the next save renames the stor
 
 **File > New Project** (**Ctrl+N**) starts a fresh project with a starter `main.tex`, after you confirm.
 The project you were on stays saved where it was.
+It's host only, and if you're sharing, it clears the project for everyone in the room, so the confirm says so.
 
 ## Opening a project
 

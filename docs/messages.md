@@ -54,12 +54,19 @@ Drive messages show here too.
 | Saved to Google Drive | Saved to your Drive. |
 | Save Error: ... | The save failed after a few retries. The rest of the message says why. |
 | Waiting for N file(s) from peers | A guest uploaded files that haven't reached the host yet. They save once they arrive. |
+| Saving paused for N file(s) changed in Google Drive | A file changed in storage since the app last saved it. That file waits for your pick in the conflict dialog. Other files keep saving. |
+| Saved your copy of path as a new file | You picked **Save mine as a copy** in the conflict dialog. |
+| Loaded path from Google Drive | You picked **Take theirs** in the conflict dialog. |
 | Opened name | A project finished opening. |
 | Save Now Disabled | You turned off Save Now. Autosave still runs. |
 | Local projects cleared | **Clear Local Projects** finished. |
 | No local projects to clear | There was nothing to clear. |
 | Saved on host local storage | You're a guest. The host saves to their browser. |
 | Saved on host Google Drive | You're a guest. The host saves to their Drive. |
+
+For the conflict messages, see [When a file changed somewhere else](saving-and-storage.md#when-a-file-changed-somewhere-else).
+
+When you're signed in to Drive, hover the pill to see the account, like "Google Drive: you@example.com".
 
 More: [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 
@@ -71,7 +78,7 @@ More: [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 | Drive: Connected | Signed in. Saves go to Drive. |
 | Drive: Connected (name the project to save) | Signed in, but the project needs a name before it can save. |
 | Drive: Session restored | After a reload, your Drive sign-in was still good. |
-| Drive session expired; saving locally. Reconnect Drive from the File menu. | After a reload, your Drive sign-in had run out. Saves go to this browser for now. |
+| Drive needs you to reconnect; saving locally. Use File > Connect Google Drive. | You were saving to Drive, but this tab has no good sign-in. That happens in a new tab, a restarted browser, or a reload after the sign-in ran out. Saves go to this browser for now. |
 | Drive: Saving... / Drive: Saved name | **Save to Google Drive** is running, then done. |
 | Drive: Opening picker... | The Drive picker is loading. |
 | Drive: Selection canceled | You closed the picker without picking. |
@@ -89,7 +96,9 @@ More: [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 | Drive: Not connected. Use File > Connect Google Drive first. | A Drive action ran without a sign-in. |
 | Drive: Could not ... Check your connection and try again. | A network error talking to Drive. |
 | Drive: Could not ... The file was not found or this app does not have access to it. | The file was deleted, or it's one the app can't see. |
-| Drive: Permission denied while trying to ... | Google said no, often a rate limit or a sharing setting. |
+| Drive: Google Drive is full. Free up space in Drive, or download a .zip so you don't lose work. | Your Drive is out of space. The app doesn't retry this one. |
+| Drive: Google is limiting requests, so we could not ... Try again in a minute. | Google is rate limiting. The app already tried a few times. |
+| Drive: Permission denied while trying to ... | Google said no, usually a sharing setting or a file the app can't change. |
 | Drive: Could not ... (HTTP code) | Another error from Google. |
 | Drive: That is not a folder. | You picked a file where a project folder was needed. |
 | Drive: path was not found in this project. | A file the app expected is missing from the Drive folder. |
@@ -103,7 +112,8 @@ These show in the header, next to Share.
 | Share link copied to clipboard | The room link is ready to paste. |
 | Could not copy automatically. Copy the link shown next to Share. | The browser didn't allow clipboard access. The link is still shown. |
 | Could not start a share session. Reload the page and try again. | Joining the room failed. |
-| Google Drive sign-in expired, so edits are saving in this browser... | Your Drive sign-in ran out mid-session. Nothing is lost. Reconnect from the File menu. |
+| Google Drive sign-in expired, so edits are saving in this browser... | Your Drive sign-in ran out mid-session. Nothing is lost. Reconnect from the File menu. This one stays until you reconnect. |
+| Disconnected Google Drive. Edits now save in this browser. | **File > Disconnect Google Drive** finished. |
 | Google Drive picker is not set up on this site (VITE_GOOGLE_API_KEY is missing). | Drive picking can't work on this copy of the site. |
 | Save canceled: the project needs a name first. | You canceled the name prompt. |
 | Uploaded N file(s) | All uploads worked. |
@@ -145,7 +155,7 @@ More: [Diagnostics](editing-and-preview.md#diagnostics).
 
 ## Confirm and prompt boxes
 
-- **Start a new project? The current one stays saved where it is.** From **New Project**.
+- **Start a new project? This clears the project for everyone in the room. The current one stays saved where it is.** From **New Project**.
 - **Name this project before saving:** From **Save Now** or **Save to Google Drive** on an unnamed project.
 - **Rename project:** From clicking the title or **Rename Project**.
 - **New file:** and **New folder:** From the Files panel or File menu.
@@ -153,4 +163,13 @@ More: [Diagnostics](editing-and-preview.md#diagnostics).
 - **Delete path? Collaborators lose it too.** From the trash can on a file row.
 - **Delete all N project(s) saved in this browser? This cannot be undone.** From **Clear Local Projects**.
 - **Start a new link? Anyone using the old link will be disconnected.** From **New link**.
-- The browser's own "Leave site?" box shows when you close the tab before the last save finished.
+- The browser's own "Leave site?" box shows when you close the tab before the last save finished, or while a file is waiting on the conflict dialog.
+
+## Conflict dialog
+
+The **File changed somewhere else** dialog shows when a file changed in storage since the app last saved it.
+It names the file and says saving for it is paused until you pick.
+The buttons are **Keep mine**, **Take theirs**, and **Save mine as a copy**.
+It has no close button, and **Escape** doesn't close it.
+
+More: [When a file changed somewhere else](saving-and-storage.md#when-a-file-changed-somewhere-else).

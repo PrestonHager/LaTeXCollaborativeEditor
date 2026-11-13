@@ -46,7 +46,7 @@ The connection badge in the header says who you're editing with.
 | Looking for the host | You opened a link and the host hasn't shown up yet. |
 | Connected with 2 other people | You're talking to peers directly. |
 | Connected with 1 other person (relayed) | At least one peer goes through a TURN relay server instead of directly. It still works, it's just a longer path. |
-| Can't reach the host | You're a guest, the host dropped off, and the app is rejoining the room. A notice with help links shows up too. |
+| Can't reach the host | You're a guest, the host dropped off, and the app is rejoining the room. It retries after 1 second, then 2, 4, and so on, up to every 20 seconds. A notice with help links shows up too. |
 
 If someone can't join, see [P2P connection problems](troubleshooting.md#p2p-connection-problems).
 
@@ -64,7 +64,7 @@ Only share it with people who should edit with you.
 The host is the tab that started the room, the one without `?room=` in the address.
 
 - The host saves the project. Guests don't save, but their edits and uploads get saved by the host.
-- The host can open, start, and save projects, and connect Drive. Those are grayed out for guests.
+- The host can open, start, and save projects, and connect or disconnect Drive. Those are grayed out for guests.
 - Guests can edit, add, rename, move, delete, and upload files, and download a `.zip`.
 - If the host switches to another project, guests switch with it.
 - If the host leaves, guests keep their copy and can keep typing. Their edits reach the host when it comes back to the same project.
@@ -78,6 +78,8 @@ Those changes show up for everyone in the room.
 
 Guests can't replace the whole project.
 **New Project**, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** are turned off in a guest tab.
+So are the Drive commands, **Save Now**, **Rename Project**, **Clear Local Projects**, and **Disable Save Now**, since they touch the host's storage.
+Their shortcuts do nothing in a guest tab either.
 If you're a guest and want your own project, open the editor in a new tab without the `room` link.
 
 When the host picks **New Project**, the confirm says it clears the project for everyone in the room.

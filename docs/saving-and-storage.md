@@ -20,7 +20,7 @@ When you're the host, the app autosaves your project.
   The setting is remembered after a reload.
 - If a save fails, it tries again a few times before showing **Save Error** in the autosave pill.
 - A file a guest uploads gets saved once its bytes reach the host.
-- If you try to close the tab before the last save is done, the browser asks if you want to leave.
+- If you try to close the tab before the last save is done, or while a file is waiting on the [conflict dialog](#when-a-file-changed-somewhere-else), the browser asks if you want to leave.
 
 **File > Save Now** (**Ctrl+S**) saves right away.
 
@@ -121,6 +121,7 @@ If someone changed the file in the meantime (in the Drive web UI, on another dev
 **File > New Project** (**Ctrl+N**) starts a fresh project with a starter `main.tex`, after you confirm.
 The project you were on stays saved where it was.
 New projects save to wherever you were saving before, browser or Drive.
+If you're sharing, the new project replaces the old one for everyone in the room.
 
 ## Related topics
 

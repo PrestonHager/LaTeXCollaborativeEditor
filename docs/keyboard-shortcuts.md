@@ -45,7 +45,7 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 ## Menus and the palette
 
 - In the menu bar, **Left** and **Right** move between menus, **Down**, **Enter**, or **Space** open one, and **Up** and **Down** move through its items.
-- **Escape** closes a menu, a dialog, or the command palette.
+- **Escape** closes a menu, a dialog, or the command palette. The save conflict dialog is the exception, you have to pick a button.
 - In the palette, **Up** and **Down** pick a command and **Enter** runs it.
 
 ## Moving around without a mouse
@@ -63,7 +63,7 @@ These don't have shortcuts.
 Use the menus or the command palette.
 
 - New File, New Folder, Upload Files, Download Current File, and Upload .zip as New Project.
-- Connect Google Drive, Save to Google Drive, Move to Drive Folder, Rename Project, and Clear Local Projects.
+- Connect Google Drive, Disconnect Google Drive, Save to Google Drive, Move to Drive Folder, Rename Project, and Clear Local Projects.
 - The theme toggles, the layout modes, and Pause Saving.
 - The **Help** menu items: Keyboard Shortcuts, Show Tour, Report a Bug, Request a Feature, and About.
 

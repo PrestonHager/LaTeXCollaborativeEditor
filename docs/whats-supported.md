@@ -33,6 +33,8 @@ Saving:
 - Autosave to this browser (IndexedDB).
 - Autosave to Google Drive, as a real folder with real files, if the site has Google keys set up.
 - Open projects from this browser or from Drive.
+- If a file changed in Drive since your last save, the app asks before it overwrites it.
+- Sign out of Drive with **File > Disconnect Google Drive**, and keep saving in this browser.
 - Old documents from before projects open as one-file projects.
 
 Look and feel:
