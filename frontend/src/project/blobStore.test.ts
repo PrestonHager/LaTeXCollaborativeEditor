@@ -58,4 +58,21 @@ describe('BlobStore', () => {
     warn.mockRestore();
     globalThis.indexedDB = saved;
   });
+
+  it('keeps retained bytes in memory until the last release, then forgets them on request', async () => {
+    const store = new BlobStore();
+    const hash = await store.put(new Uint8Array([4]));
+    store.retain(hash);
+    store.retain(hash);
+    store.forget(hash);
+    expect(store.has(hash)).toBe(true);
+    store.release(hash);
+    expect(store.isRetained(hash)).toBe(true);
+    store.release(hash);
+    expect(store.isRetained(hash)).toBe(false);
+    store.forget(hash);
+    expect(store.has(hash)).toBe(false);
+    // The browser storage copy is still there.
+    expect(Array.from((await store.get(hash))!)).toEqual([4]);
+  });
 });

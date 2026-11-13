@@ -374,7 +374,8 @@ describe('GoogleDriveProvider', () => {
           return reply({ id: created.id, name: created.name });
         }
         if (method === 'PATCH' && id) {
-          const file = files.get(id)!;
+          const file = files.get(id);
+          if (!file) return { ok: false, status: 404, json: async () => ({}) };
           bump(file);
           if (url.pathname.includes('/upload/')) {
             file.content = await readBlob(init.body as Blob);
@@ -387,7 +388,7 @@ describe('GoogleDriveProvider', () => {
           if (init.body) {
             const body = JSON.parse(init.body as string);
             if (body.name) file.name = body.name;
-            if (body.trashed) file.trashed = true;
+            if (body.trashed !== undefined) file.trashed = body.trashed;
             if (body.appProperties) file.appProperties = { ...file.appProperties, ...body.appProperties };
           }
           return reply({ id });
@@ -506,6 +507,38 @@ describe('GoogleDriveProvider', () => {
       await provider.renameProject(id, 'Renamed');
       expect(drive.files.get(id)!.name).toBe('Renamed');
       await expect(provider.move(id, 'nope.tex', 'x.tex')).rejects.toThrow(/was not found/);
+    });
+
+    it('untrashes the same file or folder when a deleted one comes back', async () => {
+      const drive = fakeDrive();
+      const provider = connectedProvider();
+      const { id } = await provider.createProject('P');
+      await provider.writeFile(id, 'ch/intro.tex', 'a');
+      await provider.writeFile(id, 'solo.tex', 's');
+      const folderId = drive.find('ch')!.id;
+      const fileId = drive.find('intro.tex')!.id;
+      const token = await provider.remove(id, 'ch');
+      expect(token).toBe(folderId);
+      expect(drive.files.get(folderId)!.trashed).toBe(true);
+
+      // Back under a new name and folder: same Drive ids, and its file can be written by path again.
+      expect(await provider.restore(id, 'parts/chapters', folderId)).toBe(true);
+      expect(drive.files.get(folderId)).toMatchObject({ trashed: false, name: 'chapters', parents: [drive.find('parts')!.id] });
+      await provider.writeFile(id, 'parts/chapters/intro.tex', 'b');
+      expect(text(drive.files.get(fileId)!.content!)).toBe('b');
+      expect([...drive.files.values()].filter((file) => file.name === 'intro.tex')).toHaveLength(1);
+      // A token is only good once.
+      expect(await provider.restore(id, 'ch', folderId)).toBe(false);
+
+      // Not over something that's there now, and not once Drive deleted it for good.
+      const solo = (await provider.remove(id, 'solo.tex')) as string;
+      await provider.writeFile(id, 'solo.tex', 'new');
+      expect(await provider.restore(id, 'solo.tex', solo)).toBe(false);
+      await provider.remove(id, 'solo.tex');
+      const again = (await provider.remove(id, 'parts/chapters/intro.tex')) as string;
+      drive.files.delete(again);
+      expect(await provider.restore(id, 'intro.tex', again)).toBe(false);
+      expect(await provider.remove(id, 'missing.tex')).toBeUndefined();
     });
 
     it('loads the project index on demand after a reload', async () => {

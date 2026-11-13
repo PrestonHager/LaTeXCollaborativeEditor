@@ -54,8 +54,8 @@ These are known limits right now.
 - **Code listings have no syntax colors.** The preview shows the code exactly, in a plain monospaced box. Style options like `basicstyle`, `frame` or a minted style are ignored.
 - **The bibliography is close, not exact.** The preview copies the common BibTeX styles itself instead of running BibTeX, so small details can differ. Other styles fall back to `plain` with a note. Citations aren't compressed or merged (no `[1-3]` or `1984a,b`), and biblatex options other than `style` and `sorting=none` are ignored.
 - **Files added to a Drive project folder from Drive itself don't show up.** The app only has permission to see files it made or that you picked. Upload files from the editor instead.
-- **There's no undo for file operations.** Undo only covers typing. Deleting, renaming, or moving a file can't be undone from the app.
-- **Undo history is per file and only lasts until you switch files.** Opening another file starts a fresh undo history.
+- **Text undo history is per file and only lasts until you switch files.** Opening another file starts a fresh undo history.
+- **File operations keep their own history of 50 steps,** and only for this project and this visit. See [Undoing file operations](editing-and-preview.md#undoing-file-operations).
 - **Files over 10 MB** can't be uploaded or sent to peers.
 - **Guests can't save.** Only the host's browser saves the project. If the host closes their tab, guests keep their copy but nothing new gets saved until the host comes back.
 - **Very strict networks** may block the peer connection unless the site has a TURN server.

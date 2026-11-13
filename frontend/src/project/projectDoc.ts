@@ -17,8 +17,14 @@ type StoredEntry = Omit<ProjectEntry, 'id'>;
 
 // Single-document rooms kept their text under this name, so the migrated main file reuses it.
 export const LEGACY_TEXT_ID = 'doc';
-// File ops use their own origin, so the editor's undo stack never picks them up.
+// File ops use their own origin, so the editor's undo stack never picks them up. The file
+// history (fileHistory.ts) tracks this origin instead, and only for ops the person made.
 export const PROJECT_ORIGIN = 'project';
+/**
+ * Set to a new value each time replaceAll swaps in a whole project, so every peer's file history
+ * knows the old project is gone and drops its undo steps. Older peers ignore it.
+ */
+export const GENERATION_KEY = 'generation';
 /** Longest project name we show, in characters. */
 export const MAX_PROJECT_NAME_LENGTH = 200;
 const ENTRY_KINDS: readonly unknown[] = ['text', 'binary', 'folder'];
@@ -189,6 +195,15 @@ export class ProjectDoc {
     }, PROJECT_ORIGIN);
   }
 
+  /** Replace a text file's content, like an upload of a file that's already there. Undoable as a file op. */
+  replaceText(id: string, content: string) {
+    const text = this.getText(id);
+    this.doc.transact(() => {
+      if (text.length) text.delete(0, text.length);
+      if (content) text.insert(0, content);
+    }, PROJECT_ORIGIN);
+  }
+
   /** Swap the whole project for new content in one change, so peers follow along. */
   replaceAll(content: ProjectContent) {
     this.doc.transact(() => {
@@ -201,6 +216,7 @@ export class ProjectDoc {
       this.files.clear();
       this.meta.clear();
       this.meta.set('name', content.name);
+      this.meta.set(GENERATION_KEY, newId());
       const taken = new Set<string>();
       let mainId: string | null = null;
       for (const file of content.files) {

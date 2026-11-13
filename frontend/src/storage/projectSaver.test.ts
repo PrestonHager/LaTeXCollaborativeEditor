@@ -4,6 +4,7 @@ import { manifestFromProject, saveProject, textRev, type SavedManifest } from '.
 import { ProjectDoc } from '../project/projectDoc';
 import { BlobStore } from '../project/blobStore';
 import { MemoryProvider } from '../test/memoryProvider';
+import { createFileHistory } from '../project/fileHistory';
 
 function setup() {
   const provider = new MemoryProvider();
@@ -187,5 +188,84 @@ describe('saveProject', () => {
   it('fingerprints text by content and length', () => {
     expect(textRev('abc')).toBe(textRev('abc'));
     expect(textRev('abc')).not.toBe(textRev('abd'));
+  });
+
+  describe('after an undone delete', () => {
+    const withHistory = async () => {
+      const t = setup();
+      t.project.setName('P');
+      const history = createFileHistory(t.project, { blobs: t.blobs });
+      // The main file follows the .tex files around, which isn't what these tests are about.
+      const ops = () => t.provider.calls.filter((call) => !call.startsWith('main '));
+      return { ...t, history, ops };
+    };
+
+    it('untrashes the same file instead of writing a copy', async () => {
+      const t = await withHistory();
+      t.project.createTextFile('a.tex', 'a');
+      await t.save();
+      t.history.record('Delete a.tex', () => t.project.removePath('a.tex'));
+      await t.save();
+      expect(t.ops()).toEqual(['remove a.tex']);
+      t.history.undo();
+      await t.save();
+      expect(t.ops()).toEqual(['restore a.tex']);
+      expect(t.provider.text(t.id(), 'a.tex')).toBe('a');
+      // Nothing left to write on the next save.
+      await t.save();
+      expect(t.ops()).toEqual([]);
+    });
+
+    it('untrashes a folder with everything in it, and trashes again what the project lost since', async () => {
+      const t = await withHistory();
+      t.project.createFolder('ch');
+      t.project.createTextFile('ch/a.tex', 'a');
+      const png = await t.blobs.put(new Uint8Array([1, 2, 3]));
+      t.project.putBinaryFile('ch/b.png', png, 3);
+      await t.save();
+      t.history.record('Delete ch', () => t.project.removePath('ch'));
+      await t.save();
+      t.history.undo();
+      t.project.removePath('ch/b.png');
+      await t.save();
+      expect(t.ops()).toEqual(['restore ch', 'remove ch/b.png']);
+      expect([...t.provider.projects.get(t.id())!.files.keys()].sort()).toEqual(['ch', 'ch/a.tex']);
+    });
+
+    it('restores under the old name, then moves it aside for a file someone made there', async () => {
+      const t = await withHistory();
+      t.project.createTextFile('a.tex', 'mine');
+      await t.save();
+      t.history.record('Delete a.tex', () => t.project.removePath('a.tex'));
+      await t.save();
+      // Not recorded, so it counts as someone else's.
+      t.project.createTextFile('a.tex', 'theirs');
+      t.history.undo();
+      await t.save();
+      expect(t.ops()).toEqual(['restore a.tex', 'move a.tex a (restored).tex', 'write a.tex']);
+      expect(t.provider.text(t.id(), 'a (restored).tex')).toBe('mine');
+      expect(t.provider.text(t.id(), 'a.tex')).toBe('theirs');
+    });
+
+    it('writes the file again when storage can no longer untrash it', async () => {
+      const t = await withHistory();
+      t.project.createTextFile('a.tex', 'a');
+      await t.save();
+      t.history.record('Delete a.tex', () => t.project.removePath('a.tex'));
+      await t.save();
+      t.provider.restorable = false;
+      t.history.undo();
+      await t.save();
+      expect(t.ops()).toEqual(['write a.tex']);
+    });
+
+    it('remembers a bounded number of trashed files', async () => {
+      const t = await withHistory();
+      for (let i = 0; i < 3; i += 1) t.project.createTextFile(`f${i}.tex`, 'x');
+      await t.save();
+      for (let i = 0; i < 3; i += 1) t.project.removePath(`f${i}.tex`);
+      const { manifest } = await t.save();
+      expect(Object.values(manifest.trashed ?? {}).map((file) => file.path)).toEqual(['f0.tex', 'f1.tex', 'f2.tex']);
+    });
   });
 });

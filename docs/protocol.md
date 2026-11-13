@@ -88,8 +88,15 @@ Project sync
 - The Yjs doc holds the project:
   - `files` is a Y.Map from a stable file id to its path and kind (text, binary, or folder). Binary entries carry a SHA-256 content hash and size.
   - Each text file has its own top-level Y.Text named `file:<id>`.
-  - `meta` holds the project name and the main file id.
+  - `meta` holds the project name and the main file id, and `generation`, a new random id each time a whole project replaces the last one (open, import, new project).
 - A rename or move writes one key in `files`, so ids (and open editors) survive it.
+- Undoing a file operation (`frontend/src/project/fileHistory.ts`) is a Yjs UndoManager on `files`, plus the text of every file, scoped to the local `project` transaction origin. It sends ordinary Yjs updates, so peers need nothing new and older peers sync as before.
+  - It only reverts our own changes. Yjs won't write over a key a peer changed since, so a file a peer renamed or deleted after us stays as they left it.
+  - A step never removes a text file that another client has typed in since the step was made (an item from another client id, newer than the state vector saved with the step, and not deleted). That file and its text are left alone, and the rest of the step still runs.
+  - A deleted file comes back with the same id. A peer's text edits made at the same time as the delete are kept.
+  - If a peer made a new file at the restored path, ours is renamed to `name (restored).ext` in the same change. A folder that's there again merges with ours.
+  - A change to `generation` clears every peer's file history, so nobody undoes into a project that's gone. Older peers ignore the key.
+  - Deleted binary files keep only their hash in the doc, so a peer holds the bytes of every binary file in its undo history in memory, where it can still serve them over the file transfer below.
 - Two renames of the same file at once settle on one of the names, the same on every peer.
 - A rename and a delete of the same file at once keep the renamed file, so no work is lost.
 - Two peers making the same path at once both keep their files. The one with the later id shows up as "name (2).ext" on every peer.

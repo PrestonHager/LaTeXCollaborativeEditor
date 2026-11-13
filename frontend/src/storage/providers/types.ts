@@ -44,8 +44,17 @@ export interface StorageProvider {
   createFolder(projectId: string, path: string): Promise<void>;
   /** Rename or move a file or folder. Moving a folder takes everything in it along. */
   move(projectId: string, from: string, to: string): Promise<void>;
-  /** Delete a file or folder. Providers with a trash should use it. */
-  remove(projectId: string, path: string): Promise<void>;
+  /**
+   * Delete a file or folder. Providers with a trash should use it, and may return a token that
+   * restore() takes to bring that same item back.
+   */
+  remove(projectId: string, path: string): Promise<string | void>;
+  /**
+   * Bring back an item remove() put in the trash, everything in it included, at path (it may have
+   * been renamed or moved since). False when it can't, like after a reload or once the trash is
+   * emptied: the caller writes the files again instead. Undoing a delete uses this (fileHistory.ts).
+   */
+  restore?(projectId: string, path: string, token: string): Promise<boolean>;
   renameProject(projectId: string, name: string): Promise<void>;
   setMainFile(projectId: string, path: string | null): Promise<void>;
   /**

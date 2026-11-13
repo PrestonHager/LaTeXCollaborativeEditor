@@ -12,8 +12,19 @@ export type SavedManifest = {
   projectId: string;
   name: string;
   mainPath: string | null;
-  files: Record<string, { path: string; kind: 'text' | 'binary' | 'folder'; rev: string; version?: string }>;
+  files: Record<string, SavedFile>;
+  /**
+   * Files a save put in the provider's trash, by file id, with the token restore() takes. When an
+   * undo brings a file back, the next save untrashes the same item instead of writing a copy.
+   * `root` is the path that was deleted, so a folder's files come back with it.
+   */
+  trashed?: Record<string, SavedFile & { token: string; root: string }>;
 };
+
+type SavedFile = { path: string; kind: 'text' | 'binary' | 'folder'; rev: string; version?: string };
+
+/** How many trashed files the manifest remembers. The file history holds 50 ops, so this is plenty. */
+const MAX_TRASHED = 500;
 
 export type SaveResult = {
   manifest: SavedManifest;
@@ -75,14 +86,42 @@ export async function saveProject(options: {
     .sort(([, a], [, b]) => depth(a.path) - depth(b.path));
   for (const [id, saved] of removed) {
     if (!manifest.files[id]) continue;
-    await provider.remove(manifest.projectId, saved.path);
+    const token = await provider.remove(manifest.projectId, saved.path);
     for (const [otherId, other] of Object.entries(manifest.files)) {
       if (other.path === saved.path || isInside(other.path, saved.path)) {
-        if (!currentById.has(otherId)) delete manifest.files[otherId];
+        if (currentById.has(otherId)) continue;
+        if (token) rememberTrashed(manifest, otherId, { ...other, token, root: saved.path });
+        delete manifest.files[otherId];
       }
     }
     delete manifest.files[id];
     step();
+  }
+
+  // Then untrash what an undo brought back, so storage keeps the same file instead of a copy.
+  // Each deleted path comes back whole. A file the project no longer has goes back to the trash.
+  if (provider.restore && manifest.trashed) {
+    const trashed = manifest.trashed;
+    const back = current.filter((entry) => !manifest.files[entry.id] && trashed[entry.id]?.path === trashed[entry.id]?.root);
+    for (const entry of back) {
+      const record = trashed[entry.id];
+      if (!record) continue;
+      const restored = await provider.restore(manifest.projectId, record.path, record.token);
+      // Either way that trash item is done with: back now, or gone and written again below.
+      const group = Object.entries(trashed).filter(([, other]) => other.token === record.token);
+      for (const [otherId] of group) delete trashed[otherId];
+      if (!restored) continue;
+      const extra: string[] = [];
+      for (const [otherId, { token: _token, root: _root, ...file }] of group) {
+        if (!currentById.has(otherId)) extra.push(file.path);
+        else if (!manifest.files[otherId]) manifest.files[otherId] = file;
+      }
+      step();
+      for (const path of extra.sort((a, b) => depth(a) - depth(b))) {
+        if (extra.some((other) => isInside(path, other))) continue;
+        await provider.remove(manifest.projectId, path);
+      }
+    }
   }
 
   // Now move and rename, shallow first, so a folder move carries its files before we look at them.
@@ -167,6 +206,15 @@ export async function saveProject(options: {
     step();
   }
   return { manifest, pending, conflicts };
+}
+
+/** Note a trashed file, and forget the oldest once there are too many. */
+function rememberTrashed(manifest: SavedManifest, id: string, record: NonNullable<SavedManifest['trashed']>[string]) {
+  const trashed = (manifest.trashed ??= {});
+  delete trashed[id];
+  trashed[id] = record;
+  const ids = Object.keys(trashed);
+  for (const old of ids.slice(0, Math.max(0, ids.length - MAX_TRASHED))) delete trashed[old];
 }
 
 /**

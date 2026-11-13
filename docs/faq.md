@@ -78,9 +78,9 @@ If the host closes the tab and opens a new one, that's a new room, and guests ne
 
 ## How do I undo a file delete?
 
-You can't from the app.
-Undo only covers typing.
-Get the file back from a downloaded zip or your Drive copy (Drive deletes go to the Drive trash).
+Click **Undo** in the notice that shows after the delete, or click in the **Files** panel and press **Ctrl+Z** (**⌘Z** on a Mac).
+**Edit > Undo** works too while the Files panel was the last thing you used.
+Images and PDFs come back as well. See [Undoing file operations](editing-and-preview.md#undoing-file-operations).
 
 ## Does it work offline?
 

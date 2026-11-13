@@ -141,6 +141,8 @@ export type AddFromDriveDeps = {
   pickFiles(folderId: string): Promise<PickerSelection[] | null>;
   setStatus(message: string): void;
   showNotice(message: string, isError?: boolean): void;
+  /** Make the added files one step in the file history, so Undo takes them out again. */
+  record?<T>(op: () => Promise<T>): Promise<T>;
 };
 
 /** The whole "Add Files from Drive" command: pick, list the folder again, and merge. */
@@ -185,7 +187,8 @@ export async function addFilesFromDrive(deps: AddFromDriveDeps): Promise<void> {
       return;
     }
     const listing = await provider.openProject(projectId);
-    const result = await mergeNewDriveFiles({ provider, projectId, listing, project: deps.getProject(), blobs: deps.blobs, manifest: projectState.manifest });
+    const merge = () => mergeNewDriveFiles({ provider, projectId, listing, project: deps.getProject(), blobs: deps.blobs, manifest: projectState.manifest });
+    const result = await (deps.record ? deps.record(merge) : merge());
     for (const conflict of result.collisions) deps.holdConflict(conflict);
     const notFound = chosen.filter((item) => provider.pathOfDriveId(projectId, item.id) === undefined).map((item) => item.name);
     const { message, isError } = describeAddResult(result, notFound);

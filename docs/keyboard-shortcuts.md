@@ -47,6 +47,12 @@ If you had turned **Ctrl+N** off, it stays off, now for **New File**. Keybinds y
 | **Select all** | **Ctrl+A** | **⌘A** |
 | Indent | **Tab** | **Tab** |
 
+Undo and Redo go by where focus is, like VS Code.
+In the editor they undo typing in the open file.
+In the **Files** panel they undo and redo file operations: create, rename, move, delete and upload.
+**Edit > Undo** says which one it'll do, like **Undo Delete chapter.tex**.
+See [Undoing file operations](editing-and-preview.md#undoing-file-operations).
+
 ## View
 
 | Action | Windows / Linux | macOS |

@@ -42,6 +42,8 @@ export type ShowNoticeOptions = {
   /** Keep it up until something replaces it. */
   sticky?: boolean;
   help?: NoticeHelp | null;
+  /** A button after the message, like Undo after a delete. Clicking it runs `run` and clears the notice. */
+  action?: { label: string; run: () => void } | null;
 };
 
 /**
@@ -52,6 +54,13 @@ export function createNotice(root: HTMLElement, options: NoticeOptions) {
   const text = root.querySelector<HTMLElement>('[data-notice-text]')!;
   const learn = root.querySelector<HTMLAnchorElement>('[data-notice-learn]')!;
   const report = root.querySelector<HTMLAnchorElement>('[data-notice-report]')!;
+  const actionButton = root.querySelector<HTMLButtonElement>('[data-notice-action]');
+  let action: (() => void) | null = null;
+  actionButton?.addEventListener('click', () => {
+    const run = action;
+    clear();
+    run?.();
+  });
   const timeoutMs = options.timeoutMs ?? 8000;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -59,6 +68,8 @@ export function createNotice(root: HTMLElement, options: NoticeOptions) {
     text.textContent = '';
     learn.hidden = true;
     report.hidden = true;
+    if (actionButton) actionButton.hidden = true;
+    action = null;
     root.classList.remove('is-error');
     if (timer) clearTimeout(timer);
     timer = null;
@@ -77,9 +88,14 @@ export function createNotice(root: HTMLElement, options: NoticeOptions) {
         report.hidden = false;
       }
     }
-    // Notices with links stay up longer, so there's time to click them.
+    if (opts.action && actionButton) {
+      actionButton.textContent = opts.action.label;
+      actionButton.hidden = false;
+      action = opts.action.run;
+    }
+    // Notices with links or a button stay up longer, so there's time to click them.
     if (opts.sticky) return;
-    timer = setTimeout(clear, help ? timeoutMs * 2 : timeoutMs);
+    timer = setTimeout(clear, help || opts.action ? timeoutMs * 2 : timeoutMs);
   };
 
   clear();

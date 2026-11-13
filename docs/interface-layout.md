@@ -43,7 +43,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 
 | Item | Shortcut | What it does |
 | --- | --- | --- |
-| Undo | Ctrl+Z | Undoes your last typing in this file. |
+| Undo | Ctrl+Z | Undoes your last typing in this file. While the Files panel has focus or was used last, it undoes your last file operation instead, and says which, like **Undo Delete chapter.tex**. |
 | Redo | Ctrl+Shift+Z or Ctrl+Y | Redoes it. |
 | Cut, Copy, Paste | Ctrl+X, Ctrl+C, Ctrl+V | The usual. The first time you choose **Paste** from the menu, the browser asks to let the page read the clipboard. If you say no, a notice tells you to use the shortcut instead. |
 | Select All | Ctrl+A | Selects the whole file. |

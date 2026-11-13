@@ -74,8 +74,8 @@
             <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-edit" aria-expanded="false">Edit</button>
             <div id="menu-edit" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="Edit">
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.undo" data-description="Undo your last edit. Other people's edits stay."><span class="menu-item-label">Undo</span><span class="menu-item-shortcut" data-shortcut></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="edit.redo" data-description="Bring back the edit you just undid."><span class="menu-item-label">Redo</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.undo" data-description="Undo your last edit, or your last file change when the file tree has focus. Other people's changes stay."><span class="menu-item-label">Undo</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="edit.redo" data-description="Bring back the edit or file change you just undid."><span class="menu-item-label">Redo</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="edit.cut" data-description="Cut the selected text."><span class="menu-item-label">Cut</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="edit.copy" data-description="Copy the selected text."><span class="menu-item-label">Copy</span><span class="menu-item-shortcut" data-shortcut></span></button>
@@ -134,6 +134,7 @@
           <span data-notice-text></span>
           <a class="btn" data-variant="link" data-size="xs" data-notice-learn target="_blank" rel="noreferrer" hidden>Learn more</a>
           <a class="btn" data-variant="link" data-size="xs" data-notice-report target="_blank" rel="noreferrer" hidden>Report this</a>
+          <button type="button" class="btn" data-variant="outline" data-size="xs" data-notice-action hidden></button>
         </span>
         <div class="status-badges">
           <span class="pill badge" data-variant="outline" title="Who you're editing with"><i data-lucide="users"></i><span id="connection-status" role="status" aria-live="polite">Not shared</span></span>

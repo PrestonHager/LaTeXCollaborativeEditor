@@ -61,9 +61,10 @@ import {
 import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
 import { BlobStore } from './project/blobStore';
+import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
-import { MAX_FILE_BYTES, basename, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
+import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
@@ -268,6 +269,26 @@ let project: ProjectDoc = new ProjectDoc(session.getDoc());
 // Undo goes through Yjs so it only reverts our own edits, not a peer's. It follows the open file.
 let undo = createCollabUndo(new Y.Doc().getText());
 let unbindDoc: (() => void) | null = null;
+
+// Undo for the file tree, apart from the text undo above (issue #55). bindProject makes one per doc.
+const makeFileHistory = (doc: ProjectDoc) =>
+  createFileHistory(doc, { blobs, inUse: (hash) => project.entries().some((entry) => entry.hash === hash) });
+let fileHistory = makeFileHistory(project);
+// Edit > Undo and its keys act on the file tree while it has focus or was used last, else on the open file.
+let undoContext: 'files' | 'text' = 'text';
+function setUndoContext(next: 'files' | 'text') {
+  if (undoContext === next) return;
+  undoContext = next;
+  refreshCommands();
+}
+const fileUndo = {
+  undo: () => runHistoryStep('undo'),
+  redo: () => runHistoryStep('redo'),
+  canUndo: () => fileHistory.canUndo(),
+  canRedo: () => fileHistory.canRedo(),
+  undoLabel: () => fileHistory.undoLabel(),
+  redoLabel: () => fileHistory.redoLabel(),
+};
 // The Y.Text the editor shows, so presence can add remote cursors to it once it starts.
 let boundText: Y.Text | null = null;
 
@@ -505,7 +526,16 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
       validate: (value) => pathProblem(value, (taken) => project.hasPath(taken), path),
       suggest: (value) => suggestFreeName(value, (typed) => typed, (taken) => project.hasPath(taken), path),
     });
-    if (next !== null && next !== path) runFileOp(() => project.movePath(path, next));
+    const to = next === null ? null : normalizePath(next);
+    if (next !== null && to !== path) {
+      const moved = to !== null && dirname(to) !== dirname(path);
+      const where = to ? dirname(to) || 'the top of the project' : '';
+      runFileOp(
+        () => project.movePath(path, next),
+        `${moved ? 'Move' : 'Rename'} ${basename(path)}`,
+        moved ? `Moved ${basename(path)} to ${where}` : `Renamed ${basename(path)} to ${basename(to ?? next)}`,
+      );
+    }
     refocusFileTree(normalizePath(next ?? path) ?? path);
   },
   onDelete: async (path) => {
@@ -516,11 +546,12 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
       confirmLabel: isFolder ? 'Delete folder' : 'Delete file',
       destructive: true,
     });
-    if (ok) runFileOp(() => project.removePath(path));
+    if (ok) runFileOp(() => project.removePath(path), `Delete ${basename(path)}`, `Deleted ${basename(path)}`);
     refocusFileTree();
   },
   onSetMain: (entry) => project.setMainFile(entry.id),
-  onMove: (path, folder) => runFileOp(() => project.movePath(path, joinPath(folder, basename(path)))),
+  onMove: (path, folder) =>
+    runFileOp(() => project.movePath(path, joinPath(folder, basename(path))), `Move ${basename(path)}`, `Moved ${basename(path)} to ${folder || 'the top of the project'}`),
   onUpload: (files, folder) => void uploadFiles(files, folder),
   onCommand: (commandId) => executeCommand(commandId),
 });
@@ -544,13 +575,55 @@ function refocusFileTree(path?: string) {
   }, 0);
 }
 
-/** Run a file tree change and show its error, like a name that's taken. */
-function runFileOp(op: () => void) {
+/**
+ * Run a file tree change and show its error, like a name that's taken. With a label it's one step in
+ * the file history, like "Delete chapter.tex". With a notice too, the notice gets an Undo button.
+ */
+function runFileOp(op: () => void, label?: string, done?: string) {
   try {
-    op();
+    if (!label) {
+      op();
+      return;
+    }
+    const before = fileHistory.latest();
+    fileHistory.record(label, op);
+    setUndoContext('files');
+    const step = fileHistory.latest();
+    if (done && step && step !== before) showUndoNotice(done, step);
   } catch (error) {
     showNotice(describeError(error), true);
   }
+}
+
+/** Say what a file op did, with an Undo button for as long as it's still the latest step. */
+function showUndoNotice(message: string, step: object) {
+  noticeKind = null;
+  notice.show(message, {
+    action: {
+      label: 'Undo',
+      run: () => {
+        if (fileHistory.latest() === step) runHistoryStep('undo');
+        else showNotice('That change is no longer the last one. Use Edit > Undo from the file tree.');
+      },
+    },
+  });
+}
+
+/** Undo or redo a file op, and say what happened, including anything that came back renamed. */
+function runHistoryStep(kind: 'undo' | 'redo') {
+  const label = kind === 'undo' ? fileHistory.undoLabel() : fileHistory.redoLabel();
+  if (!label) return;
+  const step = kind === 'undo' ? fileHistory.undo() : fileHistory.redo();
+  setUndoContext('files');
+  refocusFileTree();
+  if (!step) {
+    showNotice(`Couldn't ${kind} ${label}: someone else changed those files since.`);
+    return;
+  }
+  const renamed = step.renamed.map(({ from, to }) => `${from} came back as ${basename(to)}, since someone made a new ${basename(from)}.`);
+  const kept = step.kept.map((path) => `Kept ${basename(path)} because someone else edited it.`);
+  const head = step.changed ? `${kind === 'undo' ? 'Undid' : 'Redid'} ${label}.` : `Couldn't ${kind} ${label}.`;
+  showNotice([head, ...kept, ...renamed].join(' '), false, renamed.length + kept.length > 0);
 }
 
 function renderFiles() {
@@ -648,6 +721,10 @@ async function fetchMissingFiles() {
 function bindProject() {
   unbindDoc?.();
   project = new ProjectDoc(session.getDoc());
+  // A new doc is a new project, so the old one's file history and the bytes it kept go.
+  fileHistory.destroy();
+  fileHistory = makeFileHistory(project);
+  fileHistory.subscribe(() => refreshCommands());
   const onUpdate = () => {
     scheduleCompile();
     if (!isClient && project.getName()) autosave.markDirty();
@@ -741,19 +818,15 @@ async function uploadFile(file: File, folder: string): Promise<{ name: string; o
       const text = new TextDecoder().decode(bytes);
       const existing = project.findByPath(path);
       if (existing?.kind === 'text') {
-        const yText = project.getText(existing.id);
-        session.getDoc().transact(() => {
-          yText.delete(0, yText.length);
-          yText.insert(0, text);
-        });
+        fileHistory.record(`Upload ${name}`, () => project.replaceText(existing.id, text));
         return { name, ok: true, message: 'replaced' };
       }
-      project.createTextFile(path, text);
+      fileHistory.record(`Upload ${name}`, () => project.createTextFile(path, text));
       return { name, ok: true, message: 'added' };
     }
     const hash = await blobs.put(bytes);
     const replaced = project.findByPath(path)?.kind === 'binary';
-    project.putBinaryFile(path, hash, bytes.length);
+    fileHistory.record(`Upload ${name}`, () => project.putBinaryFile(path, hash, bytes.length));
     return { name, ok: true, message: replaced ? 'replaced' : 'added' };
   } catch (error) {
     return { name, ok: false, message: describeError(error) };
@@ -762,10 +835,14 @@ async function uploadFile(file: File, folder: string): Promise<{ name: string; o
 
 let uploadsInFlight = 0;
 async function uploadFiles(files: File[], folder: string) {
-  const results = [];
+  const results: Awaited<ReturnType<typeof uploadFile>>[] = [];
   uploadsInFlight += 1;
   try {
-    for (const file of files) results.push(await uploadFile(file, folder));
+    // One undo step for the whole drop.
+    await fileHistory.batch(`Upload ${files.length === 1 ? files[0].name : `${files.length} files`}`, async () => {
+      for (const file of files) results.push(await uploadFile(file, folder));
+    });
+    setUndoContext('files');
   } finally {
     uploadsInFlight -= 1;
   }
@@ -1010,7 +1087,7 @@ const commands = createCommands({
     return project;
   },
   get undo() {
-    return undo;
+    return undoContext === 'files' ? fileUndo : undo;
   },
   get activeFileId() {
     return activeFileId;
@@ -1059,6 +1136,11 @@ const commands = createCommands({
       getProject: () => project,
       blobs,
       autosave,
+      record: async (op) => {
+        const result = await fileHistory.batch('Add from Drive', op);
+        setUndoContext('files');
+        return result;
+      },
       ensureDrivePickerConfig,
       ensureDriveConnected,
       holdConflict: (conflict) => holdConflict(conflict, DRIVE_PICK_CONFLICT),
@@ -1196,6 +1278,9 @@ document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #pre
 commandPalette.setCommands(buildPaletteCommands());
 
 window.addEventListener('keydown', handleKeydown);
+// Undo follows focus, like VS Code: the file tree has its own history, the editor has the text's.
+document.getElementById('file-pane')!.addEventListener('focusin', () => setUndoContext('files'));
+editorPane.addEventListener('focusin', () => setUndoContext('text'));
 
 editor.onTextChanged((_text, sync = true) => {
   // Loading a different file shouldn't be undoable, so drop the stack.
