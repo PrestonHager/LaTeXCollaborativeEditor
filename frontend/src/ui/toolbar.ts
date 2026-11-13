@@ -1,10 +1,11 @@
 import type { CommandId, CommandState } from './menuBar';
 import { commandIcon } from './icons';
-import { formatPrimaryChord } from './modifierShortcutLabels';
 
 type ToolbarOptions = {
   getCommandState: (commandId: CommandId) => CommandState;
   onCommand: (commandId: CommandId) => void;
+  /** The keybind label to show for a command, if it has one. */
+  shortcutLabel?: (commandId: CommandId) => string | undefined;
 };
 
 /**
@@ -27,11 +28,8 @@ export function createToolbar(root: HTMLElement, options: ToolbarOptions) {
     const commandId = button.dataset.command as CommandId;
     // First, add the command's icon unless the HTML already has one.
     if (!button.querySelector('svg, i')) button.prepend(commandIcon(commandId));
-    // Then put the platform's shortcut in the tooltip, like "Save now (Ctrl+S)".
-    const chord = button.dataset.chord;
-    if (chord && button.dataset.tooltip) {
-      button.dataset.tooltip = `${button.dataset.tooltip} (${formatPrimaryChord(chord)})`;
-    }
+    // Keep the tooltip from the HTML, refreshShortcuts adds the keybind to it.
+    button.dataset.tooltipText = button.dataset.tooltip ?? '';
     button.addEventListener('click', () => {
       setCurrent(index);
       if (options.getCommandState(commandId).enabled) options.onCommand(commandId);
@@ -60,7 +58,18 @@ export function createToolbar(root: HTMLElement, options: ToolbarOptions) {
     });
   };
 
+  /** Put each button's keybind in its tooltip, like "Save now (Ctrl+S)". Call again when the keybinds change. */
+  const refreshShortcuts = () => {
+    buttons.forEach((button) => {
+      const text = button.dataset.tooltipText;
+      if (!text) return;
+      const shortcut = options.shortcutLabel?.(button.dataset.command as CommandId);
+      button.dataset.tooltip = shortcut ? `${text} (${shortcut})` : text;
+    });
+  };
+
   setCurrent(0);
   refresh();
-  return { refresh };
+  refreshShortcuts();
+  return { refresh, refreshShortcuts };
 }

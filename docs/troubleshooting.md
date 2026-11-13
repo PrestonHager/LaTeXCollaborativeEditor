@@ -111,7 +111,7 @@ Things to try:
 - If an image file is there but the preview shows a note instead, it might be a PDF or EPS. The preview can't show those yet. Use PNG, JPG, or SVG.
 - If a package isn't supported, try the preview without it, or wrap package-specific code so it only runs in real LaTeX.
 - If the compile pill says **No main file**, click the star next to the `.tex` file that has `\documentclass`.
-- Use **View > Compile Now** (**Ctrl+Shift+C**) to force a fresh preview.
+- Use **View > Compile Now** (**Ctrl+Enter**) to force a fresh preview.
 
 The preview pulls its fonts and styles from a CDN (`cdn.jsdelivr.net`).
 If that's blocked, the preview may look unstyled.

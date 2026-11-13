@@ -1,3 +1,5 @@
+import type { CommandId } from './menuBar';
+
 export const TOUR_SEEN_KEY = 'latex-editor.tour-seen';
 
 type KeyValueStore = Pick<Storage, 'getItem' | 'setItem'>;
@@ -76,8 +78,18 @@ export function placeTourCard(
 
 type TourStep = { target: string; title: string; body: string };
 
+// Where a command has no keybind, the step names its menu item instead.
+const SHORTCUT_FALLBACK: Partial<Record<CommandId, string>> = { 'app.commandPalette': 'Help > Command Palette' };
+
+/** Fill each `{shortcut:<command id>}` in a step's text with that command's keybind for this platform. */
+export function fillShortcuts(text: string, shortcutLabel?: (commandId: CommandId) => string | undefined): string {
+  return text.replace(/\{shortcut:([\w.]+)\}/g, (_match, id: CommandId) => shortcutLabel?.(id) ?? SHORTCUT_FALLBACK[id] ?? id);
+}
+
 type TourOptions = {
   store?: KeyValueStore;
+  /** The keybind label for a command, to fill `{shortcut:<command id>}` in the step text. */
+  shortcutLabel?: (commandId: CommandId) => string | undefined;
   /** Called when the tour closes, whether it finished or got skipped. */
   onClose?: () => void;
 };
@@ -126,7 +138,8 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
     highlighted = document.querySelector<HTMLElement>(step.target);
     highlighted?.classList.add('tour-highlight');
     titleEl.textContent = step.title;
-    bodyEl.textContent = step.body;
+    // Fill the keybinds in each time, so a changed keybind shows up here too.
+    bodyEl.textContent = fillShortcuts(step.body, options.shortcutLabel);
     countEl.textContent = `${index + 1} of ${list.length}`;
     backBtn.disabled = index === 0;
     nextBtn.textContent = index === list.length - 1 ? 'Done' : 'Next';

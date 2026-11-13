@@ -1,5 +1,4 @@
 import { createMenuBar, type CommandId } from './menuBar';
-import { formatPrimaryChord } from './modifierShortcutLabels';
 
 type TestMenu = { label: string; items: { commandId: CommandId; label: string; shortcut?: string; checkable?: boolean }[] };
 
@@ -10,7 +9,7 @@ function withMenus(container: HTMLElement, menus: TestMenu[]) {
       const items = menu.items
         .map((item) => {
           const role = item.checkable ? 'role="menuitemcheckbox" aria-checked="false"' : 'role="menuitem"';
-          const chord = item.shortcut ? `<span class="menu-item-shortcut" data-shortcut data-chord="${item.shortcut}"></span>` : '';
+          const chord = item.shortcut ? `<span class="menu-item-shortcut" data-shortcut></span>` : '';
           return `<button type="button" class="menu-item" ${role} data-command="${item.commandId}"><span class="menu-item-label">${item.label}</span>${chord}</button>`;
         })
         .join('');
@@ -383,9 +382,11 @@ describe('createMenuBar', () => {
 
   it('uses Basecoat dropdown markup and shows the popover only while open', () => {
     const container = document.createElement('div');
+    const labels: Partial<Record<CommandId, string>> = { 'file.new': 'Ctrl+N' };
     const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New', shortcut: 'N' }] }]), {
       getCommandState: () => ({ enabled: true }),
       onCommand: () => {},
+      shortcutLabel: (id) => labels[id],
     });
     const trigger = container.querySelector('.menu-trigger') as HTMLButtonElement;
     const popover = container.querySelector('[data-popover]') as HTMLElement;
@@ -397,10 +398,15 @@ describe('createMenuBar', () => {
     expect(popover.getAttribute('aria-hidden')).toBe('false');
     const item = container.querySelector('.menu-item') as HTMLButtonElement;
     expect(item.querySelector('svg')).toBeTruthy();
-    expect(item.querySelector('[data-shortcut]')?.textContent).toBe(formatPrimaryChord('N'));
+    expect(item.querySelector('[data-shortcut]')?.textContent).toBe('Ctrl+N');
     expect(menuBar.entries()).toEqual([
-      { commandId: 'file.new', label: 'New', section: 'File', shortcut: formatPrimaryChord('N'), inPalette: true },
+      { commandId: 'file.new', label: 'New', section: 'File', shortcut: 'Ctrl+N', inPalette: true },
     ]);
+    // A changed keybind shows up once the labels are refreshed.
+    labels['file.new'] = '⌘N';
+    menuBar.refreshShortcuts();
+    expect(item.querySelector('[data-shortcut]')?.textContent).toBe('⌘N');
+    expect(menuBar.entries()[0].shortcut).toBe('⌘N');
     menuBar.destroy();
   });
 

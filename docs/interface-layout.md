@@ -5,6 +5,10 @@ For a picture of how it all connects, see [How the app fits together](how-it-fit
 
 ## Menu bar
 
+The shortcuts on this page are the Windows and Linux defaults.
+On a Mac, the menus show the Mac keys instead, like **⌘S** for **Ctrl+S** and **⇧⌘O** for **Ctrl+Shift+O**.
+If you change a shortcut in [Settings](#settings), the menus, toolbar tooltips, and command palette show your keybind instead.
+
 Click a menu to open it, or focus it with **Tab** and use the arrow keys.
 **Escape** closes it.
 Items that don't apply right now are grayed out, for example host-only items when you're a guest.
@@ -41,7 +45,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | --- | --- | --- |
 | Undo | Ctrl+Z | Undoes your last typing in this file. |
 | Redo | Ctrl+Shift+Z or Ctrl+Y | Redoes it. |
-| Cut, Copy, Paste | Ctrl+X, Ctrl+C, Ctrl+V | The usual. From the menu, Paste may be blocked by the browser, so use the shortcut. |
+| Cut, Copy, Paste | Ctrl+X, Ctrl+C, Ctrl+V | The usual. The first time you choose **Paste** from the menu, the browser asks to let the page read the clipboard. If you say no, a notice tells you to use the shortcut instead. |
 | Select All | Ctrl+A | Selects the whole file. |
 | Settings | Ctrl+, | Opens [Settings](#settings). |
 
@@ -52,7 +56,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Toggle Editor Theme | | Cycles the app and editor theme: dark, light, system. |
 | Toggle Preview Theme | | Cycles the preview theme the same way. |
 | Pause Saving | | Stops autosave and Save Now until you turn it off. A check means saving is paused. |
-| Compile Now | Ctrl+Shift+C | Rebuilds the preview right away. |
+| Compile Now | Ctrl+Enter | Rebuilds the preview right away. |
 | Split View | | Editor and preview side by side. |
 | Editor Only | | Hides the preview. |
 | Preview Only | | Hides the editor. |
@@ -103,7 +107,7 @@ It only shows once per browser, and you can take it again from **Help > Show Tou
 
 ## Command palette
 
-Press **Ctrl+P** (**⌘+P** on macOS), or choose **Help > Command Palette**.
+Press **Ctrl+P** (**⌘P** on macOS), or choose **Help > Command Palette**.
 It lists every menu command with its shortcut, plus a few that only live here.
 Each entry has a one-line description under it, and search matches those words too, so typing "github" finds **Report a Bug**.
 
@@ -129,7 +133,7 @@ While the palette is open, other shortcuts are paused so the palette can use the
 
 ## Settings
 
-Open **Edit > Settings**, press **Ctrl+,** (**⌘+,** on macOS), or search the palette for "settings".
+Open **Edit > Settings**, press **Ctrl+,** (**⌘,** on macOS), or search the palette for "settings".
 Changes apply right away, so there's no save button.
 **Done**, the X, or **Escape** close it.
 
@@ -139,9 +143,10 @@ Changes apply right away, so there's no save button.
 - **App and editor theme** and **Preview theme**: match system, dark, or light.
 - **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
 - **Google Drive**: who's signed in, like "Signed in as you@example.com", or "Not connected".
+- **Keyboard shortcuts**: every command with its keybinds. See [Changing shortcuts](keyboard-shortcuts.md#changing-shortcuts).
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
-Guests can change themes, but the saving options are turned off since the host decides how the project is saved.
+Guests can change themes and shortcuts, but the saving options are turned off since the host decides how the project is saved.
 
 ## Themes
 

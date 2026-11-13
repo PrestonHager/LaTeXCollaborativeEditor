@@ -37,7 +37,7 @@ When it runs:
 - After you stop typing for half a second.
 - At most about once a second while you keep typing, so the page stays smooth.
 - When an image arrives from a peer.
-- When you choose **View > Compile Now** (**Ctrl+Shift+C**).
+- When you choose **View > Compile Now** (**Ctrl+Enter**).
 
 The compile pill in the header says **Waiting**, **Compiling**, then **Compiled**.
 While it runs, the preview shows "Updating preview...".

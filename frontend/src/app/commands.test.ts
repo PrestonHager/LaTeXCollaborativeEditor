@@ -11,7 +11,10 @@ import { NEW_PROJECT_CONFIRM, replaceProjectConfirm } from '../state/guestComman
 import { ProjectState, type DriveLike } from './projectState';
 import { createThemeController } from './theme';
 import { createLayout } from './layout';
-import { IMPORT_PICKER_BLOCKED, createCommands, shortcutCommand, shortcuts, type CommandContext } from './commands';
+import { IMPORT_PICKER_BLOCKED, createCommands, shortcuts, type CommandContext } from './commands';
+import { createKeymap, type Keymap } from './keymap';
+import { normalizeKeybind } from '../ui/modifierShortcutLabels';
+import { createEditorPane } from '../ui/editor';
 import { paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 
 class FakeLocal extends MemoryProvider {
@@ -37,7 +40,7 @@ class FakeDrive extends MemoryProvider {
   }
 }
 
-function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
+function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Keymap } = {}) {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => undefined }));
   const local = new FakeLocal();
   const drive = new FakeDrive();
@@ -68,7 +71,8 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[] } = {}) {
       enqueue: vi.fn((task: () => Promise<void>) => task()),
     },
     session: { broadcastMetadata: vi.fn() },
-    editor: { focus: vi.fn(), selectAll: vi.fn() },
+    editor: { focus: vi.fn(), selectAll: vi.fn(), insertText: vi.fn(() => true) },
+    keymap: options.keymap ?? createKeymap(shortcuts, () => 'other'),
     fileTree: { currentFolder: vi.fn(() => '') },
     projectsDialog: { open: vi.fn() },
     uploadDialog: { open: vi.fn() },
@@ -134,31 +138,34 @@ describe('commands', () => {
   });
 
   describe('shortcuts', () => {
-    it('maps Ctrl and Cmd keys to commands', () => {
-      expect(shortcutCommand({ key: 'z', ctrlKey: true, metaKey: false, shiftKey: false })).toBe('edit.undo');
-      expect(shortcutCommand({ key: 'Z', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('edit.redo');
-      expect(shortcutCommand({ key: 'y', ctrlKey: false, metaKey: true, shiftKey: false })).toBe('edit.redo');
-      expect(shortcutCommand({ key: 'O', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('file.openDrive');
-      expect(shortcutCommand({ key: 'o', ctrlKey: true, metaKey: false, shiftKey: false })).toBe('file.openLocal');
-      expect(shortcutCommand({ key: 'S', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('file.download');
-      expect(shortcutCommand({ key: 'n', ctrlKey: true, metaKey: false, shiftKey: true })).toBe('file.new');
-      expect(shortcutCommand({ key: 'c', ctrlKey: true, metaKey: false, shiftKey: false })).toBeNull();
-      expect(shortcutCommand({ key: 's', ctrlKey: false, metaKey: false, shiftKey: false })).toBeNull();
+    it('lists every built-in keybind in its stored form, once', () => {
+      const keys = shortcuts.map((shortcut) => shortcut.keybind);
+      for (const keybind of keys) expect(normalizeKeybind(keybind, 'other'), keybind).toBe(keybind);
+      expect(new Set(keys).size).toBe(keys.length);
     });
 
-    it('matches the shortcuts the menus show in index.html', () => {
+    it('keeps Compile Now off Ctrl+Shift+C, which opens the inspector (#21)', () => {
+      expect(shortcuts.find((shortcut) => shortcut.id === 'view.compileNow')?.keybind).toBe('Mod+Enter');
+      expect(shortcuts.some((shortcut) => shortcut.keybind === 'Mod+Shift+C')).toBe(false);
+    });
+
+    it('fills the menu shortcut labels from the table', () => {
       mountAppShell();
-      // The browser handles these, and Ctrl+P is handled before the table.
-      const native = new Set(['X', 'C', 'V', 'A', 'P']);
-      const chords = Array.from(document.querySelectorAll<HTMLElement>('.menu-item[data-command]'))
-        .map((item) => ({ id: item.dataset.command, chord: item.querySelector<HTMLElement>('[data-chord]')?.dataset.chord }))
-        .filter((item): item is { id: string; chord: string } => Boolean(item.chord) && !native.has(item.chord!));
-      expect(chords.length).toBeGreaterThan(0);
-      for (const { id, chord } of chords) {
-        const shift = chord.startsWith('Shift+');
-        const k = chord.replace('Shift+', '').toLowerCase();
-        expect(shortcutCommand({ key: k, ctrlKey: true, metaKey: false, shiftKey: shift }), chord).toBe(id);
-      }
+      const keymap = createKeymap(shortcuts, () => 'other');
+      createMenuBar(document.getElementById('menu-bar')!, {
+        getCommandState: () => ({ enabled: true }),
+        onCommand: () => undefined,
+        shortcutLabel: (id) => keymap.labelFor(id),
+      }).destroy();
+      const label = (id: string) => document.querySelector(`.menu-item[data-command="${id}"] [data-shortcut]`)?.textContent;
+      expect(label('file.saveNow')).toBe('Ctrl+S');
+      expect(label('file.openDrive')).toBe('Ctrl+Shift+O');
+      expect(label('edit.redo')).toBe('Ctrl+Shift+Z');
+      expect(label('view.compileNow')).toBe('Ctrl+Enter');
+      expect(label('app.commandPalette')).toBe('Ctrl+P');
+      expect(label('file.newFile')).toBe('');
+      // No keybind lives in the HTML any more.
+      expect(document.querySelector('[data-chord]')).toBeNull();
     });
   });
 
@@ -530,17 +537,41 @@ describe('commands', () => {
 
     it('runs the edit commands against the editor and undo stack', async () => {
       const { app, run, undo } = setup();
-      // jsdom has no execCommand, so we give it one.
+      // jsdom has no execCommand or clipboard, so we give it both.
       const exec = vi.fn();
       document.execCommand = exec;
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn(async () => '\\section{Pasted}') } });
       for (const id of ['edit.undo', 'edit.redo', 'edit.cut', 'edit.copy', 'edit.paste', 'edit.selectAll', 'view.focusEditor'] as CommandId[]) {
         await run(id);
       }
       expect(undo.undo).toHaveBeenCalled();
       expect(undo.redo).toHaveBeenCalled();
-      expect(exec.mock.calls.map(([name]) => name)).toEqual(['cut', 'copy', 'paste']);
+      // Paste reads the clipboard itself, since browsers block execCommand('paste') (#21).
+      expect(exec.mock.calls.map(([name]) => name)).toEqual(['cut', 'copy']);
+      expect(app.editor.insertText).toHaveBeenCalledWith('\\section{Pasted}');
       expect(app.editor.selectAll).toHaveBeenCalled();
       expect(app.editor.focus).toHaveBeenCalledTimes(4);
+    });
+
+    it('says so when the browser will not let Paste read the clipboard', async () => {
+      const { app, run } = setup();
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn(async () => Promise.reject(new DOMException('Denied', 'NotAllowedError'))) } });
+      await run('edit.paste');
+      expect(app.editor.insertText).not.toHaveBeenCalled();
+      expect(app.showNotice).toHaveBeenCalledWith("The browser didn't allow reading the clipboard. Press Ctrl+V to paste instead.", true);
+      // Older browsers have no clipboard API at all.
+      vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+      await run('edit.paste');
+      expect(app.showNotice).toHaveBeenCalledTimes(2);
+    });
+
+    it('says so when there is no text file to paste into', async () => {
+      const { app, run } = setup();
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { readText: vi.fn(async () => 'x') } });
+      vi.mocked(app.editor.insertText).mockReturnValue(false);
+      await run('edit.paste');
+      expect(app.showNotice).toHaveBeenCalledWith('Open a text file to paste into it.');
     });
 
     it('cycles and sets themes', async () => {
@@ -667,6 +698,115 @@ describe('commands', () => {
       handled.preventDefault();
       commands.handleKeydown(handled);
       expect(undo.undo).not.toHaveBeenCalled();
+    });
+
+    it('matches keybinds exactly, so Ctrl+Shift+S is not Ctrl+S', () => {
+      const { commands, app } = setup();
+      commands.handleKeydown(key('S', { shiftKey: true }));
+      expect(app.localDownload.download).not.toHaveBeenCalled();
+      expect(app.autosave.saveNow).not.toHaveBeenCalled();
+      const shiftC = key('C', { shiftKey: true });
+      commands.handleKeydown(shiftC);
+      expect(shiftC.defaultPrevented).toBe(false);
+    });
+
+    it('runs Compile Now on Ctrl+Enter', () => {
+      const { commands, app } = setup();
+      const event = key('Enter');
+      commands.handleKeydown(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(app.compile.compileNow).toHaveBeenCalled();
+    });
+
+    it('leaves native keys like Ctrl+C and Ctrl+V to the browser', () => {
+      const { commands } = setup();
+      const exec = vi.fn();
+      document.execCommand = exec;
+      for (const k of ['c', 'v', 'x', 'a']) {
+        const event = key(k);
+        commands.handleKeydown(event);
+        expect(event.defaultPrevented, k).toBe(false);
+      }
+      expect(exec).not.toHaveBeenCalled();
+    });
+
+    it('does not take the Windows key for Ctrl', () => {
+      const { commands, app } = setup();
+      const event = key('p', { ctrlKey: false, metaKey: true });
+      commands.handleKeydown(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(app.commandPalette.isOpen()).toBe(false);
+    });
+
+    it('uses Cmd, not Ctrl, on a Mac', () => {
+      const { commands, app } = setup({ keymap: createKeymap(shortcuts, () => 'mac') });
+      commands.handleKeydown(key('p', { ctrlKey: true }));
+      expect(app.commandPalette.isOpen()).toBe(false);
+      commands.handleKeydown(key('p', { ctrlKey: false, metaKey: true }));
+      expect(app.commandPalette.isOpen()).toBe(true);
+    });
+
+    it("lets the editor keep its own keys while you type, even when a rule wants one", async () => {
+      // Scrolling the cursor into view measures text, which jsdom can't do.
+      Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+      Range.prototype.getBoundingClientRect = () => new DOMRect();
+      const keymap = createKeymap(shortcuts, () => 'other', {
+        rules: [
+          { id: 'file.download', keybind: 'Mod+]' },
+          { id: 'view.compileNow', keybind: 'Alt+K' },
+        ],
+        disabled: [],
+      });
+      const { commands, app } = setup({ keymap });
+      const container = document.createElement('div');
+      document.body.append(container);
+      const editor = createEditorPane(container);
+      editor.setText('x');
+      window.addEventListener('keydown', commands.handleKeydown);
+      const press = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+        editor.getView().contentDOM.dispatchEvent(event);
+        return event;
+      };
+      try {
+        // Ctrl+] indents in the editor, so the rule giving it to Download doesn't fire there.
+        press({ key: ']', code: 'BracketRight', keyCode: 221, ctrlKey: true });
+        expect(editor.getText()).toBe('  x');
+        expect(app.localDownload.download).not.toHaveBeenCalled();
+        // Plain typing never reaches a command.
+        for (const key of ['a', 'K', ' ']) expect(press({ key }).defaultPrevented, key).toBe(false);
+        press({ key: 'Enter', keyCode: 13 });
+        expect(editor.getText()).toContain('\n');
+        expect(app.compile.compileNow).not.toHaveBeenCalled();
+        // A rule on a key the editor doesn't use works from the editor too.
+        press({ key: 'k', code: 'KeyK', altKey: true });
+        expect(app.compile.compileNow).toHaveBeenCalledTimes(1);
+        // Outside the editor, the rule gets Ctrl+].
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ']', code: 'BracketRight', ctrlKey: true, cancelable: true }));
+        await vi.waitFor(() => expect(app.localDownload.download).toHaveBeenCalled());
+      } finally {
+        window.removeEventListener('keydown', commands.handleKeydown);
+        container.remove();
+      }
+    });
+
+    it('lists every command once for Settings, menus first', () => {
+      mountAppShell();
+      const menuBar = createMenuBar(document.getElementById('menu-bar')!, { getCommandState: () => ({ enabled: true }), onCommand: () => undefined });
+      const { commands } = setup({ entries: menuBar.entries() });
+      const list = commands.listCommands();
+      const ids = list.map((command) => command.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids[0]).toBe('file.new');
+      expect(ids).toEqual(expect.arrayContaining(['share.copyLink', 'view.darkMode', 'view.toggleEditorTheme', 'edit.paste']));
+      expect(list.find((command) => command.id === 'file.saveNow')).toMatchObject({ label: 'Save Now', section: 'File' });
+      menuBar.destroy();
+    });
+
+    it('puts keybind labels on palette-only commands too', () => {
+      const keymap = createKeymap([...shortcuts, { id: 'share.copyLink', keybind: 'Alt+L' }], () => 'other');
+      const { commands } = setup({ keymap });
+      expect(commands.buildPaletteCommands().find((command) => command.id === 'share.copyLink')?.shortcut).toBe('Alt+L');
     });
   });
 });

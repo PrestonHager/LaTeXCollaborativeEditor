@@ -52,15 +52,19 @@ describe('App integration behavior', () => {
     const onEditorTheme = vi.fn();
     const onSavingPaused = vi.fn();
     const onClearLocalDocs = vi.fn();
+    const onOpen = vi.fn();
     const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
       getState: () => ({ editorTheme: 'dark', previewTheme: 'light', savingPaused: false, canChangeSaving: true }),
       onEditorTheme,
       onPreviewTheme: () => undefined,
       onSavingPaused,
       onClearLocalDocs,
+      onOpen,
     });
     dialog.open();
     expect(dialog.isOpen()).toBe(true);
+    // The keybind list draws itself again each time Settings opens.
+    expect(onOpen).toHaveBeenCalledTimes(1);
     const editorSelect = document.getElementById('settings-editor-theme') as HTMLSelectElement;
     expect(editorSelect.value).toBe('dark');
     expect((document.getElementById('settings-preview-theme') as HTMLSelectElement).value).toBe('light');

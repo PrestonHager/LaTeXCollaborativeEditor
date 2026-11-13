@@ -1,5 +1,6 @@
 import type { CommandId, CommandState, MenuEntry } from '../ui/menuBar';
 import type { PaletteCommand } from '../ui/commandPalette';
+import type { KeybindCommand } from '../ui/keybindSettings';
 import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 import type { ThemeMode } from '../state/appSession';
 import { NEW_PROJECT_CONFIRM, canRunCommand, replaceProjectConfirm, type ReplaceAction } from '../state/guestCommands';
@@ -15,6 +16,8 @@ import type { ProjectState } from './projectState';
 import type { ThemeController } from './theme';
 import type { Layout } from './layout';
 import type { PreviewCompile } from './previewCompile';
+import type { Keymap, Shortcut } from './keymap';
+import { formatKeybind, keybindFromEvent } from '../ui/modifierShortcutLabels';
 
 export type CommandHandler = () => Promise<void> | void;
 
@@ -47,7 +50,14 @@ export type CommandContext = {
     enqueue(task: () => Promise<void>): Promise<void>;
   };
   session: { broadcastMetadata(metadata: { title: string; storage: string }): void };
-  editor: { focus(): void; selectAll(): void };
+  editor: {
+    focus(): void;
+    selectAll(): void;
+    /** Put text in place of the selection. False when no file is open for editing. */
+    insertText(text: string): boolean;
+  };
+  /** The resolved keybinds, for labels and key presses. */
+  keymap: Keymap;
   fileTree: { currentFolder(): string };
   projectsDialog: { open(projects: ProjectSummary[]): void };
   uploadDialog: { open(folder?: string): void };
@@ -94,30 +104,30 @@ export type CommandContext = {
 };
 
 /**
- * Ctrl (or Cmd) shortcuts, checked in order. Leave out `shift` to match with or without it.
- * The menus show these from their data-chord attributes in index.html, so keep the two in step.
- * Ctrl+P opens the palette and is handled on its own, and cut, copy, paste, and select all are left to the browser.
+ * The built-in keybinds, the one place they're listed. `Mod` is Cmd on a Mac and Ctrl everywhere else.
+ * Menus, toolbar tooltips, the palette, and the tour all show labels from this table.
+ * When two commands list the same key, the first one gets it.
  */
-export const shortcuts: { key: string; shift?: boolean; id: CommandId }[] = [
-  { key: 'n', id: 'file.new' },
-  { key: 'z', shift: true, id: 'edit.redo' },
-  { key: 'z', id: 'edit.undo' },
-  { key: 'y', id: 'edit.redo' },
-  { key: 'o', shift: true, id: 'file.openDrive' },
-  { key: 's', shift: true, id: 'file.download' },
-  { key: 's', id: 'file.saveNow' },
-  { key: 'o', id: 'file.openLocal' },
-  { key: 'c', shift: true, id: 'view.compileNow' },
-  { key: ',', id: 'app.openSettings' },
+export const shortcuts: Shortcut[] = [
+  { id: 'app.commandPalette', keybind: 'Mod+P' },
+  { id: 'app.openSettings', keybind: 'Mod+,' },
+  { id: 'file.new', keybind: 'Mod+N' },
+  { id: 'file.openLocal', keybind: 'Mod+O' },
+  { id: 'file.openDrive', keybind: 'Mod+Shift+O' },
+  { id: 'file.download', keybind: 'Mod+Shift+S' },
+  { id: 'file.saveNow', keybind: 'Mod+S' },
+  { id: 'edit.undo', keybind: 'Mod+Z' },
+  { id: 'edit.redo', keybind: 'Mod+Shift+Z' },
+  { id: 'edit.redo', keybind: 'Mod+Y' },
+  // The browser and the editor already do these, so the keys stay theirs. The menus still run the command.
+  { id: 'edit.cut', keybind: 'Mod+X', native: true },
+  { id: 'edit.copy', keybind: 'Mod+C', native: true },
+  { id: 'edit.paste', keybind: 'Mod+V', native: true },
+  { id: 'edit.selectAll', keybind: 'Mod+A', native: true },
+  // Not Ctrl+Shift+C, which opens the element inspector in Chrome and Edge (#21).
+  // The editor's own Ctrl+Enter (insert a blank line) is turned off in ui/editor.ts so this one works there too.
+  { id: 'view.compileNow', keybind: 'Mod+Enter' },
 ];
-
-/** The command a Ctrl or Cmd key press runs, if any. */
-export function shortcutCommand(event: Pick<KeyboardEvent, 'key' | 'shiftKey' | 'ctrlKey' | 'metaKey'>): CommandId | null {
-  if (!(event.ctrlKey || event.metaKey)) return null;
-  const key = event.key.toLowerCase();
-  const match = shortcuts.find((shortcut) => shortcut.key === key && (!shortcut.shift || event.shiftKey));
-  return match?.id ?? null;
-}
 
 /** The command registry, its menu and palette state, and the keyboard shortcuts. */
 export function createCommands(app: CommandContext) {
@@ -336,9 +346,18 @@ export function createCommands(app: CommandContext) {
       editor.focus();
       document.execCommand('copy');
     },
-    'edit.paste': () => {
+    // Browsers block execCommand('paste'), so read the clipboard ourselves. That asks for permission the first time.
+    'edit.paste': async () => {
       editor.focus();
-      document.execCommand('paste');
+      let text: string;
+      try {
+        text = await navigator.clipboard.readText();
+      } catch (error) {
+        console.warn('Clipboard read failed', error);
+        showNotice(`The browser didn't allow reading the clipboard. Press ${formatKeybind('Mod+V')} to paste instead.`, true);
+        return;
+      }
+      if (!editor.insertText(text)) showNotice('Open a text file to paste into it.');
     },
     'edit.selectAll': () => {
       editor.selectAll();
@@ -495,33 +514,48 @@ export function createCommands(app: CommandContext) {
         section: entry.section,
         // The menu shows a checkmark for this one, but the palette has to say which way it goes.
         label: entry.commandId === 'view.togglePauseSaving' && projectState.savingPaused ? 'Resume Saving' : entry.label,
-        shortcut: entry.shortcut,
+        shortcut: app.keymap.labelFor(entry.commandId),
         description: entry.description,
         enabled: getCommandState(entry.commandId).enabled,
       }));
     // Skip the theme switch for the theme that's already in use.
     const themes = themeSwitchCommands
       .filter(({ theme }) => !(themeState.editorTheme === theme && themeState.previewTheme === theme))
-      .map(({ id, section, label, description }) => ({ id, section, label, description, enabled: true }));
-    const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
+      .map(({ id, section, label, description }) => ({ id, section, label, description, shortcut: app.keymap.labelFor(id), enabled: true }));
+    const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({
+      ...command,
+      shortcut: app.keymap.labelFor(command.id),
+      enabled: getCommandState(command.id).enabled,
+    }));
     return [...fromMenus, ...themes, ...extras];
+  }
+
+  /** Every command once, in menu order then the palette-only ones, for the keybind list in Settings. */
+  function listCommands(): KeybindCommand[] {
+    const byId = new Map<CommandId, KeybindCommand>();
+    for (const entry of app.menuBar.entries()) {
+      if (!byId.has(entry.commandId)) {
+        byId.set(entry.commandId, { id: entry.commandId, label: entry.label, section: entry.section, description: entry.description });
+      }
+    }
+    for (const { id, label, section, description } of [...themeSwitchCommands, ...paletteOnlyCommands, ...devPaletteCommands]) {
+      if (!byId.has(id)) byId.set(id, { id, label, section, description });
+    }
+    return [...byId.values()];
   }
 
   function handleKeydown(event: KeyboardEvent) {
     // The editor already handled this key (like its own undo), so don't run it a second time.
     if (event.defaultPrevented) return;
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
-      event.preventDefault();
-      app.commandPalette.toggle();
-      return;
-    }
-    if (app.commandPalette.isOpen()) return;
-    const commandId = shortcutCommand(event);
-    if (!commandId) return;
-    const state = getCommandState(commandId);
-    if (!state.enabled) return;
+    const keybind = keybindFromEvent(event, app.keymap.platform());
+    const match = keybind ? app.keymap.commandFor(keybind) : null;
+    // Native keys (like Ctrl+C) are the browser's and the editor's to handle.
+    if (!match || match.native) return;
+    // While the palette is open it has the keyboard, except for the key that closes it.
+    if (match.id !== 'app.commandPalette' && app.commandPalette.isOpen()) return;
+    if (!getCommandState(match.id).enabled) return;
     event.preventDefault();
-    executeCommand(commandId);
+    executeCommand(match.id);
   }
 
   /**
@@ -542,6 +576,7 @@ export function createCommands(app: CommandContext) {
     refreshCommands,
     getCommandState,
     buildPaletteCommands,
+    listCommands,
     handleKeydown,
     setSavingPaused,
   };

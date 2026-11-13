@@ -17,6 +17,8 @@ type SettingsDialogOptions = {
   onPreviewTheme: (theme: ThemeMode) => void;
   onSavingPaused: (paused: boolean) => void;
   onClearLocalDocs: () => void;
+  /** Called each time the dialog opens, so parts drawn elsewhere (like the keybind list) can catch up. */
+  onOpen?: () => void;
 };
 
 /** Wire up the Basecoat settings dialog in the page (see index.html). */
@@ -72,6 +74,7 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
 
   const open = () => {
     refresh();
+    options.onOpen?.();
     focusReturn.remember();
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');

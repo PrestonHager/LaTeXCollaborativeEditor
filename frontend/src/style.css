@@ -196,6 +196,29 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 label.settings-row { justify-content: flex-start; }
 .settings-dialog footer { justify-content: space-between; align-items: center; }
+.settings-keybinds { display: grid; gap: 0.5rem; min-width: 0; }
+.settings-keybinds h3 { margin: 0; }
+.settings-hint { margin: 0; font-size: 0.8125rem; white-space: normal; overflow: visible; text-overflow: clip; }
+.keybind-search { width: 100%; height: 2rem; padding: 0 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: 0.875rem; }
+.keybind-search:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.keybind-list { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.keybind-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 0.75rem; padding: 0.375rem 0.5rem; border-bottom: 1px solid var(--border); }
+.keybind-row:last-child { border-bottom: 0; }
+.keybind-name { display: flex; flex-direction: column; font-size: 0.875rem; min-width: 0; }
+.keybind-section { font-size: 0.75rem; color: var(--muted-foreground); }
+.keybind-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.25rem; }
+.keybind-chip { display: inline-flex; align-items: center; gap: 0.125rem; padding-left: 0.375rem; border: 1px solid var(--border); border-radius: calc(var(--radius-md) - 2px); background: var(--muted); font-size: 0.8125rem; }
+.keybind-chip kbd { font-family: inherit; white-space: nowrap; }
+.keybind-chip[data-source="rule"] { border-color: var(--primary); }
+.keybind-chip[data-off] { background: transparent; color: var(--muted-foreground); }
+.keybind-chip[data-off] kbd { text-decoration: line-through; }
+.keybind-chip .keybind-chip-button { height: 1.5rem; min-width: 1.5rem; width: auto; padding: 0 0.25rem; font-size: 0.75rem; }
+.keybind-recorder { font-size: 0.8125rem; }
+.keybind-notes { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 0.125rem; }
+.keybind-note { display: flex; align-items: flex-start; gap: 0.375rem; font-size: 0.75rem; line-height: 1.25rem; color: var(--muted-foreground); }
+.keybind-note > svg { color: var(--destructive); flex: none; margin-top: 0.25rem; }
+.keybind-note .btn { height: auto; padding: 0; margin-left: 0.375rem; font-size: 0.75rem; vertical-align: baseline; }
+.keybind-empty { padding: 0.5rem; font-size: 0.875rem; }
 .about-dialog-body { display: grid; gap: 0.5rem; font-size: 14px; }
 #about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
