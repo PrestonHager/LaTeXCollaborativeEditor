@@ -78,7 +78,7 @@ Those changes show up for everyone in the room.
 
 Guests can't replace the whole project.
 **New Project**, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** are turned off in a guest tab.
-So are the Drive commands, **Save Now**, **Rename Project**, **Clear Local Projects**, and **Disable Save Now**, since they touch the host's storage.
+So are the Drive commands, **Save Now**, **Rename Project**, **Clear Local Projects**, and **Pause Saving**, since they touch the host's storage.
 Their shortcuts do nothing in a guest tab either.
 If you're a guest and want your own project, open the editor in a new tab without the `room` link.
 

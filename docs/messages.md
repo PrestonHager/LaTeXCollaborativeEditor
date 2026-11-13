@@ -58,7 +58,7 @@ Drive messages show here too.
 | Saved your copy of path as a new file | You picked **Save mine as a copy** in the conflict dialog. |
 | Loaded path from Google Drive | You picked **Take theirs** in the conflict dialog. |
 | Opened name | A project finished opening. |
-| Save Now Disabled | You turned off Save Now. Autosave still runs. |
+| Saving paused | You turned on Pause Saving. Nothing saves until you resume. |
 | Local projects cleared | **Clear Local Projects** finished. |
 | No local projects to clear | There was nothing to clear. |
 | Saved on host local storage | You're a guest. The host saves to their browser. |

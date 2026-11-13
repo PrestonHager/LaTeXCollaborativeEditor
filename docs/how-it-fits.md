@@ -212,8 +212,8 @@ Autosave turns on for the host once browser storage is ready.
 It only writes a project that has a name.
 A file that changed in storage since the last save is held back until you answer the conflict dialog, while the other files keep saving.
 Guests never save, the host does.
-**Disable Save Now** only turns off the Save Now command and **Ctrl+S**.
-Autosave still runs.
+**Pause Saving** stops autosave and **Save Now** until you turn it off.
+What changed in the meantime saves as soon as you resume.
 
 ```mermaid
 stateDiagram-v2
@@ -233,7 +233,8 @@ stateDiagram-v2
         Saved --> Pending: edit
         SaveError --> Pending: edit
     }
-    Enabled --> Enabled: Disable Save Now<br/>(autosave keeps going)
+    Enabled --> Paused: Pause Saving
+    Paused --> Enabled: Resume Saving<br/>(saves what changed)
 ```
 
 The pill text for each state is in [Status and error messages](messages.md#autosave-pill).

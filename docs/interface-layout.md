@@ -51,7 +51,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | --- | --- | --- |
 | Toggle Editor Theme | | Cycles the app and editor theme: dark, light, system. |
 | Toggle Preview Theme | | Cycles the preview theme the same way. |
-| Disable Save Now | | Turns the Save Now command on or off. A check means it's off. Autosave keeps running. |
+| Pause Saving | | Stops autosave and Save Now until you turn it off. A check means saving is paused. |
 | Compile Now | Ctrl+Shift+C | Rebuilds the preview right away. |
 | Split View | | Editor and preview side by side. |
 | Editor Only | | Hides the preview. |
@@ -117,7 +117,7 @@ Palette-only commands:
 - **Copy share link** does the same thing as the **Share** button.
 - **Focus editor** puts the cursor back in the editor.
 
-The Disable Save Now toggle shows up as **Enable Save Now** when Save Now is off.
+The Pause Saving toggle shows up as **Resume Saving** while saving is paused.
 
 While the palette is open, other shortcuts are paused so the palette can use the keyboard.
 

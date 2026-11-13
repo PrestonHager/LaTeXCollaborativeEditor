@@ -24,10 +24,6 @@ When you're the host, the app autosaves your project.
 
 **File > Save Now** (**Ctrl+S**) saves right away.
 
-**View > Disable Save Now** (also in Settings) turns off the Save Now command and **Ctrl+S**.
-It doesn't stop autosave.
-The pill says "Save Now Disabled" while it's on.
-
 The autosave pill tells you what's going on: **Saving pending**, **Saving**, **Saved to this browser**, **Saved to Google Drive**, or **Save Error: ...**.
 The full list is in [Status and error messages](messages.md#autosave-pill).
 
