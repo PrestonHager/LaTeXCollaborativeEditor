@@ -1,5 +1,10 @@
 import { graphicsOptionsToCss } from './graphicsOptions';
 import { dirname, isPreviewableImage, joinPath, normalizePath } from '../project/paths';
+import { biblatexStyle, buildBibliography, parseBib, resolveStyle, SUPPORTED_STYLES, type BibEntry, type BibStyle } from './bibStyles';
+import type { EditorDiagnostic } from '../ui/diagnostics';
+
+/** A diagnostic that knows which project file it belongs to. */
+export type ProjectDiagnostic = EditorDiagnostic & { path: string };
 
 /** Where a line of the expanded source came from, so errors point at the right file. */
 export type SourceLine = { path: string; line: number };
@@ -12,6 +17,8 @@ export type ExpandedSource = {
   images: Map<string, { path: string; style: string }>;
   /** Files the source asked for that aren't in the project. */
   missing: string[];
+  /** Notes about the source itself, like an unknown cite key or bibliography style. */
+  diagnostics: ProjectDiagnostic[];
 };
 
 const MAX_INPUT_DEPTH = 12;
@@ -115,94 +122,122 @@ function replaceGraphics(source: string, has: (path: string) => boolean, missing
     });
 }
 
-type BibEntry = { key: string; fields: Record<string, string> };
+// Every cite command the preview understands. \nocite only adds entries to the list.
+const CITE =
+  /\\(nocite|[Cc]ite(?:p|t|alp|alt|author|year)?|[Pp]arencite|[Tt]extcite|[Aa]utocite|[Ff]ootcite)\*?\s*((?:\[[^\]]*\]\s*){0,2})\{([^}]*)\}/g;
+const BIB_COMMAND = /\\bibliography\s*\{([^}]*)\}/g;
+const BIB_RESOURCE = /\\addbibresource\s*(?:\[[^\]]*\]\s*)?\{([^}]*)\}/g;
+const PRINT_BIB = /\\printbibliography\b\s*(?:\[[^\]]*\])?/g;
+const BIB_STYLE = /\\bibliographystyle\s*\{([^}]*)\}/g;
 
-/** Pull entries out of a .bib file. Good enough for the preview, not a full BibTeX parser. */
-export function parseBib(text: string): BibEntry[] {
-  const entries: BibEntry[] = [];
-  const start = /@(\w+)\s*\{\s*([^,\s]+)\s*,/g;
-  let match: RegExpExecArray | null;
-  while ((match = start.exec(text))) {
-    if (/^(comment|preamble|string)$/i.test(match[1])) continue;
-    // First, find the end of the entry by counting braces.
-    let depth = 1;
-    let i = start.lastIndex;
-    for (; i < text.length && depth > 0; i += 1) {
-      if (text[i] === '{') depth += 1;
-      else if (text[i] === '}') depth -= 1;
+/** Pick the style from \bibliographystyle, or biblatex's options. Unknown styles fall back to plain, with a note. */
+function chooseStyle(code: string[], at: (line: number) => SourceLine, diagnostics: ProjectDiagnostic[]): BibStyle {
+  const all = code.join('\n');
+  let style: BibStyle | null = null;
+  const lineIndex = code.findIndex((line) => line.includes('\\bibliographystyle'));
+  const name = lineIndex >= 0 ? [...code[lineIndex].matchAll(BIB_STYLE)][0]?.[1].trim() : undefined;
+  if (name !== undefined) {
+    style = resolveStyle(name);
+    if (!style) {
+      diagnostics.push({
+        ...at(lineIndex),
+        severity: 'info',
+        message: `Bibliography style "${name}" isn't supported in the preview, so it uses plain. Supported: ${SUPPORTED_STYLES.join(', ')}.`,
+      });
     }
-    const body = text.slice(start.lastIndex, i - 1);
-    start.lastIndex = i;
-    // Then read each field = {value} or "value" or bare value.
-    const fields: Record<string, string> = {};
-    const field = /(\w+)\s*=\s*/g;
-    let f: RegExpExecArray | null;
-    while ((f = field.exec(body))) {
-      let j = field.lastIndex;
-      let value = '';
-      if (body[j] === '{') {
-        let d = 0;
-        const from = j;
-        for (; j < body.length; j += 1) {
-          if (body[j] === '{') d += 1;
-          else if (body[j] === '}' && --d === 0) break;
-        }
-        value = body.slice(from + 1, j);
-        j += 1;
-      } else if (body[j] === '"') {
-        const end = body.indexOf('"', j + 1);
-        value = body.slice(j + 1, end < 0 ? body.length : end);
-        j = end < 0 ? body.length : end + 1;
-      } else {
-        const end = body.slice(j).search(/[,\n]/);
-        value = body.slice(j, end < 0 ? body.length : j + end);
-        j = end < 0 ? body.length : j + end;
-      }
-      fields[f[1].toLowerCase()] = value.replace(/[{}]/g, '').replace(/\s+/g, ' ').trim();
-      field.lastIndex = j;
-    }
-    entries.push({ key: match[2], fields });
+  } else {
+    const biblatex = /\\usepackage\s*\[([^\]]*)\]\s*\{biblatex\}/.exec(all);
+    if (biblatex) style = biblatexStyle(biblatex[1]);
   }
-  return entries;
+  style ??= resolveStyle('plain')!;
+  // natbib's numbers option turns the author-year styles (plainnat and friends) into numbers.
+  if (style.label === 'authoryear' && /\\usepackage\s*\[[^\]]*\bnumbers\b[^\]]*\]\s*\{natbib\}/.test(all)) style = { ...style, label: 'numeric' };
+  return style;
 }
 
 /**
- * Turn \cite into numbers and \bibliography into a reference list, since LaTeX.js has no BibTeX.
- * Everything stays on the lines it started on, so the line map still holds.
+ * Turn \cite into labels and \bibliography (or \printbibliography) into a reference list, since
+ * LaTeX.js has no BibTeX. The style comes from \bibliographystyle. Everything stays on the lines
+ * it started on, so the line map still holds.
  */
-function replaceBibliography(source: string, texts: Map<string, string>, missing: Set<string>): string {
-  const bibCommand = /\\bibliography\s*\{([^}]*)\}/;
-  const bibMatch = bibCommand.exec(source.split('\n').map((line) => line.slice(0, commentStart(line))).join('\n'));
-  if (!bibMatch) return source;
+function replaceBibliography(source: string, lineMap: SourceLine[], texts: Map<string, string>, missing: Set<string>, diagnostics: ProjectDiagnostic[]): string {
+  const lines = source.split('\n');
+  const code = lines.map((line) => line.slice(0, commentStart(line)));
+  const all = code.join('\n');
+  const files = [...all.matchAll(BIB_COMMAND), ...all.matchAll(BIB_RESOURCE)];
+  if (!files.length) return source;
+  const at = (index: number): SourceLine => lineMap[index] ?? { path: lineMap[0]?.path ?? '', line: 1 };
+
   const entries = new Map<string, BibEntry>();
-  for (const name of bibMatch[1].split(',').map((part) => part.trim()).filter(Boolean)) {
-    const path = resolveFile(name, '', (p) => texts.has(p), ['.bib', '']);
+  let allFound = true;
+  for (const name of files.flatMap((file) => file[1].split(',')).map((part) => part.trim()).filter(Boolean)) {
+    const path = resolveFile(name, dirname(lineMap[0]?.path ?? ''), (p) => texts.has(p), ['.bib', '']);
     if (!path) {
-      missing.add(`${name}.bib`);
+      missing.add(name.endsWith('.bib') ? name : `${name}.bib`);
+      allFound = false;
       continue;
     }
-    for (const entry of parseBib(texts.get(path)!)) entries.set(entry.key, entry);
+    for (const entry of parseBib(texts.get(path)!)) if (!entries.has(entry.key)) entries.set(entry.key, entry);
   }
 
-  // Number cited keys in the order they first show up.
-  const numbers = new Map<string, number>();
-  const cite = /\\(?:cite|citep|citet|parencite|textcite|autocite)\s*(?:\[[^\]]*\]\s*)*\{([^}]*)\}/g;
-  const withCites = source.replace(cite, (_whole, keys: string) => {
-    const labels = keys.split(',').map((key) => key.trim()).filter(Boolean).map((key) => {
-      if (!entries.has(key)) return '?';
-      if (!numbers.has(key)) numbers.set(key, numbers.size + 1);
-      return String(numbers.get(key));
-    });
-    return `[${labels.join(', ')}]`;
+  // First pass: which keys are cited, in order. A missing key is only worth a warning when every .bib loaded.
+  const cited = new Map<string, BibEntry>();
+  code.forEach((line, index) => {
+    for (const [, , , keys] of line.matchAll(CITE)) {
+      for (const key of keys.split(',').map((part) => part.trim()).filter(Boolean)) {
+        if (key === '*') for (const entry of entries.values()) cited.set(entry.key, entry);
+        else if (entries.has(key)) cited.set(key, entries.get(key)!);
+        else if (allFound) diagnostics.push({ ...at(index), severity: 'warning', message: `Citation "${key}" isn't in the bibliography.` });
+      }
+    }
   });
+  // The style note goes after the cite warnings, since a missing key matters more.
+  const style = chooseStyle(code, at, diagnostics);
+  const items = buildBibliography([...cited.values()], style);
+  const byKey = new Map(items.map((item) => [item.key, item]));
+  const authorYear = style.label === 'authoryear';
 
-  const items = [...numbers].map(([key, n]) => {
-    const { author, title, journal, booktitle, publisher, year } = entries.get(key)!.fields;
-    const parts = [author, title ? `\\textit{${title}}` : '', journal ?? booktitle ?? publisher, year].filter(Boolean);
-    return `\\noindent [${n}] ${parts.join('. ')}.\\par`;
-  });
-  const list = items.length ? `\\section*{References} ${items.join(' ')}` : '';
-  return withCites.replace(/\\bibliographystyle\s*\{[^}]*\}/g, keepLineBreaks).replace(bibCommand, list);
+  const citation = (command: string, notes: string, keys: string): string => {
+    const kind = command.toLowerCase();
+    if (kind === 'nocite') return '';
+    const found = keys.split(',').map((key) => key.trim()).filter(Boolean).map((key) => byKey.get(key));
+    const args = [...notes.matchAll(/\[([^\]]*)\]/g)].map((m) => m[1].trim());
+    const [pre, post] = args.length === 2 ? args : ['', args[0] ?? ''];
+    const withPost = (text: string) => (post ? `${text}, ${post}` : text);
+    let out: string;
+    if (kind === 'citeauthor') out = found.map((item) => item?.names ?? '?').join('; ');
+    else if (kind === 'citeyear') out = found.map((item) => item?.year ?? '?').join('; ');
+    else if (kind === 'citet' || kind === 'textcite' || kind === 'citealt') {
+      const [open, close] = kind === 'citealt' ? [' ', ''] : authorYear ? [' (', ')'] : [' [', ']'];
+      out = found
+        .map((item, i) => {
+          const label = (authorYear ? item?.year : item?.label) ?? '?';
+          return `${item?.names ?? '?'}${open}${i === found.length - 1 ? withPost(label) : label}${close}`;
+        })
+        .join(authorYear ? '; ' : ', ');
+    } else {
+      const inner = withPost(found.map((item) => item?.label ?? '?').join(authorYear ? '; ' : ', '));
+      const text = pre ? `${pre} ${inner}` : inner;
+      out = kind === 'citealp' ? text : authorYear && kind !== 'cite' ? `(${text})` : `[${text}]`;
+    }
+    // \Citet and friends start a sentence.
+    return /^[A-Z]/.test(command) ? out.charAt(0).toUpperCase() + out.slice(1) : out;
+  };
+
+  const list = items.length
+    ? `\\section*{References} ${items.map((item) => `\\noindent ${authorYear ? '' : `[${item.label}] `}${item.text}\\par`).join(' ')}`
+    : '';
+  return lines
+    .map((line, index) => {
+      const replaced = code[index]
+        .replace(CITE, (_whole, command: string, notes: string, keys: string) => citation(command, notes, keys))
+        .replace(BIB_STYLE, '')
+        .replace(BIB_RESOURCE, '')
+        .replace(BIB_COMMAND, () => list)
+        .replace(PRINT_BIB, () => list);
+      return replaced + line.slice(code[index].length);
+    })
+    .join('\n');
 }
 
 /**
@@ -216,6 +251,7 @@ export function expandProjectSource(mainPath: string, texts: Map<string, string>
   const { lines, map } = expandInputs(mainPath, texts, missing, []);
   let source = lines.join('\n');
   source = replaceGraphics(source, (path) => binaries.has(path) || texts.has(path), missing, images);
-  source = replaceBibliography(source, texts, missing);
-  return { source, lineMap: map, images, missing: [...missing] };
+  const diagnostics: ProjectDiagnostic[] = [];
+  source = replaceBibliography(source, map, texts, missing, diagnostics);
+  return { source, lineMap: map, images, missing: [...missing], diagnostics };
 }

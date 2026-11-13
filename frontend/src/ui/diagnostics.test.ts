@@ -28,9 +28,10 @@ describe('editor diagnostics', () => {
       extensions: diagnosticsExtensions,
     });
     const view = new EditorView({ state, parent });
+    // Out of order on purpose: a later line first must not throw.
     setEditorDiagnostics(view, [
-      { line: 1, severity: 'warning', message: 'w' },
       { line: 2, severity: 'info', message: 'i' },
+      { line: 1, severity: 'warning', message: 'w' },
     ]);
     expect(parent.querySelector('.cm-warning-line')).toBeTruthy();
     expect(parent.querySelector('.cm-info-line')).toBeTruthy();

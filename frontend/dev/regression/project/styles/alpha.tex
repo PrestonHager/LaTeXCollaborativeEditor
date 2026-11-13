@@ -1,0 +1,11 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\begin{document}
+\section*{alpha}
+% Expect: [Knu84b], [Lam94], [PLK88], [Knu84a].
+% Expect: the list is sorted by author, so [Knu84a] (The TeXbook) comes first and [PLK88] last.
+\input{styles/citations}
+\bibliographystyle{alpha}
+\bibliography{refs}
+\end{document}

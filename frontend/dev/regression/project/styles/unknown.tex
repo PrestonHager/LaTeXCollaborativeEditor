@@ -1,0 +1,13 @@
+% Bibliography style test. In the Files panel, use Set main file on this file, then
+% compare the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+\begin{document}
+\section*{Unknown style and key}
+% Expect: [2], [3], [4], [1], numbered like plain.
+\input{styles/citations}
+% Expect: [?] here, and a warning marker on this line: Citation "nosuchkey" isn't in the bibliography.
+A missing key \cite{nosuchkey}.
+% Expect: an info marker on the next line saying "nature" isn't supported, so the preview uses plain.
+\bibliographystyle{nature}
+\bibliography{refs}
+\end{document}

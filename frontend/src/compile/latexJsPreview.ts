@@ -1,6 +1,6 @@
 import { HtmlGenerator, parse } from 'latex.js';
 import { adaptLatexSource } from './latexJsAdapt';
-import { expandProjectSource } from './projectSource';
+import { expandProjectSource, type ProjectDiagnostic } from './projectSource';
 import { addKatexFontFallbacks } from './katexFonts';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
@@ -113,7 +113,7 @@ function errorLine(err: unknown, source: string): number {
   return Math.min(line, source.split('\n').length);
 }
 
-export type ProjectDiagnostic = EditorDiagnostic & { path: string };
+export type { ProjectDiagnostic };
 
 export type ProjectPreviewInput = {
   mainPath: string;
@@ -132,10 +132,14 @@ export type ProjectPreviewResult = { html: string | null; errors: ProjectDiagnos
 export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreviewResult {
   const expanded = expandProjectSource(input.mainPath, input.texts, input.binaryPaths);
   const { doc, errors: sourceErrors } = typeset(expanded.source);
-  const errors = sourceErrors.map((error) => {
-    const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
-    return { ...error, path: origin.path, line: origin.line };
-  });
+  // LaTeX.js errors come first, since they stop the preview. Bibliography notes follow.
+  const errors: ProjectDiagnostic[] = [
+    ...sourceErrors.map((error) => {
+      const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
+      return { ...error, path: origin.path, line: origin.line };
+    }),
+    ...expanded.diagnostics,
+  ];
   if (!doc) return { html: null, errors, missing: expanded.missing };
 
   // Images go in after the URL check, since it would strip our data: URLs along with a peer's.
