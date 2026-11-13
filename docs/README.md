@@ -14,6 +14,7 @@ The **built documentation** is the **user guide**: getting started, editing, col
 | `deployment.md` | Hosting, env vars, CI build — update when deployment or CI changes. |
 | `dod-checklist.md` | v1 definition of done. |
 | `site-plan.md` | Internal planning notes. |
+| `ui-sizing.md` | Dialog and popover size scale (`dialog-sm`, `dialog-md`, `dialog-lg`, `dialog-palette`), height and scroll rules, breakpoints, and the mobile plan for #123. Read it before adding a dialog. |
 
 ## Local preview
 

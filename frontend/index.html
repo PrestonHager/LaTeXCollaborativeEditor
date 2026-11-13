@@ -288,7 +288,7 @@
     </div>
 
     <!-- Settings dialog. Every control applies right away, so there's no save button. -->
-    <dialog id="settings-dialog" class="dialog settings-dialog" aria-labelledby="settings-dialog-title" aria-describedby="settings-dialog-description">
+    <dialog id="settings-dialog" class="dialog dialog-lg settings-dialog" aria-labelledby="settings-dialog-title" aria-describedby="settings-dialog-description">
       <div>
         <header>
           <h2 id="settings-dialog-title">Settings</h2>
@@ -380,7 +380,7 @@
     </template>
 
     <!-- Upload dialog. Picked or dropped files go into the project right away. -->
-    <dialog id="upload-dialog" class="dialog upload-dialog" aria-labelledby="upload-dialog-title" aria-describedby="upload-dialog-description">
+    <dialog id="upload-dialog" class="dialog dialog-md upload-dialog" aria-labelledby="upload-dialog-title" aria-describedby="upload-dialog-description">
       <div>
         <header>
           <h2 id="upload-dialog-title">Upload files</h2>
@@ -411,7 +411,7 @@
     </dialog>
 
     <!-- Export dialog. exportDialog.ts builds the format list and options from the exporter registry (src/export/registry.ts). -->
-    <dialog id="export-dialog" class="dialog export-dialog" aria-labelledby="export-dialog-title" aria-describedby="export-dialog-description">
+    <dialog id="export-dialog" class="dialog dialog-md export-dialog" aria-labelledby="export-dialog-title" aria-describedby="export-dialog-description">
       <div>
         <header>
           <h2 id="export-dialog-title">Export</h2>
@@ -441,7 +441,7 @@
     </dialog>
 
     <!-- Project picker for local projects. Rows come from IndexedDB, so projectsDialog.ts fills them in. -->
-    <dialog id="projects-dialog" class="dialog projects-dialog" aria-labelledby="projects-dialog-title" aria-describedby="projects-dialog-description">
+    <dialog id="projects-dialog" class="dialog dialog-md projects-dialog" aria-labelledby="projects-dialog-title" aria-describedby="projects-dialog-description">
       <div>
         <header>
           <h2 id="projects-dialog-title">Open a project</h2>
@@ -480,7 +480,7 @@
     </template>
 
     <!-- Save conflict. Shown when a file changed in storage since we last saved it, and it has no close button on purpose. -->
-    <dialog id="conflict-dialog" class="dialog conflict-dialog" aria-labelledby="conflict-dialog-title" aria-describedby="conflict-dialog-description">
+    <dialog id="conflict-dialog" class="dialog dialog-md conflict-dialog" aria-labelledby="conflict-dialog-title" aria-describedby="conflict-dialog-description">
       <div>
         <header>
           <h2 id="conflict-dialog-title">File changed somewhere else</h2>
@@ -495,7 +495,7 @@
     </dialog>
 
     <!-- About dialog. aboutDialog.ts fills in the version. -->
-    <dialog id="about-dialog" class="dialog about-dialog" aria-labelledby="about-dialog-title" aria-describedby="about-dialog-description">
+    <dialog id="about-dialog" class="dialog dialog-md about-dialog" aria-labelledby="about-dialog-title" aria-describedby="about-dialog-description">
       <div>
         <header>
           <h2 id="about-dialog-title">About</h2>
@@ -520,7 +520,7 @@
     </dialog>
 
     <!-- Changelog (issue #140). changelogDialog.ts lazy-loads CHANGELOG.md from the repo root and draws it here. -->
-    <dialog id="changelog-dialog" class="dialog changelog-dialog" aria-labelledby="changelog-dialog-title" aria-describedby="changelog-dialog-description">
+    <dialog id="changelog-dialog" class="dialog dialog-lg changelog-dialog" aria-labelledby="changelog-dialog-title" aria-describedby="changelog-dialog-description">
       <div>
         <header>
           <h2 id="changelog-dialog-title">What's new</h2>

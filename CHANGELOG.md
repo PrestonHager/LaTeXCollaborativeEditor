@@ -15,6 +15,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Changed
 
+- **Wider Settings, and dialogs sized to fit.** Settings is wider, with keyboard shortcuts in their own column on large screens. Dialogs now use a few shared sizes, so Upload, Export, About, Open a project and the conflict dialog have more room, and Open a project's buttons no longer run past its edge.
 - **Breaking for open shared sessions:** the peer-to-peer library (Trystero) moved to 0.26, which changes how peers talk to each other. Tabs on the old build and tabs on this build can't sync with each other, so everyone in a session needs to reload. Open tabs see the update prompt and can reload from there. The P2P protocol version is now 2.
 - **In-app dialogs replace the browser's prompt and confirm boxes.** Renaming, creating, deleting, starting a new link and replacing the project now ask in a dialog that matches the theme, names the action on its button, and checks file and project names as you type. Risky actions have a red button with focus on Cancel.
 

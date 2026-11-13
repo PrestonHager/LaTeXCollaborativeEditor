@@ -204,6 +204,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Settings > Reset to defaults turns red and says Click again to reset, and resets nothing until the second click. It lets go after a few seconds or when you pick another section. Resetting Themes leaves keybinds alone. Resetting Tour shows the tour again on the next load.
 - [ ] With site data blocked for the page, Settings shows the note that settings only last for this tab, and changing them still works.
 - [ ] The Settings dialog scrolls inside when the window is short, so Done and the footer stay on screen, also at phone width.
+- [ ] Dialog sizes follow `docs/ui-sizing.md`: confirm and name dialogs (delete a file, New File) are small, Upload, Export, About, Open a project and the conflict dialog are medium, and Settings is large. At 1024px and wider, Settings shows two columns with Keyboard shortcuts on the right. At 1280, 1024 and 768 wide, no dialog, popover or card runs past the window edge or scrolls sideways, and every footer's buttons fit (Open a project's Close button included).
 - [ ] On Windows and Linux every shortcut label (menus, toolbar tooltips, palette, first tour step) says Ctrl, and the Windows key plus P does not open the palette.
 - [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.

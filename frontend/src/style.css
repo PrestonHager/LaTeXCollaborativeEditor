@@ -169,7 +169,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 
 /* Menu bar. Basecoat styles the dropdowns, we only set sizes and the check spacing. */
 .menu-bar { display: inline-flex; align-items: center; gap: 0.125rem; }
-.menu-popover { min-width: 15rem; }
+.menu-popover { min-width: var(--popover-menu); }
 /* Basecoat fades `visibility` too, so an opening menu stays invisible for its first frame and
    focus() on its first item is dropped. Show it at once on open; closing still fades out. */
 .menu-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
@@ -178,10 +178,40 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .menu-item-indicator { display: inline-flex; }
 .menu-item-shortcut { color: var(--muted-text); font-size: 12px; }
 
+/*
+ * Dialog and popover size scale (#141). docs/ui-sizing.md says which size each kind of dialog uses.
+ * Put dialog-sm, dialog-md or dialog-lg on the <dialog class="dialog ...">; it sizes the box inside.
+ * Without one, a dialog gets Basecoat's default, which is the same as dialog-sm.
+ * Every size stops 1rem short of each side of the window (--viewport-gutter), so nothing scrolls sideways.
+ */
+:root {
+  --dialog-sm: 28rem;      /* Confirm, prompt and notice: one question, one or two buttons. */
+  --dialog-md: 36rem;      /* Short forms and info: Upload, Export, About, Open a project, Conflict. */
+  --dialog-lg: 52rem;      /* Dense content with lists or sections side by side: Settings, Changelog. */
+  --dialog-palette: 40rem; /* The command palette (640px). */
+  --popover-card: 22rem;   /* Floating cards that point at something: tour, update prompt, preview changes. */
+  --popover-menu: 15rem;   /* Minimum width of the menu bar's dropdowns. */
+  --viewport-gutter: 2rem; /* Space a dialog leaves around itself: 1rem on each side. */
+}
+.dialog.dialog-sm > * { max-width: min(var(--dialog-sm), calc(100vw - var(--viewport-gutter))); }
+.dialog.dialog-md > * { max-width: min(var(--dialog-md), calc(100vw - var(--viewport-gutter))); }
+.dialog.dialog-lg > * { max-width: min(var(--dialog-lg), calc(100vw - var(--viewport-gutter))); }
+.dialog.dialog-palette > * { max-width: min(var(--dialog-palette), calc(100vw - var(--viewport-gutter))); }
+/*
+ * Height: Basecoat caps the box at the window height minus 2rem. The header and footer keep their size and
+ * the body (<section>) scrolls, so the buttons stay in view. The padding keeps focus rings from being clipped.
+ */
+/* :where() keeps this at one class, so a dialog's own body rule further down can change the padding or scroll. */
+.dialog > * > :where(section) { min-height: 0; overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
+/* Footers wrap instead of pushing buttons past the edge when they're wider than the box. */
+@media (min-width: 40rem) {
+  .dialog > * > footer { flex-wrap: wrap; }
+}
+
 /* Command palette. Basecoat styles the box, we handle the overlay since it isn't a <dialog>. */
 .command-palette-overlay { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgb(0 0 0 / 0.4); backdrop-filter: blur(2px); z-index: 50; }
 .command-palette-overlay.is-open { display: flex; }
-.command-palette { width: min(640px, 92vw); border: 1px solid var(--panel-border); box-shadow: 0 18px 40px rgb(0 0 0 / 0.35); }
+.command-palette { width: min(var(--dialog-palette), calc(100vw - var(--viewport-gutter))); border: 1px solid var(--panel-border); box-shadow: 0 18px 40px rgb(0 0 0 / 0.35); }
 .command-palette-list { max-height: 48vh; }
 /* We render our own empty message, so hide Basecoat's built-in one. */
 .command-palette .command-palette-list::before { display: none; }
@@ -191,9 +221,19 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .command-palette-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; border-top: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); }
 .command-palette-empty { color: var(--muted-text); padding: 1.5rem 0.65rem; font-size: 13px; text-align: center; }
 
-/* Settings dialog. Basecoat handles the box, we lay out the rows. */
-/* The body scrolls when the dialog is taller than the window, so the footer stays in view. Padding keeps focus rings unclipped. */
-.settings-dialog-body { display: grid; gap: 1rem; min-height: 0; overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.25rem; }
+/* Settings dialog (dialog-lg). Basecoat handles the box, we lay out the rows. The body scrolls like every dialog's. */
+.settings-dialog-body { display: grid; gap: 1rem; }
+/*
+ * Wide windows: two columns. Appearance, saving, Drive and "Your settings" on the left; keyboard
+ * shortcuts on the right, since that list is the tall part. The last row (1fr) takes up the
+ * extra height of the shortcuts column, so the left rows stay packed at the top.
+ */
+@media (min-width: 64rem) {
+  .settings-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: repeat(5, auto) 1fr; column-gap: 2rem; align-content: start; }
+  .settings-dialog-body > * { grid-column: 1; }
+  .settings-dialog-body > .settings-keybinds { grid-column: 2; grid-row: 1 / -1; align-content: start; padding-left: 2rem; border-left: 1px solid var(--border); }
+  .settings-dialog-body .keybind-list { max-height: 22rem; }
+}
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 label.settings-row { justify-content: flex-start; }
 .settings-dialog footer { justify-content: space-between; align-items: center; }
@@ -228,8 +268,7 @@ label.settings-row { justify-content: flex-start; }
 #about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .dialog-help-links { display: inline-flex; margin-left: auto; }
-/* Changelog dialog (issue #140). The body scrolls so a long changelog keeps the footer in view. */
-.changelog-dialog > div { max-width: min(44rem, calc(100vw - 2rem)); }
+/* Changelog dialog (issue #140, dialog-lg). The body scrolls so a long changelog keeps the footer in view. */
 .changelog-body { display: grid; gap: 1.25rem; min-height: 0; max-height: min(60vh, 36rem); overflow-y: auto; margin: 0 -0.25rem; padding: 0.125rem 0.5rem 0.125rem 0.25rem; font-size: 14px; line-height: 1.5; }
 .changelog-body:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; border-radius: var(--radius-md); }
 .changelog-release { display: grid; gap: 0.5rem; padding-left: 0.75rem; border-left: 2px solid var(--panel-border); }
@@ -260,7 +299,8 @@ label.settings-row { justify-content: flex-start; }
 .app-dialog-error[hidden] { display: none; }
 
 /* First-run tour card. tour.ts sets top and left next to the part it's pointing at. */
-.tour { position: fixed; z-index: 400; width: min(22rem, calc(100vw - 1.5rem)); padding: 1rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
+/* Narrower gutter than dialogs: tour.ts keeps the card 0.75rem from the window edge. */
+.tour { position: fixed; z-index: 400; width: min(var(--popover-card), calc(100vw - 1.5rem)); padding: 1rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
 .tour-count { margin: 0; font-size: 12px; color: var(--muted-text); }
 .tour-title { margin: 0; font-size: 1rem; font-weight: 600; }
 .tour-body { margin: 0; font-size: 14px; }
@@ -269,7 +309,7 @@ label.settings-row { justify-content: flex-start; }
 .tour-highlight { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--radius-sm); }
 
 /* "New version" prompt: a small card in the bottom corner, styled like the tour card but out of the way. */
-.update-prompt { position: fixed; z-index: 390; right: 0.75rem; bottom: 2.5rem; width: min(22rem, calc(100vw - 1.5rem)); padding: 0.75rem 1rem; display: grid; gap: 0.35rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
+.update-prompt { position: fixed; z-index: 390; right: 0.75rem; bottom: 2.5rem; width: min(var(--popover-card), calc(100vw - 1.5rem)); padding: 0.75rem 1rem; display: grid; gap: 0.35rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
 .update-prompt[hidden] { display: none; }
 .update-prompt-text { margin: 0; font-size: 14px; font-weight: 600; }
 .update-prompt-detail { margin: 0; font-size: 13px; color: var(--muted-text); }
@@ -318,7 +358,7 @@ label.settings-row { justify-content: flex-start; }
 /* The tooltip says the same as the popover, so don't stack it on top while it's open. */
 .preview-changes-btn[aria-expanded="true"]::before { display: none; }
 .preview-changes-count { font-size: 11px; line-height: 1; }
-.preview-changes-popover { width: min(22rem, calc(100vw - 2rem)); min-width: 0; max-height: min(24rem, 60vh); margin-top: 0.25rem; padding: 0.75rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
+.preview-changes-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; max-height: min(24rem, 60vh); margin-top: 0.25rem; padding: 0.75rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
 .preview-changes-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
 .preview-changes-title { margin: 0; font-size: 13px; font-weight: 600; }
 .preview-changes-summary { margin: 0; color: var(--muted-text); }
