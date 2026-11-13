@@ -17,6 +17,29 @@ function readGroup(text: string, from: number): [string, number] {
   return [text.slice(from + 1), text.length];
 }
 
+/**
+ * Make a field value safe to drop into one line of LaTeX: escape bare % (it would comment out the
+ * rest of the reference list) and balance braces, so a stray } can't close the group around it.
+ */
+function tidyValue(value: string): string {
+  let out = '';
+  let depth = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const ch = value[i];
+    if (ch === '\\') {
+      out += value.slice(i, i + 2);
+      i += 1;
+    } else if (ch === '%') out += '\\%';
+    else if (ch === '}' && depth === 0) continue;
+    else {
+      if (ch === '{') depth += 1;
+      else if (ch === '}') depth -= 1;
+      out += ch;
+    }
+  }
+  return out + '}'.repeat(depth);
+}
+
 /** Read a field value: {braced}, "quoted" or a bare word or @string name, joined with #. */
 function readValue(body: string, from: number, strings: Map<string, string>): [string, number] {
   let value = '';
@@ -42,7 +65,7 @@ function readValue(body: string, from: number, strings: Map<string, string>): [s
       j += word.length;
     }
     while (/\s/.test(body[j] ?? '')) j += 1;
-    if (body[j] !== '#') return [value.replace(/\s+/g, ' ').trim(), j];
+    if (body[j] !== '#') return [tidyValue(value.replace(/\s+/g, ' ').trim()), j];
     j += 1;
   }
 }
@@ -291,6 +314,9 @@ export function biblatexStyle(options: string): BibStyle {
 /** How a cited entry shows in the text and in the list. */
 export type BibItem = { key: string; label: string; names: string; year: string; text: string };
 
+/** A cite key shown as text, for entries with no author: LaTeX specials escaped, no line breaks. */
+const keyText = (key: string) => key.replace(/[\s\\{}~^]+/g, '').replace(/[&%$#_]/g, '\\$&');
+
 /** Who an entry belongs to for sorting and labels: its authors, or else its editors. */
 const people = (entry: BibEntry) => parseNames(entry.fields.author ?? entry.fields.editor);
 
@@ -454,7 +480,7 @@ export function buildBibliography(entries: BibEntry[], style: BibStyle): BibItem
   // Duplicate labels get a, b, c (Knu84a, Knu84b), and so do author-year pairs (1984a).
   const base = ordered.map((entry, i) => {
     if (style.label === 'alpha') return alpha[i];
-    if (style.label === 'authoryear') return `${citeNames(people(entry)) || entry.key}|${entry.fields.year ?? ''}`;
+    if (style.label === 'authoryear') return `${citeNames(people(entry)) || keyText(entry.key)}|${entry.fields.year ?? ''}`;
     return '';
   });
   const counts = new Map<string, number>();
@@ -467,7 +493,7 @@ export function buildBibliography(entries: BibEntry[], style: BibStyle): BibItem
       seen.set(base[i], n + 1);
       suffix = String.fromCharCode(97 + n);
     }
-    const names = citeNames(people(entry)) || entry.key;
+    const names = citeNames(people(entry)) || keyText(entry.key);
     const year = `${entry.fields.year ?? ''}${style.label === 'authoryear' ? suffix : ''}`;
     const label = style.label === 'alpha' ? `${alpha[i]}${suffix}` : style.label === 'numeric' ? String(i + 1) : `${names}, ${year}`;
     const text = style.layout === 'ieee' ? ieeeText(entry, style) : bibtexText(entry, style, year);

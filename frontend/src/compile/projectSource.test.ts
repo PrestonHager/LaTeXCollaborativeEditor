@@ -154,6 +154,60 @@ describe('projectToPreviewHtml', () => {
     expect(images[1].getAttribute('style')).toBe('max-width:100%;width:3cm;');
   });
 
+  describe('bibliography from a peer', () => {
+    const preview = (bib: string, extra = '') =>
+      projectToPreviewHtml({
+        mainPath: 'main.tex',
+        texts: files({
+          'main.tex': `\\documentclass{article}\n\\usepackage{hyperref}\n\\begin{document}\nSee \\cite{evil}${extra}.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}`,
+          'refs.bib': bib,
+        }),
+        binaryPaths: [],
+        imageUrls: new Map(),
+      });
+    const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html');
+
+    it('strips script URLs from \\href and \\url in bib fields', () => {
+      const result = preview(
+        '@misc{evil, author = {Eve}, title = {T}, url = {javascript:alert(1)}, doi = {\\url{javascript:alert(2)}},\n' +
+          ' howpublished = {\\href{javascript:alert(3)}{click} and \\href{data:text/html,x}{data}}, note = {\\url{vbscript:alert(4)}}}',
+      );
+      expect(result.errors).toEqual([]);
+      const doc = parse(result.html!);
+      expect(doc.body.textContent).toContain('click');
+      for (const el of Array.from(doc.querySelectorAll('*'))) {
+        for (const attr of ['href', 'src', 'xlink:href', 'action', 'formaction']) {
+          expect(el.getAttribute(attr) ?? '').not.toMatch(/^\s*(javascript|data|vbscript):/i);
+        }
+      }
+      expect(result.html).not.toMatch(/(href|src)="\s*(javascript|data|vbscript):/i);
+    });
+
+    it('renders HTML-looking field text as text, not markup', () => {
+      const result = preview(
+        '@misc{evil, author = {<img src=x onerror=alert(1)>}, title = {<script>alert(2)</script>}, note = "<svg onload=alert(3)>", howpublished = {<a href="javascript:alert(4)">x</a>}}',
+      );
+      expect(result.errors).toEqual([]);
+      const doc = parse(result.html!);
+      expect(doc.querySelector('img, script:not([src]), svg, [onerror], [onload]')).toBeNull();
+      expect(Array.from(doc.querySelectorAll('a')).some((a) => (a.getAttribute('href') ?? '').includes('javascript'))).toBe(false);
+      expect(doc.body.textContent).toContain('onerror=alert(1)');
+      expect(doc.body.textContent).toContain('onload=alert(3)');
+    });
+
+    it('keeps a stray brace, %, or odd key in a field from breaking the rest of the list', () => {
+      const result = preview(
+        '@misc{weird_key&1, title = {Keyed}}\n@misc{evil, author = {Eve}, note = {50% off}, title = {Open {brace',
+        ' \\nocite{weird_key&1}',
+      );
+      expect(result.errors).toEqual([]);
+      const text = parse(result.html!).body.textContent ?? '';
+      expect(text).toContain('Open brace');
+      expect(text).toContain('50% o'); // LaTeX.js turns ff into a ligature.
+      expect(text).toContain('Keyed');
+    });
+  });
+
   it('points an error in an \\input file at that file', () => {
     const texts = files({
       'main.tex': '\\documentclass{article}\n\\begin{document}\n\\input{body}\n\\end{document}',

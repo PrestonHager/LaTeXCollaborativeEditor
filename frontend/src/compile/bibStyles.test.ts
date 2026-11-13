@@ -106,3 +106,19 @@ describe('styles', () => {
     expect(buildBibliography([entry('misc', {}, 'webpage')], style('apalike'))[0].label).toBe('webpage, ');
   });
 });
+
+describe('peer-supplied values', () => {
+  it('escapes bare % and balances braces in field values', () => {
+    // An entry cut off at the end of the file leaves its last value unbalanced.
+    expect(parseBib('@misc{k, note = {50% off \\% kept}, x = {{d}}, title = {a {b')[0].fields).toEqual({
+      note: '50\\% off \\% kept',
+      x: '{d}',
+      title: 'a {b}',
+    });
+  });
+
+  it('shows an authorless key as safe text', () => {
+    const [item] = buildBibliography([entry('misc', { year: '2000' }, 'odd_key&{x}\\y')], style('apalike'));
+    expect(item.names).toBe('odd\\_key\\&xy');
+  });
+});
