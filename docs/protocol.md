@@ -41,6 +41,11 @@ Version handshake
 - The hello only has version numbers, never document content, and it goes over WebRTC like every other message, not through the trackers.
 - How the protocol version is bumped and migrated is in `docs/versioning.md`.
 
+Desktop app peers (issue #122)
+- The experimental desktop app (`desktop/`, `docs/desktop.md`) runs the same frontend build in the system webview, so it speaks this protocol unchanged, sends the same `hello`, and meets website peers in the same rooms (production's `VITE_P2P_APP_ID`).
+- A desktop peer can fall behind the website until its user updates, and that's what the handshake above covers. Nothing about the protocol is desktop-specific.
+- The webview needs `RTCPeerConnection`. Ubuntu's WebKitGTK doesn't have it, so on Linux the app can't join a room yet. If a native WebRTC bridge is added, it must keep the same DataChannel framing so web peers can't tell the difference.
+
 Presence (awareness)
 - While sharing, each peer tells the room who it is and where its cursor is (issue #22), so others see avatars next to Share, a dot on the file in the tree, and a caret with a name label in the editor.
 - It's `{ kind: 'awareness', clock, state }` on the same `doc-msg` action as everything else. `state` is `{ name, color, file, cursor, id, joined }`, or `null` when the peer stops sharing or closes the tab. Builds from #163 send no `id` or `joined`.

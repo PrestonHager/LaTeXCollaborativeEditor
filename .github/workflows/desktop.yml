@@ -1,0 +1,113 @@
+# Builds the native desktop app (desktop/, Tauri 2) for Linux, Windows and macOS and uploads the
+# installers as workflow artifacts. They are UNSIGNED for now: see docs/desktop.md, "Signing", for
+# the maintainer setup that signing and notarization need, and "Releases" for how this fits the
+# release flow. It deploys nothing and attaches nothing to the GitHub release yet.
+#
+# How it runs:
+# - Actions > Desktop app > Run workflow, on main or a branch, optionally with a tag to build.
+# - A vX.Y.Z tag pushed by hand runs it on the tag.
+# - Tags that tag-release.yml pushes don't start it on their own, because pushes made with
+#   GITHUB_TOKEN don't start workflows. release.yml can call it (workflow_call) once desktop
+#   builds should be part of every release; until then, run it by hand with the tag.
+name: Desktop app
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A tag to build, like v0.2.0. Empty builds the branch you run it on.
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ inputs.tag || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # Same variables as the production site, so the app's peers meet the website's peers
+    # (VITE_P2P_APP_ID) and use the same STUN server. The Google ones are left out on purpose:
+    # Google blocks its sign-in inside an app's webview, so Drive waits for the desktop sign-in
+    # flow (docs/desktop.md, "Google sign-in").
+    environment: Production
+    env:
+      VITE_DEPLOY_ENV: production
+      VITE_P2P_APP_ID: ${{ vars.VITE_P2P_APP_ID }}
+      VITE_STUN_URL: ${{ vars.VITE_STUN_URL }}
+      VITE_DOCS_BASE_URL: ${{ vars.VITE_DOCS_BASE_URL }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported Ubuntu, so the AppImage and .deb run on older glibc too.
+          - name: linux
+            os: ubuntu-22.04
+            bundles: deb,rpm,appimage
+            args: ''
+          - name: windows
+            os: windows-latest
+            bundles: msi,nsis
+            args: ''
+          # One app for Apple silicon and Intel Macs.
+          - name: macos
+            os: macos-latest
+            bundles: app,dmg
+            args: --target universal-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+      - name: Install the Linux webview and bundler libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf
+      - name: Add the Rust targets for a universal macOS app
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+      - name: Install the frontend and the Tauri CLI
+        shell: bash
+        run: |
+          npm ci --prefix frontend
+          npm ci --prefix desktop
+      - name: Check the desktop settings
+        working-directory: desktop
+        run: npm run check
+      # tauri.conf.json's beforeBuildCommand builds the frontend (npm run build in frontend/,
+      # with its bundle size check) before Tauri bundles frontend/dist into the app.
+      - name: Build the app
+        working-directory: desktop
+        shell: bash
+        run: npm run build -- --bundles "${{ matrix.bundles }}" ${{ matrix.args }}
+      - name: Upload the installers
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.name }}-unsigned
+          path: desktop/src-tauri/target/**/release/bundle/
+          if-no-files-found: error
+          retention-days: 14

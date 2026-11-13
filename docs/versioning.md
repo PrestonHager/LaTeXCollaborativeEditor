@@ -24,7 +24,7 @@ Before 1.0, a breaking change may go in a MINOR bump (`0.1.0` to `0.2.0`), as Se
 `frontend/package.json` `version` is the version.
 
 - The root `package.json` (and both `package-lock.json` files) carry the same number. A test in `frontend/scripts/scripts.test.mjs` fails if they differ, and the release workflow checks both against the tag.
-- A future native app (issue #122) takes its version from the same field, so the web and native builds of one commit always share a number. Native-only fixes still bump PATCH for everyone.
+- The desktop app (`desktop/`, issue #122) takes its version from the same field: `desktop/src-tauri/tauri.conf.json` points `version` at `frontend/package.json`, so the web and desktop builds of one commit always share a number and Prepare release needs no extra step. Desktop-only fixes still bump PATCH for everyone. See `docs/desktop.md`.
 
 ## What the build bakes in
 

@@ -310,3 +310,13 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Type something, then click Reload to update. The autosave pill shows Saving, then Saved, then the page reloads with no "Leave site?" box, and the edit is still there.
 - [ ] Later hides the card, and it doesn't come back for the same version. It shows again for another version.
 - [ ] `npm run dev` never fetches `version.json` on its own.
+
+## Desktop app (experimental)
+
+Needs the desktop build (`npm run build` in `desktop/`, or an artifact from the **Desktop app** workflow). See `docs/desktop.md`.
+
+- [ ] `npm run check` in `desktop/` passes, and the app opens on the editor with no network page in between (it loads the bundled build).
+- [ ] The File menu shows Ctrl+N for New File and Ctrl+Shift+N for New Project (⌘N and ⇧⌘N on a Mac), and both work. Settings > Keyboard shortcuts says "Keys shown are for the desktop app".
+- [ ] Ctrl+W (⌘W on a Mac) doesn't close the window when it's bound to a command. On a Mac, ⌘Q still quits and ⌘C, ⌘V and ⌘Z work in the editor.
+- [ ] Projects made in the app are still there after quitting and opening it again, and are separate from the browser's.
+- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, check what Share does when the system WebKitGTK has no WebRTC.
