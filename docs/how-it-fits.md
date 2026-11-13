@@ -102,9 +102,9 @@ flowchart TD
     D --> E([Guest opens the link])
     E --> F[Guest joins the same room<br/>through the trackers]
     F --> G{Found a peer?}
-    G -- not yet --> H[Badge says Waiting for peers.<br/>The app keeps looking]
+    G -- not yet --> H[Badge says Looking for the host.<br/>The app keeps looking]
     H --> G
-    G -- yes --> I[Badge says Connected]
+    G -- yes --> I[Badge says Connected with 1 other person]
     I --> J[Host sends the whole project]
     J --> K[Guest sees the file tree<br/>and asks for images it's missing]
     K --> L[Both edit the same files live]
@@ -285,7 +285,8 @@ Those edits reach the host when it comes back, as long as the host is still on t
 
 ### Peer connection
 
-These are the words you see in the connection badge.
+These are the connection states behind the badge.
+The badge says them in plainer words, like "Shared, waiting for others" or "Can't reach the host". See [Connection status](collaboration.md#connection-status).
 
 ```mermaid
 stateDiagram-v2

@@ -9,7 +9,7 @@ Please don't paste your document, room link, or any tokens into it.
 
 ## P2P connection problems
 
-What you see: the connection badge stays on **Waiting for peers** or **Reconnecting**, or a guest's Files panel keeps saying "Waiting for the host".
+What you see: the connection badge stays on **Looking for the host** or **Can't reach the host**, or a guest's Files panel keeps saying "Waiting for the host".
 
 How it works: browsers find each other through public trackers, then connect directly over WebRTC.
 There's no server of ours in between, so both browsers have to be able to reach each other.

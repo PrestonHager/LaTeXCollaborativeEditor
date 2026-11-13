@@ -18,11 +18,12 @@ The app shows messages in a few places:
 
 | Text | What it means |
 | --- | --- |
-| Not sharing | You haven't clicked Share and you're not in a room. |
-| Waiting for peers | In the room, nobody else has joined yet. |
-| Connected · 2 peers | Peers are connected directly. The number is how many. |
-| Relayed · 1 peer | At least one peer goes through a TURN relay server. |
-| Reconnecting | Everyone else left. The app rejoins and waits. |
+| Not shared | You haven't clicked Share and you're not in a room. |
+| Shared, waiting for others | You're the host and nobody else has joined yet. |
+| Looking for the host | You opened a link and the host hasn't shown up yet. |
+| Connected with 2 other people | Peers are connected directly. The number is how many. |
+| Connected with 1 other person (relayed) | At least one peer goes through a TURN relay server. |
+| Can't reach the host | You're a guest and the host dropped off. The app rejoins and waits. |
 
 More: [P2P connection problems](troubleshooting.md#p2p-connection-problems).
 
