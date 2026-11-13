@@ -2,8 +2,8 @@ import './style.css';
 import * as Y from 'yjs';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
-import { createMenuBar, type CommandId, type CommandState } from './ui/menuBar';
-import { createCommandPalette, type PaletteCommand } from './ui/commandPalette';
+import { createMenuBar, type CommandId } from './ui/menuBar';
+import { createCommandPalette } from './ui/commandPalette';
 import { setupShareButton } from './ui/shareButton';
 import { renderStaticIcons } from './ui/icons';
 import { createSettingsDialog } from './ui/settingsDialog';
@@ -18,37 +18,36 @@ import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
 import { bugReportUrl, featureRequestUrl, type IssueArea } from './ui/issueLinks';
 import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from './ui/statusText';
-import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from './ui/paletteCommands';
 import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
 import { LocalDownloadStorage } from './storage/localDownload';
-import { GoogleDriveProvider, LEGACY_PREFIX } from './storage/providers/googleDrive';
+import { GoogleDriveProvider } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
-import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
+import { createThemeController } from './app/theme';
+import { createLayout } from './app/layout';
+import { ProjectState, toTexName } from './app/projectState';
+import { createPreviewCompile } from './app/previewCompile';
+import { createCommands } from './app/commands';
+import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
 import { createConflictDialog } from './ui/conflictDialog';
 import { createCollabUndo } from './collab/undo';
-import { CompileScheduler, collectImageUrls } from './compile/compileScheduler';
 import {
-  createDocumentId,
   readAppSessionState,
   writeAppSessionState,
   encodeYjsState,
   decodeYjsState,
   type PersistedYjsState,
-  type ProviderMode,
-  type ThemeMode,
 } from './state/appSession';
 import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
-import { NEW_PROJECT_CONFIRM, canRunCommand } from './state/guestCommands';
 import { describeError } from './storage/errors';
 import { BlobStore } from './project/blobStore';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
-import { loadProject, projectFromZip, projectToZip, starterProject } from './project/projectIo';
+import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -78,10 +77,9 @@ const appNoticeEl = document.getElementById('app-notice') as HTMLElement;
 const activeFileNameEl = document.getElementById('active-file-name') as HTMLElement;
 const activeFileMainEl = document.getElementById('active-file-main') as HTMLElement;
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
+const layout = createLayout({ splitRoot, splitter, editorPane, previewPane });
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
-const COMPILE_DEBOUNCE_MS = 500;
-const COMPILE_MIN_INTERVAL_MS = 900;
 
 const APP_VERSION = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? 'dev';
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
@@ -99,23 +97,11 @@ const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
 const driveProvider = new GoogleDriveProvider();
 const blobs = new BlobStore();
-let activeProvider: StorageProvider = localAppProvider;
-// The stored project we save to, or null until the first save makes one.
-let projectId: string | null = null;
-// What the last save wrote, so the next one only sends changes.
-let manifest: SavedManifest | null = null;
-// Files that changed in storage under us, by file id. Saves skip them until the person picks a copy.
-const conflicts = new Map<string, FileConflict>();
-// Files the person chose to overwrite anyway.
-const overwrite = new Set<string>();
+const projectState = new ProjectState(localAppProvider, driveProvider);
+const { conflicts, overwrite } = projectState;
 let activeFileId: string | null = null;
-// Only used to match an old single-file Drive link from before projects.
-let documentId = createDocumentId();
-let savingPaused = false;
-let editorTheme: ThemeMode = 'system';
-let previewTheme: ThemeMode = 'system';
-let layoutMode: 'split' | 'editor-only' | 'preview-only' = 'split';
-let splitRatio = 0.5;
+const themeState = createThemeController();
+const { applyEditorTheme, applyPreviewTheme } = themeState;
 let hostStorageText = 'Saved on host local storage';
 const fileProgress = new Map<string, number>();
 const driveApiKey = import.meta.env.VITE_GOOGLE_API_KEY as string | undefined;
@@ -130,11 +116,6 @@ let lastSavedAt: Date | null = null;
 let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
 let inRoom = isClient;
-
-const toTexName = (name: string) => (name.endsWith('.tex') ? name : `${name}.tex`);
-const getProviderMode = (): ProviderMode => (activeProvider === driveProvider ? 'drive' : 'local');
-// Tell guests where the host is actually saving, instead of always saying local storage.
-const currentStorageLabel = () => (activeProvider === driveProvider ? 'Saved on host Google Drive' : 'Saved on host local storage');
 
 /**
  * Show a short message in the header, then clear it after a few seconds unless it's sticky.
@@ -186,111 +167,12 @@ window.addEventListener('unhandledrejection', (event) => {
   showNotice(describeError(event.reason), true);
 });
 
-function resolveDisplayTheme(mode: ThemeMode): 'dark' | 'light' {
-  if (mode === 'dark') return 'dark';
-  if (mode === 'light') return 'light';
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function applyEditorTheme(theme: ThemeMode) {
-  editorTheme = theme;
-  const display = resolveDisplayTheme(theme);
-  // Basecoat switches its own colors on the `dark` class.
-  document.documentElement.classList.toggle('dark', display === 'dark');
-  if (theme === 'system') {
-    document.documentElement.removeAttribute('data-editor-theme');
-  } else {
-    document.documentElement.setAttribute('data-editor-theme', theme);
-  }
-  document.documentElement.style.colorScheme = display === 'dark' ? 'dark' : 'light';
-  window.dispatchEvent(new CustomEvent('editorthemechange'));
-}
-
-function applyPreviewTheme(theme: ThemeMode) {
-  previewTheme = theme;
-  if (theme === 'system') {
-    document.documentElement.removeAttribute('data-preview-theme');
-  } else {
-    document.documentElement.setAttribute('data-preview-theme', theme);
-  }
-  window.dispatchEvent(new CustomEvent('previewthemechange'));
-}
-
-const applyLayoutMode = () => {
-  splitRoot.classList.toggle('is-editor-only', layoutMode === 'editor-only');
-  splitRoot.classList.toggle('is-preview-only', layoutMode === 'preview-only');
-  splitter.style.display = layoutMode === 'split' ? '' : 'none';
-  editorPane.style.display = layoutMode === 'preview-only' ? 'none' : '';
-  previewPane.style.display = layoutMode === 'editor-only' ? 'none' : '';
-  if (layoutMode === 'split') {
-    const left = Math.max(20, Math.min(80, Math.round(splitRatio * 100)));
-    splitRoot.style.gridTemplateColumns = `${left}% 8px ${100 - left}%`;
-    splitter.setAttribute('aria-valuenow', String(left));
-  } else {
-    splitRoot.style.gridTemplateColumns = '1fr';
-  }
-};
-
-const installSplitter = () => {
-  let dragging = false;
-  const onMove = (event: PointerEvent) => {
-    if (!dragging || layoutMode !== 'split') return;
-    const bounds = splitRoot.getBoundingClientRect();
-    const ratio = (event.clientX - bounds.left) / bounds.width;
-    splitRatio = Math.max(0.2, Math.min(0.8, ratio));
-    applyLayoutMode();
-  };
-  const onUp = () => {
-    dragging = false;
-    document.body.classList.remove('is-resizing');
-  };
-  splitter.addEventListener('pointerdown', (event) => {
-    if (layoutMode !== 'split') return;
-    dragging = true;
-    document.body.classList.add('is-resizing');
-    splitter.setPointerCapture(event.pointerId);
-  });
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp);
-  // Keyboard users move the splitter with the arrow keys instead of dragging.
-  splitter.addEventListener('keydown', (event) => {
-    if (layoutMode !== 'split') return;
-    const steps: Record<string, number> = { ArrowLeft: -0.05, ArrowRight: 0.05 };
-    const step = steps[event.key];
-    if (step === undefined) return;
-    event.preventDefault();
-    splitRatio = Math.max(0.2, Math.min(0.8, splitRatio + step));
-    applyLayoutMode();
-  });
-};
-
 // First, restore the last session, so we know which doc, project and provider to pick up.
 const restored = isClient ? null : readAppSessionState();
 let driveRestoreMessage: string | null = null;
 if (restored) {
-  if (restored.documentId) documentId = restored.documentId;
-  // The saved flag kept its old name, so false there means saving is paused.
-  savingPaused = !restored.saveNowEnabled;
-  editorTheme = restored.editorTheme;
-  previewTheme = restored.previewTheme;
-  projectId = restored.projectId ?? null;
-  manifest = restored.manifest ?? null;
+  driveRestoreMessage = projectState.restore(restored);
   activeFileId = restored.activeFileId ?? null;
-  if (restored.providerMode === 'drive') {
-    // Only reuse Drive when the cached token is still good. Calling connect() here would open
-    // a sign-in popup on page load, which browsers block, and saves would silently fail.
-    if (driveProvider.hasUsableToken()) {
-      activeProvider = driveProvider;
-      driveRestoreMessage = 'Drive: Session restored';
-      // Sessions from before projects saved to one Drive file, so keep saving there.
-      if (!projectId) projectId = driveProvider.legacyProjectId(restored.documentId, toTexName(restored.documentName));
-    } else {
-      // The token only lives in this tab's sessionStorage, so a new tab or browser lands here too.
-      driveRestoreMessage = 'Drive needs you to reconnect; saving locally. Use File > Connect Google Drive.';
-      projectId = null;
-      manifest = null;
-    }
-  }
 }
 
 function restoredDocState() {
@@ -299,12 +181,9 @@ function restoredDocState() {
   return state ? { docId: restored.yjs.docId, state } : undefined;
 }
 
-applyEditorTheme(editorTheme);
-applyPreviewTheme(previewTheme);
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  if (editorTheme === 'system') applyEditorTheme('system');
-  if (previewTheme === 'system') applyPreviewTheme('system');
-});
+applyEditorTheme(restored?.editorTheme ?? 'system');
+applyPreviewTheme(restored?.previewTheme ?? 'system');
+themeState.watchSystemTheme();
 
 const session: SessionController = new SessionController({
   isHost: !isClient,
@@ -318,7 +197,7 @@ const session: SessionController = new SessionController({
     hostStorageText = storage;
     setStatus(storage);
   },
-  getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: currentStorageLabel() }),
+  getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
   onDocReplaced: () => bindProject(),
   onFileProgress: (hash, fraction) => {
@@ -341,16 +220,12 @@ const persistAppSession = () => {
   const persisted = session.getPersistedState();
   writeAppSessionState({
     documentName: projectName(),
-    documentId,
+    ...projectState.sessionFields(),
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
-    providerMode: getProviderMode(),
-    saveNowEnabled: !savingPaused,
-    editorTheme,
-    previewTheme,
+    editorTheme: themeState.editorTheme,
+    previewTheme: themeState.previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
-    projectId: projectId ?? undefined,
     activeFileId: activeFileId ?? undefined,
-    manifest: manifest ?? undefined,
   });
 };
 
@@ -370,26 +245,22 @@ if (!isClient) {
 
 const autosave = new AutosaveController({
   save: async () => {
-    const provider = activeProvider;
+    const provider = projectState.activeProvider;
     const forced = new Set(overwrite);
     const result = await saveProject({
       provider,
       project,
       blobs,
-      manifest,
-      projectId,
+      manifest: projectState.manifest,
+      projectId: projectState.projectId,
       held: new Set(conflicts.keys()),
       overwrite: forced,
       onStep: (step) => {
         // Keep progress from a save that fails halfway, unless the project changed under us.
-        if (provider !== activeProvider) return;
-        manifest = step;
-        projectId = step.projectId;
+        projectState.recordSave(provider, step);
       },
     });
-    if (provider === activeProvider) {
-      manifest = result.manifest;
-      projectId = result.manifest.projectId;
+    if (projectState.recordSave(provider, result.manifest)) {
       persistAppSession();
       for (const id of forced) overwrite.delete(id);
       for (const conflict of result.conflicts) holdConflict(conflict);
@@ -401,29 +272,25 @@ const autosave = new AutosaveController({
   onStatus: setStatus,
 });
 // Keep saving paused if it was paused in the last session.
-autosave.setPaused(savingPaused);
-const savingStatus = () => (savingPaused ? 'Saving paused' : 'Autosave On');
+autosave.setPaused(projectState.savingPaused);
+const savingStatus = () => (projectState.savingPaused ? 'Saving paused' : 'Autosave On');
 
 // When Drive can't get a new token, switch to local saves so no edits are lost.
 driveProvider.onSessionLost(() => {
   showDriveAccount();
-  if (activeProvider !== driveProvider) return;
+  if (!projectState.isDrive()) return;
   useProvider(localAppProvider, null);
   showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true, {
     topic: 'driveSignIn',
   });
-  if (!savingPaused) void autosave.saveNow();
+  if (!projectState.savingPaused) void autosave.saveNow();
 });
 
 /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
 function useProvider(provider: StorageProvider, id: string | null, loaded: SavedManifest | null = null) {
-  activeProvider = provider;
-  projectId = id;
-  manifest = loaded;
-  conflicts.clear();
-  overwrite.clear();
+  projectState.use(provider, id, loaded);
   persistAppSession();
-  session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
+  session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
 const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
@@ -432,14 +299,14 @@ const conflictDialog = createConflictDialog(document.getElementById('conflict-di
 function holdConflict(conflict: FileConflict) {
   if (conflicts.has(conflict.id)) return;
   conflicts.set(conflict.id, conflict);
-  void conflictDialog.ask(conflict.path, activeProvider.label).then((choice) => resolveConflict(conflict, choice));
+  void conflictDialog.ask(conflict.path, projectState.activeProvider.label).then((choice) => resolveConflict(conflict, choice));
 }
 
 /** Act on the person's pick for a held file, then let saves pick it up again. */
 async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
   // Skip answers for a project we've since switched away from.
-  const provider = activeProvider;
-  const id = projectId;
+  const provider = projectState.activeProvider;
+  const id = projectState.projectId;
   if (conflicts.get(conflict.id) !== conflict || !id) return;
   if (choice === 'mine') {
     overwrite.add(conflict.id);
@@ -452,7 +319,8 @@ async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
     await autosave.enqueue(async () => {
       const resolve = choice === 'copy' ? keepMineAsCopy : takeTheirs;
       const saved = await resolve({ provider, projectId: id, project, blobs, conflict });
-      if (provider !== activeProvider || !manifest) return;
+      const { manifest } = projectState;
+      if (provider !== projectState.activeProvider || !manifest) return;
       if (saved) manifest.files[conflict.id] = saved;
       conflicts.delete(conflict.id);
       persistAppSession();
@@ -466,120 +334,40 @@ async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
   }
 }
 
-let compileTimer: ReturnType<typeof setTimeout> | null = null;
-let throttleTimer: ReturnType<typeof setTimeout> | null = null;
-let lastCompiledKey: string | null = null;
-let lastCompileStartedAt = 0;
-let compileSequence = 0;
-const compiler = new CompileScheduler();
-const imageUrls = new Map<string, string>();
-
-/** A data: URL for an image file, if we have its bytes. Cached by content hash. */
-const imageUrl = (path: string): string | null => {
-  const entry = project.findByPath(path);
-  if (!entry?.hash) return null;
-  const cached = imageUrls.get(entry.hash);
-  if (cached) return cached;
-  const bytes = blobs.peek(entry.hash);
-  if (!bytes) return null;
-  const url = `data:${mimeType(path)};base64,${encodeYjsState(bytes)}`;
-  imageUrls.set(entry.hash, url);
-  return url;
-};
-
-/** Show diagnostics in the footer, with a "Learn more" link while there's something to explain. */
-function setDiagnostics(text: string, topic: 'diagnostics' | 'previewErrors' = 'diagnostics') {
-  diagnosticsEl.textContent = text;
-  diagnosticsHelpEl.hidden = !text;
-  diagnosticsHelpEl.href = docsUrl(docsBase, topic);
-}
-
-const runCompile = async () => {
-  const mainId = project.getMainFileId();
-  const main = mainId ? project.get(mainId) : undefined;
+const compile = createPreviewCompile({
+  getProject: () => project,
+  getActiveFileId: () => activeFileId,
+  blobs,
+  preview,
+  editor,
+  compileStatusEl,
+  diagnosticsEl,
+  // Show a "Learn more" link next to the diagnostics while there's something to explain.
+  onDiagnostics: (text, topic) => {
+    diagnosticsHelpEl.hidden = !text;
+    diagnosticsHelpEl.href = docsUrl(docsBase, topic);
+  },
   // With no main file there's nothing to compile, so say how to pick one instead of showing a blank page.
-  previewEmptyEl.hidden = Boolean(main) || (isClient && project.isEmpty());
-  if (!main) {
-    compileStatusEl.textContent = project.isEmpty() ? 'Idle' : 'No main file';
-    setDiagnostics('');
-    return;
-  }
-  const texts = project.textFiles();
-  const binaries = project.entries().filter((entry) => entry.kind === 'binary');
-  // Skip the compile when nothing it reads has changed.
-  const key = [
-    main.path,
-    ...[...texts].map(([path, text]) => `${path}:${textRev(text)}`),
-    ...binaries.map((entry) => `${entry.path}:${entry.hash}:${entry.hash && blobs.has(entry.hash) ? 1 : 0}`),
-  ].join('|');
-  if (key === lastCompiledKey) {
-    compileStatusEl.textContent = 'Compiled';
-    return;
-  }
-  const seq = ++compileSequence;
-  lastCompileStartedAt = Date.now();
-  compileStatusEl.textContent = 'Compiling';
-  preview.setLoading(true);
-  try {
-    const binaryPaths = binaries.map((entry) => entry.path);
-    const result = await compiler.compile({ mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) });
-    if (!result || seq !== compileSequence) return;
-    const { html, errors, missing } = result;
-    if (html) await preview.renderHtml(html);
-    const activePath = activeFileId ? project.get(activeFileId)?.path : undefined;
-    editor.setDiagnostics(errors.filter((error) => error.path === activePath));
-    lastCompiledKey = key;
-    compileStatusEl.textContent = 'Compiled';
-    if (noticeKind === 'compile') {
-      notice.clear();
-      noticeKind = null;
-    }
-    if (errors.length) {
-      const first = errors[0];
-      setDiagnostics(`${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`);
-    } else {
-      setDiagnostics(missing.length ? `Not found in the project: ${missing.join(', ')}` : '');
-    }
-  } catch (error) {
-    if (seq !== compileSequence) return;
-    editor.setDiagnostics([{ line: 1, severity: 'error', message: String(error) }]);
-    compileStatusEl.textContent = 'Compile Error';
-    setDiagnostics(String(error), 'previewErrors');
-    // Only say so once per broken streak, not on every keystroke.
-    if (noticeKind !== 'compile') {
-      showNotice("The preview couldn't be built.", true, true, {
-        topic: 'previewErrors',
-        report: 'preview',
-        summary: 'The preview failed to compile.',
-      });
-      noticeKind = 'compile';
-    }
-  } finally {
-    if (seq === compileSequence) preview.setLoading(false);
-  }
-};
-
-const requestCompile = () => {
-  const elapsed = Date.now() - lastCompileStartedAt;
-  if (elapsed >= COMPILE_MIN_INTERVAL_MS) {
-    void runCompile();
-    return;
-  }
-  if (throttleTimer) clearTimeout(throttleTimer);
-  throttleTimer = setTimeout(() => {
-    throttleTimer = null;
-    void runCompile();
-  }, COMPILE_MIN_INTERVAL_MS - elapsed);
-};
-
-const scheduleCompile = () => {
-  if (compileTimer) clearTimeout(compileTimer);
-  compileStatusEl.textContent = 'Waiting';
-  compileTimer = setTimeout(() => {
-    compileTimer = null;
-    requestCompile();
-  }, COMPILE_DEBOUNCE_MS);
-};
+  onEmpty: (empty) => {
+    previewEmptyEl.hidden = !empty || (isClient && project.isEmpty());
+  },
+  onCompiled: () => {
+    if (noticeKind !== 'compile') return;
+    notice.clear();
+    noticeKind = null;
+  },
+  // Only say so once per broken streak, not on every keystroke.
+  onCompileError: () => {
+    if (noticeKind === 'compile') return;
+    showNotice("The preview couldn't be built.", true, true, {
+      topic: 'previewErrors',
+      report: 'preview',
+      summary: 'The preview failed to compile.',
+    });
+    noticeKind = 'compile';
+  },
+});
+const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
   onOpen: (entry) => openFile(entry.id),
@@ -651,7 +439,7 @@ function openFile(id: string | null) {
     if (previous !== activeFileId || !entry) bindEditor(entry ? project.getText(entry.id) : null);
   }
   renderFiles();
-  lastCompiledKey = null;
+  compile.invalidate();
   scheduleCompile();
   persistAppSession();
   refreshCommands();
@@ -682,6 +470,7 @@ async function fetchMissingFiles() {
     if (entry.kind !== 'binary' || !entry.hash || blobs.has(entry.hash) || session.transfer.isTransferring(entry.hash)) continue;
     const hash = entry.hash;
     if (await blobs.get(hash)) continue;
+    const { manifest, projectId, activeProvider } = projectState;
     const saved = manifest && Object.values(manifest.files).find((file) => file.rev === hash);
     if (!isClient && projectId && saved) {
       try {
@@ -725,7 +514,7 @@ function bindProject() {
 
 blobs.onAdded(() => {
   renderFiles();
-  lastCompiledKey = null;
+  compile.invalidate();
   scheduleCompile();
   // A file a peer just sent may still need saving.
   if (!isClient && project.getName()) autosave.markDirty();
@@ -761,7 +550,7 @@ async function renameProject() {
   if (!next || !next.trim() || next.trim() === project.getName()) return;
   // The name lives in the shared doc, and the next save renames the stored project too.
   project.setName(next.trim());
-  session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
+  session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
 /** Add uploaded files to the project. Text files become editable text, others go by hash. */
@@ -840,7 +629,7 @@ zipInput.addEventListener('change', () => {
     try {
       const content = await projectFromZip(file.name, new Uint8Array(await file.arrayBuffer()), blobs);
       // The project gets made in storage on the first save.
-      await switchProject(content, activeProvider === driveProvider && driveProvider.isSignedIn() ? driveProvider : localAppProvider, null);
+      await switchProject(content, projectState.isDrive() && driveProvider.isSignedIn() ? driveProvider : localAppProvider, null);
       autosave.markDirty();
       showNotice(`Created ${projectName()} from ${file.name}`);
     } catch (error) {
@@ -923,316 +712,72 @@ const pickFromDrive = async (kind: 'project' | 'folder') => {
 
 /** Start saving to Drive. A project that isn't in Drive yet gets a new folder on the next save. */
 const switchToDrive = () => {
-  if (activeProvider !== driveProvider) useProvider(driveProvider, null);
+  if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
 
-const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
-  'app.commandPalette': () => {
-    commandPalette.toggle();
+const commands = createCommands({
+  isClient,
+  projectState,
+  themeState,
+  layout,
+  compile,
+  localAppProvider,
+  driveProvider,
+  blobs,
+  localDownload,
+  autosave,
+  session,
+  editor,
+  fileTree,
+  projectsDialog,
+  uploadDialog,
+  zipInput,
+  shareButtonEl,
+  get project() {
+    return project;
   },
-  'file.new': async () => {
-    if (isClient) return;
-    if (!window.confirm(NEW_PROJECT_CONFIRM)) return;
-    await switchProject(starterProject(''), activeProvider, null);
+  get undo() {
+    return undo;
   },
-  'file.openLocal': async () => {
-    if (isClient) return;
-    projectsDialog.open(await localAppProvider.listProjects());
+  get activeFileId() {
+    return activeFileId;
   },
-  'file.openDrive': async () => {
-    if (isClient) return;
-    if (!ensureDrivePickerConfig()) return;
-    if (!(await ensureDriveConnected())) return;
-    setStatus('Drive: Opening picker...');
-    const picked = await pickFromDrive('project');
-    if (picked === undefined) return;
-    if (!picked) {
-      setStatus('Drive: Selection canceled');
-      return;
-    }
-    // A folder is a project. A single file opens as a one-file project, like before projects.
-    await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
+  get menuBar() {
+    return menuBar;
   },
-  'file.importZip': () => {
-    if (isClient) return;
-    zipInput.click();
+  get commandPalette() {
+    return commandPalette;
   },
-  'file.newFile': () => runFileOp(() => {
-    const folder = fileTree.currentFolder();
-    const name = window.prompt(`New file${folder ? ` in ${folder}/` : ''}:`, 'chapter.tex');
-    if (!name || !name.trim()) return;
-    // New files are text, so give them a text extension if they don't have one.
-    const path = joinPath(folder, isTextPath(name.trim()) ? name.trim() : `${name.trim()}.tex`);
-    const id = project.createTextFile(path);
-    openFile(id);
-  }),
-  'file.newFolder': () => runFileOp(() => {
-    const folder = fileTree.currentFolder();
-    const name = window.prompt(`New folder${folder ? ` in ${folder}/` : ''}:`, 'figures');
-    if (name && name.trim()) project.createFolder(joinPath(folder, name.trim()));
-  }),
-  'file.upload': () => uploadDialog.open(fileTree.currentFolder()),
-  'file.download': async () => {
-    const { zip, skipped } = await projectToZip(project, blobs);
-    localDownload.download(`${projectName()}.zip`, zip, 'application/zip');
-    showNotice(skipped.length ? `Downloaded, but still waiting on: ${skipped.join(', ')}` : `Downloaded ${projectName()}.zip`, skipped.length > 0);
+  get settingsDialog() {
+    return settingsDialog;
   },
-  'file.downloadFile': async () => {
-    const entry = activeFileId ? project.get(activeFileId) : undefined;
-    if (entry) await downloadFile(entry.path);
+  get toolbar() {
+    return toolbar;
   },
-  'file.connectDrive': async () => {
-    if (isClient) return;
-    if (!(await ensureDriveConnected())) return;
-    switchToDrive();
-    autosave.enable();
-    setStatus(project.getName() ? 'Drive: Connected' : 'Drive: Connected (name the project to save)');
-    if (project.getName()) autosave.markDirty();
-  },
-  'file.disconnectDrive': async () => {
-    if (isClient || !driveProvider.isSignedIn()) return;
-    // First, point saves at this browser, so the next save keeps every edit.
-    if (activeProvider === driveProvider) useProvider(localAppProvider, null);
-    // Then let a Drive save that's already running finish before the token goes away.
-    await autosave.enqueue(() => driveProvider.disconnect());
-    showDriveAccount();
-    showNotice('Disconnected Google Drive. Edits now save in this browser.');
-    await autosave.saveNow();
-  },
-  'file.saveToDrive': async () => {
-    if (isClient) return;
-    if (!promptForProjectName()) return;
-    if (!(await ensureDriveConnected())) return;
-    switchToDrive();
-    autosave.enable();
-    setStatus('Drive: Saving...');
-    // saveNow reports its own failure reason in the status line, so only overwrite it on success.
-    if (await autosave.saveNow()) {
-      setStatus(`Drive: Saved ${projectName()}`);
-      session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
-    }
-  },
-  'file.moveDrive': async () => {
-    if (isClient) return;
-    if (!ensureDrivePickerConfig()) return;
-    if (!(await ensureDriveConnected())) return;
-    if (activeProvider !== driveProvider || !projectId) {
-      setStatus('Drive: Save the project to Drive first');
-      return;
-    }
-    setStatus('Drive: Select destination folder...');
-    const folder = await pickFromDrive('folder');
-    if (folder === undefined) return;
-    if (!folder) {
-      setStatus('Drive: Move canceled');
-      return;
-    }
-    try {
-      await driveProvider.moveProject(projectId, folder.id);
-      setStatus(`Drive: Moved to ${folder.name}`);
-    } catch (error) {
-      console.error('Drive move failed', error);
-      setStatus(describeError(error));
-    }
-  },
-  'file.renameDrive': () => renameProject(),
-  'file.saveNow': async () => {
-    if (isClient || savingPaused) return;
-    if (!promptForProjectName()) return;
-    if (activeProvider === driveProvider && !driveProvider.isSignedIn()) {
-      setStatus('Drive: Session expired. Use File > Connect Google Drive to sign in again.');
-      return;
-    }
-    autosave.enable();
-    await autosave.saveNow();
-  },
-  'file.clearLocalDocs': async () => {
-    if (isClient) return;
-    // This deletes every project saved in this browser, so make sure first.
-    const count = (await localAppProvider.listProjects()).length;
-    if (count === 0) {
-      setStatus('No local projects to clear');
-      return;
-    }
-    if (!window.confirm(`Delete all ${count} project(s) saved in this browser? This cannot be undone.`)) return;
-    await localAppProvider.clear();
-    if (activeProvider === localAppProvider) useProvider(localAppProvider, null);
-    setStatus('Local projects cleared');
-  },
-  'edit.undo': () => undo.undo(),
-  'edit.redo': () => undo.redo(),
-  'edit.cut': () => {
-    editor.focus();
-    document.execCommand('cut');
-  },
-  'edit.copy': () => {
-    editor.focus();
-    document.execCommand('copy');
-  },
-  'edit.paste': () => {
-    editor.focus();
-    document.execCommand('paste');
-  },
-  'edit.selectAll': () => {
-    editor.selectAll();
-  },
-  'view.toggleEditorTheme': () => {
-    const nextTheme: Record<ThemeMode, ThemeMode> = { dark: 'light', light: 'system', system: 'dark' };
-    applyEditorTheme(nextTheme[editorTheme]);
-    persistAppSession();
-  },
-  'view.togglePreviewTheme': () => {
-    const nextTheme: Record<ThemeMode, ThemeMode> = { dark: 'light', light: 'system', system: 'dark' };
-    applyPreviewTheme(nextTheme[previewTheme]);
-    persistAppSession();
-  },
-  'view.darkMode': () => setAllThemes('dark'),
-  'view.lightMode': () => setAllThemes('light'),
-  'view.systemTheme': () => setAllThemes('system'),
-  'view.togglePauseSaving': () => setSavingPaused(!savingPaused),
-  'view.focusEditor': () => editor.focus(),
-  'app.openSettings': () => settingsDialog.open(),
-  'file.rename': () => renameProject(),
-  'share.copyLink': () => shareButtonEl.click(),
-  'view.compileNow': () => {
-    if (compileTimer) {
-      clearTimeout(compileTimer);
-      compileTimer = null;
-    }
-    lastCompiledKey = null;
-    requestCompile();
-  },
-  'view.layoutSplit': () => {
-    layoutMode = 'split';
-    applyLayoutMode();
-    menuBar.refresh();
-  },
-  'view.layoutEditorOnly': () => {
-    layoutMode = 'editor-only';
-    applyLayoutMode();
-    menuBar.refresh();
-  },
-  'view.layoutPreviewOnly': () => {
-    layoutMode = 'preview-only';
-    applyLayoutMode();
-    menuBar.refresh();
-  },
-  'help.documentation': () => {
-    openExternal(docsUrl(docsBase, 'gettingStarted'));
-  },
-  'help.shortcuts': () => {
-    openExternal(docsUrl(docsBase, 'shortcuts'));
-  },
-  'help.tour': () => tour.start(),
-  // NOTE: these only open the GitHub form. The person reads it and submits it themselves.
-  'help.reportBug': () => {
-    openExternal(makeBugUrl());
-  },
-  'help.requestFeature': () => {
-    openExternal(featureRequestUrl());
-  },
-  'help.about': () => aboutDialog.open(),
-  // These two only show in the palette in dev builds (see devPaletteCommands).
-  'dev.openTestProject': async () => {
-    if (import.meta.env.DEV && !isClient) {
-      if (!window.confirm('Open the regression test project? The current one stays saved where it is.')) return;
-      // Load it lazily, so the test project never ends up in a production bundle.
-      const { regressionProject } = await import('./dev/regressionProject');
-      await switchProject(await regressionProject(blobs), activeProvider, null);
-    }
-  },
-  'dev.openChecklist': () => {
-    if (import.meta.env.DEV) window.open('./regression.html', '_blank', 'noreferrer');
-  },
-};
-
-// The palette's "Switch to ... mode" commands set the app, editor, and preview together.
-function setAllThemes(theme: ThemeMode) {
-  applyEditorTheme(theme);
-  applyPreviewTheme(theme);
-  persistAppSession();
-}
-
-function setSavingPaused(paused: boolean) {
-  if (isClient) return;
-  savingPaused = paused;
-  // Autosave sets the status line, and resuming saves whatever changed while paused.
-  autosave.setPaused(paused);
-  menuBar.refresh();
-  persistAppSession();
-}
-
-/**
- * Run a command and report any error it throws, then refresh the menus.
- * Every menu, palette, and shortcut path goes through here.
- */
-function executeCommand(commandId: CommandId) {
-  const report = (error: unknown) => {
-    console.error(`Command ${commandId} failed`, error);
-    showNotice(describeError(error), true);
-  };
-  // Guests can't run commands that replace the shared project, however they get triggered.
-  if (!canRunCommand(commandId, isClient)) return;
-  try {
-    const result = commandRegistry[commandId]();
-    if (result instanceof Promise) {
-      void result.catch(report).finally(refreshCommands);
-    }
-  } catch (error) {
-    report(error);
-  }
-  refreshCommands();
-}
-
-// Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
-function refreshCommands() {
-  menuBar.refresh();
-  toolbar.refresh();
-  commandPalette.setCommands(buildPaletteCommands());
-}
-
-const getCommandState = (commandId: CommandId): CommandState => {
-  switch (commandId) {
-    case 'file.new':
-    case 'file.openLocal':
-    case 'file.openDrive':
-    case 'file.importZip':
-    case 'file.connectDrive':
-    case 'file.saveToDrive':
-    case 'file.renameDrive':
-    case 'file.clearLocalDocs':
-    case 'file.rename':
-    case 'dev.openTestProject':
-      return { enabled: !isClient };
-    case 'file.moveDrive':
-      return { enabled: !isClient && activeProvider === driveProvider };
-    case 'file.disconnectDrive':
-      return { enabled: !isClient && driveProvider.isSignedIn() };
-    case 'file.newFile':
-    case 'file.newFolder':
-    case 'file.upload':
-      // Guests can add files too, once they have the host's project.
-      return { enabled: !(isClient && project.isEmpty()) };
-    case 'file.downloadFile':
-      return { enabled: Boolean(activeFileId) };
-    case 'file.saveNow':
-      return { enabled: !isClient && !savingPaused };
-    case 'edit.undo':
-      return { enabled: undo.canUndo() };
-    case 'edit.redo':
-      return { enabled: undo.canRedo() };
-    case 'view.togglePauseSaving':
-      return { enabled: !isClient, checked: savingPaused };
-    case 'view.layoutSplit':
-      return { enabled: true, checked: layoutMode === 'split' };
-    case 'view.layoutEditorOnly':
-      return { enabled: true, checked: layoutMode === 'editor-only' };
-    case 'view.layoutPreviewOnly':
-      return { enabled: true, checked: layoutMode === 'preview-only' };
-    default:
-      return { enabled: true };
-  }
-};
+  projectName,
+  setStatus,
+  showNotice,
+  persistAppSession,
+  runFileOp,
+  openFile,
+  downloadFile,
+  switchProject,
+  openStoredProject,
+  useProvider,
+  switchToDrive,
+  promptForProjectName,
+  renameProject,
+  ensureDrivePickerConfig,
+  ensureDriveConnected,
+  pickFromDrive,
+  showDriveAccount,
+  openDocs: (topic) => openExternal(docsUrl(docsBase, topic)),
+  openBugForm: () => openExternal(makeBugUrl()),
+  openFeatureForm: () => openExternal(featureRequestUrl()),
+  startTour: () => tour.start(),
+  openAbout: () => aboutDialog.open(),
+});
+const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, handleKeydown, setSavingPaused } = commands;
 
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
@@ -1245,9 +790,9 @@ const commandPalette = createCommandPalette(document.getElementById('command-pal
 
 const settingsDialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
   getState: () => ({
-    editorTheme,
-    previewTheme,
-    savingPaused,
+    editorTheme: themeState.editorTheme,
+    previewTheme: themeState.previewTheme,
+    savingPaused: projectState.savingPaused,
     canChangeSaving: !isClient,
     driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
   }),
@@ -1291,59 +836,9 @@ document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #pre
   button.addEventListener('click', () => executeCommand(button.dataset.command as CommandId));
 });
 
-/** Build the palette from the menu HTML, plus the palette-only commands in paletteCommands.ts. */
-function buildPaletteCommands(): PaletteCommand[] {
-  const fromMenus = menuBar
-    .entries()
-    .filter((entry) => entry.inPalette)
-    .map((entry) => ({
-      id: entry.commandId,
-      section: entry.section,
-      // The menu shows a checkmark for this one, but the palette has to say which way it goes.
-      label: entry.commandId === 'view.togglePauseSaving' && savingPaused ? 'Resume Saving' : entry.label,
-      shortcut: entry.shortcut,
-      description: entry.description,
-      enabled: getCommandState(entry.commandId).enabled,
-    }));
-  // Skip the theme switch for the theme that's already in use.
-  const themes = themeSwitchCommands
-    .filter(({ theme }) => !(editorTheme === theme && previewTheme === theme))
-    .map(({ id, section, label, description }) => ({ id, section, label, description, enabled: true }));
-  const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({ ...command, enabled: getCommandState(command.id).enabled }));
-  return [...fromMenus, ...themes, ...extras];
-}
 commandPalette.setCommands(buildPaletteCommands());
 
-const runCommand = (commandId: CommandId, event: KeyboardEvent) => {
-  const state = getCommandState(commandId);
-  if (!state.enabled) return;
-  event.preventDefault();
-  executeCommand(commandId);
-};
-
-window.addEventListener('keydown', (event) => {
-  // The editor already handled this key (like its own undo), so don't run it a second time.
-  if (event.defaultPrevented) return;
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
-    event.preventDefault();
-    commandPalette.toggle();
-    return;
-  }
-  if (commandPalette.isOpen()) return;
-  if (!(event.ctrlKey || event.metaKey)) return;
-  const key = event.key.toLowerCase();
-
-  if (key === 'n') return runCommand('file.new', event);
-  if (key === 'z' && event.shiftKey) return runCommand('edit.redo', event);
-  if (key === 'z') return runCommand('edit.undo', event);
-  if (key === 'y') return runCommand('edit.redo', event);
-  if (key === 'o' && event.shiftKey) return runCommand('file.openDrive', event);
-  if (key === 's' && event.shiftKey) return runCommand('file.download', event);
-  if (key === 's') return runCommand('file.saveNow', event);
-  if (key === 'o') return runCommand('file.openLocal', event);
-  if (key === 'c' && event.shiftKey) return runCommand('view.compileNow', event);
-  if (key === ',') return runCommand('app.openSettings', event);
-});
+window.addEventListener('keydown', handleKeydown);
 
 editor.onTextChanged((_text, sync = true) => {
   // Loading a different file shouldn't be undoable, so drop the stack.
@@ -1358,10 +853,10 @@ if (!isClient) {
   void localAppProvider
     .connect()
     .then(async () => {
-      if (!projectId && activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
+      if (!projectState.projectId && projectState.activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
         const mainId = project.getMainFileId();
         const mainPath = mainId ? project.get(mainId)?.path : undefined;
-        if (mainPath) projectId = await localAppProvider.findLegacyProject(mainPath);
+        if (mainPath) projectState.projectId = await localAppProvider.findLegacyProject(mainPath);
       }
       autosave.enable();
       setStatus(driveRestoreMessage ?? savingStatus());
@@ -1381,8 +876,8 @@ if (roomId) session.join(roomId);
 else if (hostRoomId) session.join(hostRoomId);
 inRoom = Boolean(roomId || hostRoomId);
 renderConnection();
-installSplitter();
-applyLayoutMode();
+layout.installSplitter();
+layout.applyLayoutMode();
 hideLoading();
 scheduleCompile();
 
