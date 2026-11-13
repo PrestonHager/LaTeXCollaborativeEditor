@@ -151,7 +151,8 @@ function chooseStyle(code: string[], at: (line: number) => SourceLine, diagnosti
   }
   style ??= resolveStyle('plain')!;
   // natbib's numbers option turns the author-year styles (plainnat and friends) into numbers.
-  if (style.label === 'authoryear' && /\\usepackage\s*\[[^\]]*\bnumbers\b[^\]]*\]\s*\{natbib\}/.test(all)) style = { ...style, label: 'numeric' };
+  const natbib = /\\usepackage\s*\[([^\]]*)\]\s*\{natbib\}/.exec(all);
+  if (style.label === 'authoryear' && natbib?.[1].split(',').some((option) => option.trim() === 'numbers')) style = { ...style, label: 'numeric' };
   return style;
 }
 

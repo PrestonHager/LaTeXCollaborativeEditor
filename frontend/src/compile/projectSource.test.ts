@@ -118,6 +118,20 @@ describe('expandProjectSource', () => {
     expect(lines[3]).toContain('[3] Ann Zed');
   });
 
+  it('handles long adversarial project text quickly', () => {
+    const spaces = ' '.repeat(50_000);
+    const started = performance.now();
+    expandProjectSource(
+      'main.tex',
+      files({
+        'main.tex': `\\usepackage[${'numbers'.repeat(5000)}${spaces}\n\\usepackage${spaces}[${spaces}]${spaces}{natbib}\n\\cite${spaces}[${spaces}\n\\cite${spaces}{knuth}\n\\bibliographystyle{plainnat}\n\\bibliography{refs}`,
+        'refs.bib': bib,
+      }),
+      [],
+    );
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it('maps biblatex style options and finds the .bib next to the main file', () => {
     const run = (options: string) =>
       expandProjectSource(

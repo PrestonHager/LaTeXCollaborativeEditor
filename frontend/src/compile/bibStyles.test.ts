@@ -122,3 +122,48 @@ describe('peer-supplied values', () => {
     expect(item.names).toBe('odd\\_key\\&xy');
   });
 });
+
+describe('long adversarial input', () => {
+  const n = 50_000;
+  const spaces = ' '.repeat(n);
+  /** Run fn and check it finishes well inside the time a quadratic pass over 50k characters would take. */
+  const fast = (fn: () => unknown) => {
+    const started = performance.now();
+    fn();
+    expect(performance.now() - started).toBeLessThan(1000);
+  };
+
+  it('parses huge or odd .bib text in linear time', () => {
+    fast(() => parseBib(`@misc{k, ${'a'.repeat(n)}}`));
+    fast(() => parseBib(`@misc{k, ${'a = b, '.repeat(n / 6)}}`));
+    fast(() => parseBib(`@misc{k, title = {${spaces}x${spaces}}}`));
+    fast(() => parseBib(`@misc{k, title = ${'x # '.repeat(n / 4)}y}`));
+    fast(() => parseBib('@'.repeat(n) + `@misc{${spaces}`));
+  });
+
+  it('formats huge or odd fields in linear time', () => {
+    const fields: Record<string, string>[] = [
+      { pages: `1${spaces}2`, author: 'A B', title: 'T', journal: 'J' },
+      { pages: `${'- '.repeat(n / 2)}`, author: 'A B' },
+      { author: `A${spaces}B${spaces}C` },
+      { author: `A${' and'.repeat(n / 4)} B` },
+      { author: `A${spaces}andx B`, editor: `{${spaces}` },
+      { author: `${'A, '.repeat(n / 3)}B` },
+      { author: 'A B', title: `${'\\'.repeat(n)}x` },
+      { author: 'A B', title: `x${'}'.repeat(n)}`, note: `.${'}'.repeat(n)}x` },
+      { first: `${'~'.repeat(n)}` },
+    ];
+    for (const f of fields) {
+      for (const name of ['plain', 'alpha', 'ieeetr', 'apalike']) {
+        fast(() => buildBibliography([entry('article', f, `k${spaces}_`)], style(name)));
+      }
+    }
+    fast(() => biblatexStyle(`${spaces},style${spaces}=${spaces}alphabetic`));
+    expect(biblatexStyle(`${spaces},style${spaces}=${spaces}alphabetic`).name).toBe('alpha');
+  });
+
+  it('still reads names and page ranges the same way', () => {
+    expect(text('plain', entry('article', { author: 'A  One AND   B Two', title: 'T', journal: 'J', pages: '1 -  10' }))).toBe('A One and B Two. T. \\emph{J}, pages 1--10.');
+    expect(text('plain', entry('misc', { author: 'Sandy Anders and Ann Bee' }))).toBe('Sandy Anders and Ann Bee.');
+  });
+});

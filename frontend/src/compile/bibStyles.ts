@@ -6,6 +6,12 @@
 
 export type BibEntry = { key: string; type: string; fields: Record<string, string> };
 
+// Everything here reads .bib text from peers, so it uses plain loops and simple regexes that run in
+// linear time. Patterns like /\s*-+\s*/ or a regex tried at every index can take quadratic time on
+// long runs of spaces or letters.
+const isSpace = (ch: string | undefined) => ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === '\v';
+const isNameChar = (ch: string | undefined) => !!ch && /[\w-]/.test(ch);
+
 /** Read one {balanced} group starting at `from`, which must be a `{`. Returns the inside and the index after it. */
 function readGroup(text: string, from: number): [string, number] {
   let depth = 0;
@@ -45,7 +51,7 @@ function readValue(body: string, from: number, strings: Map<string, string>): [s
   let value = '';
   let j = from;
   for (;;) {
-    while (/\s/.test(body[j] ?? '')) j += 1;
+    while (isSpace(body[j])) j += 1;
     if (body[j] === '{') {
       const [inner, next] = readGroup(body, j);
       value += inner;
@@ -60,11 +66,12 @@ function readValue(body: string, from: number, strings: Map<string, string>): [s
       value += body.slice(j + 1, k);
       j = k + 1;
     } else {
-      const word = /^[^\s,#}]*/.exec(body.slice(j))![0];
+      const from = j;
+      while (j < body.length && !isSpace(body[j]) && body[j] !== ',' && body[j] !== '#' && body[j] !== '}') j += 1;
+      const word = body.slice(from, j);
       value += strings.get(word.toLowerCase()) ?? word;
-      j += word.length;
     }
-    while (/\s/.test(body[j] ?? '')) j += 1;
+    while (isSpace(body[j])) j += 1;
     if (body[j] !== '#') return [tidyValue(value.replace(/\s+/g, ' ').trim()), j];
     j += 1;
   }
@@ -73,12 +80,17 @@ function readValue(body: string, from: number, strings: Map<string, string>): [s
 /** Read `name = value` pairs out of an entry body. */
 function readFields(body: string, strings: Map<string, string>): Record<string, string> {
   const fields: Record<string, string> = {};
-  const field = /([\w-]+)\s*=\s*/g;
-  let f: RegExpExecArray | null;
-  while ((f = field.exec(body))) {
-    const [value, next] = readValue(body, field.lastIndex, strings);
-    fields[f[1].toLowerCase()] = value;
-    field.lastIndex = next;
+  let i = 0;
+  while (i < body.length) {
+    while (i < body.length && !isNameChar(body[i])) i += 1;
+    const from = i;
+    while (isNameChar(body[i])) i += 1;
+    const name = body.slice(from, i);
+    while (isSpace(body[i])) i += 1;
+    if (!name || body[i] !== '=') continue;
+    const [value, next] = readValue(body, i + 1, strings);
+    fields[name.toLowerCase()] = value;
+    i = next;
   }
   return fields;
 }
@@ -113,20 +125,43 @@ export function parseBib(text: string): BibEntry[] {
 type Name = { first: string; von: string; last: string; jr: string };
 type NameList = { names: Name[]; others: boolean };
 
-/** Split at a separator that sits outside braces. */
-function splitTop(text: string, separator: RegExp): string[] {
+/**
+ * Split at a separator that sits outside braces: a comma, a run of spaces or ~, or " and "
+ * (any case, with spaces around it). One pass, so it stays linear on any input.
+ */
+function splitTop(text: string, separator: 'comma' | 'space' | 'and'): string[] {
   const parts: string[] = [];
   let depth = 0;
   let from = 0;
   for (let i = 0; i < text.length; i += 1) {
-    if (text[i] === '{') depth += 1;
-    else if (text[i] === '}') depth -= 1;
+    const ch = text[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') depth -= 1;
     else if (depth === 0) {
-      const m = separator.exec(text.slice(i));
-      if (m && m.index === 0) {
+      let end = -1;
+      if (separator === 'comma') {
+        if (ch === ',') end = i + 1;
+      } else if (separator === 'space') {
+        if (isSpace(ch) || ch === '~') {
+          end = i;
+          while (end < text.length && (isSpace(text[end]) || text[end] === '~')) end += 1;
+        }
+      } else if (isSpace(ch)) {
+        let j = i;
+        while (isSpace(text[j])) j += 1;
+        if (text.slice(j, j + 3).toLowerCase() === 'and' && isSpace(text[j + 3])) {
+          end = j + 3;
+          while (isSpace(text[end])) end += 1;
+        } else {
+          // Not an "and", so skip the whole run of spaces at once.
+          i = j - 1;
+          continue;
+        }
+      }
+      if (end >= 0) {
         parts.push(text.slice(from, i));
-        i += m[0].length - 1;
-        from = i + 1;
+        from = end;
+        i = end - 1;
       }
     }
   }
@@ -150,12 +185,12 @@ function vonLast(words: string[]): [string, string] {
 
 /** Parse one name in any of BibTeX's three forms: First von Last, von Last, First, or von Last, Jr, First. */
 export function parseName(text: string): Name {
-  const parts = splitTop(text, /^,/);
+  const parts = splitTop(text, 'comma');
   if (parts.length >= 2) {
-    const [von, last] = vonLast(splitTop(parts[0], /^[\s~]+/));
+    const [von, last] = vonLast(splitTop(parts[0], 'space'));
     return { von, last, jr: parts.length > 2 ? parts[1] : '', first: parts[parts.length - 1] };
   }
-  const words = splitTop(text, /^[\s~]+/);
+  const words = splitTop(text, 'space');
   const vonStart = words.findIndex((word, i) => i < words.length - 1 && isLowerWord(word));
   const firstWords = vonStart < 0 ? words.slice(0, -1) : words.slice(0, vonStart);
   const [von, last] = vonLast(words.slice(firstWords.length));
@@ -163,14 +198,14 @@ export function parseName(text: string): Name {
 }
 
 function parseNames(text: string | undefined): NameList {
-  const names = text ? splitTop(text, /^\s+and\s+/i) : [];
+  const names = text ? splitTop(text, 'and') : [];
   const others = names.length > 1 && names[names.length - 1].toLowerCase() === 'others';
   return { names: (others ? names.slice(0, -1) : names).map(parseName), others };
 }
 
 /** First names to initials, so "Donald Ervin" becomes "D.~E." and "Jean-Paul" becomes "J.-P.". */
 export function initials(first: string, join = '~'): string {
-  return splitTop(first, /^[\s~]+/)
+  return splitTop(first, 'space')
     .map((word) =>
       word
         .split('-')
@@ -234,9 +269,11 @@ export function sentenceCase(title: string): string {
   for (let i = 0; i < title.length; i += 1) {
     const ch = title[i];
     if (ch === '\\') {
-      const word = /^\\(?:[A-Za-z]+|.)/.exec(title.slice(i))![0];
-      out += word;
-      i += word.length - 1;
+      // Copy a command name as is: a backslash and its letters, or a backslash and one symbol.
+      let end = i + 2;
+      if (/[A-Za-z]/.test(title[i + 1] ?? '')) while (end < title.length && /[A-Za-z]/.test(title[end])) end += 1;
+      out += title.slice(i, end);
+      i = end - 1;
       continue;
     }
     if (ch === '{') depth += 1;
@@ -264,8 +301,13 @@ function monthName(month: string | undefined, short: boolean): string {
   return short ? SHORT_MONTHS[found] : MONTHS[found];
 }
 
-/** Page ranges get an en dash, so 1-10 becomes 1--10. */
-const dashPages = (pages: string) => pages.replace(/\s*-+\s*/g, '--');
+/** Page ranges get an en dash, so 1-10 and 1 - 10 become 1--10. */
+const dashPages = (pages: string) =>
+  pages
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.trim())
+    .join('--');
 const multiplePages = (pages: string) => /[-,+]/.test(pages);
 
 // ---- Styles ----
@@ -304,8 +346,14 @@ export function resolveStyle(name: string): BibStyle | null {
 
 /** biblatex's style= option, mapped to the closest BibTeX style. */
 export function biblatexStyle(options: string): BibStyle {
-  const option = (key: string) => new RegExp(`(?:^|,)\\s*${key}\\s*=\\s*([\\w-]+)`).exec(options)?.[1] ?? '';
-  const style = option('(?:bib)?style') || 'numeric';
+  const values = new Map<string, string>();
+  for (const pair of options.split(',')) {
+    const eq = pair.indexOf('=');
+    const key = (eq < 0 ? pair : pair.slice(0, eq)).trim().toLowerCase();
+    if (!values.has(key)) values.set(key, eq < 0 ? '' : pair.slice(eq + 1).trim());
+  }
+  const option = (key: string) => values.get(key) ?? '';
+  const style = option('style') || option('bibstyle') || 'numeric';
   const base = style.startsWith('alphabetic') ? 'alpha' : style.startsWith('authoryear') || style === 'apa' ? 'apalike' : style.startsWith('ieee') ? 'ieeetr' : 'plain';
   const resolved = resolveStyle(base)!;
   return option('sorting') === 'none' ? { ...resolved, order: 'cited' } : resolved;
@@ -314,8 +362,15 @@ export function biblatexStyle(options: string): BibStyle {
 /** How a cited entry shows in the text and in the list. */
 export type BibItem = { key: string; label: string; names: string; year: string; text: string };
 
-/** A cite key shown as text, for entries with no author: LaTeX specials escaped, no line breaks. */
-const keyText = (key: string) => key.replace(/[\s\\{}~^]+/g, '').replace(/[&%$#_]/g, '\\$&');
+/** A cite key shown as text, for entries with no author: LaTeX specials escaped or dropped, no line breaks. */
+function keyText(key: string): string {
+  let out = '';
+  for (const ch of key) {
+    if (isSpace(ch) || '\\{}~^'.includes(ch)) continue;
+    out += '&%$#_'.includes(ch) ? `\\${ch}` : ch;
+  }
+  return out;
+}
 
 /** Who an entry belongs to for sorting and labels: its authors, or else its editors. */
 const people = (entry: BibEntry) => parseNames(entry.fields.author ?? entry.fields.editor);
@@ -345,7 +400,12 @@ function alphaLabel(entry: BibEntry): string {
 const commas = (...pieces: (string | undefined | false)[]) => pieces.filter(Boolean).join(', ');
 const emph = (text: string | undefined) => (text ? `\\emph{${text}}` : '');
 /** End a block with a period, unless it already ends in . ? or !. */
-const sentence = (text: string) => (!text ? '' : /[.?!]\}*$/.test(text) ? text : `${text}.`);
+function sentence(text: string): string {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '}') end -= 1;
+  if (!text) return '';
+  return end > 0 && '.?!'.includes(text[end - 1]) ? text : `${text}.`;
+}
 
 const BOOK_LIKE = new Set(['book', 'inbook', 'booklet', 'manual', 'phdthesis', 'proceedings']);
 
