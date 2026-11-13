@@ -46,7 +46,16 @@ const SAMPLES: Record<string, string> = {
 \begin{center}\textsc{Centered}\end{center}
 \begin{quote}A quote\end{quote} \\ \noindent\textit{last}
 \end{document}`,
-  'verbatim and boxes': String.raw`\documentclass{article}
+  // Issue #82: symbols Computer Modern lacks, and \not built from KaTeX's private-use slash.
+  'math symbols': String.raw`\documentclass{article}
+\usepackage{amsmath}
+\begin{document}
+$\infty$, $a \neq b$, $a \ne b$, $x \notin A$, $\not\equiv$, $\leq \geq \in \ni \forall \exists$
+$\partial \nabla \pm \mp \hbar \ell \emptyset \approx \equiv \subseteq \cup \cap$
+$\to \Rightarrow \iff \langle x \rangle \cdot \times \sum_{k=1}^\infty \int f$
+$\mathbf{v} \mathit{x} \mathsf{S} \mathrm{d}$ and text: < > \& ~
+\end{document}`,
+  'verbatim and boxes':String.raw`\documentclass{article}
 \begin{document}
 \verb|x&y| \begin{description}\item[A] b\end{description}
 \begin{flushright}r\end{flushright} \fbox{box} \hspace{1cm} \underline{u} \LaTeX
@@ -63,6 +72,12 @@ describe('miniDom with LaTeX.js', () => {
       expect(canonical(mini.html!)).toBe(canonical(real.html!));
     });
   }
+
+  it('keeps math symbol characters, including KaTeX private-use ones', () => {
+    const mini = withMiniDom(() => latexSourceToPreviewHtml(SAMPLES['math symbols']));
+    // ∞, ≠ (MathML), the \not slash KaTeX draws \neq with, and ≤.
+    for (const char of ['∞', '≠', '', '≤']) expect(mini.html).toContain(char);
+  });
 
   it('puts project images in without a real DOM', () => {
     const texts = new Map([['main.tex', '\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n\\includegraphics{a.png}\n\\end{document}']]);

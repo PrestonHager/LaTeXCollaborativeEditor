@@ -1,6 +1,7 @@
 import { HtmlGenerator, parse } from 'latex.js';
 import { adaptLatexSource } from './latexJsAdapt';
 import { expandProjectSource } from './projectSource';
+import { addKatexFontFallbacks } from './katexFonts';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** LaTeX.js static assets (CSS, fonts, JS) — same version as the `latex.js` npm dependency. */
@@ -77,6 +78,7 @@ function typeset(source: string): { doc: Document | null; errors: EditorDiagnost
     const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
+    addKatexFontFallbacks(doc);
     addChangesNote(doc, adapted.changes);
     return { doc, errors: [], changes: adapted.changes };
   } catch (err) {
