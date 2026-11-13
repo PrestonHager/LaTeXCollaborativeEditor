@@ -109,6 +109,7 @@ LaTeX preview channel
 - The preview reads the whole project, starting at the main file. `\input` and `\include` files are inlined, `\includegraphics` images go in as data URLs, and `\bibliography` gets a simple numbered reference list built from the .bib files.
 - PDF and EPS figures can't be shown by LaTeX.js, so the preview puts a note in their place.
 - Assets (CSS/fonts/scripts) may be loaded from public CDNs; document LaTeX content is never sent to a server for preview.
+- User settings (themes, layout, keybinds, see `frontend/src/state/settings.ts`) are never part of any peer message. A room only shares the project; each person, host or guest, keeps their own settings in their browser.
 
 ## Sequence diagrams
 

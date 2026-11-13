@@ -5,12 +5,15 @@ type LayoutElements = {
   splitter: HTMLElement;
   editorPane: HTMLElement;
   previewPane: HTMLElement;
+  /** Called after the person changes the mode or lets go of the splitter, so it can be saved. */
+  onChange?: (state: { mode: LayoutMode; splitRatio: number }) => void;
 };
 
 /** Show the editor, the preview, or both with a draggable splitter between them. */
-export function createLayout({ splitRoot, splitter, editorPane, previewPane }: LayoutElements) {
+export function createLayout({ splitRoot, splitter, editorPane, previewPane, onChange }: LayoutElements) {
   let layoutMode: LayoutMode = 'split';
   let splitRatio = 0.5;
+  const changed = () => onChange?.({ mode: layoutMode, splitRatio });
 
   const applyLayoutMode = () => {
     splitRoot.classList.toggle('is-editor-only', layoutMode === 'editor-only');
@@ -37,6 +40,7 @@ export function createLayout({ splitRoot, splitter, editorPane, previewPane }: L
       applyLayoutMode();
     };
     const onUp = () => {
+      if (dragging) changed();
       dragging = false;
       document.body.classList.remove('is-resizing');
     };
@@ -57,6 +61,7 @@ export function createLayout({ splitRoot, splitter, editorPane, previewPane }: L
       event.preventDefault();
       splitRatio = Math.max(0.2, Math.min(0.8, splitRatio + step));
       applyLayoutMode();
+      changed();
     });
   };
 
@@ -64,8 +69,19 @@ export function createLayout({ splitRoot, splitter, editorPane, previewPane }: L
     get mode() {
       return layoutMode;
     },
+    get splitRatio() {
+      return splitRatio;
+    },
     setMode(mode: LayoutMode) {
+      if (mode === layoutMode) return applyLayoutMode();
       layoutMode = mode;
+      applyLayoutMode();
+      changed();
+    },
+    /** Put back a saved layout without reporting it as a change. */
+    restore(state: { mode: LayoutMode; splitRatio: number }) {
+      layoutMode = state.mode;
+      splitRatio = Math.max(0.2, Math.min(0.8, state.splitRatio));
       applyLayoutMode();
     },
     applyLayoutMode,

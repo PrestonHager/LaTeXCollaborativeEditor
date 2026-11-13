@@ -1,25 +1,7 @@
 import type { CommandId } from './menuBar';
 
-export const TOUR_SEEN_KEY = 'latex-editor.tour-seen';
-
-type KeyValueStore = Pick<Storage, 'getItem' | 'setItem'>;
-
-/** Check if the first-run tour was already shown. Storage can throw (private mode), so treat that as seen. */
-export function hasSeenTour(store: KeyValueStore | undefined): boolean {
-  try {
-    return store?.getItem(TOUR_SEEN_KEY) === '1';
-  } catch {
-    return true;
-  }
-}
-
-export function markTourSeen(store: KeyValueStore | undefined) {
-  try {
-    store?.setItem(TOUR_SEEN_KEY, '1');
-  } catch {
-    // Nothing to do, the tour just shows again next time.
-  }
-}
+/** Whether this person has seen the tour. Settings keeps the flag (see state/settings.ts). */
+export type TourSeen = { has: () => boolean; mark: () => void };
 
 type Box = { top: number; left: number; right: number; bottom: number };
 type Size = { width: number; height: number };
@@ -87,7 +69,8 @@ export function fillShortcuts(text: string, shortcutLabel?: (commandId: CommandI
 }
 
 type TourOptions = {
-  store?: KeyValueStore;
+  /** With none, the tour counts as unseen every time. */
+  seen?: TourSeen;
   /** The keybind label for a command, to fill `{shortcut:<command id>}` in the step text. */
   shortcutLabel?: (commandId: CommandId) => string | undefined;
   /** Called when the tour closes, whether it finished or got skipped. */
@@ -153,7 +136,7 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
     card.hidden = true;
     highlighted?.classList.remove('tour-highlight');
     highlighted = null;
-    markTourSeen(options.store);
+    options.seen?.mark();
     // Put focus back where it was, so keyboard users don't end up at the top of the page.
     if (returnFocus?.isConnected) returnFocus.focus();
     returnFocus = null;
@@ -189,7 +172,7 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
     },
     /** Start the tour only if this browser hasn't seen it. */
     startIfNew() {
-      if (hasSeenTour(options.store)) return false;
+      if (options.seen?.has()) return false;
       this.start();
       return true;
     },

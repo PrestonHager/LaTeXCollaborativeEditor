@@ -16,40 +16,14 @@ export type KeybindSettings = { rules: KeybindRule[]; disabled: string[] };
 /** One keybind as Settings lists it, built-in or added, on or off. */
 export type Binding = Shortcut & { source: 'builtin' | 'rule'; off: boolean; ruleIndex?: number };
 
-export const KEYBINDS_KEY = 'latex-editor.keybinds';
 export const emptyKeybindSettings = (): KeybindSettings => ({ rules: [], disabled: [] });
 
 /** How a turned-off built-in keybind is stored, so turning off Ctrl+Y for Redo leaves Ctrl+Shift+Z alone. */
 export const builtinKey = (shortcut: Pick<Shortcut, 'id' | 'keybind'>) => `${shortcut.id} ${shortcut.keybind}`;
 
-type KeyValueStore = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
-
-/**
- * Read the keybind settings from this browser. They're kept apart from the project and the
- * app session. Storage can throw (private mode) or hold junk, so fall back to the defaults.
- */
-export function readKeybindSettings(store: KeyValueStore | undefined, isCommand: (id: string) => boolean = () => true): KeybindSettings {
-  try {
-    const raw = store?.getItem(KEYBINDS_KEY);
-    if (!raw) return emptyKeybindSettings();
-    const parsed = JSON.parse(raw) as Partial<KeybindSettings>;
-    const rules = (Array.isArray(parsed.rules) ? parsed.rules : [])
-      .filter((rule): rule is KeybindRule => typeof rule?.id === 'string' && typeof rule.keybind === 'string' && isCommand(rule.id))
-      .map((rule) => ({ id: rule.id, keybind: rule.keybind, ...(rule.off ? { off: true } : {}) }));
-    const disabled = (Array.isArray(parsed.disabled) ? parsed.disabled : []).filter((key): key is string => typeof key === 'string');
-    return { rules, disabled };
-  } catch {
-    return emptyKeybindSettings();
-  }
-}
-
-export function writeKeybindSettings(store: KeyValueStore | undefined, settings: KeybindSettings) {
-  try {
-    if (!settings.rules.length && !settings.disabled.length) store?.removeItem(KEYBINDS_KEY);
-    else store?.setItem(KEYBINDS_KEY, JSON.stringify(settings));
-  } catch {
-    // Nothing to do, the keybinds still apply until the page reloads.
-  }
+/** Drop rules for commands this build doesn't have. Settings (state/settings.ts) stores the rest. */
+export function keepKnownCommands(settings: KeybindSettings, isCommand: (id: string) => boolean): KeybindSettings {
+  return { rules: settings.rules.filter((rule) => isCommand(rule.id)), disabled: settings.disabled.slice() };
 }
 
 /**

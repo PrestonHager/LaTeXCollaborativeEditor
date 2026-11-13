@@ -3,36 +3,12 @@ import {
   builtinKey,
   createKeymap,
   emptyKeybindSettings,
-  KEYBINDS_KEY,
+  keepKnownCommands,
   pickWinner,
-  readKeybindSettings,
   toggleBinding,
-  writeKeybindSettings,
   type KeybindSettings,
 } from './keymap';
 import { shortcuts } from './commands';
-
-const memoryStore = () => {
-  const data = new Map<string, string>();
-  return {
-    data,
-    getItem: (key: string) => data.get(key) ?? null,
-    setItem: (key: string, value: string) => void data.set(key, value),
-    removeItem: (key: string) => void data.delete(key),
-  };
-};
-
-const brokenStore = {
-  getItem: () => {
-    throw new Error('SecurityError');
-  },
-  setItem: () => {
-    throw new Error('QuotaExceededError');
-  },
-  removeItem: () => {
-    throw new Error('SecurityError');
-  },
-};
 
 const withSettings = (settings: KeybindSettings, platform: 'mac' | 'other' = 'other') => createKeymap(shortcuts, () => platform, settings);
 
@@ -154,31 +130,10 @@ describe('editing keybind settings', () => {
   });
 });
 
-describe('keybind storage', () => {
-  it('saves and reads the settings, and clears the key once they are back to defaults', () => {
-    const store = memoryStore();
-    const settings = { rules: [{ id: 'file.newFile' as const, keybind: 'Alt+N', off: true }], disabled: ['edit.redo Mod+Y'] };
-    writeKeybindSettings(store, settings);
-    expect(readKeybindSettings(store)).toEqual(settings);
-    writeKeybindSettings(store, emptyKeybindSettings());
-    expect(store.data.has(KEYBINDS_KEY)).toBe(false);
-    expect(readKeybindSettings(store)).toEqual(emptyKeybindSettings());
-  });
-
-  it('drops junk and commands that no longer exist', () => {
-    const store = memoryStore();
-    store.setItem(KEYBINDS_KEY, JSON.stringify({ rules: [{ id: 'file.newFile', keybind: 'Alt+N' }, { id: 'gone.command', keybind: 'Alt+G' }, { id: 3 }, null], disabled: ['ok', 4] }));
-    expect(readKeybindSettings(store, (id) => id !== 'gone.command')).toEqual({ rules: [{ id: 'file.newFile', keybind: 'Alt+N' }], disabled: ['ok'] });
-    store.setItem(KEYBINDS_KEY, '{not json');
-    expect(readKeybindSettings(store)).toEqual(emptyKeybindSettings());
-    store.setItem(KEYBINDS_KEY, JSON.stringify({ rules: 'nope' }));
-    expect(readKeybindSettings(store)).toEqual(emptyKeybindSettings());
-  });
-
-  it('falls back to the defaults when storage throws or is missing', () => {
-    expect(readKeybindSettings(brokenStore)).toEqual(emptyKeybindSettings());
-    expect(readKeybindSettings(undefined)).toEqual(emptyKeybindSettings());
-    expect(() => writeKeybindSettings(brokenStore, { rules: [{ id: 'file.newFile', keybind: 'Alt+N' }], disabled: [] })).not.toThrow();
-    expect(() => writeKeybindSettings(brokenStore, emptyKeybindSettings())).not.toThrow();
+describe('keepKnownCommands', () => {
+  it('drops rules for commands that no longer exist', () => {
+    const settings = { rules: [{ id: 'file.newFile' as const, keybind: 'Alt+N' }, { id: 'gone.command' as never, keybind: 'Alt+G' }], disabled: ['ok'] };
+    expect(keepKnownCommands(settings, (id) => id !== 'gone.command')).toEqual({ rules: [{ id: 'file.newFile', keybind: 'Alt+N' }], disabled: ['ok'] });
+    expect(keepKnownCommands(emptyKeybindSettings(), () => true)).toEqual(emptyKeybindSettings());
   });
 });

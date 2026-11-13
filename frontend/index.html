@@ -316,6 +316,28 @@
             <input type="text" class="keybind-search" placeholder="Search commands or keys" enterkeyhint="search" autocomplete="off" aria-label="Search keyboard shortcuts" data-keybind-search />
             <ul class="keybind-list" aria-label="Commands and their keyboard shortcuts" data-keybind-list></ul>
           </section>
+          <!-- Your settings: export, import and reset. settingsDialog.ts wires these to state/settings.ts. -->
+          <section class="settings-data" aria-labelledby="settings-data-title">
+            <h3 id="settings-data-title" class="label">Your settings</h3>
+            <p class="muted settings-hint">Themes, layout and shortcuts are saved in this browser and shared with its other tabs. They are never sent to people in your room.</p>
+            <p id="settings-storage-note" class="settings-hint" hidden>This browser is blocking storage, so settings only last until you close this tab. Export them to keep a copy.</p>
+            <div class="settings-actions">
+              <button id="settings-export" type="button" class="btn" data-variant="outline" data-size="sm">Export settings</button>
+              <button id="settings-import" type="button" class="btn" data-variant="outline" data-size="sm">Import settings</button>
+              <input id="settings-import-file" type="file" accept="application/json,.json" hidden />
+            </div>
+            <div class="settings-actions">
+              <select id="settings-reset-scope" class="select" aria-label="What to reset">
+                <option value="all">All settings</option>
+                <option value="appearance">Themes</option>
+                <option value="layout">Layout</option>
+                <option value="keybinds">Keyboard shortcuts</option>
+                <option value="tour">Tour (show it again)</option>
+              </select>
+              <button id="settings-reset" type="button" class="btn" data-variant="outline" data-size="sm">Reset to defaults</button>
+            </div>
+            <p id="settings-data-status" class="muted settings-hint" role="status" aria-live="polite"></p>
+          </section>
         </section>
         <footer>
           <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local projects</button>

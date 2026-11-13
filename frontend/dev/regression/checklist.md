@@ -169,6 +169,15 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] The × on Redo's Ctrl+Y crosses it out and Ctrl+Y stops redoing. Turn on brings it back.
 - [ ] Giving Ctrl+] to a command warns that the editor uses it. In the editor Ctrl+] still indents, and outside it runs the command.
 - [ ] Added keybinds are still there after a reload, and Reset to defaults puts everything back.
+- [ ] Upgrading keeps your settings: with keybinds, tour seen and themes saved by the previous version, the new version shows the same themes and keybinds and no tour. DevTools > Application > Local Storage then has `latex-editor.settings`, and `latex-editor.keybinds` and `latex-editor.tour-seen` are gone.
+- [ ] Open the app in two tabs. Changing the theme, a keybind or the layout (View > Editor Only, or dragging the splitter) in one shows up in the other right away, Settings included if it's open.
+- [ ] The layout mode and splitter position survive a reload.
+- [ ] As a guest (a `?room=` link), change the theme and reload: the theme stays. The host's theme doesn't change.
+- [ ] Settings > Export settings downloads `latex-editor-settings-YYYY-MM-DD.json`. In a private window, Import settings with that file brings back the themes, layout and keybinds, and the status line says how many were imported.
+- [ ] Importing a file that isn't a settings file (any other `.json`, or a `.tex`) says so and changes nothing. A settings file with an unknown key imports the rest and names what it skipped.
+- [ ] Settings > Reset to defaults turns red and says Click again to reset, and resets nothing until the second click. It lets go after a few seconds or when you pick another section. Resetting Themes leaves keybinds alone. Resetting Tour shows the tour again on the next load.
+- [ ] With site data blocked for the page, Settings shows the note that settings only last for this tab, and changing them still works.
+- [ ] The Settings dialog scrolls inside when the window is short, so Done and the footer stay on screen, also at phone width.
 - [ ] On Windows and Linux every shortcut label (menus, toolbar tooltips, palette, first tour step) says Ctrl, and the Windows key plus P does not open the palette.
 - [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
