@@ -32,6 +32,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] References: `\ref` in the Text section shows 1.5, not `??`.
 - [ ] Math: inline math, the integral and the sum are typeset, with limits above and below the sum.
 - [ ] Math: Greek letters, symbols and the matrix render.
+- [ ] Math: `\infty`, `\neq`, `\notin` and the other symbols in the "Computer Modern lacks" line use a serif math font, and the `\neq`-style slashes cross their symbol.
 - [ ] `\input`: the Text and Math sections show up, and the commented-out `\input` causes no error.
 - [ ] `\include`: the Figures section shows up.
 - [ ] Images: the four-color image shows full size, with a caption under it.
