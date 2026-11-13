@@ -18,6 +18,8 @@ export type ConfirmOptions = {
   cancelLabel?: string;
   /** Red confirm button, and focus starts on Cancel so Enter doesn't do the risky thing. */
   destructive?: boolean;
+  /** Start focus on Cancel without the red button, for confirms that catch a misclick. */
+  focusCancel?: boolean;
 };
 
 export type PromptOptions = {
@@ -136,7 +138,7 @@ export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
   return run(false, (finish) => {
     cancel.addEventListener('click', () => finish(false));
     ok.addEventListener('click', () => finish(true));
-    (options.destructive ? cancel : ok).focus();
+    (options.destructive || options.focusCancel ? cancel : ok).focus();
   });
 }
 

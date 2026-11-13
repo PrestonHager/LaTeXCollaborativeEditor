@@ -2,7 +2,8 @@
  * Checks that dist/ has every page the app links to and none of the dev-only pages.
  * Vite only builds index.html unless vite.config.ts lists more inputs, which is how
  * the Privacy and ToS links ended up 404ing on the live site (issue #110).
- * Also checks dist/version.json, which the update check polls (issues #120, #121).
+ * Also checks dist/version.json, which the update check polls (issues #120, #121), and the web app
+ * manifest that makes the app installable (its paths must be relative, so it works under any base path).
  * Fails the build (exit 1) when something is wrong.
  * Run from frontend/ after a build: node scripts/check-build-pages.mjs
  */
@@ -61,6 +62,33 @@ export function checkChangelogFile(text) {
   return { ok: true, errors: [] };
 }
 
+export const MANIFEST_FILE = 'manifest.webmanifest';
+
+/**
+ * Check dist/manifest.webmanifest (or null when missing). Browsers want a name, a start URL, and 192px and 512px icons
+ * to offer Install. Paths have to be relative so the app installs from any folder. `exists` checks a path in dist/.
+ */
+export function checkManifestFile(text, exists = () => true) {
+  if (text === null) return { ok: false, errors: [`dist/${MANIFEST_FILE} is missing. It lives in public/.`] };
+  let manifest;
+  try {
+    manifest = JSON.parse(text);
+  } catch {
+    return { ok: false, errors: [`dist/${MANIFEST_FILE} is not valid JSON.`] };
+  }
+  const errors = [];
+  if (!manifest.name || !manifest.short_name) errors.push('it needs a name and a short_name');
+  if (!['standalone', 'minimal-ui', 'fullscreen'].includes(manifest.display)) errors.push('display has to open its own window (standalone)');
+  const paths = [manifest.start_url, manifest.scope, ...(manifest.icons ?? []).map((icon) => icon.src)].filter((path) => path !== undefined);
+  for (const path of paths) if (/^(\/|[a-z]+:)/i.test(path)) errors.push(`${path} has to be relative, so the app works under any base path`);
+  const icons = manifest.icons ?? [];
+  for (const size of ['192x192', '512x512']) {
+    if (!icons.some((icon) => icon.sizes === size && icon.type === 'image/png')) errors.push(`it needs a ${size} PNG icon`);
+  }
+  for (const icon of icons) if (!exists(icon.src)) errors.push(`icon ${icon.src} is missing from dist/`);
+  return { ok: errors.length === 0, errors: errors.map((problem) => `dist/${MANIFEST_FILE}: ${problem}.`) };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!existsSync(DIST_DIR)) {
     console.error('No dist folder. Run the build first.');
@@ -72,10 +100,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const versionResult = checkVersionFile(existsSync(versionPath) ? readFileSync(versionPath, 'utf8') : null, version);
   const changelogPath = join(DIST_DIR, CHANGELOG_FILE);
   const changelogResult = checkChangelogFile(existsSync(changelogPath) ? readFileSync(changelogPath, 'utf8') : null);
-  const errors = [...result.errors, ...versionResult.errors, ...changelogResult.errors];
+  const manifestPath = join(DIST_DIR, MANIFEST_FILE);
+  const manifestResult = checkManifestFile(existsSync(manifestPath) ? readFileSync(manifestPath, 'utf8') : null, (path) => existsSync(join(DIST_DIR, path)));
+  const errors = [...result.errors, ...versionResult.errors, ...changelogResult.errors, ...manifestResult.errors];
   if (errors.length > 0) {
     errors.forEach((line) => console.error(`ERROR: ${line}`));
     process.exit(1);
   }
-  console.log(`Build pages OK: ${REQUIRED_PAGES.join(', ')}, ${VERSION_FILE}, ${CHANGELOG_FILE}`);
+  console.log(`Build pages OK: ${REQUIRED_PAGES.join(', ')}, ${VERSION_FILE}, ${CHANGELOG_FILE}, ${MANIFEST_FILE}`);
 }

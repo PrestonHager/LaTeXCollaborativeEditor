@@ -86,7 +86,7 @@ More in [Projects and files](projects.md#downloading).
 
 ## Export
 
-**File > Export…** (**Ctrl+Shift+E**, or the toolbar button) saves the project in another format.
+**File > Export…** (**Ctrl+Shift+E**, or **Alt+Shift+E**, or the toolbar button) saves the project in another format.
 Guests can export too, since it only reads the project.
 
 ![The Export dialog with HTML picked](assets/screenshots/export-light.png#only-light)
@@ -227,7 +227,7 @@ If someone changed the file in the meantime (in the Drive web UI, on another dev
 
 ## New project
 
-**File > New Project** (**Ctrl+Shift+N**) starts a fresh project with a starter `main.tex`, after you confirm.
+**File > New Project** (**Ctrl+Shift+N**, or **Alt+Shift+N** in a browser tab) starts a fresh project with a starter `main.tex`, after you confirm.
 The project you were on stays saved where it was.
 New projects save to wherever you were saving before, browser or Drive.
 If you're sharing, the new project replaces the old one for everyone in the room.

@@ -87,6 +87,11 @@ type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'alt
 /** The key part of a key press, the same whatever modifiers changed the character it types. */
 function eventKey(event: KeyLike): string | null {
   const { key, code } = event;
+  // On a Mac, ⌥⌘N can come in as a dead key (⌥N starts ñ). With ⌘ or ⌃ held it isn't typing, so use the key's position.
+  if (key === 'Dead' && (event.metaKey || event.ctrlKey)) {
+    const letter = /^Key([A-Z])$/.exec(code ?? '');
+    if (letter) return letter[1];
+  }
   if (!key || key === 'Unidentified' || key === 'Dead' || ['Control', 'Meta', 'Alt', 'Shift', 'AltGraph', 'OS'].includes(key)) {
     return null;
   }

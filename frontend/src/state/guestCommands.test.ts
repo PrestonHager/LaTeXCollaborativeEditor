@@ -29,6 +29,7 @@ describe('guest commands', () => {
         'This project stays saved where it is. To add one file instead, cancel and use File > New File.',
       confirmLabel: 'Start new project',
       destructive: true,
+      focusCancel: true,
     });
   });
 
@@ -44,7 +45,9 @@ describe('guest commands', () => {
 
   it('still says New Project replaces the whole project when nobody else is in the room', () => {
     const dialog = replaceProjectDialog('new', false);
-    expect(dialog).toMatchObject({ title: 'Replace the whole project?', confirmLabel: 'Start new project', destructive: false });
+    // Not red with nobody else in the room, but focus still starts on Cancel, so Ctrl+Shift+N then Enter does nothing.
+    expect(dialog).toMatchObject({ title: 'Replace the whole project?', confirmLabel: 'Start new project', destructive: false, focusCancel: true });
+    expect(replaceProjectDialog('open', false)).not.toHaveProperty('focusCancel');
     expect(dialog.message).toMatch(/^New Project closes every file and folder here and starts a new project with only main\.tex\./);
     expect(dialog.message).toContain('use File > New File');
     expect(dialog.message).not.toContain('everyone in the room');

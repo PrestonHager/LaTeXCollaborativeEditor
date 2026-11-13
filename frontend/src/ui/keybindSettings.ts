@@ -1,5 +1,5 @@
 import type { CommandId } from './menuBar';
-import { addRule, pickWinner, toggleBinding, type Binding, type Keymap, type KeybindSettings, type Shortcut } from '../app/keymap';
+import { addRule, pickWinner, toggleBinding, type Binding, type Keymap, type KeybindSettings } from '../app/keymap';
 import { formatKeybind, isAssignableKeybind, keybindFromEvent } from './modifierShortcutLabels';
 import { scoreCommand } from './commandPalette';
 import { icon, keybindIcons } from './icons';
@@ -10,7 +10,8 @@ export type KeybindCommand = { id: CommandId; label: string; section: string; de
 
 type KeybindSettingsOptions = {
   keymap: Keymap;
-  builtins: readonly Shortcut[];
+  /** Where the keys are for, like "Chrome in a browser tab", since browsers keep different keys. */
+  contextLabel?: () => string;
   /** Every command, in menu order. */
   commands: () => KeybindCommand[];
   /** The editor's own keys, which it handles first while you type in it. */
@@ -20,9 +21,6 @@ type KeybindSettingsOptions = {
   /** Ask before Reset all. Defaults to the in-app confirm dialog; tests pass their own answer. */
   confirm?: (options: ConfirmOptions) => boolean | Promise<boolean>;
 };
-
-// Keys the browser keeps for itself (new tab, close tab, DevTools), whatever the page asks.
-const BROWSER_KEYS = new Set(['Mod+N', 'Mod+T', 'Mod+W', 'Mod+Q', 'Mod+Shift+N', 'Mod+Shift+T', 'Mod+Shift+W', 'Mod+Shift+C', 'Mod+Shift+I', 'Mod+Shift+J', 'F12']);
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') => {
   const node = document.createElement(tag);
@@ -41,6 +39,7 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
   const search = root.querySelector<HTMLInputElement>('[data-keybind-search]')!;
   const list = root.querySelector<HTMLElement>('[data-keybind-list]')!;
   const resetButton = root.querySelector<HTMLButtonElement>('[data-keybind-reset]')!;
+  const context = root.querySelector<HTMLElement>('[data-keybind-context]');
   // The command whose new keybind is being recorded, and what to tell the person about their last try.
   let recording: CommandId | null = null;
   let recordingHint = '';
@@ -118,10 +117,22 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
     if (binding.source === 'rule' && options.editorKeybinds.has(binding.keybind)) {
       note(`The editor uses ${key} too, so while you type in it, the editor's key comes first.`);
     }
-    if (binding.source === 'rule' && BROWSER_KEYS.has(binding.keybind)) {
-      note(`Your browser may keep ${key} for itself.`);
-    }
+    if (binding.reserved) note(reservedNote(command, binding));
     return out;
+  };
+
+  /**
+   * Say the browser or OS keeps a key here, like "Chrome uses Ctrl+N to open a new window, so Alt+N is used here instead.
+   * Ctrl+N works when the app is installed." For a built-in key with a fallback, name the fallback.
+   */
+  const reservedNote = (command: KeybindCommand, binding: Binding) => {
+    const kept = binding.reserved!;
+    const key = label(binding.keybind);
+    const spare = binding.source === 'builtin' ? keymap.bindings().find((b) => b.id === command.id && b.fallbackFor === binding.keybind) : undefined;
+    const uses = `${kept.by} uses ${key} ${kept.what}`;
+    const where = kept.keptInAppWindow ? '' : ` ${key} works when the app is installed or in its own window.`;
+    if (spare) return `${uses}, so ${label(spare.keybind)} is used here instead.${where}`;
+    return `${uses}, so it may not reach the editor here.${where}`;
   };
 
   /** The button that records a new keybind: press the keys, or Escape to stop. */
@@ -163,7 +174,9 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
       }
       recording = null;
       recordingHint = '';
-      apply(addRule(keymap.settings(), command.id, keybind, options.builtins), `[data-command="${command.id}"] [data-keybind-add]`);
+      // The built-in keys in effect here, fallbacks included, so adding one back turns it on.
+      const builtins = keymap.bindings().filter((binding) => binding.source === 'builtin');
+      apply(addRule(keymap.settings(), command.id, keybind, builtins), `[data-command="${command.id}"] [data-keybind-add]`);
     });
     // Clicking or tabbing somewhere else stops recording too. Drawing the list again isn't "somewhere else".
     // Wait until focus has landed, then draw the list again and find the button focus went to.
@@ -222,6 +235,7 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
       const shortcut = keymap.bindings().filter((binding) => binding.id === command.id).map((binding) => label(binding.keybind)).join(' ');
       return scoreCommand(query, { ...command, shortcut, enabled: true }) !== null;
     });
+    if (context && options.contextLabel) context.textContent = `Keys shown are for ${options.contextLabel()}.`;
     rendering = true;
     try {
       list.replaceChildren(...commands.map(row));

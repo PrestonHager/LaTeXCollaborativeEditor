@@ -22,6 +22,9 @@
     />
     <title>Collaborative LaTeX Editor</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <!-- Lets browsers install the app in its own window, where Ctrl+N and the other browser keys reach it (docs/keyboard-shortcuts.md). -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   </head>
   <body>
     <!--
@@ -325,7 +328,7 @@
               <h3 id="settings-keybinds-title" class="label">Keyboard shortcuts</h3>
               <button type="button" class="btn" data-variant="outline" data-size="sm" data-keybind-reset>Reset to defaults</button>
             </div>
-            <p class="muted settings-hint">Press <strong>+</strong> next to a command, then press the keys you want. Your shortcuts are saved in this browser only.</p>
+            <p class="muted settings-hint">Press <strong>+</strong> next to a command, then press the keys you want. Shortcuts are saved in this browser profile only, so changing one here doesn't change it in your other browsers. <span data-keybind-context></span></p>
             <input type="text" class="keybind-search" placeholder="Search commands or keys" enterkeyhint="search" autocomplete="off" aria-label="Search keyboard shortcuts" data-keybind-search />
             <ul class="keybind-list" aria-label="Commands and their keyboard shortcuts" data-keybind-list></ul>
           </section>

@@ -30,7 +30,7 @@ If you joined someone else's room and haven't connected yet, it says "Waiting fo
 
 ## New files and folders
 
-**New file** (**Ctrl+N**) asks for a name and suggests `chapter.tex`.
+**New file** (**Ctrl+N**, or **Alt+N** in a browser tab) asks for a name and suggests `chapter.tex`.
 **New folder** suggests `figures`.
 
 - They go into the current folder: the folder you last clicked, or the folder of the file you last clicked.
@@ -116,8 +116,8 @@ The name is shared with everyone in the room, and the next save renames the stor
 
 ## New project
 
-**File > New Project** (**Ctrl+Shift+N**) starts a fresh project with a starter `main.tex`, after you confirm.
-The confirm is titled **Replace the whole project?**, so pressing it by mistake when you meant **New File** is easy to spot and cancel.
+**File > New Project** (**Ctrl+Shift+N**, or **Alt+Shift+N** in a browser tab) starts a fresh project with a starter `main.tex`, after you confirm.
+The confirm is titled **Replace the whole project?** and starts on **Cancel**, so pressing it by mistake when you meant **New File** is easy to spot, and Enter cancels.
 The project you were on stays saved where it was.
 It's host only, and if you're sharing, it clears the project for everyone in the room, so the confirm says so.
 

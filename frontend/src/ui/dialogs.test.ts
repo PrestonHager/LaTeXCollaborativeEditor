@@ -47,6 +47,16 @@ describe('dialogs', () => {
       expect(await answer).toBe(false);
     });
 
+    it('can start on Cancel without the red button, to catch a misclick', async () => {
+      const answer = confirmDialog({ title: 'Replace the whole project?', message: 'a', confirmLabel: 'Start new project', focusCancel: true });
+      const [cancel, ok] = buttons();
+      expect(ok.dataset.variant).toBeUndefined();
+      expect(openDialog().getAttribute('role')).toBeNull();
+      expect(document.activeElement).toBe(cancel);
+      cancel.click();
+      expect(await answer).toBe(false);
+    });
+
     it('cancels on Escape and on a click outside the box', async () => {
       const first = confirmDialog({ title: 'A', message: 'a', confirmLabel: 'Go' });
       escape();

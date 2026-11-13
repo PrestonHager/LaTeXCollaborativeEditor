@@ -20,8 +20,10 @@ describe('createKeymap', () => {
     expect(keymap.commandFor('Mod+C')).toMatchObject({ id: 'edit.copy', keybind: 'Mod+C', native: true });
     expect(keymap.commandFor('Mod+Shift+C')).toBeNull();
     expect(keymap.keybindsFor('edit.redo')).toEqual(['Mod+Shift+Z', 'Mod+Y']);
-    expect(keymap.keybindsFor('file.newFile')).toEqual(['Mod+N']);
-    expect(keymap.keybindsFor('file.new')).toEqual(['Mod+Shift+N']);
+    // The fallbacks are always on, after the main key.
+    expect(keymap.keybindsFor('file.newFile')).toEqual(['Mod+N', 'Alt+N']);
+    expect(keymap.keybindsFor('file.new')).toEqual(['Mod+Shift+N', 'Alt+Shift+N']);
+    expect(keymap.keybindsFor('file.export')).toEqual(['Mod+Shift+E', 'Alt+Shift+E']);
     expect(keymap.keybindsFor('file.newFolder')).toEqual([]);
   });
 
@@ -65,17 +67,17 @@ describe('createKeymap', () => {
   it('turns off built-ins one keybind at a time, and skips rules that are off or unsafe', () => {
     const keymap = withSettings({
       rules: [
-        { id: 'file.newFile', keybind: 'Alt+N', off: true },
+        { id: 'file.newFile', keybind: 'Alt+J', off: true },
         { id: 'file.newFolder', keybind: 'N' },
       ],
       disabled: [builtinKey({ id: 'edit.redo', keybind: 'Mod+Y' })],
     });
     expect(keymap.keybindsFor('edit.redo')).toEqual(['Mod+Shift+Z']);
     expect(keymap.commandFor('Mod+Y')).toBeNull();
-    expect(keymap.commandFor('Alt+N')).toBeNull();
+    expect(keymap.commandFor('Alt+J')).toBeNull();
     // A plain letter would take typing away from the editor, so it never counts.
     expect(keymap.commandFor('N')).toBeNull();
-    expect(keymap.bindings().filter((b) => b.off).map((b) => b.keybind)).toEqual(['Mod+Y', 'Alt+N']);
+    expect(keymap.bindings().filter((b) => b.off).map((b) => b.keybind)).toEqual(['Mod+Y', 'Alt+J']);
   });
 
   it('reads the same settings for each platform', () => {
@@ -91,6 +93,58 @@ describe('createKeymap', () => {
     // settings() hands out a copy.
     keymap.settings().rules.pop();
     expect(keymap.settings().rules).toHaveLength(1);
+  });
+});
+
+describe('keys the browser keeps', () => {
+  const chromeTab = () =>
+    new Map([
+      ['Mod+N', { keybind: 'Mod+N', by: 'Chrome', what: 'to open a new window', keptInAppWindow: false }],
+      ['Mod+Shift+N', { keybind: 'Mod+Shift+N', by: 'Chrome', what: 'to open a private window', keptInAppWindow: false }],
+    ]);
+
+  it('uses the fallback where the main key is kept, and shows it first', () => {
+    const keymap = createKeymap(shortcuts, () => 'other', undefined, chromeTab);
+    expect(keymap.labelFor('file.newFile')).toBe('Alt+N');
+    expect(keymap.labelFor('file.new')).toBe('Alt+Shift+N');
+    // The main key stays bound, for when it does get through.
+    expect(keymap.keybindsFor('file.newFile')).toEqual(['Alt+N', 'Mod+N']);
+    expect(keymap.commandFor('Alt+N')?.id).toBe('file.newFile');
+    expect(keymap.commandFor('Mod+N')?.id).toBe('file.newFile');
+    const [main, spare] = keymap.bindings().filter((b) => b.id === 'file.newFile');
+    expect(main).toMatchObject({ keybind: 'Mod+N', reserved: { by: 'Chrome' } });
+    expect(spare).toMatchObject({ keybind: 'Alt+N', source: 'builtin', fallbackFor: 'Mod+N' });
+    expect(spare).not.toHaveProperty('fallback');
+    expect(keymap.reservedFor('Mod+N')?.what).toBe('to open a new window');
+    expect(keymap.reservedFor('Alt+N')).toBeNull();
+    // On a Mac the fallback adds ⌥ to ⌘, since ⌥N types.
+    expect(createKeymap(shortcuts, () => 'mac', undefined, chromeTab).labelFor('file.newFile')).toBe('⌥⌘N');
+  });
+
+  it('follows the window when it changes', () => {
+    let kept = chromeTab();
+    const keymap = createKeymap(shortcuts, () => 'other', undefined, () => kept);
+    expect(keymap.labelFor('file.newFile')).toBe('Alt+N');
+    kept = new Map();
+    keymap.refresh();
+    expect(keymap.labelFor('file.newFile')).toBe('Ctrl+N');
+    expect(keymap.keybindsFor('file.newFile')).toEqual(['Mod+N', 'Alt+N']);
+  });
+
+  it('turns a fallback off on its own, and skips one a rule already gives the command', () => {
+    const off = withSettings({ rules: [], disabled: ['file.newFile Alt+N'] });
+    const keymap = createKeymap(shortcuts, () => 'other', { rules: [], disabled: ['file.newFile Alt+N'] }, chromeTab);
+    expect(keymap.commandFor('Alt+N')).toBeNull();
+    expect(keymap.labelFor('file.newFile')).toBe('Ctrl+N');
+    expect(off.labelFor('file.newFile')).toBe('Ctrl+N');
+    const ruled = createKeymap(shortcuts, () => 'other', { rules: [{ id: 'file.newFile', keybind: 'Alt+N' }], disabled: [] }, chromeTab);
+    expect(ruled.bindings().filter((b) => b.keybind === 'Alt+N').map((b) => b.source)).toEqual(['rule']);
+    // A rule on a kept key is marked too.
+    const kept = createKeymap(shortcuts, () => 'other', { rules: [{ id: 'file.download', keybind: 'Mod+N' }], disabled: [] }, chromeTab);
+    expect(kept.bindings().find((b) => b.source === 'rule')?.reserved?.by).toBe('Chrome');
+    // Adding the fallback back, after turning it off, turns it on.
+    const builtins = keymap.bindings().filter((b) => b.source === 'builtin');
+    expect(addRule(keymap.settings(), 'file.newFile', 'Alt+N', builtins)).toEqual({ rules: [], disabled: [] });
   });
 });
 
@@ -156,8 +210,9 @@ describe('migrating saved keybinds', () => {
     const keymap = withSettings(settings([], ['file.new Mod+N']));
     expect(keymap.settings()).toEqual(settings([], ['file.newFile Mod+N']));
     expect(keymap.commandFor('Mod+N')).toBeNull();
-    // New Project still gets its new key.
-    expect(keymap.keybindsFor('file.new')).toEqual(['Mod+Shift+N']);
+    // New Project still gets its new key, and New File keeps its fallback.
+    expect(keymap.keybindsFor('file.new')).toEqual(['Mod+Shift+N', 'Alt+Shift+N']);
+    expect(keymap.keybindsFor('file.newFile')).toEqual(['Alt+N']);
   });
 
   it('keeps Ctrl+N on the command someone gave it to', () => {
@@ -172,7 +227,7 @@ describe('migrating saved keybinds', () => {
     const keymap = withSettings(settings([{ id: 'file.newFile', keybind: 'Mod+N' }], ['file.new Mod+N']));
     expect(keymap.settings()).toEqual(emptyKeybindSettings());
     expect(keymap.commandFor('Mod+N')?.id).toBe('file.newFile');
-    expect(keymap.bindings().filter((b) => b.id === 'file.newFile')).toHaveLength(1);
+    expect(keymap.bindings().filter((b) => b.id === 'file.newFile' && b.keybind === 'Mod+N')).toHaveLength(1);
     // One that had lost its key to another command stays off, as a built-in.
     const lost = migrateKeybinds(settings([{ id: 'file.new', keybind: 'Mod+Shift+N', off: true }, { id: 'view.compileNow', keybind: 'Mod+Shift+N' }]), shortcuts);
     expect(lost).toEqual(settings([{ id: 'view.compileNow', keybind: 'Mod+Shift+N' }], ['file.new Mod+Shift+N']));

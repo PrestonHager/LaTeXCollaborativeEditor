@@ -9,18 +9,25 @@ const commands: KeybindCommand[] = [
   { id: 'edit.redo', label: 'Redo', section: 'Edit' },
   { id: 'view.compileNow', label: 'Compile Now', section: 'View' },
   { id: 'share.copyLink', label: 'Copy share link', section: 'Share' },
+  { id: 'file.newFile', label: 'New File', section: 'File' },
 ];
 
-function setup(options: { platform?: 'mac' | 'other'; settings?: KeybindSettings; confirm?: boolean | 'dialog' } = {}) {
+const chromeTab = new Map([
+  ['Mod+N', { keybind: 'Mod+N', by: 'Chrome', what: 'to open a new window', keptInAppWindow: false }],
+  ['Mod+W', { keybind: 'Mod+W', by: 'Chrome', what: 'to close the tab', keptInAppWindow: false }],
+  ['Mod+H', { keybind: 'Mod+H', by: 'macOS', what: 'to hide the app', keptInAppWindow: true }],
+]);
+
+function setup(options: { platform?: 'mac' | 'other'; settings?: KeybindSettings; confirm?: boolean | 'dialog'; tab?: boolean } = {}) {
   mountAppShell();
   // jsdom 31+ (like real browsers) will not focus controls inside a closed <dialog>.
   document.getElementById('settings-dialog')!.setAttribute('open', '');
   const root = document.getElementById('settings-keybinds')!;
-  const keymap = createKeymap(shortcuts, () => options.platform ?? 'other', options.settings);
+  const keymap = createKeymap(shortcuts, () => options.platform ?? 'other', options.settings, () => (options.tab ? chromeTab : new Map()));
   const onChange = vi.fn();
   const view = createKeybindSettings(root, {
     keymap,
-    builtins: shortcuts,
+    contextLabel: () => (options.tab ? 'Chrome in a browser tab' : 'Chrome in its own window'),
     commands: () => commands,
     editorKeybinds: new Set(['Mod+]']),
     onChange,
@@ -172,8 +179,20 @@ describe('createKeybindSettings', () => {
     const { record, notes } = setup();
     record('share.copyLink', { key: ']', code: 'BracketRight', ctrlKey: true });
     expect(notes('share.copyLink')).toEqual(["The editor uses Ctrl+] too, so while you type in it, the editor's key comes first."]);
+    // Outside a browser tab, Ctrl+W reaches the page, so there's nothing to say.
     record('file.download', { key: 'w', code: 'KeyW', ctrlKey: true });
-    expect(notes('file.download')).toEqual(['Your browser may keep Ctrl+W for itself.']);
+    expect(notes('file.download')).toEqual([]);
+  });
+
+  it('says which keys the browser keeps here, and which key is used instead', () => {
+    const { record, notes, chips, root } = setup({ tab: true });
+    expect(root.querySelector('[data-keybind-context]')?.textContent).toBe('Keys shown are for Chrome in a browser tab.');
+    expect(chips('file.newFile')).toEqual(['Ctrl+N', 'Alt+N']);
+    expect(notes('file.newFile')).toEqual(['Chrome uses Ctrl+N to open a new window, so Alt+N is used here instead. Ctrl+N works when the app is installed or in its own window.']);
+    record('file.download', { key: 'w', code: 'KeyW', ctrlKey: true });
+    expect(notes('file.download')).toEqual(['Chrome uses Ctrl+W to close the tab, so it may not reach the editor here. Ctrl+W works when the app is installed or in its own window.']);
+    record('share.copyLink', { key: 'h', code: 'KeyH', ctrlKey: true });
+    expect(notes('share.copyLink')).toEqual(['macOS uses Ctrl+H to hide the app, so it may not reach the editor here.']);
   });
 
   it('searches by name, section, description or key', () => {

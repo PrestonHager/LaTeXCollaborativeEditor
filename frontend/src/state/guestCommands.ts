@@ -58,4 +58,6 @@ export const replaceProjectDialog = (action: ReplaceAction, withGuests = true) =
   message: withGuests ? replaceProjectMessage(action) : action === 'new' ? NEW_PROJECT_MESSAGE('') : 'The current project stays saved where it is.',
   confirmLabel: REPLACE_BUTTONS[action],
   destructive: withGuests,
+  // New Project asks to catch a misclick, so Ctrl+Shift+N then Enter must not replace the project.
+  ...(action === 'new' ? { focusCancel: true } : {}),
 });

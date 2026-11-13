@@ -19,22 +19,19 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
-| **New File** | **Ctrl+N** | **⌘N** |
-| **New Project** (after you confirm, host only) | **Ctrl+Shift+N** | **⇧⌘N** |
+| **New File** | **Ctrl+N**, or ***Alt+N*** | **⌘N**, or ***⌥⌘N*** |
+| **New Project** (after you confirm, host only) | **Ctrl+Shift+N**, or ***Alt+Shift+N*** | **⇧⌘N**, or ***⌥⇧⌘N*** |
 | **Open Local Project** (host only) | **Ctrl+O** | **⌘O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⇧⌘O** |
 | **Download Project .zip** | **Ctrl+Shift+S** | **⇧⌘S** |
-| **Export…** | **Ctrl+Shift+E** | **⇧⌘E** |
+| **Export…** | **Ctrl+Shift+E**, or ***Alt+Shift+E*** | **⇧⌘E** |
 | **Save Now** (host only, unless saving is paused) | **Ctrl+S** | **⌘S** |
 
-### New File and New Project in a browser tab
+Where the browser keeps a key for itself, the second key in **bold italics** is used instead, and the menus show it.
+It works everywhere, so you can always use it.
+See [Keys your browser keeps](#keys-your-browser-keeps).
 
 **Ctrl+N** used to be **New Project**. It's **New File** now, and **New Project** moved to **Ctrl+Shift+N**, since it replaces the whole project.
-
-In a normal browser tab, Chrome, Edge, and Firefox usually keep **Ctrl+N** (new window) and **Ctrl+Shift+N** (new private window) for themselves, so the editor never sees them and a new window opens instead.
-They do reach the editor when it runs in its own app window, which Chrome and Edge can make for any site: use **Create shortcut** with **Open as window** ticked, or **Install this site as an app**.
-If they don't work for you, use **File > New File** or the **New file** button in the Files panel, or give them other keys in **Settings > Keyboard shortcuts**.
-
 If you had turned **Ctrl+N** off, it stays off, now for **New File**. Keybinds you added keep working, even on these keys.
 
 ## Edit
@@ -89,8 +86,53 @@ Press **Use it here** or **Give it to ...** to pick, and the other command's key
 
 - While you type in the editor, its own keys come first, like **Ctrl+]** to indent or **Ctrl+Z** to undo.
   If you give one of those to a command, Settings warns you, and the command only runs when the editor doesn't have focus.
-- Some keys belong to the browser, like **Ctrl+W** (close tab), **Ctrl+T** (new tab), **Ctrl+N** (new window), and **Ctrl+Shift+C** (inspector), and pages can't take them in a normal tab.
-  Settings warns you about those too.
+- Some keys belong to the browser or your computer, like **Ctrl+W** (close tab), **Ctrl+T** (new tab) and **Ctrl+N** (new window) in a browser tab, or **⌘H** (hide) on a Mac.
+  Settings warns you about those, and says which key is used instead. See [Keys your browser keeps](#keys-your-browser-keeps).
+- Your keybinds are saved in this browser profile, so a change in Chrome doesn't change Firefox, and each browser can have the keys that work in it.
+
+## Keys your browser keeps
+
+In a normal browser tab, the browser keeps a few keys for itself. The page never sees them, so the editor can't use them there:
+
+| Browser | Keys it keeps in a tab |
+| --- | --- |
+| Chrome, Edge, Opera, Brave | **Ctrl+N** (new window), **Ctrl+Shift+N** (private window), **Ctrl+T**, **Ctrl+W**, **Ctrl+Shift+W**, **Ctrl+Tab**, **Ctrl+PageUp** and **Ctrl+PageDown**, and **Ctrl+Shift+T** once there's a closed tab to reopen. ⌘ instead of Ctrl on a Mac. |
+| Firefox | The same, plus **Ctrl+Shift+P** (private window). **Ctrl+Shift+N** reopens a closed window. **Ctrl+Shift+E** opens the Network Monitor on Windows and Linux. |
+| Safari | **⌘N**, **⇧⌘N**, **⌘T**, **⌘W**, and **⌃Tab**. |
+| macOS, any browser | **⌘Q**, **⌘H**, **⌘M**, **⌘Tab**, **⌘Space**. |
+
+So the editor picks its keys for where it's running:
+
+- **New File** is **Ctrl+N** (**⌘N**) in its own window, and **Alt+N** (**⌥⌘N**) in a browser tab.
+- **New Project** is **Ctrl+Shift+N** (**⇧⌘N**) in its own window, and **Alt+Shift+N** (**⌥⇧⌘N**) in a browser tab.
+- **Export…** is **Ctrl+Shift+E** (**⇧⌘E**), and **Alt+Shift+E** in Firefox on Windows and Linux.
+- Every other shortcut works in a tab in every browser.
+
+The menus, palette, tour, and Settings show the key that works where you are.
+The second keys work everywhere, so you don't have to remember which window you're in.
+On a Mac they add ⌥ to ⌘, since ⌥ on its own types characters (⌥N starts ñ), and ⌃N moves the cursor down in the editor.
+
+### Get the real Ctrl+N: install the app
+
+When the editor runs in its own window, Chrome and Edge give it every key, Ctrl+N included.
+
+- **Chrome**: open the editor, then **⋮ > Cast, save, and share > Install page as app** (or the install icon at the end of the address bar).
+- **Edge**: **… > Apps > Install this site as an app**.
+- Then open it from your Start menu, Dock, or app list. It's the same editor, with your projects and settings, in a window without tabs.
+- Pressing **F11** for full screen in Chrome or Edge also gives the editor these keys, until you leave full screen.
+
+Firefox and Safari don't give these keys to installed sites, as far as we know, so the second keys are used there.
+In Firefox you can let the editor have them: open **Page Info** (the icon left of the address) **> Permissions > Override keyboard shortcuts**, and choose **Allow**.
+Safari on a Mac can **File > Add to Dock**, but it isn't known to hand over **⌘N**.
+
+### How these were checked
+
+The Chrome keys were pressed for real (X key events, not keys sent straight to the page) in Chromium 153 on Linux, in a normal tab, an app window, and full screen.
+Everything else comes from the browsers' own documentation and source, because Firefox, Safari, Windows and macOS weren't available to test.
+The full list, with where each entry comes from, is in `frontend/src/app/reservedKeys.ts`.
+
+Chrome and Edge also have an experimental [Keyboard Lock](https://developer.mozilla.org/docs/Web/API/Keyboard_API) that lets a page take these keys, but only while one part of the page is in full screen.
+The editor doesn't use it.
 
 ## Menus and the palette
 
