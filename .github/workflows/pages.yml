@@ -28,6 +28,8 @@ jobs:
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_API_KEY: ${{ secrets.VITE_GOOGLE_API_KEY }}
+          VITE_GOOGLE_APP_ID: ${{ vars.VITE_GOOGLE_APP_ID }}
+          VITE_DOCS_BASE_URL: ${{ vars.VITE_DOCS_BASE_URL }}
           VITE_P2P_APP_ID: ${{ vars.VITE_P2P_APP_ID }}
           VITE_STUN_URL: ${{ vars.VITE_STUN_URL }}
         run: |
