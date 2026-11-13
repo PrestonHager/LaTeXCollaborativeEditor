@@ -1,9 +1,23 @@
 // @vitest-environment node
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSubset, readVegaSource, OUTPUT_PATH } from './basecoat-subset.mjs';
-import { checkBudget, measureAssets } from './check-bundle-size.mjs';
+import {
+  ASSUMED_BYTES_PER_SECOND,
+  ASSUMED_RTT_MS,
+  INITIAL_BUDGET_GZIP_BYTES,
+  LAZY_FAIL_GZIP_BYTES,
+  LAZY_WARN_GZIP_BYTES,
+  checkBuild,
+  checkDist,
+  estimateLoadMs,
+  findInitialGraph,
+  findStaticImports,
+  measureAssets,
+  parseIndexHtml,
+  toDistPath,
+} from './check-bundle-size.mjs';
 import { checkPages, checkVersionFile, REQUIRED_PAGES, FORBIDDEN_PATHS } from './check-build-pages.mjs';
 import {
   VERSION_FILE,
@@ -50,27 +64,152 @@ describe('basecoat subset script', () => {
 });
 
 describe('bundle size script', () => {
-  it('flags a bundle that is over budget', () => {
-    const result = checkBudget([{ name: 'a.js', bytes: 5000, gzipBytes: 3000 }], 2048);
-    expect(result.overBudget).toBe(true);
-    expect(result.summary).toContain('over the 2.0 kB budget');
+  const html = [
+    '<link rel="icon" href="./favicon.svg" />',
+    '<script type="module" crossorigin src="./assets/index-a.js"></script>',
+    '<link rel="modulepreload" crossorigin href="./assets/vendor-b.js">',
+    '<link rel="stylesheet" crossorigin href="./assets/index-c.css">',
+    '<script src="https://accounts.google.com/gsi/client"></script>',
+  ].join('\n');
+  const manifest = {
+    'index.html': {
+      file: 'assets/index-a.js',
+      isEntry: true,
+      imports: ['_vendor-b.js'],
+      dynamicImports: ['src/zip.ts'],
+      css: ['assets/index-c.css'],
+    },
+    '_vendor-b.js': { file: 'assets/vendor-b.js', imports: ['_shared-e.js'] },
+    '_shared-e.js': { file: 'assets/shared-e.js', css: ['assets/shared-f.css'] },
+    'src/zip.ts': { file: 'assets/zip-d.js', isDynamicEntry: true, imports: ['_vendor-b.js'] },
+  };
+  const asset = (path, gzipBytes, staticImports = []) => ({ path, bytes: gzipBytes * 3, gzipBytes, staticImports });
+  const assets = () => [
+    asset('assets/index-a.js', 100_000, ['./vendor-b.js']),
+    asset('assets/vendor-b.js', 50_000, ['./shared-e.js']),
+    asset('assets/shared-e.js', 10_000),
+    asset('assets/shared-f.css', 1_000),
+    asset('assets/index-c.css', 10_000),
+    asset('assets/zip-d.js', 20_000, ['./vendor-b.js']),
+    asset('assets/compile.worker-x.js', 200_000),
+  ];
+
+  it('has the Vite manifest turned on, since the check reads it', () => {
+    expect(viteConfig.build.manifest).toBe(true);
   });
 
-  it('passes a bundle under budget', () => {
-    const result = checkBudget([{ name: 'a.js', bytes: 5000, gzipBytes: 1000 }], 2048);
-    expect(result.overBudget).toBe(false);
-    expect(result.lines.at(-1)).toContain('total gzip: 1.0 kB');
+  it('reads local scripts, preloads and stylesheets from index.html', () => {
+    expect(parseIndexHtml(html)).toEqual({
+      scripts: ['assets/index-a.js'],
+      modulepreloads: ['assets/vendor-b.js'],
+      stylesheets: ['assets/index-c.css'],
+    });
   });
 
-  it('measures only js and css files', () => {
+  it('follows static imports and css in the manifest, but not dynamic imports', () => {
+    const files = findInitialGraph(parseIndexHtml(html), manifest);
+    expect([...files].sort()).toEqual([
+      'assets/index-a.js',
+      'assets/index-c.css',
+      'assets/shared-e.js',
+      'assets/shared-f.css',
+      'assets/vendor-b.js',
+    ]);
+  });
+
+  it('counts only the initial graph against the budget and lists lazy chunks with load times', () => {
+    const result = checkBuild({ html, htmlGzipBytes: 5_000, manifest, assets: assets() });
+    expect(result.errors).toEqual([]);
+    expect(result.initialGzip).toBe(5_000 + 100_000 + 50_000 + 10_000 + 1_000 + 10_000);
+    expect(result.lazy.sort()).toEqual(['assets/compile.worker-x.js', 'assets/zip-d.js']);
+    expect(result.lines.join('\n')).toContain('assets/compile.worker-x.js: 600.0 kB (gzip 200.0 kB), about 210 ms');
+  });
+
+  it('fails when the initial load is over budget', () => {
+    const result = checkBuild({ html, htmlGzipBytes: 5_000, manifest, assets: assets() }, { initialBudget: 100_000 });
+    expect(result.errors.join('\n')).toContain('over the 100.0 kB budget');
+  });
+
+  it('warns about a big lazy chunk and fails on an absurd one', () => {
+    const big = checkBuild({ html, htmlGzipBytes: 0, manifest, assets: assets() }, { lazyWarn: 150_000 });
+    expect(big.errors).toEqual([]);
+    expect(big.warnings.join('\n')).toContain('assets/compile.worker-x.js is 200.0 kB');
+    const absurd = checkBuild({ html, htmlGzipBytes: 0, manifest, assets: assets() }, { lazyFail: 150_000 });
+    expect(absurd.errors.join('\n')).toContain('over the 150.0 kB limit for one lazy chunk');
+  });
+
+  it('fails when a dynamic import ended up in the initial graph', () => {
+    const merged = structuredClone(manifest);
+    merged['_vendor-b.js'].imports.push('src/zip.ts');
+    const list = assets();
+    list[1].staticImports.push('./zip-d.js');
+    const result = checkBuild({ html, htmlGzipBytes: 0, manifest: merged, assets: list });
+    expect(result.errors.join('\n')).toContain('src/zip.ts is imported dynamically');
+  });
+
+  it('fails when initial code statically imports a chunk outside the initial graph', () => {
+    const list = assets();
+    list[0].staticImports.push('./compile.worker-x.js');
+    const result = checkBuild({ html, htmlGzipBytes: 0, manifest, assets: list });
+    expect(result.errors.join('\n')).toContain('assets/index-a.js statically imports assets/compile.worker-x.js');
+  });
+
+  it('fails when index.html loads a file that is not in dist', () => {
+    const result = checkBuild({ html, htmlGzipBytes: 0, manifest, assets: assets().filter((a) => a.path !== 'assets/index-c.css') });
+    expect(result.errors.join('\n')).toContain("index.html loads assets/index-c.css, but it isn't in dist/");
+  });
+
+  it('finds static imports but not dynamic ones', () => {
+    const code = 'import{a as b}from"./x-1.js";import"./y-2.js";export{c}from"../z-3.js";const m=import("./lazy-4.js");import.meta.url;';
+    expect(findStaticImports(code).sort()).toEqual(['../z-3.js', './x-1.js', './y-2.js']);
+  });
+
+  it('turns html refs into dist paths and skips external ones', () => {
+    expect(toDistPath('./assets/a.js?v=1')).toBe('assets/a.js');
+    expect(toDistPath('/assets/a.js')).toBe('assets/a.js');
+    expect(toDistPath('https://cdn.example.com/a.js')).toBeNull();
+    expect(toDistPath('//cdn.example.com/a.js')).toBeNull();
+    expect(toDistPath(null)).toBeNull();
+  });
+
+  it('estimates load time from the assumed speed and round trip', () => {
+    expect(estimateLoadMs(ASSUMED_BYTES_PER_SECOND)).toBe(1000 + ASSUMED_RTT_MS);
+    // The initial budget is about 200 ms of transfer, which keeps the whole load to a few hundred ms.
+    expect(estimateLoadMs(INITIAL_BUDGET_GZIP_BYTES)).toBeLessThanOrEqual(300);
+    expect(LAZY_WARN_GZIP_BYTES).toBeLessThan(LAZY_FAIL_GZIP_BYTES);
+  });
+
+  it('measures js and css under dist, including subfolders but not .vite', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bundle-size-'));
     try {
-      writeFileSync(join(dir, 'app.js'), 'console.log(1);'.repeat(50));
-      writeFileSync(join(dir, 'app.css'), 'a{color:red}');
-      writeFileSync(join(dir, 'logo.png'), 'not measured');
+      mkdirSync(join(dir, 'assets'));
+      mkdirSync(join(dir, '.vite'));
+      writeFileSync(join(dir, 'assets', 'app.js'), 'import"./dep.js";' + 'console.log(1);'.repeat(50));
+      writeFileSync(join(dir, 'assets', 'app.css'), 'a{color:red}');
+      writeFileSync(join(dir, 'assets', 'logo.png'), 'not measured');
+      writeFileSync(join(dir, '.vite', 'manifest.js'), 'not measured');
       const files = measureAssets(dir);
-      expect(files.map((f) => f.name).sort()).toEqual(['app.css', 'app.js']);
+      expect(files.map((f) => f.path).sort()).toEqual(['assets/app.css', 'assets/app.js']);
       expect(files.every((f) => f.gzipBytes > 0)).toBe(true);
+      expect(files.find((f) => f.path === 'assets/app.js').staticImports).toEqual(['./dep.js']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('checks a dist folder end to end', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bundle-dist-'));
+    try {
+      mkdirSync(join(dir, 'assets'));
+      mkdirSync(join(dir, '.vite'));
+      writeFileSync(join(dir, 'index.html'), '<script type="module" src="./assets/main.js"></script>');
+      writeFileSync(join(dir, 'assets', 'main.js'), 'const w=new URL("./worker.js",import.meta.url);');
+      writeFileSync(join(dir, 'assets', 'worker.js'), 'self.onmessage=()=>{};');
+      writeFileSync(join(dir, '.vite', 'manifest.json'), JSON.stringify({ 'index.html': { file: 'assets/main.js', isEntry: true } }));
+      const result = checkDist(dir);
+      expect(result.errors).toEqual([]);
+      expect(result.initial).toEqual(['assets/main.js']);
+      expect(result.lazy).toEqual(['assets/worker.js']);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

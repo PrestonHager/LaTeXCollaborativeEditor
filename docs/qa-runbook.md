@@ -42,6 +42,28 @@ The report and traces land in `e2e/playwright-report/` and `e2e/test-results/`, 
 To point the test at an app that's already running, set `E2E_BASE_URL`, for example `E2E_BASE_URL=https://latex.prestonhager.com/ npm run test:e2e`.
 To use another port for the local server, set `E2E_PORT`.
 
+## Load time check
+
+This checks how long a first visit takes before you can type in the editor, over a throttled connection.
+It's in `e2e/perf/` with its own config, so `npm run test:e2e`, CI and `npm run build` don't run it.
+With the same one-time setup as above, run it from the repo root:
+
+```sh
+npm run test:load-time
+```
+
+It builds the app, serves it with `vite preview`, and loads it three times in fresh browser contexts with the cache off.
+The defaults match the bundle budget in `frontend/scripts/check-bundle-size.mjs`: 10 Mbps down and a 50 ms round trip.
+It prints the median time from navigation to an editor that accepts typing, and fails if that's over 1000 ms.
+Change the conditions with environment variables:
+
+- `LOAD_TIME_MBPS` (default 10) and `LOAD_TIME_RTT_MS` (default 50) for the network.
+- `LOAD_TIME_CPU` for Chrome's CPU slowdown, for example 4 for a mid-range phone (default 1, no slowdown).
+- `LOAD_TIME_RUNS` (default 3) and `LOAD_TIME_MAX_MS` (default 1000).
+- `E2E_BASE_URL` to measure a deployed site instead, for example `E2E_BASE_URL=https://latex.prestonhager.com/ npm run test:load-time`.
+
+The time depends on the machine, so compare runs on the same one.
+
 ## Local manual check
 
 1. Run `npm run dev` and open `http://localhost:5173/` in one browser.
