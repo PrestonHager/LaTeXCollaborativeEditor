@@ -102,9 +102,9 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 
 Use two browser windows, or a normal and a private window, so each has its own storage.
 
-- [ ] Before sharing, the connection badge says Not sharing.
-- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Waiting for peers.
-- [ ] Opening the link in the second window joins as a guest, and both badges say Connected · 1 peer.
+- [ ] Before sharing, the connection badge says Not shared.
+- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Shared, waiting for others.
+- [ ] Opening the link in the second window joins as a guest, and both badges say Connected with 1 other person.
 - [ ] The guest gets the whole file tree, the text and the image.
 - [ ] Edits show up in the other window within a couple of seconds, both ways.
 - [ ] A new file or folder from either side shows up on the other.
@@ -112,7 +112,8 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Reloading the host rejoins the same room, and the guest keeps syncing.
 - [ ] Text the guest typed while the host was reloading shows up on the host.
 - [ ] New link starts a different room, and the old link stops working.
-- [ ] Closing the guest window makes the host badge go to Reconnecting, then Waiting for peers.
+- [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
+- [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
 - [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands, from the menus, the palette or shortcuts.
 - [ ] Guests can still add, edit and upload files in the host's project.
 - [ ] The guest's header shows the project name and where the host saves.
@@ -129,11 +130,19 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Arrow keys move through menu items and between menus, and Escape closes them.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
+- [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
 - [ ] The palette has the palette-only commands: Copy share link, Focus editor, and Switch to dark, light or system theme.
 - [ ] Ctrl+, opens Settings. Its theme selects, Pause Saving and Clear Local Projects all work.
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
 - [ ] Split View, Editor Only and Preview Only change the layout, and the splitter drags.
-- [ ] Help > Documentation opens the docs, and About / Repository opens the repo.
+- [ ] Help > Documentation opens the docs, and Keyboard Shortcuts opens the shortcuts page.
+- [ ] Help > Report a Bug and Request a Feature open the GitHub forms, and the bug form has browser, OS and version filled in, but no document text.
+- [ ] Help > About shows the app version with links to the docs, the source and the policies.
+- [ ] The toolbar under the menus runs the same commands as the menus, shows tooltips on hover, and its buttons are disabled in the same cases.
+- [ ] Tab moves into the toolbar, the arrow keys move between its buttons, and Home and End jump to the ends.
+- [ ] The ? help links next to Share, the save status, the file list and the preview open the matching docs page.
+- [ ] A failed save or a blocked popup shows a notice with a Learn more link.
+- [ ] In a fresh private window, the first-run tour shows once. Skip tour and Esc close it, and Help > Show Tour runs it again.
 - [ ] The page works at phone width without scrolling sideways.
 
 ## Build
