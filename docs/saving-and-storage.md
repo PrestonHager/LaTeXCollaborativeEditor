@@ -70,6 +70,22 @@ If **Connect** or **Open** fails, check the status message in the header (for ex
 - The app can only see files it made or that you picked. If you add a file to the project folder in Drive itself, the app won't see it yet. Upload it from the editor instead.
 - Opening an old single `.tex` file keeps saving to that file. Once you add a second file, the app makes a project folder next to the file and moves the file into it.
 
+### When a file changed somewhere else
+
+The app remembers each file's Drive version from the last time it loaded or saved it.
+Before it overwrites a file, it asks Drive for that file's current version.
+If someone changed the file in the meantime (in the Drive web UI, on another device, or in another tab), the app doesn't overwrite it.
+
+- Saving stops for that one file. Other files keep saving as usual.
+- A dialog asks what you want to do:
+  - **Keep mine** overwrites the Drive file with your copy.
+  - **Take theirs** loads the Drive copy into the editor, replacing your copy of that file.
+  - **Save mine as a copy** keeps your copy as a new file next to it, like `main (my copy).tex`, then loads the Drive copy into the original.
+- The dialog has no close button, since a skipped answer would leave the file unsaved.
+- Until you pick, the autosave line says saving is paused, and closing the tab warns you.
+- Renaming or moving a file in Drive doesn't count as a change, only its content does.
+- If you reload before picking, the app asks again on the next save.
+
 ## New project
 
 **New Project** starts a fresh project with a starter `main.tex`, after you confirm. The project you were on stays saved where it was.

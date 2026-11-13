@@ -300,6 +300,21 @@
       </button>
     </template>
 
+    <!-- Save conflict. Shown when a file changed in storage since we last saved it, and it has no close button on purpose. -->
+    <dialog id="conflict-dialog" class="dialog conflict-dialog" aria-labelledby="conflict-dialog-title" aria-describedby="conflict-dialog-description">
+      <div>
+        <header>
+          <h2 id="conflict-dialog-title">File changed somewhere else</h2>
+          <p id="conflict-dialog-description"><strong id="conflict-dialog-path"></strong> changed in <span id="conflict-dialog-storage">storage</span> since it was last saved here. Saving for this file is paused until you pick which copy to keep.</p>
+        </header>
+        <footer>
+          <button id="conflict-copy" type="button" class="btn" data-variant="outline">Save mine as a copy</button>
+          <button id="conflict-theirs" type="button" class="btn" data-variant="outline">Take theirs</button>
+          <button id="conflict-mine" type="button" class="btn" data-variant="destructive">Keep mine</button>
+        </footer>
+      </div>
+    </dialog>
+
     <input id="zip-input" type="file" accept=".zip,application/zip" hidden />
 
     <script type="module" src="/src/main.ts"></script>

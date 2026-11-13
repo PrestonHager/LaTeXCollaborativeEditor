@@ -11,6 +11,19 @@ export type ProjectListing = {
   entries: StoredEntry[];
 };
 
+export type WriteOptions = {
+  /**
+   * The file version from our last load or save. If storage has a different one now, writeFile
+   * throws a ConflictError instead of overwriting.
+   */
+  expectedVersion?: string;
+  /** Overwrite even if the file changed, after the person picked "keep mine". */
+  force?: boolean;
+};
+
+/** What a write left behind. Providers that don't track versions can leave it out. */
+export type WriteResult = { version?: string } | void;
+
 /**
  * Where projects get saved. A project is a folder of files, so a new provider (Dropbox, a local
  * folder, and so on) only has to map these calls onto its own folders.
@@ -25,7 +38,9 @@ export interface StorageProvider {
   createProject(name: string): Promise<ProjectSummary>;
   openProject(projectId: string): Promise<ProjectListing>;
   readFile(projectId: string, path: string): Promise<Uint8Array>;
-  writeFile(projectId: string, path: string, data: string | Uint8Array): Promise<void>;
+  writeFile(projectId: string, path: string, data: string | Uint8Array, options?: WriteOptions): Promise<WriteResult>;
+  /** The version of a file as of the last load or save, if the provider tracks them. */
+  fileVersion?(projectId: string, path: string): string | undefined;
   createFolder(projectId: string, path: string): Promise<void>;
   /** Rename or move a file or folder. Moving a folder takes everything in it along. */
   move(projectId: string, from: string, to: string): Promise<void>;

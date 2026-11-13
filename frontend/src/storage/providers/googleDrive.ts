@@ -1,5 +1,6 @@
-import type { ProjectListing, ProjectSummary, StorageProvider } from './types';
+import type { ProjectListing, ProjectSummary, StorageProvider, WriteOptions, WriteResult } from './types';
 import { StorageError } from '../errors';
+import { ConflictError } from '../conflicts';
 import { loadScript } from './scriptLoader';
 import { basename, dirname, isInside, mimeType, replacePrefix } from '../../project/paths';
 
@@ -14,7 +15,7 @@ type GoogleTokenError = { type?: string; message?: string };
 type DriveFileRef = { id: string; name: string; documentId?: string };
 type StoredToken = { accessToken: string; expiresAt: number; account?: string };
 type TokenResult = { ok: true } | { ok: false; reason: string };
-type DriveItem = { id: string; name: string; mimeType?: string; parents?: string[]; appProperties?: Record<string, string>; modifiedTime?: string };
+type DriveItem = { id: string; name: string; mimeType?: string; parents?: string[]; appProperties?: Record<string, string>; modifiedTime?: string; version?: string; md5Checksum?: string };
 
 /**
  * What we know about an open project's files: path to Drive id.
@@ -22,7 +23,8 @@ type DriveItem = { id: string; name: string; mimeType?: string; parents?: string
  */
 type ProjectIndex = {
   rootId: string;
-  paths: Map<string, { id: string; folder: boolean }>;
+  // A file's version is from our last load or save of it, see versionToken.
+  paths: Map<string, { id: string; folder: boolean; version?: string }>;
   legacy?: { fileId: string; parentId: string | null; name: string };
 };
 
@@ -38,6 +40,8 @@ const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 // The about endpoint tells us who's signed in, and works with the drive.file scope we already have.
 const DRIVE_ABOUT_API = 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
+// What we ask Drive for to tell if a file changed under us.
+const VERSION_FIELDS = 'version,md5Checksum';
 // Project folders are tagged so "list projects" can find them without seeing the rest of Drive.
 const PROJECT_PROPERTY = 'latexProject';
 // Old single-file projects use ids like "file:<drive file id>".
@@ -260,7 +264,7 @@ export class GoogleDriveProvider implements StorageProvider {
     while (level.length) {
       const next: typeof level = [];
       for (const dir of level) {
-        const children = await this.listAll(`'${dir.id}' in parents and trashed=false`, 'id,name,mimeType', 'list project files');
+        const children = await this.listAll(`'${dir.id}' in parents and trashed=false`, `id,name,mimeType,${VERSION_FIELDS}`, 'list project files');
         for (const child of children) {
           const path = dir.path ? `${dir.path}/${child.name}` : child.name;
           if (child.mimeType === FOLDER_MIME) {
@@ -269,7 +273,7 @@ export class GoogleDriveProvider implements StorageProvider {
             next.push({ id: child.id, path });
           } else if (!child.mimeType?.startsWith('application/vnd.google-apps.')) {
             // Skip Google Docs and Sheets, since they have no file bytes to download.
-            index.paths.set(path, { id: child.id, folder: false });
+            index.paths.set(path, { id: child.id, folder: false, version: versionToken(child) });
             entries.push({ path, kind: 'file' });
           }
         }
@@ -290,28 +294,48 @@ export class GoogleDriveProvider implements StorageProvider {
     return new Uint8Array(await res.arrayBuffer());
   }
 
-  async writeFile(projectId: string, path: string, data: string | Uint8Array): Promise<void> {
+  /** The Drive version we last saw for a file, so a later save can check it. */
+  fileVersion(projectId: string, path: string): string | undefined {
+    return this.indexes.get(projectId)?.paths.get(path)?.version;
+  }
+
+  async writeFile(projectId: string, path: string, data: string | Uint8Array, options: WriteOptions = {}): Promise<WriteResult> {
     let index = await this.ensureIndex(projectId);
     if (index.legacy && path !== index.legacy.name) index = await this.upgradeLegacy(projectId, index);
     const body = new Blob([data as BlobPart], { type: mimeType(path) });
     const existing = index.paths.get(path);
     if (existing && !existing.folder) {
-      await this.driveFetch(
-        `${DRIVE_UPLOAD_API}/${existing.id}?uploadType=media`,
+      // First, check the file hasn't changed in Drive since we last saw it. It's one small metadata call.
+      const expected = options.expectedVersion ?? existing.version;
+      if (expected && !options.force) {
+        const check = await this.driveFetch(`${DRIVE_API}/${existing.id}?fields=${VERSION_FIELDS}`, {}, `check ${path}`);
+        const remote = versionToken(await readJson(check));
+        if (!sameContent(expected, remote)) throw new ConflictError(path, remote);
+      }
+      // Now overwrite it, and keep the new version for next time.
+      const res = await this.driveFetch(
+        `${DRIVE_UPLOAD_API}/${existing.id}?uploadType=media&fields=${VERSION_FIELDS}`,
         { method: 'PATCH', headers: { 'Content-Type': mimeType(path) }, body },
         `save ${path}`,
       );
-      return;
+      existing.version = versionToken(await readJson(res));
+      return { version: existing.version };
     }
     const parentId = await this.ensureFolder(index, dirname(path));
     const metadata = new Blob([JSON.stringify({ name: basename(path), parents: [parentId] })], { type: 'application/json' });
     const form = new FormData();
     form.append('metadata', metadata);
     form.append('file', body);
-    const res = await this.driveFetch(`${DRIVE_UPLOAD_API}?uploadType=multipart`, { method: 'POST', body: form }, `create ${path}`);
+    const res = await this.driveFetch(
+      `${DRIVE_UPLOAD_API}?uploadType=multipart&fields=id,${VERSION_FIELDS}`,
+      { method: 'POST', body: form },
+      `create ${path}`,
+    );
     const json = (await res.json()) as Partial<DriveItem>;
     if (!json?.id) throw new StorageError('Drive: Created a file but Google did not return its id');
-    index.paths.set(path, { id: json.id, folder: false });
+    const version = versionToken(json);
+    index.paths.set(path, { id: json.id, folder: false, version });
+    return { version };
   }
 
   async createFolder(projectId: string, path: string): Promise<void> {
@@ -390,12 +414,12 @@ export class GoogleDriveProvider implements StorageProvider {
 
   private async openLegacyFile(projectId: string): Promise<ProjectListing> {
     const fileId = projectId.slice(LEGACY_PREFIX.length);
-    const res = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=id,name,mimeType,parents`, {}, 'load file details');
+    const res = await this.driveFetch(`${DRIVE_API}/${fileId}?fields=id,name,mimeType,parents,${VERSION_FIELDS}`, {}, 'load file details');
     const file = (await res.json()) as DriveItem;
     if (file.mimeType === FOLDER_MIME) return this.openProject(file.id);
     const index: ProjectIndex = {
       rootId: '',
-      paths: new Map([[file.name, { id: file.id, folder: false }]]),
+      paths: new Map([[file.name, { id: file.id, folder: false, version: versionToken(file) }]]),
       legacy: { fileId: file.id, parentId: file.parents?.[0] ?? null, name: file.name },
     };
     this.indexes.set(projectId, index);
@@ -716,6 +740,31 @@ function sessionExpiredError(status?: number): StorageError {
     retryable: false,
     status,
   });
+}
+
+/**
+ * Pack a file's Drive version and checksum into one string, or undefined if Drive sent neither.
+ * NOTE: Drive bumps version on any change, even a rename, so the checksum tells us if the bytes changed.
+ */
+function versionToken(item: Partial<DriveItem> | undefined): string | undefined {
+  if (!item?.version && !item?.md5Checksum) return undefined;
+  return `${item.version ?? ''}:${item.md5Checksum ?? ''}`;
+}
+
+/** Check if Drive still has the content we last saw, by version first, then by checksum. */
+function sameContent(expected: string, remote: string | undefined): boolean {
+  if (!remote || expected === remote) return true;
+  const expectedMd5 = expected.split(':')[1];
+  return Boolean(expectedMd5) && expectedMd5 === remote.split(':')[1];
+}
+
+/** Read a JSON body, or nothing if there isn't one. */
+async function readJson(res: Response): Promise<Partial<DriveItem> | undefined> {
+  try {
+    return (await res.json()) as Partial<DriveItem>;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

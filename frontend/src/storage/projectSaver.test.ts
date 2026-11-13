@@ -117,6 +117,73 @@ describe('saveProject', () => {
     expect(Object.values(manifest.files).map((file) => file.rev)).toContain('h');
   });
 
+  it('keeps the version from a load, so the first save can check it', () => {
+    const project = new ProjectDoc(new Y.Doc());
+    const text = project.createTextFile('main.tex', 'x');
+    const folder = project.createFolder('f');
+    const manifest = manifestFromProject('pid', project, (path) => (path === 'main.tex' ? 'v7' : 'nope'));
+    expect(manifest.files[text].version).toBe('v7');
+    expect(manifest.files[folder].version).toBeUndefined();
+  });
+
+  describe('conflicts', () => {
+    /** Save a two-file project once, then let the test change things. */
+    async function savedTwice() {
+      const t = setup();
+      t.project.setName('P');
+      const main = t.project.createTextFile('main.tex', 'mine');
+      const other = t.project.createTextFile('other.tex', 'a');
+      let manifest = (await saveProject({ provider: t.provider, project: t.project, blobs: t.blobs, manifest: null, projectId: null })).manifest;
+      const save = async (extra: { held?: Set<string>; overwrite?: Set<string> } = {}) => {
+        t.provider.calls.length = 0;
+        const result = await saveProject({ provider: t.provider, project: t.project, blobs: t.blobs, manifest, projectId: manifest.projectId, ...extra });
+        manifest = result.manifest;
+        return result;
+      };
+      return { ...t, main, other, save, manifest: () => manifest };
+    }
+
+    it('records the version of every write', async () => {
+      const t = await savedTwice();
+      expect(t.manifest().files[t.main].version).toBe('1');
+      t.project.getText(t.main).insert(0, '% ');
+      await t.save();
+      expect(t.manifest().files[t.main].version).toBe('2');
+    });
+
+    it('holds a file that changed in storage and still saves the rest', async () => {
+      const t = await savedTwice();
+      const pid = t.manifest().projectId;
+      t.provider.editElsewhere(pid, 'main.tex', 'theirs');
+      t.project.getText(t.main).insert(0, 'more ');
+      t.project.getText(t.other).insert(0, 'b');
+
+      const result = await t.save();
+      expect(result.conflicts).toEqual([{ id: t.main, path: 'main.tex', remoteVersion: '2' }]);
+      expect(t.provider.calls).toEqual(['conflict main.tex', 'write other.tex']);
+      expect(t.provider.text(pid, 'main.tex')).toBe('theirs');
+      // The held file keeps its old rev, so it still counts as unsaved.
+      expect(t.manifest().files[t.main].rev).toBe(textRev('mine'));
+
+      // While held, saves don't even try it.
+      await t.save({ held: new Set([t.main]) });
+      expect(t.provider.calls).toEqual([]);
+
+      // Keep mine overwrites it.
+      await t.save({ overwrite: new Set([t.main]) });
+      expect(t.provider.calls).toEqual(['write main.tex']);
+      expect(t.provider.text(pid, 'main.tex')).toBe('more mine');
+      expect(t.manifest().files[t.main].version).toBe('3');
+    });
+
+    it('still throws other errors', async () => {
+      const t = await savedTwice();
+      t.project.getText(t.main).insert(0, 'x');
+      vi.spyOn(t.provider, 'writeFile').mockRejectedValueOnce(new Error('offline'));
+      await expect(t.save()).rejects.toThrow('offline');
+    });
+  });
+
   it('fingerprints text by content and length', () => {
     expect(textRev('abc')).toBe(textRev('abc'));
     expect(textRev('abc')).not.toBe(textRev('abd'));

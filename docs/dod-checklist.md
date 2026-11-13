@@ -28,6 +28,7 @@ Checklist
 - [ ] Drive sign-out: File > Disconnect Google Drive revokes the token and switches saving to the browser without losing edits, and Settings shows who's signed in.
 - [ ] Drive token storage: the token is only in `sessionStorage`, never in `localStorage`, and a reload in the same tab stays signed in.
 - [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
+- [ ] Drive conflicts: a file changed in Drive since the last load or save is never overwritten silently. Saving pauses for that file only, and the conflict dialog's Keep mine, Take theirs, and Save mine as a copy each work.
 - [x] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.
 - [ ] Privacy: Rendezvous metadata does not carry document payload content.

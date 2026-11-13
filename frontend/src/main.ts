@@ -20,6 +20,9 @@ import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
 import { openGooglePicker } from './storage/providers/googlePicker';
 import { manifestFromProject, saveProject, textRev, type SavedManifest } from './storage/projectSaver';
+import type { ConflictChoice, FileConflict } from './storage/conflicts';
+import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
+import { createConflictDialog } from './ui/conflictDialog';
 import { createCollabUndo } from './collab/undo';
 import { CompileScheduler, collectImageUrls } from './compile/compileScheduler';
 import {
@@ -88,6 +91,10 @@ let activeProvider: StorageProvider = localAppProvider;
 let projectId: string | null = null;
 // What the last save wrote, so the next one only sends changes.
 let manifest: SavedManifest | null = null;
+// Files that changed in storage under us, by file id. Saves skip them until the person picks a copy.
+const conflicts = new Map<string, FileConflict>();
+// Files the person chose to overwrite anyway.
+const overwrite = new Set<string>();
 let activeFileId: string | null = null;
 // Only used to match an old single-file Drive link from before projects.
 let documentId = createDocumentId();
@@ -302,12 +309,15 @@ if (!isClient) {
 const autosave = new AutosaveController({
   save: async () => {
     const provider = activeProvider;
+    const forced = new Set(overwrite);
     const result = await saveProject({
       provider,
       project,
       blobs,
       manifest,
       projectId,
+      held: new Set(conflicts.keys()),
+      overwrite: forced,
       onStep: (step) => {
         // Keep progress from a save that fails halfway, unless the project changed under us.
         if (provider !== activeProvider) return;
@@ -319,8 +329,11 @@ const autosave = new AutosaveController({
       manifest = result.manifest;
       projectId = result.manifest.projectId;
       persistAppSession();
+      for (const id of forced) overwrite.delete(id);
+      for (const conflict of result.conflicts) holdConflict(conflict);
     }
     if (result.pending) setTimeout(() => setStatus(`Waiting for ${result.pending} file(s) from peers`), 0);
+    if (conflicts.size) setTimeout(() => setStatus(`Saving paused for ${conflicts.size} file(s) changed in ${provider.label}`), 0);
     return provider.label;
   },
   onStatus: setStatus,
@@ -340,8 +353,50 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
   activeProvider = provider;
   projectId = id;
   manifest = loaded;
+  conflicts.clear();
+  overwrite.clear();
   persistAppSession();
   session.broadcastMetadata({ title: projectName(), storage: currentStorageLabel() });
+}
+
+const conflictDialog = createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement);
+
+/** Hold a file that changed in storage under us, and ask the person which copy to keep. */
+function holdConflict(conflict: FileConflict) {
+  if (conflicts.has(conflict.id)) return;
+  conflicts.set(conflict.id, conflict);
+  void conflictDialog.ask(conflict.path, activeProvider.label).then((choice) => resolveConflict(conflict, choice));
+}
+
+/** Act on the person's pick for a held file, then let saves pick it up again. */
+async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
+  // Skip answers for a project we've since switched away from.
+  const provider = activeProvider;
+  const id = projectId;
+  if (conflicts.get(conflict.id) !== conflict || !id) return;
+  if (choice === 'mine') {
+    overwrite.add(conflict.id);
+    conflicts.delete(conflict.id);
+    await autosave.saveNow();
+    return;
+  }
+  try {
+    // Run in the save queue, so a save can't write this file while we swap its content.
+    await autosave.enqueue(async () => {
+      const resolve = choice === 'copy' ? keepMineAsCopy : takeTheirs;
+      const saved = await resolve({ provider, projectId: id, project, blobs, conflict });
+      if (provider !== activeProvider || !manifest) return;
+      if (saved) manifest.files[conflict.id] = saved;
+      conflicts.delete(conflict.id);
+      persistAppSession();
+    });
+    setStatus(choice === 'copy' ? `Saved your copy of ${conflict.path} as a new file` : `Loaded ${conflict.path} from ${provider.label}`);
+  } catch (error) {
+    // Keep holding the file and ask again, since nothing changed.
+    showNotice(describeError(error), true);
+    conflicts.delete(conflict.id);
+    holdConflict(conflict);
+  }
 }
 
 let compileTimer: ReturnType<typeof setTimeout> | null = null;
@@ -588,7 +643,7 @@ async function switchProject(content: ProjectContent, provider: StorageProvider,
   await autosave.enqueue(async () => {
     activeFileId = null;
     project.replaceAll(content);
-    useProvider(provider, id, id ? manifestFromProject(id, project) : null);
+    useProvider(provider, id, id ? manifestFromProject(id, project, (path) => provider.fileVersion?.(id, path)) : null);
   });
   ensureActiveFile();
   renderFiles();
@@ -1221,8 +1276,8 @@ if (!isClient) titleEl.addEventListener('click', () => void renameProject());
 
 window.addEventListener('beforeunload', (event) => {
   persistAppSession();
-  // Warn before closing if the last save hasn't gone through yet.
-  if (autosave.hasUnsavedChanges()) {
+  // Warn before closing if the last save hasn't gone through yet, or a file is held by a conflict.
+  if (autosave.hasUnsavedChanges() || conflicts.size > 0) {
     event.preventDefault();
     event.returnValue = '';
   }

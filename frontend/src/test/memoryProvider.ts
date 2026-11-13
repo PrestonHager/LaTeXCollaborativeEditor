@@ -1,7 +1,8 @@
-import type { ProjectListing, ProjectSummary, StorageProvider } from '../storage/providers/types';
+import type { ProjectListing, ProjectSummary, StorageProvider, WriteOptions } from '../storage/providers/types';
 import { isInside, replacePrefix } from '../project/paths';
+import { ConflictError } from '../storage/conflicts';
 
-type MemoryProject = { name: string; mainPath: string | null; files: Map<string, Uint8Array | null> };
+type MemoryProject = { name: string; mainPath: string | null; files: Map<string, Uint8Array | null>; versions: Map<string, number> };
 
 /** A storage provider kept in memory, so tests can check exactly what a save wrote. */
 export class MemoryProvider implements StorageProvider {
@@ -24,7 +25,7 @@ export class MemoryProvider implements StorageProvider {
 
   async createProject(name: string): Promise<ProjectSummary> {
     const id = `p${(this.nextId += 1)}`;
-    this.projects.set(id, { name, mainPath: null, files: new Map() });
+    this.projects.set(id, { name, mainPath: null, files: new Map(), versions: new Map() });
     this.calls.push(`create ${name}`);
     return { id, name };
   }
@@ -45,9 +46,30 @@ export class MemoryProvider implements StorageProvider {
     return data;
   }
 
-  async writeFile(projectId: string, path: string, data: string | Uint8Array) {
-    this.get(projectId).files.set(path, typeof data === 'string' ? new TextEncoder().encode(data) : data);
+  async writeFile(projectId: string, path: string, data: string | Uint8Array, options: WriteOptions = {}) {
+    const project = this.get(projectId);
+    // Act like Drive: refuse to overwrite a file that changed since the version the caller saw.
+    const current = project.versions.get(path);
+    if (current !== undefined && options.expectedVersion !== undefined && !options.force && options.expectedVersion !== String(current)) {
+      this.calls.push(`conflict ${path}`);
+      throw new ConflictError(path, String(current));
+    }
+    project.files.set(path, typeof data === 'string' ? new TextEncoder().encode(data) : data);
+    project.versions.set(path, (current ?? 0) + 1);
     this.calls.push(`write ${path}`);
+    return { version: String(current === undefined ? 1 : current + 1) };
+  }
+
+  fileVersion(projectId: string, path: string) {
+    const version = this.get(projectId).versions.get(path);
+    return version === undefined ? undefined : String(version);
+  }
+
+  /** Pretend someone changed a file outside the app, like in the Drive web UI. */
+  editElsewhere(projectId: string, path: string, text: string) {
+    const project = this.get(projectId);
+    project.files.set(path, new TextEncoder().encode(text));
+    project.versions.set(path, (project.versions.get(path) ?? 0) + 1);
   }
 
   async createFolder(projectId: string, path: string) {
@@ -56,11 +78,14 @@ export class MemoryProvider implements StorageProvider {
   }
 
   async move(projectId: string, from: string, to: string) {
-    const files = this.get(projectId).files;
+    const { files, versions } = this.get(projectId);
     for (const [path, data] of [...files]) {
       if (path !== from && !isInside(path, from)) continue;
+      const version = versions.get(path);
       files.delete(path);
+      versions.delete(path);
       files.set(replacePrefix(path, from, to), data);
+      if (version !== undefined) versions.set(replacePrefix(path, from, to), version);
     }
     this.calls.push(`move ${from} ${to}`);
   }
