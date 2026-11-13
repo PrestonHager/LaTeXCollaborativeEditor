@@ -165,6 +165,27 @@ export function createCommands(app: CommandContext) {
   const confirmReplace = (action: ReplaceAction) => guestCount() === 0 || window.confirm(replaceProjectConfirm(action));
   // When the browser blocked the zip picker after an OK, this is when that OK happened.
   let importConfirmedAt = 0;
+  // Whether the host OK'd the confirm for the Open a project dialog that's showing now.
+  // Its Upload .zip button replaces the project too, but the host already said yes, so it doesn't ask again.
+  let openDialogConfirmed = false;
+
+  /** Pick a .zip to open as a new project. Pass alreadyConfirmed when the host just OK'd replacing the project. */
+  function importZip(alreadyConfirmed: boolean) {
+    if (isClient) return;
+    const confirmedRecently = Date.now() - importConfirmedAt < IMPORT_CONFIRM_KEEP_MS;
+    importConfirmedAt = 0;
+    if (guestCount() > 0 && !alreadyConfirmed && !confirmedRecently) {
+      if (!window.confirm(replaceProjectConfirm('import'))) return;
+      // Browsers only open a file picker for a few seconds after a click, and a confirm left open longer uses that up.
+      // Then click() would do nothing, so say so and skip the confirm on the next try.
+      if (navigator.userActivation?.isActive === false) {
+        importConfirmedAt = Date.now();
+        showNotice(IMPORT_PICKER_BLOCKED);
+        return;
+      }
+    }
+    zipInput.click();
+  }
 
   const commandRegistry: Record<CommandId, CommandHandler> = {
     'app.commandPalette': () => {
@@ -177,7 +198,11 @@ export function createCommands(app: CommandContext) {
     },
     'file.openLocal': async () => {
       if (isClient) return;
+      // Only an OK on a real confirm counts. With nobody connected there's nothing to carry over.
+      const asked = guestCount() > 0;
+      openDialogConfirmed = false;
       if (!confirmReplace('open')) return;
+      openDialogConfirmed = asked;
       projectsDialog.open(await localAppProvider.listProjects());
     },
     'file.openDrive': async () => {
@@ -195,22 +220,7 @@ export function createCommands(app: CommandContext) {
       // A folder is a project. A single file opens as a one-file project, like before projects.
       await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
     },
-    'file.importZip': () => {
-      if (isClient) return;
-      const confirmedRecently = Date.now() - importConfirmedAt < IMPORT_CONFIRM_KEEP_MS;
-      importConfirmedAt = 0;
-      if (guestCount() > 0 && !confirmedRecently) {
-        if (!window.confirm(replaceProjectConfirm('import'))) return;
-        // Browsers only open a file picker for a few seconds after a click, and a confirm left open longer uses that up.
-        // Then click() would do nothing, so say so and skip the confirm on the next try.
-        if (navigator.userActivation?.isActive === false) {
-          importConfirmedAt = Date.now();
-          showNotice(IMPORT_PICKER_BLOCKED);
-          return;
-        }
-      }
-      zipInput.click();
-    },
+    'file.importZip': () => importZip(false),
     'file.newFile': () => runFileOp(() => {
       const folder = fileTree.currentFolder();
       const name = window.prompt(`New file${folder ? ` in ${folder}/` : ''}:`, 'chapter.tex');
@@ -510,9 +520,21 @@ export function createCommands(app: CommandContext) {
     executeCommand(commandId);
   }
 
+  /**
+   * The Upload .zip button in the Open a project dialog.
+   * The host already OK'd replacing the project to open that dialog, so it doesn't ask again.
+   * If nobody was connected then, it still asks when a guest has joined since.
+   */
+  function importZipFromOpenDialog() {
+    if (!canRunCommand('file.importZip', isClient)) return;
+    importZip(openDialogConfirmed);
+    refreshCommands();
+  }
+
   return {
     commandRegistry,
     executeCommand,
+    importZipFromOpenDialog,
     refreshCommands,
     getCommandState,
     buildPaletteCommands,

@@ -344,6 +344,44 @@ describe('commands', () => {
       expect(app.zipInput.click).toHaveBeenCalled();
     });
 
+    it('asks once for Upload .zip in the Open dialog after the host OKs Open', async () => {
+      const { app, run, commands } = setup();
+      app.guestCount.mockReturnValue(1);
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      await run('file.openLocal');
+      commands.importZipFromOpenDialog();
+      expect(confirm.mock.calls).toEqual([[replaceProjectConfirm('open')]]);
+      expect(app.zipInput.click).toHaveBeenCalledTimes(1);
+      // The other ways in still ask.
+      await run('file.importZip');
+      expect(confirm).toHaveBeenLastCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).toHaveBeenCalledTimes(2);
+      // A canceled Open doesn't count as a yes.
+      confirm.mockReturnValue(false);
+      await run('file.openLocal');
+      confirm.mockClear();
+      commands.importZipFromOpenDialog();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).toHaveBeenCalledTimes(2);
+    });
+
+    it('asks in the Open dialog when a guest joined after it opened', async () => {
+      const { app, run, commands } = setup();
+      const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      await run('file.openLocal');
+      expect(confirm).not.toHaveBeenCalled();
+      app.guestCount.mockReturnValue(1);
+      commands.importZipFromOpenDialog();
+      expect(confirm).toHaveBeenCalledWith(replaceProjectConfirm('import'));
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+    });
+
+    it('never imports from the Open dialog in a guest tab', () => {
+      const { app, commands } = setup({ isClient: true });
+      commands.importZipFromOpenDialog();
+      expect(app.zipInput.click).not.toHaveBeenCalled();
+    });
+
     it('says so when a slow confirm used up the click, and skips the confirm on the retry', async () => {
       const { app, run } = setup();
       app.guestCount.mockReturnValue(1);

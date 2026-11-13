@@ -602,7 +602,8 @@ const projectsDialog = createProjectsDialog(document.getElementById('projects-di
   onPick: (summary) => {
     if (!isClient) void openStoredProject(localAppProvider, summary.id);
   },
-  onImportZip: () => executeCommand('file.importZip'),
+  // The host already OK'd Open to get here, so this doesn't ask again.
+  onImportZip: () => commands.importZipFromOpenDialog(),
 });
 
 async function openStoredProject(provider: StorageProvider, id: string) {

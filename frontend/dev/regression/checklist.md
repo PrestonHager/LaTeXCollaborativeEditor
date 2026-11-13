@@ -119,6 +119,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands, from the menus, the palette or shortcuts.
 - [ ] Guests can still add, edit and upload files in the host's project.
 - [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first, saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
+- [ ] With a guest connected, OK on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.
 - [ ] With nobody connected, those three open straight away without asking.
 - [ ] With a guest connected, leaving the Upload .zip confirm open for more than 5 seconds and then pressing OK shows a notice that the browser blocked the picker. Choosing Upload .zip again opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
