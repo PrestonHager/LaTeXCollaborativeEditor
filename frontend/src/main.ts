@@ -217,7 +217,8 @@ if (restored) {
       // Sessions from before projects saved to one Drive file, so keep saving there.
       if (!projectId) projectId = driveProvider.legacyProjectId(restored.documentId, toTexName(restored.documentName));
     } else {
-      driveRestoreMessage = 'Drive session expired; saving locally. Reconnect Drive from the File menu.';
+      // The token only lives in this tab's sessionStorage, so a new tab or browser lands here too.
+      driveRestoreMessage = 'Drive needs you to reconnect; saving locally. Use File > Connect Google Drive.';
       projectId = null;
       manifest = null;
     }
@@ -326,6 +327,7 @@ const autosave = new AutosaveController({
 
 // When Drive can't get a new token, switch to local saves so no edits are lost.
 driveProvider.onSessionLost(() => {
+  showDriveAccount();
   if (activeProvider !== driveProvider) return;
   useProvider(localAppProvider, null);
   showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true);
@@ -732,8 +734,17 @@ const ensureDriveConnected = async () => {
   // Clear any leftover "sign-in expired" notice now that we're back.
   appNoticeEl.textContent = '';
   setStatus('Drive: Connected');
+  void driveProvider.loadAccount().then(showDriveAccount);
   return true;
 };
+
+/** Show who's signed in to Drive on the save status badge and in Settings. */
+function showDriveAccount() {
+  const account = driveProvider.accountLabel();
+  autosaveStatusEl.title = account ? `Google Drive: ${account}` : '';
+  if (settingsDialog.isOpen()) settingsDialog.refresh();
+  refreshCommands();
+}
 
 const ensureDrivePickerConfig = () => {
   if (driveApiKey) return true;
@@ -825,6 +836,16 @@ const commandRegistry: Record<CommandId, () => Promise<void> | void> = {
     autosave.enable();
     setStatus(project.getName() ? 'Drive: Connected' : 'Drive: Connected (name the project to save)');
     if (project.getName()) autosave.markDirty();
+  },
+  'file.disconnectDrive': async () => {
+    if (isClient || !driveProvider.isSignedIn()) return;
+    // First, point saves at this browser, so the next save keeps every edit.
+    if (activeProvider === driveProvider) useProvider(localAppProvider, null);
+    // Then let a Drive save that's already running finish before the token goes away.
+    await autosave.enqueue(() => driveProvider.disconnect());
+    showDriveAccount();
+    showNotice('Disconnected Google Drive. Edits now save in this browser.');
+    await autosave.saveNow();
   },
   'file.saveToDrive': async () => {
     if (isClient) return;
@@ -1007,6 +1028,8 @@ const getCommandState = (commandId: CommandId): CommandState => {
       return { enabled: !isClient };
     case 'file.moveDrive':
       return { enabled: !isClient && activeProvider === driveProvider };
+    case 'file.disconnectDrive':
+      return { enabled: !isClient && driveProvider.isSignedIn() };
     case 'file.newFile':
     case 'file.newFolder':
     case 'file.upload':
@@ -1043,7 +1066,13 @@ const commandPalette = createCommandPalette(document.getElementById('command-pal
 });
 
 const settingsDialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
-  getState: () => ({ editorTheme, previewTheme, saveNowEnabled, canChangeSaving: !isClient }),
+  getState: () => ({
+    editorTheme,
+    previewTheme,
+    saveNowEnabled,
+    canChangeSaving: !isClient,
+    driveAccount: driveProvider.isSignedIn() ? (driveProvider.accountLabel() ?? '') : null,
+  }),
   onEditorTheme: (theme) => {
     applyEditorTheme(theme);
     persistAppSession();
@@ -1145,6 +1174,7 @@ if (!isClient) {
       }
       autosave.enable();
       setStatus(driveRestoreMessage ?? 'Autosave On');
+      if (driveProvider.hasUsableToken()) void driveProvider.loadAccount().then(showDriveAccount);
     })
     .catch((error) => {
       console.error('Local storage failed', error);

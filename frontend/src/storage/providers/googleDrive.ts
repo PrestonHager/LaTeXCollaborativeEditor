@@ -12,7 +12,7 @@ type GoogleTokenResponse = {
 type GoogleTokenError = { type?: string; message?: string };
 // The single Drive file an old session was saving to, from before projects.
 type DriveFileRef = { id: string; name: string; documentId?: string };
-type StoredToken = { accessToken: string; expiresAt: number };
+type StoredToken = { accessToken: string; expiresAt: number; account?: string };
 type TokenResult = { ok: true } | { ok: false; reason: string };
 type DriveItem = { id: string; name: string; mimeType?: string; parents?: string[]; appProperties?: Record<string, string>; modifiedTime?: string };
 
@@ -35,6 +35,8 @@ declare global {
 const GIS_SCRIPT = 'https://accounts.google.com/gsi/client';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
+// The about endpoint tells us who's signed in, and works with the drive.file scope we already have.
+const DRIVE_ABOUT_API = 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // Project folders are tagged so "list projects" can find them without seeing the rest of Drive.
 const PROJECT_PROPERTY = 'latexProject';
@@ -47,6 +49,10 @@ const TOKEN_EXPIRY_SLACK_MS = 60_000;
 const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
 // Drive error reasons that mean "slow down and try again".
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
+// Don't hold up a disconnect for long if Google never answers the revoke call.
+const TOKEN_REVOKE_TIMEOUT_MS = 5_000;
+// Old builds kept the token here, where any script on the page could read it.
+const OLD_TOKEN_KEY = 'drive_access_token';
 
 /**
  * Projects in Google Drive. A project is a Drive folder and every project file is a real
@@ -62,12 +68,18 @@ export class GoogleDriveProvider implements StorageProvider {
   private currentStatus = 'Autosave Off';
   private refreshing: Promise<boolean> | null = null;
   private sessionLostHandler: (() => void) | null = null;
+  // The signed-in Google account, once we've looked it up.
+  private account: string | null = null;
+  // Goes up on every sign-out, so a token request that was already running can't sign us back in.
+  private signOuts = 0;
   private readonly indexes = new Map<string, ProjectIndex>();
   // Old single-file project ids that have since become real folders.
   private readonly aliases = new Map<string, string>();
-  private static readonly tokenStorageKey = 'drive_access_token';
+  // NOTE: the token lives in sessionStorage, so it survives a reload but not a new tab or a closed browser.
+  private static readonly tokenStorageKey = 'drive_session_token';
 
   constructor() {
+    removeOldToken();
     this.readStoredAccessToken();
   }
 
@@ -112,6 +124,66 @@ export class GoogleDriveProvider implements StorageProvider {
       localStorage.removeItem(LEGACY_FILE_KEY);
     } catch {
       // Nothing to do if storage is locked down.
+    }
+  }
+
+  /** The email (or name) of the signed-in Google account, if we know it. */
+  accountLabel(): string | null {
+    return this.isSignedIn() ? this.account : null;
+  }
+
+  /**
+   * Look up who's signed in with the Drive about endpoint.
+   * This is best effort, so a failure just leaves the account unknown.
+   */
+  async loadAccount(): Promise<string | null> {
+    if (!this.hasUsableToken()) return null;
+    if (this.account) return this.account;
+    const token = this.accessToken;
+    try {
+      const res = await fetch(DRIVE_ABOUT_API, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return null;
+      const json = (await res.json()) as { user?: { emailAddress?: string; displayName?: string } };
+      const account = json?.user?.emailAddress || json?.user?.displayName || null;
+      // Skip it if we signed out while the lookup was running.
+      if (!account || this.accessToken !== token) return null;
+      this.account = account;
+      this.writeStoredToken();
+      return account;
+    } catch (error) {
+      console.warn('Could not look up the Drive account', error);
+      return null;
+    }
+  }
+
+  /**
+   * Sign out of Drive. First we forget the token and what we know about Drive files,
+   * then we ask Google to revoke the token so it stops working everywhere.
+   */
+  async disconnect(): Promise<void> {
+    const token = this.accessToken;
+    this.signOuts += 1;
+    this.clearAccessToken();
+    this.indexes.clear();
+    this.aliases.clear();
+    this.forgetLegacyFile();
+    this.currentStatus = 'Drive: Disconnected';
+    if (!token) return;
+    try {
+      await loadScript(GIS_SCRIPT, 'Google sign-in');
+      const oauth2 = window.google?.accounts?.oauth2;
+      if (!oauth2?.revoke) throw new Error('Google sign-in script loaded but revoke is missing');
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        new Promise<void>((resolve) => oauth2.revoke(token, () => resolve())),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, TOKEN_REVOKE_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    } catch (error) {
+      // The token is gone from this page either way, and it runs out within the hour.
+      console.warn('Could not revoke the Drive token', error);
     }
   }
 
@@ -540,11 +612,16 @@ export class GoogleDriveProvider implements StorageProvider {
    * when needed, and a second popup after an await gets blocked since it's no longer a user click.
    */
   private requestAccessToken(oauth2: any, clientId: string): Promise<TokenResult> {
+    const signOuts = this.signOuts;
     return new Promise((resolve) => {
       const tokenClient = oauth2.initTokenClient({
         client_id: clientId,
         scope: 'https://www.googleapis.com/auth/drive.file',
         callback: (resp: GoogleTokenResponse) => {
+          if (signOuts !== this.signOuts) {
+            resolve({ ok: false, reason: 'Disconnected' });
+            return;
+          }
           if (!resp?.access_token || resp.error) {
             resolve({ ok: false, reason: describeTokenError(resp?.error, resp?.error_description) });
             return;
@@ -565,19 +642,25 @@ export class GoogleDriveProvider implements StorageProvider {
   private setAccessToken(accessToken: string, expiresAt: number) {
     this.accessToken = accessToken;
     this.tokenExpiresAt = expiresAt;
+    this.writeStoredToken();
+  }
+
+  private writeStoredToken() {
     try {
-      const stored: StoredToken = { accessToken, expiresAt };
-      localStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(stored));
+      const stored: StoredToken = { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt };
+      if (this.account) stored.account = this.account;
+      sessionStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(stored));
     } catch (error) {
-      console.warn('Could not cache the Drive token; you will need to reconnect after reload', error);
+      console.warn('Could not keep the Drive token for this tab; you will need to reconnect after reload', error);
     }
   }
 
   private clearAccessToken() {
     this.accessToken = '';
     this.tokenExpiresAt = 0;
+    this.account = null;
     try {
-      localStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+      sessionStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
     } catch {
       // Nothing else to do if storage is locked down.
     }
@@ -585,19 +668,29 @@ export class GoogleDriveProvider implements StorageProvider {
 
   private readStoredAccessToken() {
     try {
-      const raw = localStorage.getItem(GoogleDriveProvider.tokenStorageKey);
+      const raw = sessionStorage.getItem(GoogleDriveProvider.tokenStorageKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as StoredToken;
       if (!parsed?.accessToken || !parsed?.expiresAt) return;
       if (parsed.expiresAt <= Date.now() + TOKEN_EXPIRY_SLACK_MS) {
-        localStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+        sessionStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
         return;
       }
       this.accessToken = parsed.accessToken;
       this.tokenExpiresAt = parsed.expiresAt;
+      this.account = parsed.account ?? null;
     } catch {
       // Corrupt cache, just start signed out.
     }
+  }
+}
+
+/** Drop a token an old build left in localStorage. */
+function removeOldToken() {
+  try {
+    localStorage.removeItem(OLD_TOKEN_KEY);
+  } catch {
+    // Nothing to do if storage is locked down.
   }
 }
 

@@ -24,6 +24,8 @@ Checklist
 - [ ] Storage errors: an expired Drive session, a blocked sign-in popup, or full browser storage shows a clear message and never overwrites the wrong file.
 - [ ] Drive save errors: a full Drive shows "Google Drive is full" right away without retries, and a Drive rate limit gets retried.
 - [ ] Drive token expiry: after the hour-long token runs out, autosave gets a new one silently, or shows a notice and switches to saving in the browser.
+- [ ] Drive sign-out: File > Disconnect Google Drive revokes the token and switches saving to the browser without losing edits, and Settings shows who's signed in.
+- [ ] Drive token storage: the token is only in `sessionStorage`, never in `localStorage`, and a reload in the same tab stays signed in.
 - [ ] Renames: renaming a project or file never leaves a duplicate in Drive or in browser storage, and a failed save keeps what already made it.
 - [x] Networking: no repository-owned signaling server is required for connection setup.
 - [ ] Rendezvous: the app only contacts the trackers in `VITE_P2P_RENDEZVOUS` (or the defaults), and the console shows no relay errors on load.

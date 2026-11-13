@@ -10,6 +10,7 @@ export type CommandId =
   | 'file.openDrive'
   | 'file.download'
   | 'file.connectDrive'
+  | 'file.disconnectDrive'
   | 'file.saveToDrive'
   | 'file.moveDrive'
   | 'file.renameDrive'

@@ -6,6 +6,8 @@ export type SettingsState = {
   saveNowEnabled: boolean;
   /** Guests can't change how the host saves, so those controls get disabled. */
   canChangeSaving: boolean;
+  /** Who's signed in to Drive. An empty string means signed in but we don't know who yet. */
+  driveAccount?: string | null;
 };
 
 type SettingsDialogOptions = {
@@ -27,6 +29,7 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
   const previewSelect = find<HTMLSelectElement>('#settings-preview-theme');
   const saveNowToggle = find<HTMLInputElement>('#settings-disable-save-now');
   const clearButton = find<HTMLButtonElement>('#settings-clear-local');
+  const driveAccount = find<HTMLElement>('#settings-drive-account');
 
   const close = () => {
     // NOTE: jsdom has no dialog methods, so fall back to the open attribute there.
@@ -60,6 +63,8 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
     saveNowToggle.checked = !state.saveNowEnabled;
     saveNowToggle.disabled = !state.canChangeSaving;
     clearButton.disabled = !state.canChangeSaving;
+    const account = state.driveAccount;
+    driveAccount.textContent = account == null ? 'Not connected' : account ? `Signed in as ${account}` : 'Connected';
   };
 
   const open = () => {

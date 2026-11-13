@@ -45,6 +45,10 @@ Runtime architecture (summary)
 - Every peer checks the messages it gets and drops bad ones, since anyone with the room link can join. The limits are in `docs/protocol.md`. Nothing about this needs a server or any config.
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
+- The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.
+  Older builds kept it in `localStorage` as `drive_access_token`; the app deletes that key on load.
+- **File > Disconnect Google Drive** calls `google.accounts.oauth2.revoke` and clears the token.
+- The signed-in email comes from the Drive `about` endpoint, which works with the `drive.file` scope, so no extra scope is needed.
 - A project in Drive is a folder, tagged with an `appProperties` flag so the app can list its projects.
   Each project file is a real Drive file inside it, with subfolders kept as they are.
 - The app still only asks for the `drive.file` scope. That's enough for every file and folder the app makes.
