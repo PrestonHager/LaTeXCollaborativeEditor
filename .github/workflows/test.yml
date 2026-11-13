@@ -3,6 +3,8 @@ name: Test and Coverage
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -35,3 +37,35 @@ jobs:
         with:
           name: frontend-coverage
           path: frontend/coverage
+
+  e2e-sync:
+    runs-on: ubuntu-latest
+    # Peers meet through public relays we don't run, so a relay outage can fail this job.
+    # Keep it non-blocking and check the report when it goes red.
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Install Playwright
+        run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Run two-browser sync test
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
