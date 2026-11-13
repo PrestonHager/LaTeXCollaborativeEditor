@@ -13,6 +13,8 @@ const commands: KeybindCommand[] = [
 
 function setup(options: { platform?: 'mac' | 'other'; settings?: KeybindSettings; confirm?: boolean } = {}) {
   mountAppShell();
+  // jsdom 31+ (like real browsers) will not focus controls inside a closed <dialog>.
+  document.getElementById('settings-dialog')!.setAttribute('open', '');
   const root = document.getElementById('settings-keybinds')!;
   const keymap = createKeymap(shortcuts, () => options.platform ?? 'other', options.settings);
   const onChange = vi.fn();
