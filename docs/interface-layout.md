@@ -5,8 +5,9 @@ For a picture of how it all connects, see [How the app fits together](how-it-fit
 
 ## Menu bar
 
-The shortcuts on this page are the Windows and Linux ones.
+The shortcuts on this page are the Windows and Linux defaults.
 On a Mac, the menus show the Mac keys instead, like **⌘S** for **Ctrl+S** and **⇧⌘O** for **Ctrl+Shift+O**.
+If you change a shortcut in [Settings](#settings), the menus, toolbar tooltips, and command palette show your keybind instead.
 
 Click a menu to open it, or focus it with **Tab** and use the arrow keys.
 **Escape** closes it.
@@ -141,9 +142,10 @@ Changes apply right away, so there's no save button.
 - **App and editor theme** and **Preview theme**: match system, dark, or light.
 - **Pause saving**: same as **View > Pause Saving**. It stops autosave and **Save Now** until you turn it off, then saves what changed.
 - **Google Drive**: who's signed in, like "Signed in as you@example.com", or "Not connected".
+- **Keyboard shortcuts**: every command with its keybinds. See [Changing shortcuts](keyboard-shortcuts.md#changing-shortcuts).
 - **Clear local projects**: deletes every project saved in this browser, after asking first.
 
-Guests can change themes, but the saving options are turned off since the host decides how the project is saved.
+Guests can change themes and shortcuts, but the saving options are turned off since the host decides how the project is saved.
 
 ## Themes
 

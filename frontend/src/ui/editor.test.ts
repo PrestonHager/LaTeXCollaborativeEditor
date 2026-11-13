@@ -1,5 +1,5 @@
 import { EditorView } from '@codemirror/view';
-import { createEditorPane, editorKeymap } from './editor';
+import { createEditorPane, editorKeybinds, editorKeymap } from './editor';
 
 // Scrolling the cursor into view measures text, which jsdom can't do, so give it empty boxes.
 beforeAll(() => {
@@ -116,6 +116,22 @@ describe('createEditorPane', () => {
       editor.getView().destroy();
       container.remove();
     });
+  });
+
+  it("lists the editor's own keys the app's way, for each platform", () => {
+    const other = editorKeybinds('other');
+    // Indent, undo from the shared undo stack, and delete line.
+    expect(other).toContain('Mod+]');
+    expect(other).toContain('Mod+Z');
+    expect(other).toContain('Mod+Shift+K');
+    // Compile Now has Ctrl+Enter, and plain keys like Enter are never listed.
+    expect(other).not.toContain('Mod+Enter');
+    expect(other).not.toContain('Enter');
+    expect([...other].every((keybind) => /Mod|Ctrl|Alt|Meta|F\d/.test(keybind))).toBe(true);
+    // Some editor keys are different on a Mac, like Ctrl+A for start of line.
+    const mac = editorKeybinds('mac');
+    expect(mac).toContain('Mod+]');
+    expect(mac).not.toEqual(other);
   });
 
   it('inserts text in place of the selection, unless it is read-only', () => {

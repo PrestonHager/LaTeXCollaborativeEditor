@@ -287,6 +287,16 @@
             <span class="label">Google Drive</span>
             <span id="settings-drive-account" class="muted">Not connected</span>
           </div>
+          <!-- Keybinds. keybindSettings.ts draws one row per command into the list. -->
+          <section id="settings-keybinds" class="settings-keybinds" aria-labelledby="settings-keybinds-title">
+            <div class="settings-row">
+              <h3 id="settings-keybinds-title" class="label">Keyboard shortcuts</h3>
+              <button type="button" class="btn" data-variant="outline" data-size="sm" data-keybind-reset>Reset to defaults</button>
+            </div>
+            <p class="muted settings-hint">Press <strong>+</strong> next to a command, then press the keys you want. Your shortcuts are saved in this browser only.</p>
+            <input type="text" class="keybind-search" placeholder="Search commands or keys" enterkeyhint="search" autocomplete="off" aria-label="Search keyboard shortcuts" data-keybind-search />
+            <ul class="keybind-list" aria-label="Commands and their keyboard shortcuts" data-keybind-list></ul>
+          </section>
         </section>
         <footer>
           <button id="settings-clear-local" type="button" class="btn" data-variant="destructive">Clear local projects</button>

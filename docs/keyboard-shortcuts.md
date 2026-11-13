@@ -47,6 +47,39 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 **Compile Now** used to be **Ctrl+Shift+C**, but Chrome and Edge open the element inspector on that key.
 In the editor, **Ctrl+Enter** compiles instead of inserting a blank line.
 
+## Changing shortcuts
+
+Open **Edit > Settings** and scroll to **Keyboard shortcuts**.
+It lists every command, with its keybinds next to it.
+
+- **Add a keybind**: press **+** next to the command, then press the keys you want.
+  A command can have as many keybinds as you like.
+  **Escape** stops without adding one.
+- Keybinds need **Ctrl**, **Alt**, or **⌘** (or **⌥** or **⌃** on a Mac), so plain typing always reaches the editor.
+  **F1** to **F12** work on their own.
+- **Turn off a built-in keybind**: press the **×** on it. It stays in the list, crossed out, with a **Turn on** button.
+  Press **×** on a keybind you added to remove it.
+- **Search** by command name, menu, what it does, or key, like "save" or "Ctrl+S".
+- **Reset to defaults** removes every keybind you added and turns the built-in ones back on.
+
+Your keybinds are saved in this browser only, apart from your projects.
+They're stored with a "main modifier" instead of Ctrl or ⌘, so a keybind you add on Windows shows as ⌘ on a Mac.
+
+The menus, toolbar tooltips, command palette, and tour all show your keybinds as soon as you add them.
+
+### When two commands want the same key
+
+A warning shows under both commands, and says which one runs now.
+A keybind you added wins over a built-in one, and a newer one wins over an older one.
+Press **Use it here** or **Give it to ...** to pick, and the other command's keybind gets turned off.
+
+### Keys the editor or browser keeps
+
+- While you type in the editor, its own keys come first, like **Ctrl+]** to indent or **Ctrl+Z** to undo.
+  If you give one of those to a command, Settings warns you, and the command only runs when the editor doesn't have focus.
+- Some keys belong to the browser, like **Ctrl+W** (close tab), **Ctrl+T** (new tab), and **Ctrl+Shift+C** (inspector), and pages can't take them.
+  Settings warns you about those too.
+
 ## Menus and the palette
 
 - In the menu bar, **Left** and **Right** move between menus, **Down**, **Enter**, or **Space** open one, and **Up** and **Down** move through its items.

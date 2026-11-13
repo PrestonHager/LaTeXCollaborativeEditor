@@ -32,7 +32,10 @@ import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
-import { createKeymap } from './app/keymap';
+import { createKeymap, readKeybindSettings, writeKeybindSettings } from './app/keymap';
+import { createKeybindSettings } from './ui/keybindSettings';
+import { editorKeybinds } from './ui/editor';
+import { detectPlatform } from './ui/modifierShortcutLabels';
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -811,7 +814,19 @@ const commands = createCommands({
   startTour: () => tour.start(),
   openAbout: () => aboutDialog.open(),
 });
-const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, handleKeydown, setSavingPaused } = commands;
+const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, listCommands, handleKeydown, setSavingPaused } = commands;
+
+// Some browsers throw just for touching localStorage when site data is blocked.
+const browserStore = (() => {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+})();
+
+// Keybinds from Settings live in this browser, apart from the project and the app session.
+keymap.setSettings(readKeybindSettings(browserStore, (id) => id in commands.commandRegistry));
 
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
@@ -846,6 +861,21 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
     refreshCommands();
   },
   onClearLocalDocs: () => executeCommand('file.clearLocalDocs'),
+  onOpen: () => keybindSettings.refresh(),
+});
+
+const keybindSettings = createKeybindSettings(document.getElementById('settings-keybinds')!, {
+  keymap,
+  builtins: shortcuts,
+  commands: listCommands,
+  editorKeybinds: editorKeybinds(detectPlatform()),
+  onChange: (settings) => {
+    writeKeybindSettings(browserStore, settings);
+    // A changed keybind shows up everywhere right away.
+    menuBar.refreshShortcuts();
+    toolbar.refreshShortcuts();
+    refreshCommands();
+  },
 });
 
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
@@ -858,14 +888,7 @@ const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as
 
 const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
   shortcutLabel,
-  store: (() => {
-    // Some browsers throw just for touching localStorage when site data is blocked.
-    try {
-      return window.localStorage;
-    } catch {
-      return undefined;
-    }
-  })(),
+  store: browserStore,
 });
 
 // The empty states have their own buttons for the next step, like New file.

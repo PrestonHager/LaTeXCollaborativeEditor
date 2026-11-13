@@ -58,6 +58,8 @@ import {
   Lightbulb,
   Signpost,
   CircleHelp,
+  Plus,
+  TriangleAlert,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -141,6 +143,9 @@ const staticIcons = {
 
 /** Icons for file tree rows, picked by kind. */
 export const fileIcons = { File, FileImage, FileText, Folder, FolderOpen };
+
+/** Icons for the keybind list in Settings. */
+export const keybindIcons = { Plus, X, TriangleAlert };
 
 /** Build an SVG icon. Icons are decorative, so screen readers skip them. */
 export function icon(node: IconNode, className = 'size-4'): SVGElement {

@@ -14,6 +14,7 @@ import { createLayout } from './layout';
 import { IMPORT_PICKER_BLOCKED, createCommands, shortcuts, type CommandContext } from './commands';
 import { createKeymap, type Keymap } from './keymap';
 import { normalizeKeybind } from '../ui/modifierShortcutLabels';
+import { createEditorPane } from '../ui/editor';
 import { paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 
 class FakeLocal extends MemoryProvider {
@@ -743,6 +744,63 @@ describe('commands', () => {
       expect(app.commandPalette.isOpen()).toBe(false);
       commands.handleKeydown(key('p', { ctrlKey: false, metaKey: true }));
       expect(app.commandPalette.isOpen()).toBe(true);
+    });
+
+    it("lets the editor keep its own keys while you type, even when a rule wants one", async () => {
+      // Scrolling the cursor into view measures text, which jsdom can't do.
+      Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+      Range.prototype.getBoundingClientRect = () => new DOMRect();
+      const keymap = createKeymap(shortcuts, () => 'other', {
+        rules: [
+          { id: 'file.download', keybind: 'Mod+]' },
+          { id: 'view.compileNow', keybind: 'Alt+K' },
+        ],
+        disabled: [],
+      });
+      const { commands, app } = setup({ keymap });
+      const container = document.createElement('div');
+      document.body.append(container);
+      const editor = createEditorPane(container);
+      editor.setText('x');
+      window.addEventListener('keydown', commands.handleKeydown);
+      const press = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+        editor.getView().contentDOM.dispatchEvent(event);
+        return event;
+      };
+      try {
+        // Ctrl+] indents in the editor, so the rule giving it to Download doesn't fire there.
+        press({ key: ']', code: 'BracketRight', keyCode: 221, ctrlKey: true });
+        expect(editor.getText()).toBe('  x');
+        expect(app.localDownload.download).not.toHaveBeenCalled();
+        // Plain typing never reaches a command.
+        for (const key of ['a', 'K', ' ']) expect(press({ key }).defaultPrevented, key).toBe(false);
+        press({ key: 'Enter', keyCode: 13 });
+        expect(editor.getText()).toContain('\n');
+        expect(app.compile.compileNow).not.toHaveBeenCalled();
+        // A rule on a key the editor doesn't use works from the editor too.
+        press({ key: 'k', code: 'KeyK', altKey: true });
+        expect(app.compile.compileNow).toHaveBeenCalledTimes(1);
+        // Outside the editor, the rule gets Ctrl+].
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: ']', code: 'BracketRight', ctrlKey: true, cancelable: true }));
+        await vi.waitFor(() => expect(app.localDownload.download).toHaveBeenCalled());
+      } finally {
+        window.removeEventListener('keydown', commands.handleKeydown);
+        container.remove();
+      }
+    });
+
+    it('lists every command once for Settings, menus first', () => {
+      mountAppShell();
+      const menuBar = createMenuBar(document.getElementById('menu-bar')!, { getCommandState: () => ({ enabled: true }), onCommand: () => undefined });
+      const { commands } = setup({ entries: menuBar.entries() });
+      const list = commands.listCommands();
+      const ids = list.map((command) => command.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids[0]).toBe('file.new');
+      expect(ids).toEqual(expect.arrayContaining(['share.copyLink', 'view.darkMode', 'view.toggleEditorTheme', 'edit.paste']));
+      expect(list.find((command) => command.id === 'file.saveNow')).toMatchObject({ label: 'Save Now', section: 'File' });
+      menuBar.destroy();
     });
 
     it('puts keybind labels on palette-only commands too', () => {

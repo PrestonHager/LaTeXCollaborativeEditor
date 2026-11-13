@@ -1,5 +1,6 @@
 import type { CommandId, CommandState, MenuEntry } from '../ui/menuBar';
 import type { PaletteCommand } from '../ui/commandPalette';
+import type { KeybindCommand } from '../ui/keybindSettings';
 import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 import type { ThemeMode } from '../state/appSession';
 import { NEW_PROJECT_CONFIRM, canRunCommand, replaceProjectConfirm, type ReplaceAction } from '../state/guestCommands';
@@ -529,6 +530,20 @@ export function createCommands(app: CommandContext) {
     return [...fromMenus, ...themes, ...extras];
   }
 
+  /** Every command once, in menu order then the palette-only ones, for the keybind list in Settings. */
+  function listCommands(): KeybindCommand[] {
+    const byId = new Map<CommandId, KeybindCommand>();
+    for (const entry of app.menuBar.entries()) {
+      if (!byId.has(entry.commandId)) {
+        byId.set(entry.commandId, { id: entry.commandId, label: entry.label, section: entry.section, description: entry.description });
+      }
+    }
+    for (const { id, label, section, description } of [...themeSwitchCommands, ...paletteOnlyCommands, ...devPaletteCommands]) {
+      if (!byId.has(id)) byId.set(id, { id, label, section, description });
+    }
+    return [...byId.values()];
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     // The editor already handled this key (like its own undo), so don't run it a second time.
     if (event.defaultPrevented) return;
@@ -561,6 +576,7 @@ export function createCommands(app: CommandContext) {
     refreshCommands,
     getCommandState,
     buildPaletteCommands,
+    listCommands,
     handleKeydown,
     setSavingPaused,
   };

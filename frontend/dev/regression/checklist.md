@@ -156,6 +156,12 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
 - [ ] The palette has the palette-only commands: Copy share link, Focus editor, and Switch to dark, light or system theme.
 - [ ] Ctrl+, opens Settings. Its theme selects, Pause Saving and Clear Local Projects all work.
+- [ ] Settings > Keyboard shortcuts lists every command. Press + on Copy share link, then Alt+L: the chip shows, the palette lists Alt+L, and Alt+L copies the link, from the editor too.
+- [ ] While recording, a plain letter says it's for typing, Escape stops, and Tab moves on without adding anything.
+- [ ] Giving Ctrl+S to Compile Now shows a warning on both rows. Use it here on Save Now gives it back, and the Compile Now chip turns off.
+- [ ] The × on Redo's Ctrl+Y crosses it out and Ctrl+Y stops redoing. Turn on brings it back.
+- [ ] Giving Ctrl+] to a command warns that the editor uses it. In the editor Ctrl+] still indents, and outside it runs the command.
+- [ ] Added keybinds are still there after a reload, and Reset to defaults puts everything back.
 - [ ] On Windows and Linux every shortcut label (menus, toolbar tooltips, palette, first tour step) says Ctrl, and the Windows key plus P does not open the palette.
 - [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.

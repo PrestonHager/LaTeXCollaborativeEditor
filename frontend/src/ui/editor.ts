@@ -10,6 +10,8 @@ import type { Extension } from '@codemirror/state';
 import type { EditorDiagnostic } from './diagnostics';
 import { diagnosticsExtensions, setEditorDiagnostics } from './diagnostics';
 import { latexSyntaxHighlighting } from './syntaxHighlight';
+import { yUndoManagerKeymap } from 'y-codemirror.next';
+import { isAssignableKeybind, normalizeKeybind, type Platform } from './modifierShortcutLabels';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
@@ -22,6 +24,21 @@ export const editorKeymap = [
   ...closeBracketsKeymap,
   indentWithTab,
 ];
+
+/**
+ * The editor's own keys that use a modifier, written the app's way (like "Mod+Shift+K").
+ * The editor handles these first while you type in it, so Settings warns before you give one to a command.
+ */
+export function editorKeybinds(platform: Platform): Set<string> {
+  const keys = new Set<string>();
+  for (const binding of [...editorKeymap, ...yUndoManagerKeymap]) {
+    const key = (platform === 'mac' ? binding.mac : binding.win ?? binding.linux) ?? binding.key;
+    // CodeMirror joins with "-", and a trailing "-" is the minus key itself.
+    const keybind = key && normalizeKeybind(key.replace(/-(?!$)/g, '+'), platform);
+    if (keybind && isAssignableKeybind(keybind)) keys.add(keybind);
+  }
+  return keys;
+}
 
 const DEFAULT_DOC = '\\documentclass{article}\n\\begin{document}\nHello, collaborative LaTeX!\n\\end{document}\n';
 
