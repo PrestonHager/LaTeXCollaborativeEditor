@@ -19,6 +19,61 @@ export function markTourSeen(store: KeyValueStore | undefined) {
   }
 }
 
+type Box = { top: number; left: number; right: number; bottom: number };
+type Size = { width: number; height: number };
+export type TourPlacement = 'below' | 'above' | 'right' | 'left';
+
+/**
+ * Work out where the tour card goes so it doesn't cover what it points at. Try below, above,
+ * right, then left of the target, and take the first spot that fits on screen. Tall panes like
+ * the file list or editor have no room above or below, so the card ends up beside them. If no
+ * spot fits (a small window), keep the card on screen where it covers the least of the target.
+ */
+export function placeTourCard(
+  target: Box,
+  card: Size,
+  viewport: Size,
+  margin = 12,
+): { top: number; left: number; placement: TourPlacement } {
+  // Only the part of the target that's on screen matters, some panes run past the edge.
+  const t = {
+    top: Math.max(target.top, 0),
+    left: Math.max(target.left, 0),
+    right: Math.min(target.right, viewport.width),
+    bottom: Math.min(target.bottom, viewport.height),
+  };
+  const maxTop = viewport.height - card.height - margin;
+  const maxLeft = viewport.width - card.width - margin;
+  // Math.max last, so a card bigger than the window still starts at the top left.
+  const onScreenTop = (top: number) => Math.max(margin, Math.min(top, maxTop));
+  const onScreenLeft = (left: number) => Math.max(margin, Math.min(left, maxLeft));
+  const spots: { placement: TourPlacement; top: number; left: number }[] = [
+    { placement: 'below', top: t.bottom + margin, left: onScreenLeft(t.left) },
+    { placement: 'above', top: t.top - card.height - margin, left: onScreenLeft(t.left) },
+    { placement: 'right', top: onScreenTop(t.top), left: t.right + margin },
+    { placement: 'left', top: onScreenTop(t.top), left: t.left - card.width - margin },
+  ];
+  const fits = spots.find((s) => s.top >= margin && s.left >= margin && s.top <= maxTop && s.left <= maxLeft);
+  if (fits) return fits;
+
+  // Nothing fits, so pull each spot onto the screen and pick the one that hides the least.
+  const covered = (top: number, left: number) =>
+    Math.max(0, Math.min(t.right, left + card.width) - Math.max(t.left, left)) *
+    Math.max(0, Math.min(t.bottom, top + card.height) - Math.max(t.top, top));
+  let best = { placement: spots[0].placement, top: 0, left: 0 };
+  let bestCovered = Infinity;
+  for (const spot of spots) {
+    const top = onScreenTop(spot.top);
+    const left = onScreenLeft(spot.left);
+    const area = covered(top, left);
+    if (area < bestCovered) {
+      best = { placement: spot.placement, top, left };
+      bestCovered = area;
+    }
+  }
+  return best;
+}
+
 type TourStep = { target: string; title: string; body: string };
 
 type TourOptions = {
@@ -54,19 +109,13 @@ export function createTour(card: HTMLElement, stepList: HTMLElement, options: To
       return el && !el.closest('[hidden]') && getComputedStyle(el).display !== 'none';
     });
 
-  /** Put the card next to the target: below it if there's room, otherwise above, kept on screen. */
   const position = (target: HTMLElement) => {
-    const rect = target.getBoundingClientRect();
-    const cardRect = card.getBoundingClientRect();
-    const margin = 12;
-    const below = rect.bottom + margin;
-    const fitsBelow = below + cardRect.height < window.innerHeight;
-    let top = fitsBelow ? below : rect.top - cardRect.height - margin;
-    // Big targets like the editor leave no room either way, so sit inside them instead.
-    if (top < margin) top = Math.min(rect.top + margin, window.innerHeight - cardRect.height - margin);
-    const left = Math.min(Math.max(margin, rect.left), window.innerWidth - cardRect.width - margin);
-    card.style.top = `${Math.max(margin, top)}px`;
-    card.style.left = `${Math.max(margin, left)}px`;
+    const { width, height } = card.getBoundingClientRect();
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    const spot = placeTourCard(target.getBoundingClientRect(), { width, height }, viewport);
+    card.style.top = `${spot.top}px`;
+    card.style.left = `${spot.left}px`;
+    card.dataset.placement = spot.placement;
   };
 
   const show = () => {

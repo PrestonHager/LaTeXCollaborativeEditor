@@ -143,6 +143,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] The ? help links next to Share, the save status, the file list and the preview open the matching docs page.
 - [ ] A failed save or a blocked popup shows a notice with a Learn more link.
 - [ ] In a fresh private window, the first-run tour shows once. Skip tour and Esc close it, and Help > Show Tour runs it again.
+- [ ] Each tour card sits next to what it points at without covering it: beside the file list, editor and preview, below the menus and toolbar. In a small window the card stays fully on screen and covers as little of the highlighted part as it can.
 - [ ] The page works at phone width without scrolling sideways.
 
 ## Build

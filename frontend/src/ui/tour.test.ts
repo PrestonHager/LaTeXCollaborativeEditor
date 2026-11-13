@@ -1,4 +1,4 @@
-import { createTour, hasSeenTour, markTourSeen, TOUR_SEEN_KEY } from './tour';
+import { createTour, hasSeenTour, markTourSeen, placeTourCard, TOUR_SEEN_KEY } from './tour';
 import { mountAppShell } from '../test/appShell';
 
 const memoryStore = () => {
@@ -31,6 +31,58 @@ describe('tour state', () => {
     expect(hasSeenTour(brokenStore)).toBe(true);
     expect(() => markTourSeen(brokenStore)).not.toThrow();
     expect(hasSeenTour(undefined)).toBe(false);
+  });
+});
+
+describe('placeTourCard', () => {
+  const card = { width: 352, height: 205 };
+  const desktop = { width: 1280, height: 800 };
+  const box = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom });
+  type Spot = ReturnType<typeof placeTourCard>;
+  const overlaps = (spot: Spot, t: ReturnType<typeof box>) =>
+    spot.left < t.right && spot.left + card.width > t.left && spot.top < t.bottom && spot.top + card.height > t.top;
+
+  it('goes below a short target, lined up with its left edge', () => {
+    const menus = box(110, 10, 317, 42);
+    expect(placeTourCard(menus, card, desktop)).toEqual({ placement: 'below', top: 54, left: 110 });
+  });
+
+  it('goes above when there is no room below', () => {
+    const status = box(1000, 700, 1260, 760);
+    const spot = placeTourCard(status, card, desktop);
+    expect(spot).toEqual({ placement: 'above', top: 700 - 205 - 12, left: 1280 - 352 - 12 });
+  });
+
+  it('puts the card beside tall panes instead of on top of them', () => {
+    const files = box(0, 92, 240, 767);
+    const editor = box(240, 92, 760, 767);
+    // The preview runs a little past the right edge of the window.
+    const preview = box(768, 92, 1288, 767);
+    expect(placeTourCard(files, card, desktop)).toEqual({ placement: 'right', top: 92, left: 252 });
+    expect(placeTourCard(editor, card, desktop)).toEqual({ placement: 'right', top: 92, left: 772 });
+    expect(placeTourCard(preview, card, desktop)).toEqual({ placement: 'left', top: 92, left: 768 - 352 - 12 });
+    for (const target of [files, editor, preview]) expect(overlaps(placeTourCard(target, card, desktop), target)).toBe(false);
+  });
+
+  it('stays on screen and covers as little as it can when nothing fits', () => {
+    const phone = { width: 390, height: 844 };
+    const files = box(0, 164, 240, 811);
+    const spot = placeTourCard(files, card, phone);
+    // Pushed up against the top, only clipping the top of the pane.
+    expect(spot).toEqual({ placement: 'above', top: 12, left: 12 });
+
+    const whole = box(0, 0, 390, 844);
+    const fallback = placeTourCard(whole, card, phone);
+    expect(fallback.top).toBeGreaterThanOrEqual(12);
+    expect(fallback.top + card.height).toBeLessThanOrEqual(844 - 12);
+    expect(fallback.left + card.width).toBeLessThanOrEqual(390 - 12);
+  });
+
+  it('keeps the card at the top left when the window is smaller than the card', () => {
+    const tiny = { width: 200, height: 150 };
+    const spot = placeTourCard(box(0, 0, 100, 100), card, tiny);
+    expect(spot.top).toBe(12);
+    expect(spot.left).toBe(12);
   });
 });
 
