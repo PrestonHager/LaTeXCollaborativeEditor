@@ -31,7 +31,7 @@ describe('expandProjectSource', () => {
     });
     const out = expandProjectSource('main.tex', texts, ['figures/plot.png', 'diagram.pdf']);
     expect(out.source.split('\n')).toEqual(['', '\\includegraphics[]{lcimg1}', '\\includegraphics{diagram.pdf}', '\\includegraphics{gone.png}']);
-    expect(out.images.get('lcimg1')).toEqual({ path: 'figures/plot.png', widthPercent: 50 });
+    expect(out.images.get('lcimg1')).toEqual({ path: 'figures/plot.png', style: 'max-width:100%;width:50%;' });
     expect(out.missing).toEqual(['gone.png']);
   });
 
@@ -68,7 +68,7 @@ describe('projectToPreviewHtml', () => {
   it('puts project images into the preview and maps errors to their file', () => {
     const texts = files({
       'main.tex': '\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n\\input{body}\n\\end{document}',
-      'body.tex': 'Hello\n\\includegraphics[width=\\textwidth]{a.png}\n\\includegraphics{late.png}',
+      'body.tex': 'Hello\n\\includegraphics[width=\\textwidth]{a.png}\n\\includegraphics[width=3cm]{late.png}',
     });
     const result = projectToPreviewHtml({
       mainPath: 'main.tex',
@@ -83,6 +83,7 @@ describe('projectToPreviewHtml', () => {
     expect(images[0].getAttribute('style')).toContain('width:100%');
     expect(images[1].hasAttribute('src')).toBe(false);
     expect(images[1].getAttribute('alt')).toBe('late.png');
+    expect(images[1].getAttribute('style')).toBe('max-width:100%;width:3cm;');
   });
 
   it('points an error in an \\input file at that file', () => {

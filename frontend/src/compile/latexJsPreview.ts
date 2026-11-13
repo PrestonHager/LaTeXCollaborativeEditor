@@ -132,7 +132,7 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.setAttribute('alt', image.path);
-    img.setAttribute('style', `max-width:100%;${image.widthPercent ? `width:${image.widthPercent}%;` : ''}`);
+    img.setAttribute('style', image.style);
     if (url) img.setAttribute('src', url);
     else img.removeAttribute('src');
   }

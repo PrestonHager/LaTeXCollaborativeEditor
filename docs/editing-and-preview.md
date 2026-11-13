@@ -29,7 +29,7 @@ What it reads:
 
 - It starts from the [main file](projects.md#main-file).
 - It pulls in `\input` and `\include` files from the project.
-- `\includegraphics` shows PNG, JPG, GIF, WebP, and SVG images from the project. It follows `\graphicspath`, and widths like `width=0.5\textwidth`.
+- `\includegraphics` shows PNG, JPG, GIF, WebP, and SVG images from the project. It follows `\graphicspath` and the size options `width`, `height`, `scale` and `keepaspectratio`, with relative sizes like `0.5\textwidth` and absolute ones like `5cm` or `2in`. With only a width or a height, the image keeps its proportions. A height relative to `\textheight` is ignored, since the preview has no page height.
 - `\cite` and `\bibliography` become a numbered reference list built from your `.bib` files.
 
 When it runs:

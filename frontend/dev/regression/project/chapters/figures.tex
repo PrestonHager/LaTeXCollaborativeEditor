@@ -2,8 +2,7 @@
 % Expect: this section comes from chapters/figures.tex through \include.
 
 \subsection{Images}
-% Expect: the same four-color image twice.
-% NOTE: the width option is dropped for now, so both come out the same size.
+% Expect: the same four-color image, first full size with a caption under it.
 % The image comes from figures/quadrants.png in the file tree.
 \begin{figure}
   \centering
@@ -11,7 +10,24 @@
   \caption{A project image, full size.}
 \end{figure}
 
+\subsubsection{Image sizes}
+% Expect: an image half as wide as the text column.
+\includegraphics[width=0.5\textwidth]{figures/quadrants}
+
+% Expect: an image 2cm wide (about 76px), with its height kept in proportion.
 \includegraphics[width=2cm]{figures/quadrants}
+
+% Expect: an image 1in tall (96px), with its width kept in proportion.
+\includegraphics[height=1in]{figures/quadrants}
+
+% Expect: an image stretched to 4cm wide and 1cm tall.
+\includegraphics[width=4cm,height=1cm]{figures/quadrants}
+
+% Expect: an image fitted inside 4cm by 1cm without stretching, so it is 1cm tall.
+\includegraphics[width=4cm,height=1cm,keepaspectratio]{figures/quadrants}
+
+% Expect: an image at half its natural size (48px by 32px).
+\includegraphics[scale=0.5]{figures/quadrants}
 
 \subsection{Pictures}
 % Expect: a box with a line across it and a circle in the middle.
