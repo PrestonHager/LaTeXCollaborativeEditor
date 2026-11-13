@@ -118,6 +118,7 @@ const commandIcons: Record<CommandId, IconNode> = {
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
 const staticIcons = {
   CircleHelp,
+  Info,
   Play,
   Save,
   Check,

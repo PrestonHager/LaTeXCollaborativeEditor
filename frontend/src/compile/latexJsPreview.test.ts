@@ -1,4 +1,4 @@
-import { addChangesNote, isDangerousUrl, latexSourceToPreviewHtml, LATEX_JS_ASSET_BASE } from './latexJsPreview';
+import { isDangerousUrl, latexSourceToPreviewHtml, projectToPreviewHtml, LATEX_JS_ASSET_BASE } from './latexJsPreview';
 
 describe('latexSourceToPreviewHtml', () => {
   it('returns HTML for minimal valid LaTeX', () => {
@@ -37,7 +37,7 @@ describe('latexSourceToPreviewHtml', () => {
     expect(html).toContain('<a>??</a>');
   });
 
-  it('adds no note when nothing was changed', () => {
+  it('reports no changes when nothing was changed', () => {
     const { html, changes } = latexSourceToPreviewHtml(
       '\\documentclass{article}\\begin{document}Hi\\end{document}',
     );
@@ -45,7 +45,7 @@ describe('latexSourceToPreviewHtml', () => {
     expect(html).not.toContain('lc-preview-note');
   });
 
-  it('adds a note listing what was stripped or rewritten', () => {
+  it('lists what was stripped or rewritten, but keeps the list out of the document', () => {
     const { html, errors, changes } = latexSourceToPreviewHtml(
       [
         '\\documentclass{article}',
@@ -57,11 +57,10 @@ describe('latexSourceToPreviewHtml', () => {
     );
     expect(errors).toEqual([]);
     expect(changes).toHaveLength(2);
-    const doc = new DOMParser().parseFromString(html ?? '', 'text/html');
-    const note = doc.body.firstElementChild;
-    expect(note?.className).toBe('lc-preview-note');
-    expect(note?.querySelector('summary')?.textContent).toBe('Preview is approximate: 2 changes made for LaTeX.js.');
-    expect(Array.from(note?.querySelectorAll('li') ?? [], (li) => li.textContent)).toEqual(changes);
+    expect(changes[0]).toBe("Removed packages the preview can't load: geometry.");
+    expect(html).not.toContain('Preview is approximate');
+    expect(html).not.toContain('lc-preview-note');
+    expect(html).not.toContain('<details');
   });
 
   it('keeps the change notes when the parse fails', () => {
@@ -70,20 +69,15 @@ describe('latexSourceToPreviewHtml', () => {
     expect(changes).toEqual(["Removed packages the preview can't load: geometry."]);
   });
 
-  it('says "change" for a single change', () => {
-    const doc = new DOMParser().parseFromString('<html><body><p>x</p></body></html>', 'text/html');
-    addChangesNote(doc, ['Removed \\vspace.']);
-    expect(doc.querySelector('summary')?.textContent).toBe('Preview is approximate: 1 change made for LaTeX.js.');
-    expect(doc.body.lastElementChild?.tagName).toBe('P');
-  });
-
-  it('takes the note colors from the preview theme, with light fallbacks', () => {
-    const doc = new DOMParser().parseFromString('<html><body><p>x</p></body></html>', 'text/html');
-    addChangesNote(doc, ['Removed \\vspace.']);
-    const style = doc.querySelector('.lc-preview-note')?.getAttribute('style') ?? '';
-    expect(style).toContain('color:var(--lc-note-text,#555)');
-    expect(style).toContain('background:var(--lc-note-bg,#f6f6f6)');
-    expect(style).toContain('border:1px solid var(--lc-note-border,#ddd)');
+  it('returns the changes for a whole project, with or without a document', () => {
+    const texts = new Map([['main.tex', '\\documentclass{article}\n\\usepackage{geometry}\n\\begin{document}Hi\\end{document}']]);
+    const ok = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: [], imageUrls: new Map() });
+    expect(ok.changes).toEqual(["Removed packages the preview can't load: geometry."]);
+    expect(ok.html).not.toContain('Preview is approximate');
+    texts.set('main.tex', '\\usepackage{geometry}\n\\invalidtokenalone');
+    const failed = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: [], imageUrls: new Map() });
+    expect(failed.html).toBeNull();
+    expect(failed.changes).toEqual(["Removed packages the preview can't load: geometry."]);
   });
 
   it('returns structured error when parse fails', () => {

@@ -266,6 +266,20 @@ label.settings-row { justify-content: flex-start; }
 .preview-pane { position: relative; display: flex; flex-direction: column; }
 .preview-pane > .preview { flex: 1; min-height: 0; height: auto; }
 .pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 0.5rem 0 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
+.pane-bar-actions { display: inline-flex; align-items: center; gap: 0.125rem; }
+/* Info button for "Preview is approximate": an icon and a small count, then a popover listing the changes. */
+.preview-changes[hidden] { display: none; }
+.preview-changes-btn { gap: 0.2rem; color: var(--muted-text); font-variant-numeric: tabular-nums; }
+.preview-changes-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
+/* The tooltip says the same as the popover, so don't stack it on top while it's open. */
+.preview-changes-btn[aria-expanded="true"]::before { display: none; }
+.preview-changes-count { font-size: 11px; line-height: 1; }
+.preview-changes-popover { width: min(22rem, calc(100vw - 2rem)); min-width: 0; max-height: min(24rem, 60vh); margin-top: 0.25rem; padding: 0.75rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
+.preview-changes-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
+.preview-changes-title { margin: 0; font-size: 13px; font-weight: 600; }
+.preview-changes-summary { margin: 0; color: var(--muted-text); }
+.preview-changes-list { margin: 0; padding-left: 1.1rem; list-style: disc; display: grid; gap: 0.2rem; overflow-wrap: anywhere; }
+.preview-changes-learn { justify-self: start; color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .preview-empty { position: absolute; inset: 2rem 0 0 0; z-index: 1; border: 0; background: var(--surface); }
 .editor-file-bar { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
 .editor-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

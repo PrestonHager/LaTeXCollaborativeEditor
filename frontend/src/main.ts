@@ -37,6 +37,7 @@ import { createKeymap, readKeybindSettings, writeKeybindSettings } from './app/k
 import { createKeybindSettings } from './ui/keybindSettings';
 import { editorKeybinds } from './ui/editor';
 import { detectPlatform } from './ui/modifierShortcutLabels';
+import { createPreviewChanges, previewChangesElements } from './ui/previewChanges';
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
@@ -65,6 +66,7 @@ renderStaticIcons();
 const editorPane = document.getElementById('editor-pane') as HTMLElement;
 const editor = createEditorPane(editorPane);
 const preview = createPreviewPane(document.getElementById('preview-pane')!);
+const previewChanges = createPreviewChanges(previewChangesElements());
 const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
 const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
@@ -359,6 +361,8 @@ const compile = createPreviewCompile({
   onEmpty: (empty) => {
     previewEmptyEl.hidden = !empty || (isClient && project.isEmpty());
   },
+  // The info button in the preview bar lists what the preview changed for LaTeX.js.
+  onChanges: (changes) => previewChanges.setChanges(changes),
   // With drive.file we can't see files added to the folder from Drive, so point at the fix.
   missingHint: () => (!isClient && projectState.isDrive() ? DRIVE_MISSING_HINT : ''),
   onCompiled: () => {

@@ -7,9 +7,6 @@ type PreviewColors = {
   background: string;
   text: string;
   link: string;
-  noteText: string;
-  noteBackground: string;
-  noteBorder: string;
   loadingBackground: string;
   loadingText: string;
 };
@@ -23,9 +20,6 @@ export const PREVIEW_COLORS: Record<PreviewDisplayTheme, PreviewColors> = {
     background: '#ffffff',
     text: '#111111',
     link: '#1a4fb2',
-    noteText: '#555555',
-    noteBackground: '#f6f6f6',
-    noteBorder: '#dddddd',
     loadingBackground: 'rgba(255, 255, 255, 0.82)',
     loadingText: '#222222',
   },
@@ -33,9 +27,6 @@ export const PREVIEW_COLORS: Record<PreviewDisplayTheme, PreviewColors> = {
     background: '#1a1a1a',
     text: '#e0e0e0',
     link: '#8ab4ff',
-    noteText: '#b8b8b8',
-    noteBackground: '#242424',
-    noteBorder: '#3a3a3a',
     loadingBackground: 'rgba(0, 0, 0, 0.82)',
     loadingText: '#e0e0e0',
   },
@@ -51,8 +42,7 @@ export const PREVIEW_THEME_STYLE_ID = 'lc-preview-theme';
 export function previewThemeCss(theme: PreviewDisplayTheme): string {
   const c = PREVIEW_COLORS[theme];
   return (
-    `:root{color-scheme:${theme};background:${c.background};color:${c.text};` +
-    `--lc-note-text:${c.noteText};--lc-note-bg:${c.noteBackground};--lc-note-border:${c.noteBorder};}` +
+    `:root{color-scheme:${theme};background:${c.background};color:${c.text};}` +
     `a:link,a:visited{color:${c.link};}` +
     // LaTeX.js draws pictures with a hard-coded black stroke, and filled shapes and arrow
     // heads with the SVG default fill (black). Draw them in the text color instead.
