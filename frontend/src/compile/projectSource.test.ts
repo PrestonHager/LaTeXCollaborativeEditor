@@ -41,12 +41,24 @@ describe('expandProjectSource', () => {
 
   it('swaps project images for tokens, with \\graphicspath and widths', () => {
     const texts = files({
-      'main.tex': '\\graphicspath{{figures/}}\n\\includegraphics[width=0.5\\textwidth]{plot}\n\\includegraphics{diagram.pdf}\n\\includegraphics{gone.png}',
+      'main.tex': '\\graphicspath{{figures/}}\n\\includegraphics[width=0.5\\textwidth]{plot}\n\\includegraphics{data.bin}\n\\includegraphics{gone.png}',
     });
-    const out = expandProjectSource('main.tex', texts, ['figures/plot.png', 'diagram.pdf']);
-    expect(out.source.split('\n')).toEqual(['', '\\includegraphics[]{lcimg1}', '\\includegraphics{diagram.pdf}', '\\includegraphics{gone.png}']);
-    expect(out.images.get('lcimg1')).toEqual({ path: 'figures/plot.png', style: 'max-width:100%;width:50%;' });
+    const out = expandProjectSource('main.tex', texts, ['figures/plot.png', 'data.bin']);
+    expect(out.source.split('\n')).toEqual(['', '\\includegraphics[]{lcimg1}', '\\includegraphics{data.bin}', '\\includegraphics{gone.png}']);
+    expect(out.images.get('lcimg1')).toEqual({ kind: 'image', path: 'figures/plot.png', style: 'max-width:100%;width:50%;' });
     expect(out.missing).toEqual(['gone.png']);
+  });
+
+  it('swaps PDF and EPS figures for tokens too, with the PDF page and crop', () => {
+    const texts = files({
+      'main.tex': '\\includegraphics[page=2,trim=1cm 0 1cm 0,clip,width=3cm]{plot}\n\\includegraphics{wave}\n\\includegraphics{plot.pdf}',
+    });
+    const out = expandProjectSource('main.tex', texts, ['plot.pdf', 'wave.eps']);
+    expect(out.source.split('\n')).toEqual(['\\includegraphics[]{lcimg1}', '\\includegraphics[]{lcimg2}', '\\includegraphics[]{lcimg3}']);
+    const crop = { kind: 'trim', values: [72 / 2.54, 0, 72 / 2.54, 0] };
+    expect(out.images.get('lcimg1')).toEqual({ kind: 'pdf', path: 'plot.pdf', style: 'max-width:100%;width:3cm;', pdf: { page: 2, crop, clip: true } });
+    expect(out.images.get('lcimg2')).toEqual({ kind: 'eps', path: 'wave.eps', style: 'max-width:100%;' });
+    expect(out.images.get('lcimg3')).toEqual({ kind: 'pdf', path: 'plot.pdf', style: 'max-width:100%;', pdf: { page: 1, crop: null, clip: false } });
   });
 
   it('numbers citations and builds a reference list from .bib files', () => {

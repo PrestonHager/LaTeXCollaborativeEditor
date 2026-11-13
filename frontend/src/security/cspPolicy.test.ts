@@ -143,6 +143,18 @@ describe('Content-Security-Policy in index.html', () => {
     expect(cspAllows(csp, 'connect-src', 'ws://localhost:5173/', 'http://localhost:5173')).toBe(true);
   });
 
+  it('lets pdf.js run its self-hosted worker and hand PDF figures to the preview as data: images', () => {
+    // Vite bundles pdf.js's worker into assets/ (src/compile/pdfRender.ts), so it's same-origin.
+    expect(cspAllows(csp, 'worker-src', `${APP_ORIGIN}/assets/pdf.worker.min-abc123.js`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'script-src', `${APP_ORIGIN}/assets/pdfRender-abc123.js`, APP_ORIGIN)).toBe(true);
+    // No CDN for pdf.js, and its WebAssembly decoders stay off (useWasm: false), so no wasm-unsafe-eval.
+    expect(cspAllows(csp, 'worker-src', 'https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.mjs', APP_ORIGIN)).toBe(false);
+    expect(cspAllows(csp, 'worker-src', 'blob:', APP_ORIGIN)).toBe(false);
+    expect(cspAllows(csp, 'img-src', 'data:image/png;base64,AAAA', APP_ORIGIN)).toBe(true);
+    // pdf.js loads embedded fonts with the FontFace API, or as data: fonts as a fallback.
+    expect(csp['font-src']).toContain('data:');
+  });
+
   it('allows every external URL in src/', () => {
     const urls = externalUrls();
     expect(urls.size).toBeGreaterThan(5);

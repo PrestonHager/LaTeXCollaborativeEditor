@@ -33,7 +33,7 @@ Frontend deployment (GitHub Pages)
     The script finds these from `dist/index.html` and the Vite manifest (`dist/.vite/manifest.json`, turned on with `build.manifest` in `vite.config.ts`).
     The budget is **225 kB gzipped**, and going over it fails the build.
     That's the initial load after the trim pass (208.6 kB) plus about 15 kB of headroom, under the 250 kB ceiling below, so the bundle doesn't creep back up unnoticed.
-  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js`. They load on demand and in parallel from the GitHub Pages CDN, so there's no total cap.
+  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js` or `pdf.worker.min-*.js`. They load on demand and in parallel from the GitHub Pages CDN, so there's no total cap.
     Each one warns above 1 MB gzipped and fails the build above 5 MB.
     The build also fails if a lazy chunk ended up in the initial load, either because a module that's imported dynamically is also imported statically, or because initial code statically imports a chunk outside the initial graph.
   - Where the 250 kB ceiling comes from: the goal is an editor you can type in within a few hundred milliseconds.
@@ -113,6 +113,8 @@ Runtime architecture (summary)
 - LaTeX preview runs in the browser via LaTeX.js inside a sandboxed iframe; assets may be loaded from a CDN.
 - The compile runs in a module worker, built to its own `dist/assets/compile.worker-*.js` file.
   It's a plain static file, so static hosting still works. It's a lazy chunk, so it has the per-chunk limit but doesn't count toward the initial-load budget.
+- PDF figures in the preview are drawn with pdf.js (`pdfjs-dist`), which loads only when a document uses one. Its code is the lazy `dist/assets/pdfRender-*.js` chunk, and its own module worker is bundled to `dist/assets/pdf.worker.min-*.js`.
+  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so the CSP still needs no `'wasm-unsafe-eval'`. Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.
   Older builds kept it in `localStorage` as `drive_access_token`; the app deletes that key on load.

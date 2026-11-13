@@ -29,7 +29,7 @@ What it reads:
 
 - It starts from the [main file](projects.md#main-file).
 - It pulls in `\input` and `\include` files from the project.
-- `\includegraphics` shows PNG, JPG, GIF, WebP, and SVG images from the project. It follows `\graphicspath` and the size options `width`, `height`, `scale` and `keepaspectratio`, with relative sizes like `0.5\textwidth` and absolute ones like `5cm` or `2in`. With only a width or a height, the image keeps its proportions. A height relative to `\textheight` is ignored, since the preview has no page height.
+- `\includegraphics` shows PNG, JPG, GIF, WebP, SVG and PDF figures from the project. It follows `\graphicspath` and the size options `width`, `height`, `scale` and `keepaspectratio`, with relative sizes like `0.5\textwidth` and absolute ones like `5cm` or `2in`. With only a width or a height, the image keeps its proportions. A height relative to `\textheight` is ignored, since the preview has no page height. See [Figures](#figures) for PDF and EPS.
 - `\cite` and `\bibliography` become citations and a reference list built from your `.bib` files, in the style set by `\bibliographystyle`. See [Bibliography](#bibliography).
 
 When it runs:
@@ -69,7 +69,32 @@ Clicks on other links never load anything in the frame.
 The frame asks the editor to open the link. The editor checks that the request came from the preview frame, that the address is `http`, `https` or `mailto`, and that you just clicked (the browser's user activation). Without a click, nothing opens. Browsers without user activation tracking open at most one link every 1.5 seconds.
 The frame itself still can't open windows or reach the app.
 
-For what doesn't work, like PDF figures, see [What's supported](whats-supported.md).
+For what doesn't work, like EPS figures, see [What's supported](whats-supported.md).
+
+### Figures
+
+Which figure formats the preview can show:
+
+| Format | In the preview |
+| --- | --- |
+| PNG, JPG, GIF, WebP, SVG | Shown as they are. |
+| PDF | One page, drawn as an image. |
+| EPS | An empty box the size of the figure, with its name. |
+
+**PDF figures.** The preview draws the page with [pdf.js](https://mozilla.github.io/pdf.js/), which loads the first time a document uses a PDF figure.
+It shows page 1, or the page you pick with `page=`, like `\includegraphics[page=2]{plots.pdf}`.
+With no size options, the figure shows at its own size, like in LaTeX. `width`, `height`, `scale` and `keepaspectratio` work as they do for images.
+`trim=left bottom right top` and `viewport=llx lly urx ury` cut the figure down, in `bp` unless you give a unit.
+In the preview they always cut it off, as if `clip` were set. Without `clip`, LaTeX would let the figure spill past the edges, so the ⓘ list says the preview cut it.
+Each page is drawn once and kept until you reload, so typing doesn't redraw it. Changing the file draws it again.
+If a page can't be drawn, like `page=5` in a 2-page file, the preview shows a box with the reason, and the ⓘ list says so too.
+The figure is a picture of the page, so its text can't be selected or searched.
+
+**EPS figures.** The browser can't draw PostScript, and the converters that can, like Ghostscript, aren't part of the editor.
+So the preview shows a dashed box the size of the figure, read from the file's `%%BoundingBox`, with the file name and "EPS can't be previewed; convert it to PDF."
+Size options work on the box like on an image. A file with no `%%BoundingBox` gets a 4 by 3 inch box.
+To see the figure, convert it to PDF, for example with `epstopdf figure.eps` on a computer with TeX installed, and upload the PDF.
+A full TeX engine in the browser would draw EPS too; that's planned.
 
 ## What the preview supports
 
@@ -100,7 +125,7 @@ Rewritten:
 - `figure` (with or without `[H]`) becomes a `center` block, so figures show where they are in the source.
 - `\caption{...}` becomes a bold line.
 - `\footnote{...}` shows inline, in italics and parentheses.
-- `\includegraphics` shows images from the project, and anything else (like a PDF or EPS figure, or a missing file) gets a short note instead.
+- `\includegraphics` shows images and PDF figures from the project. An EPS figure becomes an empty box of the same size, and a file that's missing or can't be shown gets a short note instead.
 - `\nomenclature{symbol}{meaning}` shows just the symbol.
 - authblk's `\author[...]{...}` drops the option, and `\affil{...}` becomes a small line of text.
 - `\textcopyright` becomes ©.
@@ -172,7 +197,7 @@ It's a preview-quality PDF, so expect it to look like the preview, not like a Te
 - The paper size is A4 or US Letter, with 2 cm side margins and 2.5 cm top and bottom ones. `geometry` settings don't apply.
 - There are no page numbers, headers or footers. If your browser adds its own date and URL, turn off **Headers and footers** in the print dialog.
 - Links in the text work in the PDF. There are no PDF bookmarks.
-- Anything the preview can't show, like a PDF figure, is missing from the PDF too.
+- Anything the preview can't show, like an EPS figure, shows the same way in the PDF.
 
 The PDF is made in a hidden frame that can't run scripts, so nothing in the document runs while it prints.
 A full PDF from a real TeX engine, with bookmarks and metadata, needs an in-browser TeX compiler, which is planned.

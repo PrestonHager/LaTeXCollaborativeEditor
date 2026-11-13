@@ -1,10 +1,20 @@
-import { graphicsOptionsToCss } from './graphicsOptions';
-import { dirname, isPreviewableImage, joinPath, normalizePath } from '../project/paths';
+import { graphicsOptionsToCss, pdfFigureOptions, type PdfFigureOptions } from './graphicsOptions';
+import { dirname, extension, isPreviewableImage, joinPath, normalizePath } from '../project/paths';
 import { biblatexStyle, buildBibliography, parseBib, resolveStyle, SUPPORTED_STYLES, type BibEntry, type BibStyle } from './bibStyles';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** A diagnostic that knows which project file it belongs to. */
 export type ProjectDiagnostic = EditorDiagnostic & { path: string };
+
+/**
+ * A figure the preview puts back in place of an image token. `image` is a file the browser can
+ * show as it is. A `pdf` figure is drawn from one page of the file, and an `eps` figure becomes
+ * a placeholder box, since the browser can't draw PostScript.
+ */
+export type ProjectImage =
+  | { kind: 'image'; path: string; style: string }
+  | { kind: 'pdf'; path: string; style: string; pdf: PdfFigureOptions }
+  | { kind: 'eps'; path: string; style: string };
 
 /** Where a line of the expanded source came from, so errors point at the right file. */
 export type SourceLine = { path: string; line: number };
@@ -14,7 +24,7 @@ export type ExpandedSource = {
   /** lineMap[i] is where line i + 1 of `source` came from. */
   lineMap: SourceLine[];
   /** Image tokens put into the source, mapped to the project file they stand for and the CSS for their size. */
-  images: Map<string, { path: string; style: string }>;
+  images: Map<string, ProjectImage>;
   /** Files the source asked for that aren't in the project. */
   missing: string[];
   /** Notes about the source itself, like an unknown cite key or bibliography style. */
@@ -114,9 +124,14 @@ function replaceGraphics(source: string, has: (path: string) => boolean, missing
         missing.add(name);
         return whole;
       }
-      if (!isPreviewableImage(found)) return whole;
+      const ext = extension(found);
+      if (!isPreviewableImage(found) && ext !== 'pdf' && ext !== 'eps') return whole;
       const token = `${IMAGE_TOKEN_PREFIX}${images.size + 1}`;
-      images.set(token, { path: found, style: graphicsOptionsToCss(options?.slice(1, -1)) });
+      const inner = options?.slice(1, -1);
+      const style = graphicsOptionsToCss(inner);
+      if (ext === 'pdf') images.set(token, { kind: 'pdf', path: found, style, pdf: pdfFigureOptions(inner) });
+      else if (ext === 'eps') images.set(token, { kind: 'eps', path: found, style });
+      else images.set(token, { kind: 'image', path: found, style });
       // LaTeX.js needs the options group, even an empty one, or it crashes on a missing width.
       return `\\includegraphics[]{${token}}`;
     });

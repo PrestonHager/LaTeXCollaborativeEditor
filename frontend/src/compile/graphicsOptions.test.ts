@@ -1,4 +1,49 @@
-import { graphicsOptionsToCss, texLengthToCss } from './graphicsOptions';
+import { graphicsOptionsToCss, pdfFigureOptions, pdfImageKey, pdfRenderKey, texLengthToBp, texLengthToCss } from './graphicsOptions';
+
+describe('texLengthToBp', () => {
+  it.each([
+    ['10', 10],
+    ['72bp', 72],
+    ['1in', 72],
+    ['2.54cm', 72],
+    ['25.4mm', 72],
+    ['72.27pt', 72],
+    ['4px', 3],
+    ['-3bp', -3],
+  ])('reads %s as %s bp', (tex, bp) => {
+    expect(texLengthToBp(tex)).toBeCloseTo(bp, 6);
+  });
+
+  it.each(['', 'cm', '\\textwidth', '1furlong', '1zz'])('gives up on %j', (tex) => {
+    expect(texLengthToBp(tex)).toBeNull();
+  });
+});
+
+describe('pdfFigureOptions', () => {
+  it('defaults to page 1, no crop and no clip', () => {
+    expect(pdfFigureOptions(undefined)).toEqual({ page: 1, crop: null, clip: false });
+    expect(pdfFigureOptions('width=3cm')).toEqual({ page: 1, crop: null, clip: false });
+  });
+
+  it('reads page, trim and clip', () => {
+    expect(pdfFigureOptions('page=3, trim=1in 0 0 2bp, clip')).toEqual({ page: 3, crop: { kind: 'trim', values: [72, 0, 0, 2] }, clip: true });
+    expect(pdfFigureOptions('trim={10 20 30 40},clip=false')).toEqual({ page: 1, crop: { kind: 'trim', values: [10, 20, 30, 40] }, clip: false });
+  });
+
+  it('prefers viewport over trim, and ignores a bad page or box', () => {
+    expect(pdfFigureOptions('viewport=0 0 100 50,trim=1 1 1 1').crop).toEqual({ kind: 'viewport', values: [0, 0, 100, 50] });
+    expect(pdfFigureOptions('page=0,trim=1 2 3')).toEqual({ page: 1, crop: null, clip: false });
+    expect(pdfFigureOptions('page=x,viewport=1 2 3 4cm5').page).toBe(1);
+  });
+});
+
+describe('pdfRenderKey and pdfImageKey', () => {
+  it('names a page and its crop', () => {
+    expect(pdfRenderKey({ page: 2, crop: null })).toBe('p2');
+    expect(pdfRenderKey({ page: 1, crop: { kind: 'trim', values: [1 / 3, 0, 0, 2] } })).toBe('p1;trim=0.33,0,0,2');
+    expect(pdfImageKey('figs/a.pdf', 'p2')).toBe('figs/a.pdf#p2');
+  });
+});
 
 describe('texLengthToCss', () => {
   it.each([
