@@ -25,6 +25,18 @@ describe('latexSourceToPreviewHtml', () => {
     expect(html).toContain(LATEX_JS_ASSET_BASE);
   });
 
+  it('keeps \\ref as an in-page link but leaves an unknown label as plain ??', () => {
+    const { html, errors } = latexSourceToPreviewHtml(
+      String.raw`\documentclass{article}\begin{document}` +
+        String.raw`\section{A}\label{a}See \ref{b} and \ref{missing}.\section{B}\label{b}\end{document}`,
+    );
+    expect(errors).toEqual([]);
+    expect(html).toContain('<a href="#sec-2">2</a>');
+    expect(html).toContain('id="sec-2"');
+    expect(html).not.toContain('href="#"');
+    expect(html).toContain('<a>??</a>');
+  });
+
   it('adds no note when nothing was changed', () => {
     const { html, changes } = latexSourceToPreviewHtml(
       '\\documentclass{article}\\begin{document}Hi\\end{document}',

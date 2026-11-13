@@ -51,6 +51,24 @@ The preview runs in a locked-down frame, so a collaborator's links or code can't
 Its fonts and styles load from a CDN.
 Your LaTeX stays in your browser.
 
+When the preview updates, it keeps your scroll position instead of jumping back to the top.
+
+### Links in the preview
+
+- Clicking a cross-reference made with `\ref` scrolls the preview to that section, figure or equation.
+  It works across files too, since the preview is one combined document.
+- A `\ref` to a label that doesn't exist shows `??` as plain text, not a link.
+- Clicking an `\href` or `\url` link to an `http`, `https` or `mailto` address opens it in a new tab (or your mail app).
+  The new tab has no connection back to the editor.
+- Links with any other scheme do nothing when clicked.
+  `javascript:` and `data:` links are removed before the preview shows, so they appear as plain text.
+
+How it works: the editor adds a small script of its own to the preview frame.
+Clicks on in-page links scroll inside the frame.
+Clicks on other links never load anything in the frame.
+The frame asks the editor to open the link, and the editor checks that the request came from the preview frame and that the address is `http`, `https` or `mailto` before opening it.
+The frame itself still can't open windows or reach the app.
+
 For what doesn't work, like PDF figures and BibTeX styles, see [What's supported](whats-supported.md).
 
 ## What the preview supports

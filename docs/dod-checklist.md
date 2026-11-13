@@ -13,7 +13,7 @@ Checklist
 - [x] Diagnostics: compile errors are parsed and highlighted inline on the correct editor lines.
 - [x] Preview: edits trigger an updated, correctly typeset preview using LaTeX.js.
 - [ ] Preview worker: the compile runs in a Web Worker, typing stays smooth on a big document, and a `picture` still renders (it compiles on the main thread).
-- [x] Preview sandbox: the rendered preview runs inside a sandboxed iframe (`allow-scripts` only, no `allow-same-origin`) to isolate execution, `javascript:`/`vbscript:`/`data:` links are stripped, and the LaTeX.js CDN styles and fonts still load.
+- [x] Preview sandbox: the rendered preview runs inside a sandboxed iframe (`allow-scripts` only, no `allow-same-origin`) to isolate execution, `javascript:`/`vbscript:`/`data:` links are stripped, and the LaTeX.js CDN styles and fonts still load. In-page links scroll inside the frame; other links go to the app by `postMessage`, which checks the sender is the preview frame and opens only `http`/`https`/`mailto` with `noopener,noreferrer` (no `allow-popups`).
 - [ ] Projects: you can create a project, add files and folders, rename, move and delete them, and set the main file.
 - [ ] Project images: an uploaded image used with `\includegraphics` shows up in the preview, and `\input` and `\bibliography` resolve against the file tree.
 - [ ] Project sync: a second peer joining the room sees the full file tree and gets uploaded images over WebRTC, with progress, and files over 10 MB are refused.
