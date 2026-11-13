@@ -48,7 +48,7 @@ Checklist
 - [ ] Versioning: the About dialog and footer show the version and commit, the bug form prefills `App version: X.Y.Z+sha`, `npm run build` fails without a valid `dist/version.json`, peers exchange `hello` with their versions (an older peer without it still syncs), and a `vX.Y.Z` release makes a GitHub release from `CHANGELOG.md` and deploys that tag to production (see `docs/versioning.md`).
 - [ ] Changelog: Help > About > View changelog shows `CHANGELOG.md` newest first with the running version marked, `dist/CHANGELOG.md` ships (the page check fails without it), and the update prompt's What's new shows the new deploy's changelog with "New in the update" on newer sections, or the bundled one plus a GitHub link if it can't be fetched.
 - [ ] Trystero 0.26: Share shows a `?room=` link with no console errors, two tabs on the same build sync text and an uploaded image (the e2e-sync jobs), and after a deploy a tab still on the Trystero 0.24 build (protocol 1) gets the update prompt and syncs again once reloaded.
-- [x] Bundle size: `npm run build` passes the bundle check in `scripts/check-bundle-size.mjs`: the initial load (index.html, entry JS and CSS) is under 250 kB gzipped, no lazy chunk is over 5 MB, and no lazy chunk is in the initial load. Lazy chunks over 1 MB are explained in the PR.
+- [x] Bundle size: `npm run build` passes the bundle check in `scripts/check-bundle-size.mjs`: the initial load (index.html, entry JS and CSS) is under the 225 kB gzip budget, no lazy chunk is over 5 MB, and no lazy chunk is in the initial load. Lazy chunks over 1 MB are explained in the PR.
 - [x] Load time: `npm run test:load-time` shows the editor interactive in under a second at 10 Mbps with a 50 ms round trip.
 - [ ] Docs: every menu item, dialog, shortcut, palette command, and status message has a docs section, and `mkdocs build --strict` passes.
 - [ ] Docs diagrams: the UI map, user flows, and state diagrams in `how-it-fits.md` and the sequence diagrams in `protocol.md` render and match the code.
@@ -138,11 +138,11 @@ A box above is only checked when it was actually seen working.
 - Deployment: verified.
   The last three Pages runs passed, the latest on `5cf418c`, and the custom domain serves over HTTPS with a valid certificate.
   `/docs/` returns the MkDocs site.
-- Bundle size: verified locally after the budget split (#127).
-  `npm run build` reported an initial load of 211.8 kB gzip out of the 250 kB budget (index.html 7.1 kB, entry JS 190.7 kB, CSS 13.9 kB).
-  The only lazy chunk is the compile worker, 187.4 kB gzip, about 200 ms at 10 Mbps.
+- Bundle size: verified locally after the initial-load trim, which lowered the budget from 250 kB to 225 kB.
+  `npm run build` reported an initial load of 208.6 kB gzip, down from 241.8 kB (index.html 9.8 kB, entry JS 180.7 kB, CSS 15.7 kB, shared helpers 2.4 kB).
+  The biggest lazy chunks are the compile worker (191.4 kB gzip) and the P2P transport with Trystero (22.6 kB gzip), which loads on the first join or when the pointer reaches Share.
 - Load time: verified locally with `npm run test:load-time`.
-  At 10 Mbps and a 50 ms round trip the editor was interactive in a median of 451 ms (235 ms unthrottled, 967 ms with 4x CPU slowdown).
+  At 10 Mbps and a 50 ms round trip the editor was interactive in a median of 480 ms after the trim, against 576 ms for the same machine before it (986 ms against 1161 ms with 4x CPU slowdown).
 - UI: failed.
   Menus, the command palette (Ctrl+P) and the settings dialog all open above the editor and preview, and the menus and palette work by keyboard.
   With the app theme on Light and the preview theme on Match system while the OS is dark, the preview turns dark but the LaTeX text stays black, so it's unreadable.

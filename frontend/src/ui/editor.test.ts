@@ -50,12 +50,15 @@ describe('createEditorPane', () => {
     container.remove();
   });
 
-  it('setDiagnostics updates lint state', () => {
+  it('setDiagnostics updates lint state', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     const editor = createEditorPane(container);
     editor.setDiagnostics([{ line: 1, severity: 'warning', message: 'w' }]);
     expect(container.querySelector('.cm-warning-line')).toBeTruthy();
+    // The lint gutter loads after the editor, in the same spot as its placeholder.
+    await editor.lintReady();
+    expect(container.querySelectorAll('.cm-gutter-lint')).toHaveLength(1);
     editor.getView().destroy();
     container.remove();
   });

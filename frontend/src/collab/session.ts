@@ -54,6 +54,8 @@ type SessionConfig = {
   build?: Pick<BuildInfo, 'version' | 'commit'>;
   /** A peer said which build it runs. Fires for every hello, matching or not. */
   onPeerVersion?: (peer: PeerVersion) => void;
+  /** The P2P code couldn't be fetched (see PeerSession). The session keeps retrying the join. */
+  onTransportLoadError?: (error: unknown) => void;
 };
 
 export type PersistedDocState = { docId: string; state: Uint8Array };
@@ -134,6 +136,7 @@ export class SessionController {
         // When the host leaves, take the next snapshot from whoever comes back as host.
         if (peerId === this.hostPeerId) this.hostPeerId = null;
       },
+      onLoadError: (error) => this.config.onTransportLoadError?.(error),
     });
     this.config.onConnectionState('Not sharing', 0);
   }
@@ -144,6 +147,11 @@ export class SessionController {
     this.roomId = crypto.randomUUID();
     this.session.joinRoom(this.roomId);
     return this.roomId;
+  }
+
+  /** Start fetching the P2P code before it's needed, like when the pointer reaches Share. */
+  preloadTransport(): Promise<void> {
+    return this.session.preload();
   }
 
   getRoomId() {

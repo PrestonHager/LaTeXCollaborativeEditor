@@ -17,6 +17,7 @@ const joinRoom = vi.fn();
 const sendMessage = vi.fn();
 const close = vi.fn();
 const sendBinary = vi.fn();
+const preload = vi.fn(async () => {});
 let callbacks:
   | {
       onState: (s: string) => void;
@@ -25,6 +26,7 @@ let callbacks:
       onMessage: (payload: unknown, peerId?: string) => void;
       onPeerLeave?: (peerId: string) => void;
       onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
+      onLoadError?: (error: unknown) => void;
     }
   | undefined;
 
@@ -39,9 +41,13 @@ vi.mock('../net/peerSession', () => ({
         onMessage: (payload: unknown, peerId?: string) => void;
         onPeerLeave?: (peerId: string) => void;
         onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
+        onLoadError?: (error: unknown) => void;
       },
     ) {
       callbacks = cb;
+    }
+    preload() {
+      return preload();
     }
     joinRoom(id: string) {
       joinRoom(id);
@@ -100,6 +106,16 @@ describe('SessionController', () => {
       },
     };
   };
+
+  it('preloads the transport and passes load failures on', async () => {
+    const onTransportLoadError = vi.fn();
+    const controller = new SessionController({ isHost: true, onConnectionState: vi.fn(), blobs: new BlobStore(), onTransportLoadError });
+    await controller.preloadTransport();
+    expect(preload).toHaveBeenCalledTimes(1);
+    const error = new Error('offline');
+    callbacks?.onLoadError?.(error);
+    expect(onTransportLoadError).toHaveBeenCalledWith(error);
+  });
 
   it('creates and joins rooms via peer session', () => {
     const controller = new SessionController({

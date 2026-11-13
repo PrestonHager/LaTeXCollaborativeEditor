@@ -14,7 +14,7 @@
 
 ## Validation commands
 - Root: `npm test`, `npm run test:coverage` (frontend coverage), `npm run test:load-time` (optional, throttled load time; see `docs/qa-runbook.md`)
-- In `frontend/`: `npm run build` (fails if the initial load is over the 250 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches)
+- In `frontend/`: `npm run build` (fails if the initial load is over the 225 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches)
 
 ## Required docs updates
 If P2P protocol, bootstrap/build steps, or storage provider behavior changes, update:

@@ -3,14 +3,10 @@ import * as Y from 'yjs';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
 import { createMenuBar, type CommandId } from './ui/menuBar';
-import { createCommandPalette } from './ui/commandPalette';
 import { setupShareButton } from './ui/shareButton';
 import { renderStaticIcons } from './ui/icons';
-import { createSettingsDialog } from './ui/settingsDialog';
 import { createFileTree } from './ui/fileTree';
-import { createUploadDialog } from './ui/uploadDialog';
 import type { ExportDialog } from './ui/exportDialog';
-import { createProjectsDialog } from './ui/projectsDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
 import { createAboutDialog, renderFooterVersion } from './ui/aboutDialog';
@@ -18,8 +14,9 @@ import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
+import { lazyLoadProblem, preloadOnIntent, whenIdle } from './app/lazy';
+import { lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
-import { createTour } from './ui/tour';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
 import { bugReportUrl, featureRequestUrl, SECURITY_REPORT_URL, type IssueArea } from './ui/issueLinks';
@@ -31,8 +28,7 @@ import { GoogleDriveProvider } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
-import { openGooglePicker, pickProjectFiles } from './storage/providers/googlePicker';
-import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFilesFromDrive, addFromDriveNote } from './app/driveAddFiles';
+import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
 import { ProjectState, toTexName } from './app/projectState';
@@ -42,13 +38,11 @@ import { createKeymap } from './app/keymap';
 import { describeKeyContext, reservedKeys, watchKeyContext } from './app/reservedKeys';
 import { createSettingsStore } from './state/settings';
 import { bindSettings, importSettingsFile, resetSettings, settingsFileName } from './app/settingsBinding';
-import { createKeybindSettings } from './ui/keybindSettings';
 import { editorKeybinds } from './ui/editor';
 import { detectPlatform } from './ui/modifierShortcutLabels';
 import { createPreviewChanges, previewChangesElements } from './ui/previewChanges';
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
-import { keepMineAsCopy, takeTheirs } from './storage/conflictResolution';
 import { createConflictDialog } from './ui/conflictDialog';
 import { confirmDialog, promptDialog } from './ui/dialogs';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
@@ -183,6 +177,14 @@ function renderConnection() {
   }
 }
 
+/** A part of the app that loads on first use didn't load. After a deploy, offer the reload. */
+function lazyLoadFailed(feature: string, error: unknown) {
+  console.error(`${feature} failed to load`, error);
+  const { message, staleChunk } = lazyLoadProblem(feature, error);
+  if (staleChunk && updateFlow) updateFlow.offer('stale-chunk');
+  else showNotice(message, true);
+}
+
 // Catch anything a command forgot to handle, so failures never just vanish into the console.
 window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled error', event.reason);
@@ -227,6 +229,7 @@ const session: SessionController = new SessionController({
   initialState: restoredDocState(),
   onDocReplaced: () => bindProject(),
   onPeerVersion: (peer) => updateFlow?.onPeerVersion(peer),
+  onTransportLoadError: (error) => lazyLoadFailed('Sharing', error),
   onFileProgress: (hash, fraction) => {
     if (fraction === null) fileProgress.delete(hash);
     else fileProgress.set(hash, fraction);
@@ -344,6 +347,7 @@ async function resolveConflict(conflict: FileConflict, choice: ConflictChoice) {
   try {
     // Run in the save queue, so a save can't write this file while we swap its content.
     await autosave.enqueue(async () => {
+      const { keepMineAsCopy, takeTheirs } = await import('./storage/conflictResolution');
       const resolve = choice === 'copy' ? keepMineAsCopy : takeTheirs;
       const saved = await resolve({ provider, projectId: id, project, blobs, conflict });
       const { manifest } = projectState;
@@ -678,14 +682,14 @@ async function uploadFiles(files: File[], folder: string) {
   else showNotice(`Uploaded ${results.length} file(s)`);
 }
 
-const uploadDialog = createUploadDialog(document.getElementById('upload-dialog') as HTMLDialogElement, {
+const uploadDialog = lazyUploadDialog(document.getElementById('upload-dialog') as HTMLDialogElement, {
   getFolders: () => project.folderPaths(),
   upload: uploadFile,
   fromDrive: {
     state: () => ({ enabled: getCommandState('file.addFromDrive').enabled, note: addFromDriveNote({ isClient, isDrive: projectState.isDrive() }) }),
     run: () => executeCommand('file.addFromDrive'),
   },
-});
+}, lazyLoadFailed);
 
 // File > Export. The formats come from the exporter registry in src/export/registry.ts. The dialog,
 // the exporters and the Drive upload load on first use, to keep them out of the initial bundle.
@@ -735,13 +739,13 @@ const exportDialog = {
     ),
 };
 
-const projectsDialog = createProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
+const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
   onPick: (summary) => {
     if (!isClient) void openStoredProject(localAppProvider, summary.id);
   },
   // The host already OK'd Open to get here, so this doesn't ask again.
   onImportZip: () => commands.importZipFromOpenDialog(),
-});
+}, lazyLoadFailed);
 
 async function openStoredProject(provider: StorageProvider, id: string) {
   showLoading(`Opening ${provider === driveProvider ? 'from Google Drive' : 'project'}...`);
@@ -835,6 +839,7 @@ const ensureDrivePickerConfig = () => {
 /** Open the Drive picker and turn script or popup failures into a status message. */
 const pickFromDrive = async (kind: 'project' | 'folder') => {
   try {
+    const { openGooglePicker } = await import('./storage/providers/googlePicker');
     return await openGooglePicker({
       accessToken: driveProvider.getAccessToken(),
       apiKey: driveApiKey!,
@@ -927,8 +932,10 @@ const commands = createCommands({
   ensureDriveConnected,
   pickFromDrive,
   showDriveAccount,
-  addFilesFromDrive: () =>
-    addFilesFromDrive({
+  // The command and the Google Picker code load on first use.
+  addFilesFromDrive: async () => {
+    const { addFilesFromDrive } = await import('./app/driveAddFiles');
+    return addFilesFromDrive({
       isClient,
       projectState,
       provider: driveProvider,
@@ -938,10 +945,14 @@ const commands = createCommands({
       ensureDrivePickerConfig,
       ensureDriveConnected,
       holdConflict: (conflict) => holdConflict(conflict, DRIVE_PICK_CONFLICT),
-      pickFiles: (folderId) => pickProjectFiles({ accessToken: driveProvider.getAccessToken(), apiKey: driveApiKey!, appId: driveAppId, folderId }),
+      pickFiles: async (folderId) => {
+        const { pickProjectFiles } = await import('./storage/providers/googlePicker');
+        return pickProjectFiles({ accessToken: driveProvider.getAccessToken(), apiKey: driveApiKey!, appId: driveAppId, folderId });
+      },
       setStatus,
       showNotice,
-    }),
+    });
+  },
   openDocs: (topic) => openExternal(docsUrl(docsBase, topic)),
   openBugForm: () => openExternal(makeBugUrl()),
   openSecurityReport: () => openExternal(SECURITY_REPORT_URL),
@@ -977,11 +988,12 @@ const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const commandPalette = createCommandPalette(document.getElementById('command-palette')!, {
+const commandPalette = lazyCommandPalette(document.getElementById('command-palette')!, {
   onSelect: (commandId) => executeCommand(commandId),
-});
+}, lazyLoadFailed);
 
-const settingsDialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+// Settings and its keybind editor load together on first open (app/lazyUi.ts).
+const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettings(document.getElementById('settings-dialog') as HTMLDialogElement, {
   getState: () => ({
     editorTheme: themeState.editorTheme,
     previewTheme: themeState.previewTheme,
@@ -1007,9 +1019,7 @@ const settingsDialog = createSettingsDialog(document.getElementById('settings-di
   onExportSettings: () => localDownload.download(settingsFileName(), settings.exportJson(), 'application/json'),
   onImportSettings: (file) => importSettingsFile(settings, file),
   onResetSettings: (scope) => resetSettings(settings, scope),
-});
-
-const keybindSettings = createKeybindSettings(document.getElementById('settings-keybinds')!, {
+}, document.getElementById('settings-keybinds')!, {
   keymap,
   contextLabel: () => describeKeyContext(keyContext.current()),
   commands: listCommands,
@@ -1021,7 +1031,7 @@ const keybindSettings = createKeybindSettings(document.getElementById('settings-
     toolbar.refreshShortcuts();
     refreshCommands();
   },
-});
+}, lazyLoadFailed);
 
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
   getCommandState,
@@ -1038,11 +1048,24 @@ const openChangelog = () => void changelogDialog.open();
 const aboutDialog = createAboutDialog(document.getElementById('about-dialog') as HTMLDialogElement, BUILD_INFO, { onViewChangelog: openChangelog });
 renderFooterVersion(document.getElementById('footer-version') as HTMLAnchorElement, BUILD_INFO);
 
-const tour = createTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
+const tour = lazyTour(document.getElementById('tour')!, document.getElementById('tour-steps')!, {
   shortcutLabel,
   // With storage blocked, count the tour as seen so it doesn't pop up on every visit.
   seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
-});
+}, lazyLoadFailed);
+
+// The palette, Settings and the Open and Upload dialogs load on first use. Fetch them once the page
+// is idle, or as soon as the pointer or focus reaches the menus or toolbar, so they open at once.
+const preloadDialogs = () => {
+  commandPalette.preload();
+  preloadSettings();
+  projectsDialog.preload();
+  uploadDialog.preload();
+  tour.preload();
+};
+preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
+preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);
+whenIdle(preloadDialogs);
 
 // The empty states have their own buttons for the next step, like New file.
 document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #preview-empty [data-command]').forEach((button) => {
@@ -1096,6 +1119,8 @@ layout.applyLayoutMode();
 hideLoading();
 scheduleCompile();
 
+// The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share.
+preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
 setupShareButton({
   button: shareButtonEl,
   linkEl: shareLinkEl,
@@ -1190,7 +1215,4 @@ updateFlow = setupUpdateFlow({
 });
 // The update prompt's What's new needs the changelog renderer, and after a deploy its old chunk is
 // gone from the server, so fetch it (about 4 kB) once the tab is idle. Dev has no deploys.
-if (import.meta.env.PROD) {
-  const whenIdle = window.requestIdleCallback ?? ((callback: () => void) => window.setTimeout(callback, 3000));
-  whenIdle(() => void changelogDialog.preload(), { timeout: 10000 });
-}
+if (import.meta.env.PROD) whenIdle(() => void changelogDialog.preload());

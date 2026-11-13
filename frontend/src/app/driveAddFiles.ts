@@ -7,6 +7,10 @@ import { describeError } from '../storage/errors';
 import type { FileConflict } from '../storage/conflicts';
 import { isTextPath } from '../project/paths';
 
+// The short texts live in driveNotes.ts, so the initial bundle has them without this file, which
+// main.ts loads on the first "Add Files from Drive".
+export { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './driveNotes';
+
 /**
  * "Add Files from Drive". The app only has the drive.file scope, so it can't see files someone put
  * in the project folder from Drive itself. Picking them in the Google Picker grants access, then we
@@ -126,13 +130,6 @@ export function describeAddResult(result: MergeResult, notFound: string[]): { me
   return { message: parts.join(' '), isError: notFound.length > 0 || result.failed.length > 0 };
 }
 
-/** Why the command is or isn't available, for the upload dialog. */
-export function addFromDriveNote(state: { isClient: boolean; isDrive: boolean }): string {
-  if (state.isClient) return 'Only the host can add files from their Google Drive.';
-  if (!state.isDrive) return 'Save the project to Google Drive first, then you can add files from its Drive folder.';
-  return 'Files put in the project folder from Drive itself stay hidden until you pick them.';
-}
-
 export type AddFromDriveDeps = {
   isClient: boolean;
   projectState: { isDrive(): boolean; readonly projectId: string | null; readonly manifest: SavedManifest | null };
@@ -200,16 +197,3 @@ export async function addFilesFromDrive(deps: AddFromDriveDeps): Promise<void> {
     showNotice(message, isError);
   });
 }
-
-/**
- * How the conflict dialog words a picked Drive file that meets a project file of the same name.
- * "Keep mine" overwrites Drive's copy, "Use Drive's copy" replaces the project's.
- */
-export const DRIVE_PICK_CONFLICT = {
-  title: 'Same file name in Drive',
-  reason: "is also in the project's Drive folder, with different content, and this copy was never saved there.",
-  theirs: "Use Drive's copy",
-};
-
-/** Said after "Not found in the project" in the preview diagnostics while the project is on Drive. */
-export const DRIVE_MISSING_HINT = "If they're in the project's Drive folder, use File > Add Files from Drive so the app can see them.";

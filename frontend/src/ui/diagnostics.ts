@@ -1,6 +1,6 @@
-import { StateEffect, StateField, RangeSetBuilder } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
-import { linter, type Diagnostic } from '@codemirror/lint';
+import { StateEffect, StateField, RangeSetBuilder, type Extension } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView, gutter } from '@codemirror/view';
+import type { Diagnostic } from '@codemirror/lint';
 
 export type EditorDiagnostic = {
   line: number;
@@ -46,7 +46,8 @@ const lineDecorationsField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
-const diagnosticsLinter = linter((view): Diagnostic[] => {
+/** Lint markers for the diagnostics in the field, read by @codemirror/lint's linter. */
+export function diagnosticsToLint(view: EditorView): Diagnostic[] {
   const diagnostics = view.state.field(diagnosticsField);
   return diagnostics.map((diagnostic) => {
     const line = view.state.doc.line(Math.min(Math.max(diagnostic.line, 1), view.state.doc.lines));
@@ -57,9 +58,30 @@ const diagnosticsLinter = linter((view): Diagnostic[] => {
       message: diagnostic.message,
     };
   });
-});
+}
 
-export const diagnosticsExtensions = [diagnosticsField, lineDecorationsField, diagnosticsLinter];
+/** The diagnostics state and the line highlights. These work without @codemirror/lint. */
+export const diagnosticsExtensions = [diagnosticsField, lineDecorationsField];
+
+/**
+ * An empty gutter as wide as the lint gutter, so the text doesn't shift when the real one arrives
+ * from loadLintExtensions(). The width matches @codemirror/lint's own theme.
+ */
+export const lintGutterPlaceholder: Extension = [
+  gutter({ class: 'cm-gutter-lint' }),
+  EditorView.baseTheme({ '.cm-gutter-lint': { width: '1.4em' } }),
+];
+
+type LintModule = Pick<typeof import('@codemirror/lint'), 'linter' | 'lintGutter'>;
+
+/**
+ * The lint gutter and the hover tooltips for diagnostics. @codemirror/lint isn't needed to show the
+ * editor, so it loads just after the page does (about 5 kB gzipped off the initial load).
+ */
+export async function loadLintExtensions(load: () => Promise<LintModule> = () => import('@codemirror/lint')): Promise<Extension> {
+  const { linter, lintGutter } = await load();
+  return [lintGutter(), linter(diagnosticsToLint)];
+}
 
 export function setEditorDiagnostics(view: EditorView, diagnostics: EditorDiagnostic[]) {
   view.dispatch({
