@@ -44,3 +44,11 @@ and \href{data:text/html,hi}{a data link}.
 \subsection{References}
 \label{sec:refs}
 This is section~\ref{sec:refs}.
+
+\subsection{Verbatim}
+% Expect: the \verb text shows in monospace exactly as typed, backslashes and braces included.
+% Expect: nothing from the comment block shows, and "Before" and "after" stay in one paragraph.
+% Expect: the "Preview is approximate" list doesn't mention \vspace or \addcontentsline,
+% since both only appear inside verbatim-like text.
+Inline code: \verb|\vspace{1em}| and \verb+\footnote{not a footnote}+.
+Before \begin{comment}\addcontentsline{toc}{section}{Hidden}\end{comment} after.
