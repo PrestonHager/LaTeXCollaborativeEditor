@@ -1,6 +1,8 @@
 import { HtmlGenerator, parse } from 'latex.js';
 import { PAGE_BREAK_TOKEN, adaptLatexSource } from './latexJsAdapt';
-import { expandProjectSource, type ProjectDiagnostic } from './projectSource';
+import { expandProjectSource, type ProjectDiagnostic, type ProjectImage } from './projectSource';
+import { pdfImageKey, pdfRenderKey, type PdfCrop, type RenderedPdfFigure } from './graphicsOptions';
+import type { EpsBox } from './epsBoundingBox';
 import { addKatexFontFallbacks } from './katexFonts';
 import { extractVerbatim, insertVerbatimBlocks, type VerbatimBlock } from './verbatimBlocks';
 import type { EditorDiagnostic } from '../ui/diagnostics';
@@ -125,7 +127,17 @@ export type ProjectPreviewInput = {
   binaryPaths: string[];
   /** Data URLs for image files by path. A missing one means its bytes haven't arrived yet. */
   imageUrls: Map<string, string>;
+  /**
+   * PDF figures already drawn as images, by pdfImageKey(path, renderKey). A missing one hasn't
+   * been drawn yet; the result's `pdfFigures` says which ones the document wants.
+   */
+  pdfImages?: Map<string, RenderedPdfFigure>;
+  /** The %%BoundingBox of each EPS file by path, or null when it has none. Missing: no bytes yet. */
+  epsBoxes?: Map<string, EpsBox | null>;
 };
+
+/** A PDF page the document shows as a figure, for the main thread to draw (see figureImages.ts). */
+export type PdfFigureRequest = { path: string; renderKey: string; page: number; crop: PdfCrop | null };
 
 export type ProjectPreviewResult = {
   html: string | null;
@@ -133,6 +145,8 @@ export type ProjectPreviewResult = {
   missing: string[];
   /** What the preview removed or rewrote for LaTeX.js, as plain text. It can quote the document. */
   changes: string[];
+  /** Every PDF page the document uses as a figure, drawn or not. */
+  pdfFigures?: PdfFigureRequest[];
 };
 
 /**
@@ -156,16 +170,120 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
   if (!doc) return { html: null, errors, missing: expanded.missing, changes };
 
   // Images go in after the URL check, since it would strip our data: URLs along with a peer's.
+  const figures = placeFigures(doc, expanded.images, input);
+  return {
+    html: doc.documentElement.outerHTML,
+    errors,
+    missing: expanded.missing,
+    changes: [...changes, ...figures.changes],
+    pdfFigures: figures.pdfFigures,
+  };
+}
+
+/** Class of the box that stands in for a figure the preview can't draw. */
+export const FIGURE_PLACEHOLDER_CLASS = 'lc-figure-placeholder';
+
+// The box is sized like the figure and drawn in the text color, so it works in light and dark.
+const PLACEHOLDER_STYLE =
+  'display:inline-flex;flex-direction:column;justify-content:center;align-items:center;gap:.25em;box-sizing:border-box;' +
+  'border:1px dashed currentColor;padding:.5em;overflow:hidden;vertical-align:bottom;text-align:center;' +
+  'font:12px/1.35 system-ui,sans-serif;text-indent:0;overflow-wrap:anywhere;';
+
+// A placeholder with no %%BoundingBox gets the size of a typical figure: 4 by 3 inches.
+const DEFAULT_BOX: EpsBox = { width: 288, height: 216 };
+
+const hasProperty = (style: string, property: string) => new RegExp(`(^|;)${property}:`).test(style);
+
+const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/**
+ * Add a natural size, in bp, to a figure's option style. A width or height from the options
+ * wins; with neither, the figure shows at its own size, the way LaTeX would.
+ */
+export function naturalSizeStyle(optionStyle: string, width: number, height: number): string {
+  if (hasProperty(optionStyle, 'width') || hasProperty(optionStyle, 'height')) return optionStyle;
+  return `${optionStyle}width:${round2(width)}pt;aspect-ratio:${round2(width)}/${round2(height)};`;
+}
+
+/** The style for a placeholder box: the figure's size, keeping its shape when only one side is set. */
+function placeholderStyle(optionStyle: string, box: EpsBox | null): string {
+  const { width, height } = box ?? DEFAULT_BOX;
+  const sized = naturalSizeStyle(optionStyle.replace(/object-fit:[^;]*;/, ''), width, height);
+  const shaped = hasProperty(sized, 'aspect-ratio') ? sized : `${sized}aspect-ratio:${round2(width)}/${round2(height)};`;
+  return PLACEHOLDER_STYLE + shaped;
+}
+
+/** A framed box in place of a figure, with its file name and why it isn't shown. */
+function placeholder(doc: Document, image: ProjectImage, box: EpsBox | null, message: string): Element {
+  const span = doc.createElement('span');
+  span.setAttribute('class', FIGURE_PLACEHOLDER_CLASS);
+  span.setAttribute('role', 'img');
+  span.setAttribute('aria-label', `${image.path}. ${message}`);
+  span.setAttribute('style', placeholderStyle(image.style, box));
+  const name = doc.createElement('strong');
+  name.textContent = image.path;
+  const note = doc.createElement('span');
+  note.setAttribute('style', 'opacity:.75;');
+  note.textContent = message;
+  span.appendChild(name);
+  span.appendChild(note);
+  return span;
+}
+
+export const EPS_PLACEHOLDER_MESSAGE = "EPS can't be previewed; convert it to PDF.";
+
+/**
+ * Put the project's figures back in place of LaTeX.js's image tokens: images as data: URLs,
+ * PDF pages as the images the main thread drew, and EPS files as placeholder boxes.
+ */
+function placeFigures(
+  doc: Document,
+  images: Map<string, ProjectImage>,
+  input: ProjectPreviewInput,
+): { changes: string[]; pdfFigures: PdfFigureRequest[] } {
+  const pdfFigures = new Map<string, PdfFigureRequest>();
+  let eps = false;
+  let clipped = false;
+  const failed = new Set<string>();
+
   for (const img of Array.from(doc.querySelectorAll('img'))) {
-    const image = expanded.images.get(img.getAttribute('src') ?? '');
+    const image = images.get(img.getAttribute('src') ?? '');
     if (!image) continue;
-    const url = input.imageUrls.get(image.path);
     img.removeAttribute('width');
     img.removeAttribute('height');
     img.setAttribute('alt', image.path);
     img.setAttribute('style', image.style);
-    if (url) img.setAttribute('src', url);
-    else img.removeAttribute('src');
+    img.removeAttribute('src');
+
+    if (image.kind === 'eps') {
+      const box = input.epsBoxes?.get(image.path);
+      // No entry means its bytes haven't arrived, so it stays an empty image until they do.
+      if (box === undefined) continue;
+      eps = true;
+      img.replaceWith(placeholder(doc, image, box, EPS_PLACEHOLDER_MESSAGE));
+    } else if (image.kind === 'pdf') {
+      const renderKey = pdfRenderKey(image.pdf);
+      const key = pdfImageKey(image.path, renderKey);
+      pdfFigures.set(key, { path: image.path, renderKey, page: image.pdf.page, crop: image.pdf.crop });
+      if (image.pdf.crop && !image.pdf.clip) clipped = true;
+      const rendered = input.pdfImages?.get(key);
+      if (!rendered) continue;
+      if ('error' in rendered) {
+        failed.add(`${image.path}: ${rendered.error}`);
+        img.replaceWith(placeholder(doc, image, null, `This PDF figure couldn't be drawn. ${rendered.error}`));
+        continue;
+      }
+      img.setAttribute('style', naturalSizeStyle(image.style, rendered.width, rendered.height));
+      img.setAttribute('src', rendered.url);
+    } else {
+      const url = input.imageUrls.get(image.path);
+      if (url) img.setAttribute('src', url);
+    }
   }
-  return { html: doc.documentElement.outerHTML, errors, missing: expanded.missing, changes };
+
+  const changes: string[] = [];
+  if (eps) changes.push("Showed EPS figures as empty boxes of the same size, since the preview can't draw PostScript. Convert them to PDF to see them.");
+  if (clipped) changes.push('Cut PDF figures off at their trim or viewport, as if clip were set.');
+  for (const reason of failed) changes.push(`Couldn't draw the PDF figure ${reason}`);
+  return { changes, pdfFigures: [...pdfFigures.values()] };
 }

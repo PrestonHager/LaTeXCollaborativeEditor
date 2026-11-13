@@ -6,13 +6,13 @@ import { contentFromFiles } from '../project/projectIo';
 const ROOT = '../../dev/regression/project/';
 
 // Pull the test project in at build time. Text comes in as strings, images as data URLs.
-// The .py file is there for \lstinputlisting.
-const texts = import.meta.glob<string>('../../dev/regression/project/**/*.{tex,bib,py}', {
+// The .py file is there for \lstinputlisting. EPS figures are plain PostScript text, so they come in as strings too.
+const texts = import.meta.glob<string>('../../dev/regression/project/**/*.{tex,bib,py,eps}', {
   query: '?raw',
   import: 'default',
   eager: true,
 });
-const images = import.meta.glob<string>('../../dev/regression/project/**/*.png', {
+const images = import.meta.glob<string>('../../dev/regression/project/**/*.{png,pdf}', {
   query: '?inline',
   import: 'default',
   eager: true,

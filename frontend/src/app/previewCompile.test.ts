@@ -6,7 +6,7 @@ import { COMPILE_DEBOUNCE_MS, COMPILE_MIN_INTERVAL_MS, createPreviewCompile } fr
 
 const ok = (overrides: Partial<ProjectPreviewResult> = {}): ProjectPreviewResult => ({ html: '<p>ok</p>', errors: [], missing: [], changes: [], ...overrides });
 
-type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onChanges' | 'onCompiled' | 'onCompileError' | 'missingHint'>;
+type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onChanges' | 'onCompiled' | 'onCompileError' | 'missingHint' | 'loadPdfRenderer'>;
 
 function setup(content: ProjectContent = starterProject('Paper'), hooks: Hooks = {}) {
   const project = new ProjectDoc(new Y.Doc());
@@ -198,6 +198,34 @@ describe('preview compile', () => {
     compile.invalidate();
     await compile.runCompile();
     expect(compiler.compile.mock.calls[1][0].imageUrls.get('fig.png')).toBe('data:image/png;base64,AQID');
+  });
+
+  it('passes EPS boxes in, and draws PDF figures before showing the document', async () => {
+    const render = vi.fn(async () => ({ url: 'data:image/png;base64,PDF', width: 20, height: 10 }));
+    const loadPdfRenderer = vi.fn(async () => render);
+    const { compile, compiler, project, bytes, preview } = setup(starterProject('Paper'), { loadPdfRenderer });
+    project.putBinaryFile('plot.pdf', 'pdf', 4);
+    project.putBinaryFile('wave.eps', 'eps', 30);
+    bytes.set('pdf', new Uint8Array([37, 80, 68, 70]));
+    bytes.set('eps', new TextEncoder().encode('%!PS\n%%BoundingBox: 0 0 40 20\n'));
+    const request = { path: 'plot.pdf', renderKey: 'p1', page: 1, crop: null };
+    compiler.compile.mockResolvedValueOnce(ok({ html: '<p>first</p>', pdfFigures: [request] }));
+    compiler.compile.mockResolvedValueOnce(ok({ html: '<p>with figure</p>', pdfFigures: [request] }));
+    await compile.runCompile();
+    expect(compiler.compile).toHaveBeenCalledTimes(2);
+    expect(compiler.compile.mock.calls[0][0].epsBoxes).toEqual(new Map([['wave.eps', { width: 40, height: 20 }]]));
+    expect(compiler.compile.mock.calls[1][0].pdfImages).toEqual(new Map([['plot.pdf#p1', { url: 'data:image/png;base64,PDF', width: 20, height: 10 }]]));
+    expect(preview.renderHtml).toHaveBeenCalledTimes(1);
+    expect(preview.renderHtml).toHaveBeenCalledWith('<p>with figure</p>');
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it("doesn't load the figure code for a project with no PDF or EPS files", async () => {
+    const loadPdfRenderer = vi.fn();
+    const { compile, compiler } = setup(starterProject('Paper'), { loadPdfRenderer });
+    await compile.runCompile();
+    expect(compiler.compile.mock.calls[0][0].epsBoxes).toBeUndefined();
+    expect(loadPdfRenderer).not.toHaveBeenCalled();
   });
 
   it('tells the page about diagnostics, an empty project, and each compile outcome', async () => {

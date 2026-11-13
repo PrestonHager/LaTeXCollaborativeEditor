@@ -137,3 +137,80 @@ describe('isDangerousUrl', () => {
     expect(isDangerousUrl('#section')).toBe(false);
   });
 });
+
+describe('projectToPreviewHtml figures', () => {
+  const doc = (body: string) => new Map([['main.tex', `\\documentclass{article}\\usepackage{graphicx}\\begin{document}\n${body}\n\\end{document}`]]);
+  const parse = (html: string | null) => new DOMParser().parseFromString(html!, 'text/html');
+
+  it('asks for each PDF page once, and leaves the image empty until it is drawn', () => {
+    const texts = doc('\\includegraphics{plot.pdf}\\includegraphics[width=2cm]{plot}\\includegraphics[page=2]{plot}');
+    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: ['plot.pdf'], imageUrls: new Map() });
+    expect(result.errors).toEqual([]);
+    expect(result.pdfFigures).toEqual([
+      { path: 'plot.pdf', renderKey: 'p1', page: 1, crop: null },
+      { path: 'plot.pdf', renderKey: 'p2', page: 2, crop: null },
+    ]);
+    const imgs = parse(result.html).querySelectorAll('img');
+    expect(imgs).toHaveLength(3);
+    for (const img of imgs) {
+      expect(img.getAttribute('src')).toBeNull();
+      expect(img.getAttribute('alt')).toBe('plot.pdf');
+    }
+    expect(result.changes).toEqual([]);
+  });
+
+  it('shows a drawn PDF page at its natural size, unless the options size it', () => {
+    const texts = doc('\\includegraphics{plot.pdf}\\includegraphics[width=2cm]{plot.pdf}');
+    const pdfImages = new Map([['plot.pdf#p1', { url: 'data:image/png;base64,AAAA', width: 144, height: 96 }]]);
+    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: ['plot.pdf'], imageUrls: new Map(), pdfImages });
+    const [natural, sized] = parse(result.html).querySelectorAll('img');
+    expect(natural.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+    expect(natural.getAttribute('style')).toBe('max-width:100%;width:144pt;aspect-ratio:144/96;');
+    expect(sized.getAttribute('style')).toBe('max-width:100%;width:2cm;');
+  });
+
+  it('notes a trim without clip, and puts a box with the reason in place of a PDF that failed', () => {
+    const texts = doc('\\includegraphics[trim=1 2 3 4]{plot.pdf}\\includegraphics[page=9]{plot.pdf}');
+    const pdfImages = new Map([
+      ['plot.pdf#p1;trim=1,2,3,4', { url: 'data:image/png;base64,AAAA', width: 10, height: 10 }],
+      ['plot.pdf#p9', { error: 'It has no page 9 (it has 2).' }],
+    ]);
+    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: ['plot.pdf'], imageUrls: new Map(), pdfImages });
+    expect(result.changes).toEqual([
+      'Cut PDF figures off at their trim or viewport, as if clip were set.',
+      "Couldn't draw the PDF figure plot.pdf: It has no page 9 (it has 2).",
+    ]);
+    const box = parse(result.html).querySelector('.lc-figure-placeholder')!;
+    expect(box.textContent).toContain('It has no page 9');
+    expect(box.getAttribute('role')).toBe('img');
+  });
+
+  it('puts a box the size of the %%BoundingBox in place of an EPS figure', () => {
+    const texts = doc('\\includegraphics{wave.eps}\\includegraphics[width=0.5\\textwidth]{wave}\\includegraphics[height=1cm]{none.eps}');
+    const epsBoxes = new Map([
+      ['wave.eps', { width: 144, height: 72 }],
+      ['none.eps', null],
+    ]);
+    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: ['wave.eps', 'none.eps'], imageUrls: new Map(), epsBoxes });
+    const boxes = [...parse(result.html).querySelectorAll('.lc-figure-placeholder')];
+    expect(boxes).toHaveLength(3);
+    expect(boxes[0].textContent).toBe("wave.epsEPS can't be previewed; convert it to PDF.");
+    expect(boxes[0].getAttribute('style')).toContain('width:144pt;aspect-ratio:144/72;');
+    expect(boxes[1].getAttribute('style')).toContain('width:50%;aspect-ratio:144/72;');
+    expect(boxes[1].getAttribute('style')).not.toContain('144pt');
+    // No box in the file: a 4 by 3 shape, with the height from the options.
+    expect(boxes[2].getAttribute('style')).toContain('height:1cm;aspect-ratio:288/216;');
+    expect(boxes[2].getAttribute('style')).not.toContain('object-fit');
+    expect(result.changes).toEqual([
+      "Showed EPS figures as empty boxes of the same size, since the preview can't draw PostScript. Convert them to PDF to see them.",
+    ]);
+  });
+
+  it('keeps an empty image for an EPS file whose bytes have not arrived', () => {
+    const result = projectToPreviewHtml({ mainPath: 'main.tex', texts: doc('\\includegraphics{wave.eps}'), binaryPaths: ['wave.eps'], imageUrls: new Map() });
+    const img = parse(result.html).querySelector('img')!;
+    expect(img.getAttribute('alt')).toBe('wave.eps');
+    expect(img.getAttribute('src')).toBeNull();
+    expect(result.changes).toEqual([]);
+  });
+});

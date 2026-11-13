@@ -1,6 +1,7 @@
 import { BlobStore } from '../project/blobStore';
 import { REGRESSION_PROJECT_NAME, dataUrlBytes, regressionProject } from './regressionProject';
 import { projectToPreviewHtml } from '../compile/latexJsPreview';
+import { parseEpsBoundingBox } from '../compile/epsBoundingBox';
 
 describe('regressionProject', () => {
   it('loads every file in dev/regression/project with main.tex as the main file', async () => {
@@ -15,7 +16,9 @@ describe('regressionProject', () => {
       'chapters/hello.py',
       'chapters/math.tex',
       'chapters/text.tex',
+      'figures/chart.pdf',
       'figures/quadrants.png',
+      'figures/wave.eps',
       'main.tex',
       'refs.bib',
       ...['abbrv', 'alpha', 'apalike', 'biblatex', 'citations', 'ieeetr', 'natbib', 'unknown', 'unsrt'].map((name) => `styles/${name}.tex`),
@@ -57,6 +60,34 @@ describe('regressionProject', () => {
     const doc = new DOMParser().parseFromString(result.html!, 'text/html');
     expect(doc.querySelectorAll('pre.lc-listing').length).toBe(6);
     expect(doc.body.textContent).toContain('Listing 3: A minted listing');
+  });
+
+  it('compiles the PDF and EPS figures, asking for each PDF page and boxing the EPS file', async () => {
+    const blobs = new BlobStore();
+    const content = await regressionProject(blobs);
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    // jsdom can't measure the picture, so compile the figures chapter up to it.
+    const figures = texts.get('chapters/figures.tex')!;
+    texts.set('figures-only.tex', `\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n${figures.slice(0, figures.indexOf('\\subsection{Pictures}'))}\n\\end{document}`);
+    const eps = content.files.find((file) => file.path === 'figures/wave.eps')!;
+    const binaryPaths = content.files.filter((file) => file.kind === 'binary').map((file) => file.path);
+    const drawn = { url: 'data:image/png;base64,AAAA', width: 144, height: 96 };
+    const result = projectToPreviewHtml({
+      mainPath: 'figures-only.tex',
+      texts,
+      binaryPaths,
+      imageUrls: new Map(),
+      epsBoxes: new Map([['figures/wave.eps', parseEpsBoundingBox(blobs.peek(eps.hash!)!)]]),
+      pdfImages: new Map([['figures/chart.pdf#p1', drawn], ['figures/chart.pdf#p2', drawn], ['figures/chart.pdf#p1;trim=90,8,18,11', drawn]]),
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.missing).toEqual([]);
+    expect(result.pdfFigures!.map((figure) => figure.renderKey)).toEqual(['p1', 'p2', 'p1;trim=90,8,18,11']);
+    const doc = new DOMParser().parseFromString(result.html!, 'text/html');
+    expect(doc.querySelectorAll('img[alt="figures/chart.pdf"][src^="data:image/png"]').length).toBe(3);
+    const boxes = doc.querySelectorAll('.lc-figure-placeholder');
+    expect(boxes.length).toBe(2);
+    expect(boxes[0].getAttribute('style')).toContain('width:144pt;aspect-ratio:144/72;');
   });
 
   it('compiles every bibliography style file, with notes only in unknown.tex', async () => {

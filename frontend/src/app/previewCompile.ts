@@ -1,4 +1,5 @@
 import { CompileScheduler, collectImageUrls } from '../compile/compileScheduler';
+import type { FigureCompile, RenderPdfFigure } from '../compile/figureImages';
 import { encodeYjsState } from '../state/appSession';
 import { textRev } from '../storage/projectSaver';
 import type { BlobStore } from '../project/blobStore';
@@ -20,6 +21,8 @@ type PreviewCompileOptions = {
   diagnosticsEl: HTMLElement;
   // Tests hand in a fake compiler. The app uses the worker one.
   compiler?: Pick<CompileScheduler, 'compile'>;
+  /** Tests hand in a fake PDF renderer. The app loads pdf.js the first time it's needed. */
+  loadPdfRenderer?: () => Promise<RenderPdfFigure>;
   /** Called with every diagnostics line, and which docs topic explains it, so the page can show a help link. */
   onDiagnostics?: (text: string, topic: DiagnosticsTopic) => void;
   /** Called with true when there's no main file to show, so the page can say how to pick one. */
@@ -34,6 +37,9 @@ type PreviewCompileOptions = {
   /** Extra words after "Not found in the project", like where to look for the missing files. */
   missingHint?: () => string;
 };
+
+/** Files the preview needs figureImages.ts for: PDF and EPS figures. */
+const FIGURE_FILE = /\.(?:pdf|eps)$/i;
 
 export type DiagnosticsTopic = 'diagnostics' | 'previewErrors';
 
@@ -53,6 +59,7 @@ export function createPreviewCompile({
   onCompiled,
   onCompileError,
   missingHint,
+  loadPdfRenderer,
 }: PreviewCompileOptions) {
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -60,6 +67,8 @@ export function createPreviewCompile({
   let lastCompileStartedAt = 0;
   let compileSequence = 0;
   const imageUrls = new Map<string, string>();
+  // PDF and EPS figures (figureImages.ts), loaded only once a project has such a file.
+  let figures: Promise<FigureCompile> | null = null;
 
   /** A data: URL for an image file, if we have its bytes. Cached by content hash. */
   const imageUrl = (path: string): string | null => {
@@ -108,7 +117,13 @@ export function createPreviewCompile({
     preview.setLoading(true);
     try {
       const binaryPaths = binaries.map((entry) => entry.path);
-      const result = await compiler.compile({ mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) });
+      const input = { mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) };
+      const withFigures = binaries.some((entry) => FIGURE_FILE.test(entry.path))
+        ? await (figures ??= import('../compile/figureImages').then((module) => module.createFigureCompile(blobs, loadPdfRenderer)))
+        : null;
+      const result = withFigures
+        ? await withFigures(binaries, input, compiler, () => seq === compileSequence)
+        : await compiler.compile(input);
       if (!result || seq !== compileSequence) return;
       const { html, errors, missing } = result;
       if (html) {

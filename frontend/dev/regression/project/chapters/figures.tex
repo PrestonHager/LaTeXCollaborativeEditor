@@ -29,6 +29,24 @@
 % Expect: an image at half its natural size (48px by 32px).
 \includegraphics[scale=0.5]{figures/quadrants}
 
+\subsection{PDF and EPS figures}
+% Expect: a bar chart (red, green and blue bars on axes, "PDF figure p1" at the top) at its
+% natural size, 2in by 1.33in. It comes from page 1 of figures/chart.pdf, drawn with pdf.js.
+\includegraphics{figures/chart.pdf}
+
+% Expect: page 2 of the same PDF, a blue diamond with "page 2" on it, 3cm wide.
+\includegraphics[page=2,width=3cm]{figures/chart}
+
+% Expect: only the right-hand blue bar of page 1, cut out with trim and clip, 1in tall.
+\includegraphics[trim=90bp 8bp 18bp 11bp,clip,height=1in]{figures/chart.pdf}
+
+% Expect: a dashed box 2in by 1in (the file's %%BoundingBox) with the name figures/wave.eps
+% and "EPS can't be previewed; convert it to PDF." in it. The ⓘ list says EPS figures show as boxes.
+\includegraphics{figures/wave.eps}
+
+% Expect: the same EPS box at half the column width, keeping its 2:1 shape.
+\includegraphics[width=0.5\textwidth]{figures/wave}
+
 \subsection{Pictures}
 % Expect: a box with a line across it and a circle in the middle.
 % A picture compiles on the main thread instead of the worker, since LaTeX.js needs the real DOM to size it.

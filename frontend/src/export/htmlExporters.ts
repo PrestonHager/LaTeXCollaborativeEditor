@@ -4,6 +4,7 @@ import { isPreviewableImage, mimeType } from '../project/paths';
 import { withPreviewTheme } from '../ui/preview';
 import { encodeYjsState } from '../state/appSession';
 import type { ProjectPreviewResult } from '../compile/latexJsPreview';
+import { FigureImages, compileWithFigures } from '../compile/figureImages';
 import { mainPath, needsMainFile, notSyncedWarning } from './sourceExporters';
 import { safeFileName, throwIfAborted, type ExportRun, type ExportSource, type Exporter } from './types';
 
@@ -28,10 +29,16 @@ export async function typesetProject(source: ExportSource, { signal, onProgress,
     throwIfAborted(signal);
   }
   onProgress(0.2, 'Typesetting with LaTeX.js...');
-  const result: ProjectPreviewResult = await services.compile(
+  // PDF figures are drawn the same way as in the preview, and EPS figures get the same box.
+  const figures = new FigureImages((hash) => source.blobs.get(hash));
+  const result: ProjectPreviewResult | null = await compileWithFigures(
+    figures,
+    binaries,
     { mainPath: main, texts: source.project.textFiles(), binaryPaths: binaries.map((entry) => entry.path), imageUrls },
-    signal,
+    (input) => services.compile(input, signal),
+    () => !signal.aborted,
   );
+  if (!result) throw new Error('The export was stopped.');
   throwIfAborted(signal);
   if (!result.html) {
     const first = result.errors[0];

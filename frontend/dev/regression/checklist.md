@@ -45,6 +45,10 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] `\include`: the Figures section shows up.
 - [ ] Images: the four-color image shows full size, with a caption under it.
 - [ ] Image sizes: `width=0.5\textwidth` is half the column, `width=2cm` and `height=1in` keep their proportions, `width=4cm,height=1cm` stretches, adding `keepaspectratio` doesn't, and `scale=0.5` is half size.
+- [ ] PDF figures: the bar chart from `figures/chart.pdf` shows at 2in by 1.33in, page 2 (the blue diamond) is 3cm wide, and the trimmed one shows only the blue bar, 1in tall. In the dev tools Network tab, `pdf.worker` loads from the app itself, once, and only after opening a project with a PDF.
+- [ ] PDF figures: they look the same in the light and dark preview (a white page behind the chart), and typing elsewhere doesn't make them flicker or redraw.
+- [ ] PDF figures: change `page=2` to `page=5`. A dashed box says the page doesn't exist (it has 2), and the ⓘ list says the same.
+- [ ] EPS figures: `figures/wave.eps` shows as a dashed 2in by 1in box with the file name and "EPS can't be previewed; convert it to PDF.", and at half the column width it keeps its 2:1 shape. The ⓘ list says EPS figures show as empty boxes.
 - [ ] Pictures: the box with a diagonal line and a circle renders.
 - [ ] Typing stays smooth while the preview compiles, since the compile runs in a Web Worker.
 - [ ] Citations (plain): Lamport is [3] and Knuth is [1], since plain sorts by author. The repeated cite reuses [1], the page note shows as [2, p. 5], and two keys show as [4, 3].
@@ -63,7 +67,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] A `%` comment that mentions `\vspace` or `\usepackage{fancyhdr}` is left alone, not rewritten.
 - [ ] Code in `verbatim`, `lstlisting`, `minted` or `comment` blocks, and in environments the document defines with `\lstnewenvironment`, `\DefineVerbatimEnvironment`, `\newminted` or a `\newenvironment` around one of those, is left alone, even when `\begin` or `\end` is in the middle of a line. The unit tests in `src/compile/latexJsAdapt.test.ts` and `src/compile/verbatimBlocks.test.ts` cover them.
 
-Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio` (a height relative to `\textheight` is ignored).
+Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref`, footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio`, plus `page`, `trim`, `viewport` and `clip` for PDF figures (a height relative to `\textheight` is ignored, and `trim` or `viewport` always clips). EPS figures are boxes, not drawings.
 
 ## Diagnostics
 

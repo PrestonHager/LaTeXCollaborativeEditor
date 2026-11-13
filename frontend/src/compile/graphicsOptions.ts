@@ -23,7 +23,7 @@ const CSS_UNITS = new Set(['cm', 'mm', 'in', 'em', 'ex', 'px']);
 const round = (value: number) => Math.round(value * 100) / 100;
 
 /** Split key=value options on top-level commas, so a braced value can hold a comma. */
-function splitOptions(options: string): Map<string, string> {
+export function splitOptions(options: string): Map<string, string> {
   const result = new Map<string, string>();
   let depth = 0;
   let start = 0;
@@ -91,3 +91,64 @@ export function graphicsOptionsToCss(options: string | undefined): string {
   }
   return `${style.join(';')};`;
 }
+
+/** A crop from \includegraphics: `trim` cuts from each edge, `viewport` keeps a box. Both in bp. */
+export type PdfCrop = { kind: 'trim' | 'viewport'; values: [number, number, number, number] };
+
+/** Which part of a PDF \includegraphics shows: the page (1-based) and an optional crop. */
+export type PdfFigureOptions = { page: number; crop: PdfCrop | null; clip: boolean };
+
+/** Read one TeX length as big points (1/72 in). A bare number is already bp, as in graphicx. */
+export function texLengthToBp(value: string): number | null {
+  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*([a-zA-Z]{2})?$/.exec(value.trim());
+  if (!match) return null;
+  const number = Number.parseFloat(match[1]);
+  const unit = (match[2] ?? 'bp').toLowerCase();
+  const BP: Record<string, number> = {
+    bp: 1,
+    pt: 72 / 72.27,
+    in: 72,
+    cm: 72 / 2.54,
+    mm: 72 / 25.4,
+    pc: (12 * 72) / 72.27,
+    dd: ((1238 / 1157) * 72) / 72.27,
+    cc: ((12 * 1238) / 1157) * (72 / 72.27),
+    sp: 72 / 72.27 / 65536,
+    px: 0.75,
+  };
+  return unit in BP && Number.isFinite(number) ? number * BP[unit] : null;
+}
+
+/** Read four space-separated lengths, like `trim=1cm 0 1cm 0`. */
+function readBox(value: string | undefined): [number, number, number, number] | null {
+  if (value === undefined) return null;
+  const parts = value.trim().split(/\s+/).map(texLengthToBp);
+  if (parts.length !== 4 || parts.some((part) => part === null)) return null;
+  return parts as [number, number, number, number];
+}
+
+/** Read the options that pick what part of a PDF to show: page=, trim= or viewport=, and clip. */
+export function pdfFigureOptions(options: string | undefined): PdfFigureOptions {
+  const parsed = splitOptions(options ?? '');
+  const rawPage = Number.parseInt(parsed.get('page') ?? '1', 10);
+  const page = Number.isFinite(rawPage) && rawPage >= 1 ? rawPage : 1;
+  const viewport = readBox(parsed.get('viewport'));
+  const trim = readBox(parsed.get('trim'));
+  const crop: PdfCrop | null = viewport ? { kind: 'viewport', values: viewport } : trim ? { kind: 'trim', values: trim } : null;
+  const clip = parsed.has('clip') && parsed.get('clip') !== 'false';
+  return { page, crop, clip };
+}
+
+/**
+ * A short, stable name for one rendering of a PDF: its page and crop. The same file with the
+ * same key renders the same image, so it can be cached by the file's hash and this key.
+ */
+export function pdfRenderKey({ page, crop }: Pick<PdfFigureOptions, 'page' | 'crop'>): string {
+  return crop ? `p${page};${crop.kind}=${crop.values.map((v) => round(v)).join(',')}` : `p${page}`;
+}
+
+/** Where a rendered PDF figure goes in ProjectPreviewInput.pdfImages: its path and render key. */
+export const pdfImageKey = (path: string, renderKey: string) => `${path}#${renderKey}`;
+
+/** A PDF page drawn as an image: a data: URL and its natural size in bp, or why it couldn't be drawn. */
+export type RenderedPdfFigure = { url: string; width: number; height: number } | { error: string };

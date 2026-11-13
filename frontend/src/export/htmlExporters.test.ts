@@ -86,6 +86,16 @@ describe('HTML and PDF exporters', () => {
     expect(output.warnings).toEqual([expect.stringContaining('b.png')]);
   });
 
+  it('exports an EPS figure as the same sized box the preview shows', async () => {
+    const { blobs, project, source, run } = setup({
+      'main.tex': '\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\includegraphics{wave.eps}\\end{document}',
+    });
+    project.putBinaryFile('wave.eps', await blobs.put(new TextEncoder().encode('%!PS\n%%BoundingBox: 0 0 144 72\n')), 30);
+    const html = await text((await htmlExporter.run(source, defaultOptions(htmlExporter.options(source)), run)).files[0].data);
+    expect(html).toContain('class="lc-figure-placeholder"');
+    expect(html).toContain('width:144pt;aspect-ratio:144/72;');
+  });
+
   it('keeps the CDN links and says so when the styles fail to download', async () => {
     const { source, run } = setup();
     run.services.fetch = fakeFetch(true);
