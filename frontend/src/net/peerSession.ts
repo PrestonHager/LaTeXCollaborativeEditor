@@ -1,4 +1,4 @@
-import { P2pTransport, type TransportState } from './p2pTransport';
+import { P2pTransport, type BinaryData, type TransportState } from './p2pTransport';
 import type { BootstrapConfig } from './bootstrapConfig';
 
 type PeerSessionCallbacks = {
@@ -7,7 +7,7 @@ type PeerSessionCallbacks = {
   onPeerCount: (count: number) => void;
   onPeerJoin: (peerId: string) => void;
   onPeerLeave?: (peerId: string) => void;
-  onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
+  onBinary?: (data: BinaryData, peerId: string, metadata: unknown) => void;
 };
 
 export class PeerSession {

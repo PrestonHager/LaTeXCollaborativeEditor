@@ -43,6 +43,7 @@ Checklist
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
 - [ ] Legal pages: `npm run build` passes its page check, and the Privacy and ToS links in the footer and About dialog open `privacy.html` and `tos.html` on the deployed site, not a 404.
 - [ ] Versioning: the About dialog and footer show the version and commit, the bug form prefills `App version: X.Y.Z+sha`, `npm run build` fails without a valid `dist/version.json`, peers exchange `hello` with their versions (an older peer without it still syncs), and a `vX.Y.Z` tag makes a GitHub release from `CHANGELOG.md` (see `docs/versioning.md`).
+- [ ] Trystero 0.26: Share shows a `?room=` link with no console errors, two tabs on the same build sync text and an uploaded image (the e2e-sync jobs), and after a deploy a tab still on the Trystero 0.24 build (protocol 1) gets the update prompt and syncs again once reloaded.
 - [x] Bundle size: `npm run build` passes the bundle check in `scripts/check-bundle-size.mjs`: the initial load (index.html, entry JS and CSS) is under 250 kB gzipped, no lazy chunk is over 5 MB, and no lazy chunk is in the initial load. Lazy chunks over 1 MB are explained in the PR.
 - [x] Load time: `npm run test:load-time` shows the editor interactive in under a second at 10 Mbps with a 50 ms round trip.
 - [ ] Docs: every menu item, dialog, shortcut, palette command, and status message has a docs section, and `mkdocs build --strict` passes.

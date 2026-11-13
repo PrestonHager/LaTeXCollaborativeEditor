@@ -20,7 +20,7 @@ export const MAX_APP_VERSION_LENGTH = 64;
  * (see docs/versioning.md). Adding an optional field or a new message kind doesn't need a bump,
  * since peers drop kinds they don't know and strip fields they don't know.
  */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 export type Metadata = { title: string; storage: string };
 

@@ -1,4 +1,4 @@
-import { joinRoom } from '@trystero-p2p/torrent';
+import { joinRoom, type DataPayload, type JsonValue, type Room } from '@trystero-p2p/torrent';
 import type { BootstrapConfig } from './bootstrapConfig';
 
 export type TransportState = 'Not sharing' | 'Waiting for peers' | 'Connected' | 'Relayed' | 'Reconnecting';
@@ -40,11 +40,18 @@ type TransportCallbacks = {
   onPeerJoin: (peerId: string) => void;
   onPeerLeave?: (peerId: string) => void;
   /** Binary data, like a chunk of a project file. Metadata says what it is. */
-  onBinary?: (data: ArrayBuffer, peerId: string, metadata: unknown) => void;
+  onBinary?: (data: BinaryData, peerId: string, metadata: unknown) => void;
 };
 
+/** Trystero 0.26 hands binary payloads over as a Uint8Array; older builds used an ArrayBuffer. */
+export type BinaryData = ArrayBuffer | Uint8Array;
+
+// Sends return a promise that rejects if the peer goes away mid-send. Peers come and go all
+// the time and the sync layer re-requests what it misses, so a failed send isn't an error here.
+const ignoreSendFailure = () => {};
+
 export class P2pTransport {
-  private room: any;
+  private room: Room | null = null;
   private sendTextAction: ((payload: unknown, peerId?: string) => void) | null = null;
   private sendBinaryAction: ((data: Uint8Array, peerId: string, metadata: unknown) => void) | null = null;
   private peers = new Set<string>();
@@ -68,25 +75,35 @@ export class P2pTransport {
       roomId,
     );
 
-    const [sendText, getText] = this.room.makeAction('doc-msg');
-    this.sendTextAction = sendText;
-    getText((payload: unknown, peerId?: string) => this.callbacks.onMessage(payload, peerId));
+    const room = this.room;
+
+    // Since trystero 0.25, makeAction returns { send, onMessage } instead of a [send, receive] tuple,
+    // and send takes an options object and returns a promise.
+    const text = room.makeAction<DataPayload>('doc-msg', {
+      onMessage: (payload, { peerId }) => this.callbacks.onMessage(payload, peerId),
+    });
+    this.sendTextAction = (payload, peerId) => {
+      // Our messages are plain JSON; messages.ts checks everything that comes back in.
+      void text.send(payload as DataPayload, peerId ? { target: peerId } : undefined).catch(ignoreSendFailure);
+    };
 
     // Files go over their own action, so trystero sends them as binary instead of JSON.
-    const [sendBinary, getBinary] = this.room.makeAction('file-chunk');
-    this.sendBinaryAction = sendBinary;
-    getBinary((data: ArrayBuffer, peerId: string, metadata: unknown) => this.callbacks.onBinary?.(data, peerId, metadata));
+    const binary = room.makeAction<DataPayload>('file-chunk', {
+      onMessage: (data, { peerId, metadata }) => this.callbacks.onBinary?.(data as BinaryData, peerId, metadata),
+    });
+    this.sendBinaryAction = (data, peerId, metadata) => {
+      void binary.send(data, { target: peerId, metadata: metadata as JsonValue }).catch(ignoreSendFailure);
+    };
 
-    const room = this.room;
-    this.room.onPeerJoin((peerId: string) => {
+    room.onPeerJoin = (peerId) => {
       this.peers.add(peerId);
       this.callbacks.onPeerCount(this.peers.size);
       this.callbacks.onState(this.connectedState());
       this.callbacks.onPeerJoin(peerId);
       void this.checkRelay(room, peerId);
-    });
+    };
 
-    this.room.onPeerLeave((peerId: string) => {
+    room.onPeerLeave = (peerId) => {
       this.peers.delete(peerId);
       this.relayedPeers.delete(peerId);
       this.callbacks.onPeerCount(this.peers.size);
@@ -96,7 +113,7 @@ export class P2pTransport {
       } else {
         this.callbacks.onState(this.connectedState());
       }
-    });
+    };
 
     // We're in the room, but nobody has joined yet. That's not a failure, so just wait.
     this.callbacks.onState('Waiting for peers');
@@ -107,12 +124,7 @@ export class P2pTransport {
   }
 
   send(payload: unknown, peerId?: string) {
-    if (!this.sendTextAction) return;
-    if (peerId) {
-      this.sendTextAction(payload, peerId);
-      return;
-    }
-    this.sendTextAction(payload);
+    this.sendTextAction?.(payload, peerId);
   }
 
   sendBinary(data: Uint8Array, peerId: string, metadata: unknown) {
@@ -120,7 +132,8 @@ export class P2pTransport {
   }
 
   disconnect() {
-    if (this.room?.leave) this.room.leave();
+    // leave() returns a promise in 0.25+. Nothing waits on it, but don't let a failure go unhandled.
+    if (this.room) void Promise.resolve(this.room.leave()).catch(() => {});
     this.room = null;
     // Reset so a later join starts counting peers from zero.
     this.peers.clear();
@@ -136,8 +149,8 @@ export class P2pTransport {
   }
 
   // Look at the peer's ICE stats and switch to Relayed if it goes through TURN.
-  private async checkRelay(room: any, peerId: string) {
-    const connection: RTCPeerConnection | undefined = room.getPeers?.()[peerId];
+  private async checkRelay(room: Room, peerId: string) {
+    const connection: RTCPeerConnection | undefined = room.getPeers()[peerId];
     if (!connection?.getStats) return;
     let relayed = false;
     try {
