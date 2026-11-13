@@ -62,7 +62,16 @@ It only ever has these three fields. The dev server serves the same file at `/ve
 
 After `vite build`, `frontend/scripts/check-build-pages.mjs` fails the build if `version.json` is missing, isn't JSON, has a bad field, or has a version that doesn't match `package.json`.
 
-The update check (issue #121) fetches it and compares it with `BUILD_INFO`. `buildInfo.ts` has what it needs: `parseVersionInfo` to check the fetched JSON, `compareVersions` for SemVer order, and `isDifferentBuild` to spot a new deploy of the same version. GitHub Pages sends `Cache-Control: max-age=600` and we can't change headers there, so the fetch has to bypass the cache itself: `fetch('version.json?t=' + Date.now(), { cache: 'no-store' })`. There's no service worker, so nothing else caches it.
+The update check fetches it, checks it with `parseVersionInfo`, and compares it with `BUILD_INFO` using `isDifferentBuild`. GitHub Pages sends `Cache-Control: max-age=600` and we can't change headers there, so the fetch bypasses the cache itself: `fetch('version.json?t=' + Date.now(), { cache: 'no-store' })`. There's no service worker, so nothing else caches it.
+
+### The update prompt
+
+- `frontend/src/app/updateCheck.ts` (`createUpdateChecker`) checks on load, every 15 minutes, and on window focus or `visibilitychange` to visible, at most once a minute. It only runs in production builds (`import.meta.env.PROD`).
+- Any build that `isDifferentBuild` says differs counts as new, a rollback included. Each build is announced once, so **Later** holds until the next one.
+- Failures are silent. Being offline, a network error, a bad status or malformed JSON double the wait, up to an hour. A 404 stops polling for the session.
+- `frontend/src/app/updateFlow.ts` shows the card (`#update-prompt`, `ui/updatePrompt.ts`). **Reload to update** calls `flushBeforeReload`: it writes the session to localStorage, then runs `autosave.saveNow()` unless saving is paused. A failed save, a held conflict or files in flight stop the reload and offer **Reload anyway**. Guests only write their local state, since their edits are already in the host's doc.
+- A `vite:preloadError`, or an unhandled "Failed to fetch dynamically imported module", shows the same card, since that's an old tab missing a chunk the new deploy removed.
+- The leave prompt (`beforeunload`) is decided by `frontend/src/app/leaveGuard.ts` and is skipped for the update reload.
 
 ## Protocol and storage versions
 
@@ -74,7 +83,7 @@ Each peer sends a `hello` to every peer that joins: `{ kind: 'hello', protocol, 
 - Bump it only when an older peer would misread or break on the new messages. That's a MAJOR app bump too.
 - Don't bump it for a new optional field or a new message kind. Peers already strip fields they don't know and drop kinds they don't know, so older peers just ignore them. That's how `hello` itself went in without a bump.
 - `SessionController` compares each hello with its own build (`comparePeerBuild`): `same-build`, `different-build` or `incompatible-protocol`. It logs anything that isn't the same build, hands it to `onPeerVersion`, and lists it in `getPeerVersions()`. It never blocks a peer. Peers on builds from before `hello` don't send one, so they just don't show up.
-- The update prompt (issue #121) uses that to tell people to reload when a peer is on another protocol.
+- The update prompt uses that. A peer on a newer protocol shows the reload card ("A collaborator is on a newer version"), and a peer on an older one gets a notice asking them to reload. `different-build` alone shows nothing. Nothing is sent to the peer, and syncing isn't blocked yet.
 
 ### Stored data
 

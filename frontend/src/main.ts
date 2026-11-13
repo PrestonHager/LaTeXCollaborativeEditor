@@ -14,6 +14,9 @@ import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
 import { createAboutDialog, renderFooterVersion } from './ui/aboutDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
+import { flushBeforeReload } from './app/updateCheck';
+import { setupUpdateFlow } from './app/updateFlow';
+import { shouldConfirmLeave } from './app/leaveGuard';
 import { createTour } from './ui/tour';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -45,6 +48,7 @@ import { createCollabUndo } from './collab/undo';
 import {
   readAppSessionState,
   writeAppSessionState,
+  type SessionWriteResult,
   encodeYjsState,
   decodeYjsState,
   type PersistedYjsState,
@@ -192,6 +196,9 @@ applyEditorTheme(restored?.editorTheme ?? 'system');
 applyPreviewTheme(restored?.previewTheme ?? 'system');
 themeState.watchSystemTheme();
 
+// Set up at the end of this file. Peers only say hello once the page is running, so it's ready by then.
+let updateFlow: ReturnType<typeof setupUpdateFlow> | null = null;
+
 const session: SessionController = new SessionController({
   isHost: !isClient,
   blobs,
@@ -208,6 +215,7 @@ const session: SessionController = new SessionController({
   getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
   onDocReplaced: () => bindProject(),
+  onPeerVersion: (peer) => updateFlow?.onPeerVersion(peer),
   onFileProgress: (hash, fraction) => {
     if (fraction === null) fileProgress.delete(hash);
     else fileProgress.set(hash, fraction);
@@ -222,11 +230,12 @@ let unbindDoc: (() => void) | null = null;
 
 const projectName = () => project.getName() || 'Untitled';
 
-const persistAppSession = () => {
-  if (isClient) return;
+/** Write the session to localStorage. pendingSave tells the next load to save edits the autosave hadn't. */
+const persistAppSession = (pendingSave = false): SessionWriteResult => {
+  if (isClient) return 'failed';
   const active = activeFileId ? project.get(activeFileId) : undefined;
   const persisted = session.getPersistedState();
-  writeAppSessionState({
+  return writeAppSessionState({
     documentName: projectName(),
     ...projectState.sessionFields(),
     content: active?.kind === 'text' ? project.getText(active.id).toString() : '',
@@ -234,6 +243,7 @@ const persistAppSession = () => {
     previewTheme: themeState.previewTheme,
     yjs: persisted ? ({ docId: persisted.docId, state: encodeYjsState(persisted.state) } satisfies PersistedYjsState) : undefined,
     activeFileId: activeFileId ?? undefined,
+    pendingSave: pendingSave || undefined,
   });
 };
 
@@ -595,9 +605,15 @@ async function uploadFile(file: File, folder: string): Promise<{ name: string; o
   }
 }
 
+let uploadsInFlight = 0;
 async function uploadFiles(files: File[], folder: string) {
   const results = [];
-  for (const file of files) results.push(await uploadFile(file, folder));
+  uploadsInFlight += 1;
+  try {
+    for (const file of files) results.push(await uploadFile(file, folder));
+  } finally {
+    uploadsInFlight -= 1;
+  }
   const failed = results.filter((result) => !result.ok);
   if (failed.length) showNotice(failed.map((result) => `${result.name}: ${result.message}`).join('; '), true);
   else showNotice(`Uploaded ${results.length} file(s)`);
@@ -922,6 +938,8 @@ if (!isClient) {
       }
       autosave.enable();
       setStatus(driveRestoreMessage ?? savingStatus());
+      // The tab closed before the last edits were saved, so save them now.
+      if (restored?.pendingSave && project.getName()) autosave.markDirty();
       if (driveProvider.hasUsableToken()) void driveProvider.loadAccount().then(showDriveAccount);
     })
     .catch((error) => {
@@ -985,11 +1003,45 @@ document.querySelector('.skip-link')?.addEventListener('click', (event) => {
 // Finally, show the tour to first-time visitors once the page has settled.
 setTimeout(() => tour.startIfNew(), 600);
 
+let reloadingForUpdate = false;
+// Write the session right away, then only warn for work that write can't keep (see app/leaveGuard.ts).
 window.addEventListener('beforeunload', (event) => {
-  persistAppSession();
-  // Warn before closing if the last save hasn't gone through yet, or a file is held by a conflict.
-  if (autosave.hasUnsavedChanges() || conflicts.size > 0) {
+  const unsavedEdits = autosave.hasUnsavedChanges();
+  const sessionWrite = persistAppSession(unsavedEdits);
+  const confirm = shouldConfirmLeave({
+    reloadingForUpdate,
+    unsavedEdits,
+    savingPaused: autosave.isPaused(),
+    provider: projectState.isDrive() ? 'drive' : 'local',
+    sessionWrite,
+    saveFailed: autosave.lastSaveError() !== null,
+    heldConflicts: conflicts.size,
+    filesInFlight: fileProgress.size + uploadsInFlight,
+  });
+  if (confirm) {
     event.preventDefault();
     event.returnValue = '';
   }
+});
+
+// Offer to reload when a new build is deployed, or a peer runs a newer protocol (app/updateFlow.ts).
+updateFlow = setupUpdateFlow({
+  root: document.getElementById('update-prompt') as HTMLElement,
+  current: BUILD_INFO,
+  poll: import.meta.env.PROD,
+  baseUrl: document.baseURI,
+  room: () => ({ isHost: !isClient, inRoom }),
+  flush: () =>
+    flushBeforeReload({
+      isClient,
+      persist: () => persistAppSession(),
+      autosave,
+      blocker: () =>
+        conflicts.size ? `${conflicts.size} file(s) are waiting for you to pick a version.` : fileProgress.size + uploadsInFlight ? 'Files are still uploading or arriving.' : null,
+    }),
+  beforeReload: () => {
+    reloadingForUpdate = true;
+  },
+  reload: () => location.reload(),
+  showNotice: (message) => showNotice(message),
 });

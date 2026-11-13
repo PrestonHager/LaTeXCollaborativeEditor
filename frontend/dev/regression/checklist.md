@@ -90,6 +90,8 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Save Now (Ctrl+S) saves right away.
 - [ ] View > Pause Saving stops autosave and Save Now, the menu shows it checked, and the status says "Saving paused".
 - [ ] While paused, the palette shows Resume Saving, and leaving the page warns about unsaved edits.
+- [ ] On a named project saved in this browser, type and reload within 4 seconds. No "Leave site?" box shows, the edit is still there, and the autosave saves it again after the reload.
+- [ ] With Google Drive connected, type and close the tab within 4 seconds. The "Leave site?" box shows.
 - [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
 - [ ] Open Local Project (Ctrl+O) lists saved projects and opens the one you pick.
 - [ ] Clear Local Projects asks first, then removes the saved projects.
@@ -197,3 +199,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] `npm run preview` serves the built app, and the palette has no regression commands.
 - [ ] `dist/version.json` has the `version` from `package.json`, the short commit, and the build time. `/version.json` also works in `npm run dev`.
+- [ ] In `npm run preview`, open the app, then edit `dist/version.json` to another commit and switch to another tab and back (or wait 15 minutes). The "A new version of the app is available" card shows in the bottom corner without taking focus from the editor, in light and dark themes.
+- [ ] Type something, then click Reload to update. The autosave pill shows Saving, then Saved, then the page reloads with no "Leave site?" box, and the edit is still there.
+- [ ] Later hides the card, and it doesn't come back for the same version. It shows again for another version.
+- [ ] `npm run dev` never fetches `version.json` on its own.

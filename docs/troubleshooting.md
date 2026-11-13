@@ -120,4 +120,5 @@ If that's blocked, the preview may look unstyled.
 
 - **The share link didn't copy.** The notice says "Could not copy automatically." Copy the link shown next to **Share** by hand. Clipboard access needs HTTPS and a focused page.
 - **Something went wrong. Check the browser console for details.** An error the app didn't expect. Open your browser's developer tools to see more, and please report it.
-- **The page warns me when I close it.** The last save hasn't finished, or a file is waiting on the conflict dialog. Wait for the autosave pill to say Saved, or answer the dialog.
+- **The page warns me when I close it.** Something could still be lost: edits that haven't reached Google Drive, saving is paused, the last save failed, a file is waiting on the conflict dialog, files are still uploading or arriving, or browser storage is full. Wait for the autosave pill to say Saved, resume saving, or answer the dialog.
+- **"A new version of the app is available" keeps showing.** It shows once per new version. Click **Reload to update**. If it says "Couldn't save", fix the save first (see the autosave pill), or use **Reload anyway** if you're sure. A part of the page that fails to load after a deploy shows the same card, and reloading fixes it.

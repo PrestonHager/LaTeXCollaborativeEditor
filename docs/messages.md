@@ -138,6 +138,19 @@ These show in the header, next to Share.
 | Could not load Google sign-in. / Could not load the Google Picker. | A script didn't load. Check your connection and blockers. |
 | Network request failed. Check your connection and try again. | A request didn't go through. |
 | Something went wrong. Check the browser console for details. | An error the app didn't expect. Please report it. |
+| A collaborator is on an older version of the app. Ask them to reload the page to keep editing together. | A peer runs an older build that speaks a different P2P protocol. |
+
+## Update card
+
+This card shows in the bottom corner. It never takes focus from the editor.
+
+| Text | What it means |
+| --- | --- |
+| A new version of the app is available. | A newer build was deployed since you opened the page. **Reload to update** saves, then reloads. **Later** hides it until the next version. |
+| A collaborator is on a newer version of the app. Reload to update so you can keep editing together. | A peer runs a build with a newer P2P protocol. |
+| Part of the app couldn't load because a new version is live. Reload to update. | A piece of the old version was removed by the new deploy. |
+| Your changes are saved first. | Under each of the above. If you're sharing, it also says guests are disconnected for a moment, or that you'll rejoin the room. |
+| Couldn't save: ... Your edits are still in this tab. | The save before the reload failed, so the page didn't reload. **Reload anyway** reloads without it. |
 
 ## Loading bar
 
@@ -167,7 +180,7 @@ More: [Diagnostics](editing-and-preview.md#diagnostics).
 - **Delete path? Collaborators lose it too.** From the trash can on a file row.
 - **Delete all N project(s) saved in this browser? This cannot be undone.** From **Clear Local Projects**.
 - **Start a new link? Anyone using the old link will be disconnected.** From **New link**.
-- The browser's own "Leave site?" box shows when you close the tab before the last save finished, or while a file is waiting on the conflict dialog.
+- The browser's own "Leave site?" box shows only when something could be lost: edits not yet in Google Drive, edits made while saving is paused, a failed save, a file waiting on the conflict dialog, files still uploading or arriving, or browser storage too full to keep the project. Edits saved to this browser are written right away when you leave, so they don't ask. See [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 
 ## Conflict dialog
 

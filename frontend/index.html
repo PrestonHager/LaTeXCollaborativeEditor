@@ -453,6 +453,17 @@
       </div>
     </dialog>
 
+    <!-- "A new version is available" prompt (issue #121). updatePrompt.ts shows it; it never takes focus from the editor. -->
+    <section id="update-prompt" class="update-prompt" role="status" aria-live="polite" aria-labelledby="update-prompt-text" hidden>
+      <p id="update-prompt-text" class="update-prompt-text" data-update-text></p>
+      <p class="update-prompt-detail" data-update-detail></p>
+      <footer class="update-prompt-buttons">
+        <button type="button" class="btn" data-variant="ghost" data-size="sm" data-update-later>Later</button>
+        <button type="button" class="btn" data-variant="outline" data-size="sm" data-update-anyway hidden>Reload anyway</button>
+        <button type="button" class="btn" data-size="sm" data-update-reload>Reload to update</button>
+      </footer>
+    </section>
+
     <!-- First-run tour. tour.ts walks through the steps below and puts this card next to each target. -->
     <div id="tour" class="tour" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-body" hidden>
       <p class="tour-count" data-tour-count></p>

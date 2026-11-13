@@ -33,7 +33,7 @@ Version handshake
   - `appVersion` is the app's SemVer version, like `0.1.0`, and `commit` is the short commit SHA of the build (or `dev`).
 - Each peer compares the hello with its own build: `same-build`, `different-build` (same protocol, another version or commit), or `incompatible-protocol`.
   - It logs anything but `same-build` to the console. `incompatible-protocol` is a warning that says to reload.
-  - It never blocks or disconnects the peer. The update prompt (issue #121) reads `SessionController.getPeerVersions()` and `onPeerVersion` to ask people to reload.
+  - It never blocks or disconnects the peer. The update prompt listens to `onPeerVersion`: when the peer's protocol is newer, this side shows the "reload to update" card; when it's older, a notice asks to have the collaborator reload. `different-build` alone shows nothing. No extra message is sent.
 - Backward compatible both ways:
   - Builds from before the handshake drop `hello` as an unknown kind (quietly, or with a dev-only `console.warn`) and sync as before.
   - A newer peer that never gets a hello from an old one just doesn't list it. Nothing waits on the hello.

@@ -20,6 +20,8 @@ export type AppSessionState = {
   projectId?: string;
   activeFileId?: string;
   manifest?: SavedManifest;
+  // Set when the tab closed with edits the autosave hadn't written yet, so the next load saves them.
+  pendingSave?: boolean;
 };
 
 // The state is a base64 encoded Yjs update.
@@ -57,6 +59,7 @@ export function readAppSessionState(): AppSessionState | null {
       projectId: typeof parsed.projectId === 'string' && parsed.projectId ? parsed.projectId : undefined,
       activeFileId: typeof parsed.activeFileId === 'string' && parsed.activeFileId ? parsed.activeFileId : undefined,
       manifest: isManifest(parsed.manifest) ? parsed.manifest : undefined,
+      pendingSave: parsed.pendingSave === true ? true : undefined,
     };
   } catch {
     return null;
@@ -85,7 +88,13 @@ export function createDocumentId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function writeAppSessionState(state: WriteAppSessionPayload): boolean {
+/**
+ * How a session write went: 'full' kept the whole Yjs doc, 'text-only' had to drop it to fit
+ * (only the open file's text is kept), and 'failed' wrote nothing.
+ */
+export type SessionWriteResult = 'full' | 'text-only' | 'failed';
+
+export function writeAppSessionState(state: WriteAppSessionPayload): SessionWriteResult {
   const payload: AppSessionState = {
     ...state,
     editorTheme: state.editorTheme ?? 'system',
@@ -94,20 +103,20 @@ export function writeAppSessionState(state: WriteAppSessionPayload): boolean {
   };
   try {
     localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
-    return true;
+    return payload.yjs ? 'full' : 'text-only';
   } catch (error) {
     // The Yjs state is the biggest part, so if storage is full try again without it to keep the text safe.
     if (payload.yjs) {
       try {
         localStorage.setItem(SESSION_KEY, JSON.stringify({ ...payload, yjs: undefined }));
-        return true;
+        return 'text-only';
       } catch {
         // Fall through to the warning below.
       }
     }
     // This runs on every keystroke, so a full or blocked storage must never throw into the editor.
     console.warn('Could not save the app session to browser storage', error);
-    return false;
+    return 'failed';
   }
 }
 
