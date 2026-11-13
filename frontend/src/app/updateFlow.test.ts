@@ -84,6 +84,16 @@ describe('setupUpdateFlow', () => {
     expect(deps.flush).toHaveBeenCalledTimes(1);
   });
 
+  it("opens the changelog from What's new, and hides the button without one", () => {
+    const openChangelog = vi.fn();
+    const { button } = setup({ openChangelog });
+    expect(button('whats-new').hidden).toBe(false);
+    button('whats-new').click();
+    expect(openChangelog).toHaveBeenCalledTimes(1);
+    const plain = setup();
+    expect(plain.button('whats-new').hidden).toBe(true);
+  });
+
   it('hides on Later', () => {
     const { flow, root, button } = setup();
     flow.offer('deploy');

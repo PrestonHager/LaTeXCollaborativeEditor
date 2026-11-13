@@ -9,7 +9,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { VERSION_FILE, versionInfoErrors } from './build-info.mjs';
+import { CHANGELOG_FILE, VERSION_FILE, versionInfoErrors } from './build-info.mjs';
 
 /** Pages that must ship. index.html links to privacy.html and tos.html. */
 export const REQUIRED_PAGES = ['index.html', 'privacy.html', 'tos.html'];
@@ -54,6 +54,13 @@ export function checkVersionFile(text, expectedVersion) {
   return { ok: errors.length === 0, errors };
 }
 
+/** dist/CHANGELOG.md (or null when missing) must be there and look like the changelog, for the update prompt's What's new. */
+export function checkChangelogFile(text) {
+  if (text === null) return { ok: false, errors: [`dist/${CHANGELOG_FILE} is missing. changelogFilePlugin in vite.config.ts writes it.`] };
+  if (!/^## /m.test(text)) return { ok: false, errors: [`dist/${CHANGELOG_FILE} has no "## " version sections.`] };
+  return { ok: true, errors: [] };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!existsSync(DIST_DIR)) {
     console.error('No dist folder. Run the build first.');
@@ -63,10 +70,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const versionPath = join(DIST_DIR, VERSION_FILE);
   const { version } = JSON.parse(readFileSync(PACKAGE_JSON, 'utf8'));
   const versionResult = checkVersionFile(existsSync(versionPath) ? readFileSync(versionPath, 'utf8') : null, version);
-  const errors = [...result.errors, ...versionResult.errors];
+  const changelogPath = join(DIST_DIR, CHANGELOG_FILE);
+  const changelogResult = checkChangelogFile(existsSync(changelogPath) ? readFileSync(changelogPath, 'utf8') : null);
+  const errors = [...result.errors, ...versionResult.errors, ...changelogResult.errors];
   if (errors.length > 0) {
     errors.forEach((line) => console.error(`ERROR: ${line}`));
     process.exit(1);
   }
-  console.log(`Build pages OK: ${REQUIRED_PAGES.join(', ')}, ${VERSION_FILE}`);
+  console.log(`Build pages OK: ${REQUIRED_PAGES.join(', ')}, ${VERSION_FILE}, ${CHANGELOG_FILE}`);
 }

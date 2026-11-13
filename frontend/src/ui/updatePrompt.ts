@@ -5,6 +5,8 @@ type UpdatePromptActions = {
   /** Save, then reload. `force` skips the save check after a failed save. */
   onReload: (force: boolean) => void;
   onLater?: () => void;
+  /** Open the changelog dialog (issue #140). Without it the "What's new" button stays hidden. */
+  onWhatsNew?: () => void;
 };
 
 export function createUpdatePrompt(root: HTMLElement, actions: UpdatePromptActions) {
@@ -13,6 +15,7 @@ export function createUpdatePrompt(root: HTMLElement, actions: UpdatePromptActio
   const later = root.querySelector<HTMLButtonElement>('[data-update-later]')!;
   const anyway = root.querySelector<HTMLButtonElement>('[data-update-anyway]')!;
   const reload = root.querySelector<HTMLButtonElement>('[data-update-reload]')!;
+  const whatsNew = root.querySelector<HTMLButtonElement>('[data-update-whats-new]');
 
   const setBusy = (busy: boolean) => {
     reload.disabled = busy;
@@ -50,6 +53,10 @@ export function createUpdatePrompt(root: HTMLElement, actions: UpdatePromptActio
     setBusy(true);
     actions.onReload(true);
   });
+  if (whatsNew) {
+    whatsNew.hidden = !actions.onWhatsNew;
+    whatsNew.addEventListener('click', () => actions.onWhatsNew?.());
+  }
   later.addEventListener('click', () => {
     hide();
     actions.onLater?.();

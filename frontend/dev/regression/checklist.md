@@ -215,6 +215,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Help > Report a Security Issue sits right under Report a Bug, has a shield icon in the palette, and opens GitHub's private Report a vulnerability form (`/security/advisories/new`), not a public issue.
 - [ ] Help > About shows the app version with links to the docs, the source and the policies.
 - [ ] Help > About says `Version X.Y.Z (commit abc1234, built YYYY-MM-DD)`, and the commit link opens that commit on GitHub.
+- [ ] Help > About > View changelog opens What's new on top of About. It shows "Unreleased (in this build)" first, then each version newest first with its date, and the running version has a "You're on this version" badge (none in `npm run dev`, which is a dev build). The list scrolls, Tab stays inside the dialog, and Esc or Close goes back to About with focus on View changelog. Links open GitHub in a new tab, and it reads well in the light and dark app themes.
 - [ ] The footer ends with a small `vX.Y.Z` link. Hovering it shows the commit and build date, and clicking it opens the commit.
 - [ ] The bug form's extra info says `App version: X.Y.Z+abc1234`.
 - [ ] The toolbar under the menus runs the same commands as the menus, shows tooltips on hover, and its buttons are disabled in the same cases.
@@ -231,6 +232,8 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] `npm run test:e2e` from the repo root passes the two-browser sync test (it uses public relays, so retry once if it times out).
 - [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
+- [ ] The build's lazy chunks list a `changelogView` chunk, and the changelog text isn't in the initial `index-*.js`. In `npm run preview`, Help > About > View changelog loads it with no CSP errors in the console.
+- [ ] `dist/CHANGELOG.md` matches the repo-root `CHANGELOG.md`. In `npm run preview`, edit `dist/CHANGELOG.md` to add a `## [9.9.9]` section, then show the update card (dev tools: remove `hidden` from `#update-prompt`) and click What's new: 9.9.9 says "New in the update" and the running version says "You're on this version". With `dist/CHANGELOG.md` deleted, it shows this build's changelog with a note linking to GitHub.
 - [ ] `npm run preview` serves the built app, and the palette has no regression commands.
 - [ ] `dist/version.json` has the `version` from `package.json`, the short commit, and the build time. `/version.json` also works in `npm run dev`.
 - [ ] In `npm run preview`, open the app, then edit `dist/version.json` to another commit and switch to another tab and back (or wait 15 minutes). The "A new version of the app is available" card shows in the bottom corner without taking focus from the editor, in light and dark themes.
