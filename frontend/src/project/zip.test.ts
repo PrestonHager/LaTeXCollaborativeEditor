@@ -1,4 +1,18 @@
-import { crc32, createZip, emptyFolders, readZip } from './zip';
+import { crc32, createZip, dosDateTime, emptyFolders, readZip } from './zip';
+
+/** Read the MS-DOS date and time fields of every local and central header back into dates. */
+function headerDates(zip: Uint8Array): Date[] {
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const decode = (time: number, date: number) =>
+    new Date((date >> 9) + 1980, ((date >> 5) & 0xf) - 1, date & 0x1f, time >> 11, (time >> 5) & 0x3f, (time & 0x1f) * 2);
+  const dates: Date[] = [];
+  for (let at = 0; at + 4 <= zip.length; at += 1) {
+    const sig = view.getUint32(at, true);
+    if (sig === 0x04034b50) dates.push(decode(view.getUint16(at + 10, true), view.getUint16(at + 12, true)));
+    if (sig === 0x02014b50) dates.push(decode(view.getUint16(at + 12, true), view.getUint16(at + 14, true)));
+  }
+  return dates;
+}
 
 const enc = (text: string) => new TextEncoder().encode(text);
 const dec = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
@@ -6,6 +20,49 @@ const dec = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 describe('zip', () => {
   it('computes the standard CRC-32', () => {
     expect(crc32(enc('123456789'))).toBe(0xcbf43926);
+  });
+
+  it('dates each entry with its modified time, or the export time, in both headers', async () => {
+    const now = new Date(2026, 10, 13, 14, 37, 21);
+    const edited = new Date(2024, 1, 29, 9, 5, 0);
+    const zip = await createZip(
+      [
+        { path: 'main.tex', data: enc('a') },
+        { path: 'old.tex', data: enc('b'), modified: edited },
+      ],
+      ['empty'],
+      now,
+    );
+    // DOS time keeps seconds in twos, so 21 s is stored as 20 s.
+    const stored = new Date(2026, 10, 13, 14, 37, 20).getTime();
+    // Locals come first: empty/, main.tex, old.tex; then the central records in the same order.
+    expect(headerDates(zip).map((date) => date.getTime())).toEqual([
+      stored,
+      stored,
+      edited.getTime(),
+      stored,
+      stored,
+      edited.getTime(),
+    ]);
+  });
+
+  it('defaults to the current time and never writes month 0', async () => {
+    const before = Date.now();
+    const [date] = headerDates(await createZip([{ path: 'a.tex', data: enc('a') }]));
+    expect(date.getTime()).toBeGreaterThanOrEqual(before - 2000);
+    expect(date.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('packs DOS dates with months 1-12 and clamps to the range the format holds', () => {
+    expect(dosDateTime(new Date(1980, 0, 1))).toEqual({ time: 0, date: (1 << 5) | 1 });
+    expect(dosDateTime(new Date(2026, 11, 31, 23, 59, 59))).toEqual({
+      time: (23 << 11) | (59 << 5) | 29,
+      date: (46 << 9) | (12 << 5) | 31,
+    });
+    const earliest = dosDateTime(new Date(1980, 0, 1));
+    expect(dosDateTime(new Date(1970, 0, 1))).toEqual(earliest);
+    expect(dosDateTime(new Date(Number.NaN))).toEqual(earliest);
+    expect(dosDateTime(new Date(2200, 0, 1))).toEqual(dosDateTime(new Date(2107, 11, 31, 23, 59, 58)));
   });
 
   it('round trips files, deflating the ones that shrink', async () => {

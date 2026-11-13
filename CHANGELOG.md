@@ -19,6 +19,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Fixed
 
+- Downloaded and exported `.zip` files now carry a real date (the time of the download) on each file. Before, every entry had an invalid date, which some zip tools showed as blank or rejected.
 - The "Leave site?" box no longer shows just because you typed in the last 4 seconds. Edits are written to this browser as you leave, and the box only shows when something could really be lost.
 
 ## [0.1.0] - 2026-11-13
