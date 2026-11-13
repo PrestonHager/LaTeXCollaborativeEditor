@@ -36,6 +36,7 @@ Checklist
 - [ ] Message validation: malformed or oversized peer messages, file chunks, and unsafe file paths are dropped, snapshots and metadata are only taken from the host, and only a few files transfer at once (see `docs/protocol.md`).
 - [x] Accessibility: connections work on localhost and the production domain (e.g. https://latex.example.com).
 - [x] Deployment: the app deploys successfully to GitHub Pages or the chosen static hosting.
+- [ ] Legal pages: `npm run build` passes its page check, and the Privacy and ToS links in the footer and About dialog open `privacy.html` and `tos.html` on the deployed site, not a 404.
 - [x] Bundle size: `npm run build` reports the gzipped JS and CSS under the budget in `scripts/check-bundle-size.mjs`, or the PR explains why it went over.
 - [ ] Docs: every menu item, dialog, shortcut, palette command, and status message has a docs section, and `mkdocs build --strict` passes.
 - [ ] Docs diagrams: the UI map, user flows, and state diagrams in `how-it-fits.md` and the sequence diagrams in `protocol.md` render and match the code.

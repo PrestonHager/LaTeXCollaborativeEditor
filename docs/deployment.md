@@ -19,6 +19,8 @@ Frontend deployment (GitHub Pages)
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
+- Vite builds every page in `BUILD_PAGES` in `frontend/vite.config.ts`: `index.html`, `privacy.html` and `tos.html`. A new top-level HTML page that should ship has to be added there, or it won't reach `dist/`. `regression.html` is dev-only and stays off the list.
+- After `vite build`, `npm run build` runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
 - `npm run build` ends with a bundle size check (`scripts/check-bundle-size.mjs`). If the gzipped JS and CSS go over the budget, it prints a warning (a GitHub annotation in CI) but doesn't fail the build.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
 - Push to main; the CI workflow builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder as the Pages artifact.

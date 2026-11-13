@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/check-bundle-size.mjs",
+    "build": "tsc && vite build && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
+    "check:pages": "node scripts/check-build-pages.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
