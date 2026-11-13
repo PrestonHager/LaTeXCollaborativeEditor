@@ -1,0 +1,81 @@
+# When a release PR (from prepare-release.yml) merges, tag vX.Y.Z on the merge commit and run
+# the release (release.yml), which deploys it to production. See docs/versioning.md.
+#
+# A push is a release when frontend/package.json's version went up, or the commit message names
+# a release/vX.Y.Z branch for the current version (frontend/scripts/release-tag.mjs).
+# A tag pushed with GITHUB_TOKEN doesn't start other workflows, so this calls release.yml itself.
+# That run is on main, so the github-pages environment's "main only" rule lets it deploy.
+name: Tag release
+
+on:
+  push:
+    branches: [main]
+    paths: [frontend/package.json]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Enough history to read package.json before this push.
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Is this push a release?
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          before_version=""
+          if git cat-file -e "${BEFORE}:frontend/package.json" 2> /dev/null; then
+            before_version="$(git show "${BEFORE}:frontend/package.json" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')"
+          fi
+          version="$(node frontend/scripts/release-tag.mjs "$before_version" "$MESSAGE")"
+          echo "Before: ${before_version:-unknown}. Now: $(node -p 'require("./frontend/package.json").version'). Release: ${version:-none}."
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Tag the merge commit
+        id: tag
+        if: steps.detect.outputs.version != ''
+        env:
+          VERSION: ${{ steps.detect.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::notice title=Already tagged::$tag already exists, so this push isn't released again. To redeploy it, run the Release workflow on main with $tag."
+            exit 0
+          fi
+          node frontend/scripts/release-notes.mjs "$tag" > /dev/null
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Tagged::$tag on ${GITHUB_SHA::7}. Releasing it to production."
+
+  release:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+    secrets: inherit

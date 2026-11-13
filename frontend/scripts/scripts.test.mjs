@@ -22,15 +22,33 @@ import {
 import { checkChangelogFile, checkManifestFile, checkPages, checkVersionFile, REQUIRED_PAGES, FORBIDDEN_PATHS } from './check-build-pages.mjs';
 import {
   CHANGELOG_FILE,
+  DEFAULT_P2P_APP_ID,
+  DEPLOY_ENV_BADGE_MARKER,
+  STAGING_ROBOTS_TXT,
   VERSION_FILE,
   changelogFilePlugin,
+  deployEnvPlugin,
   isValidVersionInfo,
+  resolveDeployEnv,
+  stagingP2pAppId,
+  transformHtmlForDeployEnv,
   resolveBuildInfo,
   resolveCommit,
   versionJson,
   versionJsonPlugin,
 } from './build-info.mjs';
 import { changelogSection, prepareRelease, versionFromTag } from './release-notes.mjs';
+import {
+  VERSION_FILES,
+  compareSemver,
+  nextVersion,
+  parseArgs,
+  prepareReleaseFiles,
+  releaseChangelog,
+  setPackageVersion,
+  today,
+} from './prepare-release.mjs';
+import { detectRelease, releaseBranch, versionFromReleaseBranch } from './release-tag.mjs';
 import viteConfig from '../vite.config.ts';
 
 const fakeVega = [
@@ -255,7 +273,8 @@ describe('build pages script', () => {
   });
 });
 
-const goodInfo = { version: '0.1.0', commit: 'abc1234', builtAt: '2026-11-13T10:00:00.000Z' };
+const goodInfo = { version: '0.1.0', commit: 'abc1234', builtAt: '2026-11-13T10:00:00.000Z', env: 'production' };
+const goodBuild = { version: '0.1.0', commit: 'abc1234', builtAt: '2026-11-13T10:00:00.000Z' };
 
 describe('build info script', () => {
   const noGit = () => {
@@ -276,22 +295,29 @@ describe('build info script', () => {
 
   it('bakes in the version, commit and build time', () => {
     const now = new Date('2026-11-13T10:00:00Z');
-    expect(resolveBuildInfo({ version: '0.1.0', env: {}, git: () => 'abc1234', now })).toEqual(goodInfo);
+    expect(resolveBuildInfo({ version: '0.1.0', env: {}, git: () => 'abc1234', now })).toEqual(goodBuild);
   });
 
   it('uses the real git checkout by default', () => {
     const info = resolveBuildInfo({ version: '0.1.0' });
-    expect(isValidVersionInfo(info)).toBe(true);
+    expect(isValidVersionInfo({ ...info, env: 'dev' })).toBe(true);
   });
 
-  it('writes only the three fields to version.json', () => {
+  it('writes only the four fields to version.json', () => {
     const text = versionJson({ ...goodInfo, secret: 'x' });
     expect(JSON.parse(text)).toEqual(goodInfo);
     expect(text.endsWith('\n')).toBe(true);
   });
 
   it('emits version.json from the Vite plugin and serves it in dev', () => {
-    const plugin = versionJsonPlugin(goodInfo);
+    let env = 'staging';
+    const staging = versionJsonPlugin(goodBuild, () => env);
+    const emitStaging = vi.fn();
+    env = 'dev';
+    staging.generateBundle.call({ emitFile: emitStaging });
+    expect(JSON.parse(emitStaging.mock.calls[0][0].source).env).toBe('dev');
+
+    const plugin = versionJsonPlugin(goodBuild);
     const emitFile = vi.fn();
     plugin.generateBundle.call({ emitFile });
     expect(emitFile).toHaveBeenCalledWith({ type: 'asset', fileName: VERSION_FILE, source: versionJson(goodInfo) });
@@ -306,6 +332,74 @@ describe('build info script', () => {
     middleware({ url: '/index.html' }, res, next);
     middleware({}, res, next);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  it('resolves VITE_DEPLOY_ENV, defaulting to dev for the dev server and production for a build', () => {
+    expect(resolveDeployEnv(undefined, 'serve')).toBe('dev');
+    expect(resolveDeployEnv('', 'build')).toBe('production');
+    expect(resolveDeployEnv(undefined)).toBe('production');
+    expect(resolveDeployEnv(' Staging ', 'build')).toBe('staging');
+    expect(resolveDeployEnv('dev', 'build')).toBe('dev');
+    expect(() => resolveDeployEnv('stage', 'build')).toThrow(/must be one of production, staging, dev/);
+  });
+
+  it('always gives staging a P2P app id of its own', () => {
+    expect(stagingP2pAppId(undefined)).toBe(`${DEFAULT_P2P_APP_ID}-staging`);
+    expect(stagingP2pAppId('  ')).toBe(`${DEFAULT_P2P_APP_ID}-staging`);
+    expect(stagingP2pAppId('latex-prod')).toBe('latex-prod-staging');
+    expect(stagingP2pAppId('latex-Staging-2')).toBe('latex-Staging-2');
+    const bootstrap = readFileSync(new URL('../src/net/bootstrapConfig.ts', import.meta.url), 'utf8');
+    expect(bootstrap).toContain(`VITE_P2P_APP_ID ?? '${DEFAULT_P2P_APP_ID}'`);
+  });
+
+  it('adds the badge and noindex to staging pages only', () => {
+    const html = `<html><head><title>x</title></head><body><h1>t</h1>${DEPLOY_ENV_BADGE_MARKER}</body></html>`;
+    const prod = transformHtmlForDeployEnv(html, 'production');
+    expect(prod).not.toContain(DEPLOY_ENV_BADGE_MARKER);
+    expect(prod).not.toContain('Staging');
+    expect(prod).not.toContain('robots');
+    expect(transformHtmlForDeployEnv(html, 'dev')).toBe(prod);
+    const staging = transformHtmlForDeployEnv(html, 'staging');
+    expect(staging).toContain('<meta name="robots" content="noindex" />');
+    expect(staging).toMatch(/<span id="deploy-env-badge" class="badge"[^>]*>Staging<\/span>/);
+    // Pages without the marker (privacy, tos) still get noindex.
+    expect(transformHtmlForDeployEnv('<head></head>', 'staging')).toContain('noindex');
+  });
+
+  it('has the badge marker once, in the header of index.html', () => {
+    const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+    expect(index.split(DEPLOY_ENV_BADGE_MARKER)).toHaveLength(2);
+    const header = index.slice(index.indexOf('<header class="topbar">'), index.indexOf('</header>'));
+    expect(header).toContain(DEPLOY_ENV_BADGE_MARKER);
+  });
+
+  it('wires VITE_DEPLOY_ENV through the Vite plugin', () => {
+    const run = (vars, command = 'build') => {
+      const plugin = deployEnvPlugin(() => vars);
+      const config = plugin.config({}, { command, mode: 'production' });
+      const emitFile = vi.fn();
+      plugin.generateBundle.call({ emitFile });
+      return { plugin, config, emitFile };
+    };
+    const prod = run({ VITE_P2P_APP_ID: 'prod-id' });
+    expect(prod.plugin.api.env).toBe('production');
+    expect(prod.config.define).toEqual({ 'import.meta.env.VITE_DEPLOY_ENV': '"production"' });
+    expect(prod.emitFile).not.toHaveBeenCalled();
+    expect(prod.plugin.transformIndexHtml(`<head></head>${DEPLOY_ENV_BADGE_MARKER}`)).toBe('<head></head>');
+
+    const staging = run({ VITE_DEPLOY_ENV: 'staging', VITE_P2P_APP_ID: 'prod-id' });
+    expect(staging.plugin.api.env).toBe('staging');
+    expect(staging.config.define).toEqual({
+      'import.meta.env.VITE_DEPLOY_ENV': '"staging"',
+      'import.meta.env.VITE_P2P_APP_ID': '"prod-id-staging"',
+    });
+    expect(staging.emitFile).toHaveBeenCalledWith({ type: 'asset', fileName: 'robots.txt', source: STAGING_ROBOTS_TXT });
+    expect(staging.plugin.transformIndexHtml('<head></head>')).toContain('noindex');
+
+    expect(run({}, 'serve').plugin.api.env).toBe('dev');
+    // The default reads process.env.
+    expect(deployEnvPlugin().config({}, { command: 'serve', mode: 'development' }).define['import.meta.env.VITE_DEPLOY_ENV']).toBeTruthy();
+    expect(viteConfig.plugins.flat().map((p) => p?.name)).toContain('app-deploy-env');
   });
 
   it('copies the root CHANGELOG.md into dist and serves it in dev', () => {
@@ -371,6 +465,7 @@ describe('build info script', () => {
 describe('version.json check', () => {
   it('passes a good file with the package.json version', () => {
     expect(checkVersionFile(versionJson(goodInfo), '0.1.0')).toEqual({ ok: true, errors: [] });
+    expect(checkVersionFile(versionJson({ ...goodInfo, env: 'staging' }), '0.1.0')).toEqual({ ok: true, errors: [] });
     expect(checkVersionFile(versionJson({ ...goodInfo, commit: 'dev' }))).toEqual({ ok: true, errors: [] });
   });
 
@@ -391,6 +486,7 @@ describe('version.json check', () => {
     expect(result.errors.join('\n')).toContain('"version" must be a SemVer string');
     expect(result.errors.join('\n')).toContain('"commit" must be a hex SHA');
     expect(result.errors.join('\n')).toContain('"builtAt" must be an ISO date');
+    expect(result.errors.join('\n')).toContain('"env" must be one of production, staging, dev');
   });
 
   it('fails when the version does not match package.json', () => {
@@ -459,5 +555,150 @@ describe('release notes script', () => {
     const result = prepareRelease({ tag: `v${pkg.version}`, frontendVersion: pkg.version, rootVersion: rootPkg.version, changelog: real });
     expect(result.errors).toEqual([]);
     expect(result.notes).toContain('### Added');
+  });
+});
+
+const releaseChangelogText = [
+  '# Changelog',
+  '',
+  '## [Unreleased]',
+  '',
+  '### Added',
+  '',
+  '- Something new.',
+  '',
+  '## [0.1.0] - 2026-11-13',
+  '',
+  '- The first one.',
+  '',
+  '[Unreleased]: https://github.com/o/r/compare/v0.1.0...HEAD',
+  '[0.1.0]: https://github.com/o/r/releases/tag/v0.1.0',
+  '',
+].join('\n');
+
+describe('prepare release script', () => {
+  it('compares versions', () => {
+    expect(compareSemver('0.2.0', '0.1.9')).toBe(1);
+    expect(compareSemver('0.1.0', '0.1.0')).toBe(0);
+    expect(compareSemver('1.0.0-rc.1', '1.0.0')).toBe(-1);
+    expect(compareSemver('1.0.0', '1.0.0-rc.1')).toBe(1);
+    expect(compareSemver('1.0.0-rc.1', '1.0.0-rc.2')).toBe(-1);
+    expect(compareSemver('1.0.0-rc.2', '1.0.0-rc.1')).toBe(1);
+  });
+
+  it('bumps patch, minor and major', () => {
+    expect(nextVersion('0.1.0', 'patch')).toBe('0.1.1');
+    expect(nextVersion('0.1.3', 'minor')).toBe('0.2.0');
+    expect(nextVersion('0.1.3', 'major')).toBe('1.0.0');
+    expect(nextVersion('0.1.0', ' minor ')).toBe('0.2.0');
+  });
+
+  it('finishes a pre-release first, like npm version', () => {
+    expect(nextVersion('1.0.0-rc.1', 'patch')).toBe('1.0.0');
+    expect(nextVersion('1.0.0-rc.1', 'minor')).toBe('1.0.0');
+    expect(nextVersion('1.0.0-rc.1', 'major')).toBe('1.0.0');
+    expect(nextVersion('1.0.1-rc.1', 'minor')).toBe('1.1.0');
+    expect(nextVersion('1.1.0-rc.1', 'major')).toBe('2.0.0');
+  });
+
+  it('takes an exact version, with or without the v, if it is newer', () => {
+    expect(nextVersion('0.1.0', '0.2.0')).toBe('0.2.0');
+    expect(nextVersion('0.1.0', 'v1.0.0-rc.1')).toBe('1.0.0-rc.1');
+    expect(() => nextVersion('0.2.0', '0.1.0')).toThrow(/isn't newer/);
+    expect(() => nextVersion('0.2.0', '0.2.0')).toThrow(/isn't newer/);
+    expect(() => nextVersion('0.2.0', 'huge')).toThrow(/isn't patch, minor, major/);
+    expect(() => nextVersion('0.2.0', undefined)).toThrow(/isn't patch, minor, major/);
+    expect(() => nextVersion('banana', 'patch')).toThrow(/isn't SemVer/);
+  });
+
+  it('sets the version in package.json and in the lockfile root package', () => {
+    expect(setPackageVersion('{"name":"x","version":"0.1.0"}', '0.2.0')).toBe('{\n  "name": "x",\n  "version": "0.2.0"\n}\n');
+    const lock = JSON.parse(
+      setPackageVersion(JSON.stringify({ version: '0.1.0', packages: { '': { version: '0.1.0' }, 'node_modules/a': { version: '1.0.0' } } }), '0.2.0'),
+    );
+    expect(lock.version).toBe('0.2.0');
+    expect(lock.packages[''].version).toBe('0.2.0');
+    expect(lock.packages['node_modules/a'].version).toBe('1.0.0');
+  });
+
+  it('moves Unreleased to a dated section and updates the links', () => {
+    const out = releaseChangelog(releaseChangelogText, '0.2.0', '2026-11-20');
+    expect(out).toContain('## [Unreleased]\n\n## [0.2.0] - 2026-11-20\n\n### Added\n\n- Something new.');
+    expect(out).toContain(
+      '[Unreleased]: https://github.com/o/r/compare/v0.2.0...HEAD\n[0.2.0]: https://github.com/o/r/compare/v0.1.0...v0.2.0\n[0.1.0]:',
+    );
+    // The release notes script reads the new section back.
+    expect(changelogSection(out, '0.2.0')).toBe('### Added\n\n- Something new.');
+    expect(changelogSection(out, 'Unreleased')).toBeNull();
+    // CRLF input works too.
+    expect(releaseChangelog(releaseChangelogText.replace(/\n/g, '\r\n'), '0.2.0', '2026-11-20')).toBe(out);
+  });
+
+  it('links a release to its tag when there is nothing to compare with', () => {
+    const first = releaseChangelogText.replace('compare/v0.1.0...HEAD', 'commits/main');
+    expect(releaseChangelog(first, '0.2.0', '2026-11-20')).toContain('[0.2.0]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/releases/tag/v0.2.0');
+  });
+
+  it('refuses a changelog it cannot release', () => {
+    expect(() => releaseChangelog(releaseChangelogText, '0.2.0', '20 Nov')).toThrow(/isn't YYYY-MM-DD/);
+    expect(() => releaseChangelog(releaseChangelogText, '0.1.0', '2026-11-20')).toThrow(/already has a section for 0.1.0/);
+    expect(() => releaseChangelog('# Changelog\n', '0.2.0', '2026-11-20')).toThrow(/no "## \[Unreleased\]"/);
+    const empty = releaseChangelogText.replace('- Something new.\n', '');
+    expect(() => releaseChangelog(empty, '0.2.0', '2026-11-20')).toThrow(/empty, so there is nothing to release/);
+    expect(() => releaseChangelog('## [Unreleased]\n- x', '0.2.0', '2026-11-20')).toThrow(/no "\[Unreleased\]: " compare link/);
+  });
+
+  it('prepares every file at once from the real repo', () => {
+    const root = new URL('../../', import.meta.url);
+    const files = Object.fromEntries([...VERSION_FILES, 'CHANGELOG.md'].map((path) => [path, readFileSync(new URL(path, root), 'utf8')]));
+    files['CHANGELOG.md'] = releaseChangelogText;
+    const current = JSON.parse(files['frontend/package.json']).version;
+    const result = prepareReleaseFiles(files, 'minor', '2026-11-20');
+    expect(result.previous).toBe(current);
+    expect(result.version).toBe(nextVersion(current, 'minor'));
+    expect(Object.keys(result.files).sort()).toEqual([...VERSION_FILES, 'CHANGELOG.md'].sort());
+    for (const path of VERSION_FILES) {
+      const json = JSON.parse(result.files[path]);
+      expect(json.version).toBe(result.version);
+      if (path.endsWith('lock.json')) expect(json.packages[''].version).toBe(result.version);
+      // Only the version lines change, so the diff stays small.
+      expect(result.files[path]).toBe(files[path].split(`"version": "${current}"`).join(`"version": "${result.version}"`));
+    }
+  });
+
+  it('reads the bump and an optional date from the command line', () => {
+    expect(parseArgs(['minor', '--date', '2026-11-20'])).toEqual({ bump: 'minor', date: '2026-11-20' });
+    expect(parseArgs(['--date', '2026-11-20', '0.2.0'])).toEqual({ bump: '0.2.0', date: '2026-11-20' });
+    expect(parseArgs(['patch'])).toEqual({ bump: 'patch', date: today() });
+    expect(today(new Date('2026-11-20T23:59:00Z'))).toBe('2026-11-20');
+  });
+});
+
+describe('release tag script', () => {
+  it('names the release branch and reads it back from a commit message', () => {
+    expect(releaseBranch('0.2.0')).toBe('release/v0.2.0');
+    expect(versionFromReleaseBranch('Merge pull request #160 from PrestonHager/release/v0.2.0\n\nRelease v0.2.0')).toBe('0.2.0');
+    expect(versionFromReleaseBranch('Release v1.0.0-rc.1 (release/v1.0.0-rc.1)')).toBe('1.0.0-rc.1');
+    expect(versionFromReleaseBranch('Merge branch release/v0.3')).toBeNull();
+    expect(versionFromReleaseBranch('Fix prerelease/v0.2.0 notes')).toBeNull();
+    expect(versionFromReleaseBranch(undefined)).toBeNull();
+  });
+
+  it('tags a push that bumps the version', () => {
+    expect(detectRelease({ beforeVersion: '0.1.0', afterVersion: '0.2.0', message: 'Release v0.2.0 (#160)' })).toBe('0.2.0');
+    expect(detectRelease({ beforeVersion: '1.0.0-rc.1', afterVersion: '1.0.0', message: '' })).toBe('1.0.0');
+  });
+
+  it('does not tag an unchanged or lower version', () => {
+    expect(detectRelease({ beforeVersion: '0.2.0', afterVersion: '0.2.0', message: 'Fix a typo' })).toBeNull();
+    expect(detectRelease({ beforeVersion: '0.3.0', afterVersion: '0.2.0', message: 'Revert the release' })).toBeNull();
+    expect(detectRelease({ beforeVersion: '0.1.0', afterVersion: 'nope', message: 'release/vnope' })).toBeNull();
+  });
+
+  it('falls back to the release branch name when the old version is unknown', () => {
+    const message = 'Merge pull request #160 from PrestonHager/release/v0.2.0';
+    expect(detectRelease({ beforeVersion: '', afterVersion: '0.2.0', message })).toBe('0.2.0');
+    expect(detectRelease({ beforeVersion: undefined, afterVersion: '0.3.0', message })).toBeNull();
+    expect(detectRelease({ beforeVersion: '', afterVersion: '0.2.0', message: 'Bump stuff' })).toBeNull();
   });
 });

@@ -24,9 +24,10 @@ If P2P protocol, bootstrap/build steps, or storage provider behavior changes, up
 
 ## Versioning
 - The version is `frontend/package.json` `version` (SemVer). The root `package.json` follows it.
-- Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes.
+- Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes. Don't bump the version in a normal PR.
 - Bump `PROTOCOL_VERSION` in `frontend/src/collab/messages.ts` only for a P2P change older peers can't handle.
-- Releases are a `vX.Y.Z` tag on `main`; `.github/workflows/release.yml` makes the GitHub release. Only maintainers tag.
+- `main` deploys to staging (`staging.yml`, its own origin). Production only deploys releases.
+- A maintainer cuts a release with the **Prepare release** workflow (patch, minor, major or an exact version). It bumps the version, dates the changelog and opens a `release/vX.Y.Z` PR. Merging it tags `vX.Y.Z` (`tag-release.yml`), and `release.yml` tests it, deploys it to production and makes the GitHub release. Agents don't run it or tag.
 - Details: `docs/versioning.md`.
 
 ## Regression checklist

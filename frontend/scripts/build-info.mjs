@@ -1,5 +1,5 @@
 /**
- * Build metadata: the app version, the short commit SHA and the build time.
+ * Build metadata: the app version, the short commit SHA, the build time and the deploy environment.
  * vite.config.ts bakes these into the bundle and writes them to dist/version.json,
  * which the update check (issue #121) polls to see if a newer build is live.
  * check-build-pages.mjs uses isValidVersionInfo to fail the build if the file is wrong.
@@ -24,6 +24,18 @@ export const SEMVER_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9
 /** A short or full hex SHA, or "dev" when the build couldn't find one. */
 export const COMMIT_PATTERN = /^(?:[0-9a-f]{7,40}|dev)$/;
 
+/**
+ * Where a build is going (VITE_DEPLOY_ENV, issue #156). main deploys to staging, a vX.Y.Z tag
+ * to production, and `npm run dev` is dev. See docs/deployment.md.
+ */
+export const DEPLOY_ENVS = ['production', 'staging', 'dev'];
+
+/** The P2P app id the app uses when VITE_P2P_APP_ID isn't set (src/net/bootstrapConfig.ts). */
+export const DEFAULT_P2P_APP_ID = 'latex-collaborative-editor';
+
+/** The comment in index.html that a staging build swaps for the "Staging" badge. */
+export const DEPLOY_ENV_BADGE_MARKER = '<!-- deploy-env-badge -->';
+
 /** Short SHA length, the same as `git rev-parse --short` usually prints. */
 const SHORT_SHA_LENGTH = 7;
 
@@ -47,6 +59,76 @@ export function resolveCommit(env = process.env, git = runGit) {
   return 'dev';
 }
 
+/**
+ * The deploy environment from VITE_DEPLOY_ENV. When it's unset, the dev server is "dev" and a
+ * build is "production", so a plain `npm run build` behaves as it always has.
+ * Throws on anything else, so a typo like "stage" fails the build instead of shipping unmarked.
+ */
+export function resolveDeployEnv(value, command = 'build') {
+  const text = String(value ?? '').trim().toLowerCase();
+  if (!text) return command === 'serve' ? 'dev' : 'production';
+  if (!DEPLOY_ENVS.includes(text)) {
+    throw new Error(`VITE_DEPLOY_ENV must be one of ${DEPLOY_ENVS.join(', ')}, got ${JSON.stringify(value)}.`);
+  }
+  return text;
+}
+
+/**
+ * The P2P app id for a staging build. Peers only meet peers with the same app id, so staging
+ * always gets one with "staging" in it, even if the staging environment inherited production's
+ * VITE_P2P_APP_ID from a repository variable.
+ */
+export function stagingP2pAppId(appId) {
+  const id = String(appId ?? '').trim() || DEFAULT_P2P_APP_ID;
+  return /staging/i.test(id) ? id : `${id}-staging`;
+}
+
+/** The small header badge a staging build shows. Basecoat's badge classes, no new styles. */
+export function deployEnvBadgeHtml() {
+  return '<span id="deploy-env-badge" class="badge" data-variant="secondary" data-tooltip="Staging build of main. Projects here are separate from the live site." data-side="bottom">Staging</span>';
+}
+
+/** Rewrite an HTML page for a deploy environment. Only staging changes anything. */
+export function transformHtmlForDeployEnv(html, deployEnv) {
+  if (deployEnv !== 'staging') return html.replace(DEPLOY_ENV_BADGE_MARKER, '');
+  const withBadge = html.replace(DEPLOY_ENV_BADGE_MARKER, deployEnvBadgeHtml());
+  // Search engines shouldn't index staging. robots.txt covers the docs too.
+  return withBadge.replace(/<head>/i, '<head>\n    <meta name="robots" content="noindex" />');
+}
+
+/** robots.txt for staging, which blocks every crawler. Production ships none. */
+export const STAGING_ROBOTS_TXT = 'User-agent: *\nDisallow: /\n';
+
+/**
+ * Vite plugin for VITE_DEPLOY_ENV. It defines import.meta.env.VITE_DEPLOY_ENV, gives staging its
+ * own P2P app id, adds the badge and noindex to staging pages and writes a staging robots.txt.
+ * `api.env` is the resolved value, for versionJsonPlugin.
+ */
+export function deployEnvPlugin(loadEnvVars = () => process.env) {
+  let deployEnv = 'production';
+  return {
+    name: 'app-deploy-env',
+    api: {
+      get env() {
+        return deployEnv;
+      },
+    },
+    config(_config, { command, mode }) {
+      const env = loadEnvVars(mode);
+      deployEnv = resolveDeployEnv(env.VITE_DEPLOY_ENV, command);
+      const define = { 'import.meta.env.VITE_DEPLOY_ENV': JSON.stringify(deployEnv) };
+      if (deployEnv === 'staging') define['import.meta.env.VITE_P2P_APP_ID'] = JSON.stringify(stagingP2pAppId(env.VITE_P2P_APP_ID));
+      return { define };
+    },
+    transformIndexHtml(html) {
+      return transformHtmlForDeployEnv(html, deployEnv);
+    },
+    generateBundle() {
+      if (deployEnv === 'staging') this.emitFile({ type: 'asset', fileName: 'robots.txt', source: STAGING_ROBOTS_TXT });
+    },
+  };
+}
+
 /** Everything the build bakes in. `now` is a parameter so tests get a fixed time. */
 export function resolveBuildInfo({ version, env = process.env, git = runGit, now = new Date() }) {
   return { version, commit: resolveCommit(env, git), builtAt: now.toISOString() };
@@ -65,6 +147,9 @@ export function versionInfoErrors(value) {
   if (typeof value.builtAt !== 'string' || Number.isNaN(Date.parse(value.builtAt))) {
     errors.push(`"builtAt" must be an ISO date, got ${JSON.stringify(value.builtAt)}`);
   }
+  if (!DEPLOY_ENVS.includes(value.env)) {
+    errors.push(`"env" must be one of ${DEPLOY_ENVS.join(', ')}, got ${JSON.stringify(value.env)}`);
+  }
   return errors;
 }
 
@@ -72,15 +157,11 @@ export function isValidVersionInfo(value) {
   return versionInfoErrors(value).length === 0;
 }
 
-/** The exact text of version.json. Only these three fields, so nothing else leaks into it. */
+/** The exact text of version.json. Only these four fields, so nothing else leaks into it. */
 export function versionJson(info) {
-  return `${JSON.stringify({ version: info.version, commit: info.commit, builtAt: info.builtAt }, null, 2)}\n`;
+  return `${JSON.stringify({ version: info.version, commit: info.commit, builtAt: info.builtAt, env: info.env }, null, 2)}\n`;
 }
 
-/**
- * Vite plugin that writes dist/version.json and serves /version.json from the dev server,
- * so the update check works the same in `npm run dev`.
- */
 /** Copy the CHANGELOG.md at `sourcePath` into dist/, and serve it in dev, uncached like version.json. */
 export function changelogFilePlugin(sourcePath) {
   return {
@@ -99,7 +180,13 @@ export function changelogFilePlugin(sourcePath) {
   };
 }
 
-export function versionJsonPlugin(info) {
+/**
+ * Vite plugin that writes dist/version.json and serves /version.json from the dev server,
+ * so the update check works the same in `npm run dev`. `getEnv` returns the deploy environment
+ * (deployEnvPlugin's `api.env`), read when the file is written.
+ */
+export function versionJsonPlugin(info, getEnv = () => 'production') {
+  const text = () => versionJson({ ...info, env: getEnv() });
   return {
     name: 'app-version-json',
     configureServer(server) {
@@ -107,11 +194,11 @@ export function versionJsonPlugin(info) {
         if (!req.url || req.url.split('?')[0] !== `/${VERSION_FILE}`) return next();
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'no-store');
-        res.end(versionJson(info));
+        res.end(text());
       });
     },
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: VERSION_FILE, source: versionJson(info) });
+      this.emitFile({ type: 'asset', fileName: VERSION_FILE, source: text() });
     },
   };
 }

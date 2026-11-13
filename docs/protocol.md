@@ -125,6 +125,7 @@ The transport is trystero 0.26 over WebTorrent trackers (`VITE_P2P_RENDEZVOUS`, 
 `P2pTransport` uses two actions, `doc-msg` (JSON) and `file-chunk` (binary). In 0.25 and later, `room.makeAction(name, { onMessage })` returns `{ send, onMessage }`, `send(data, { target, metadata })` returns a promise, `onPeerJoin`/`onPeerLeave` are properties you set, and `leave()` returns a promise. `room` is typed with trystero's `Room`, so a future change to that API fails `tsc`.
 The trackers only carry WebRTC offers and answers for the room topic.
 Document data starts after the data channel is open.
+The room topic comes from the app id (`VITE_P2P_APP_ID`) and the room id, so only tabs with the same app id meet. A staging build always uses an app id with `staging` in it, so staging and production peers never meet, even with the same room link (`docs/deployment.md`, "Staging and production"). The wire protocol itself is the same on both.
 
 ```mermaid
 sequenceDiagram
