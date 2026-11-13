@@ -21,6 +21,8 @@ describe('dialogs', () => {
       const answer = confirmDialog({ title: 'Start a new link?', message: 'The old link stops working.', confirmLabel: 'Start new link', cancelLabel: 'Keep current link' });
       const dialog = openDialog();
       expect(dialog.hasAttribute('open')).toBe(true);
+      // Confirm, prompt and notice dialogs use the small size from the shared scale (docs/ui-sizing.md).
+      expect(dialog.classList.contains('dialog-sm')).toBe(true);
       expect(document.getElementById(dialog.getAttribute('aria-labelledby')!)?.textContent).toBe('Start a new link?');
       expect(document.getElementById(dialog.getAttribute('aria-describedby')!)?.textContent).toBe('The old link stops working.');
       const [cancel, ok] = buttons();

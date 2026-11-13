@@ -17,6 +17,8 @@ exclude_docs: |
   deployment.md
   versioning.md
   qa-runbook.md
+  ui-sizing.md
+  assets/ui-sizing/
 
 theme:
   name: material

@@ -67,7 +67,8 @@ type Shell = {
 /** The <dialog> every kind shares: title, message, footer, focus return, Escape and backdrop to cancel. */
 function shell(kind: string, title: string, message: string | undefined): Shell {
   const id = `app-dialog-${(nextId += 1)}`;
-  const dialog = el('dialog', { className: `dialog app-dialog app-dialog-${kind}` });
+  // dialog-sm is the size for confirm, prompt and notice dialogs (docs/ui-sizing.md).
+  const dialog = el('dialog', { className: `dialog dialog-sm app-dialog app-dialog-${kind}` });
   dialog.setAttribute('aria-labelledby', `${id}-title`);
   const header = el('header');
   header.append(el('h2', { id: `${id}-title`, textContent: title }));
