@@ -138,6 +138,9 @@ These show in the header, next to Share.
 | Could not load Google sign-in. / Could not load the Google Picker. | A script didn't load. Check your connection and blockers. |
 | Network request failed. Check your connection and try again. | A request didn't go through. |
 | Something went wrong. Check the browser console for details. | An error the app didn't expect. Please report it. |
+| You're offline. Settings will load when you're back online. | You opened a part of the app that loads on first use (Settings, the command palette, Export, About and others) while offline. It opens by itself once the connection is back. |
+| You're offline. Import .zip will work once you're back online. | That part of the app hasn't downloaded yet. Try again once you're online. |
+| Export couldn't load. Check your connection, then reload the page. | That part of the app didn't download, and the site still serves this version, so it's the network. The browser won't retry it until the page reloads. |
 | A collaborator is on an older version of the app. Ask them to reload the page to keep editing together. | A peer runs an older build that speaks a different P2P protocol. |
 
 ## Update card
@@ -148,7 +151,7 @@ This card shows in the bottom corner. It never takes focus from the editor.
 | --- | --- |
 | A new version of the app is available. | A newer build was deployed since you opened the page. **Reload to update** saves, then reloads. **Later** hides it until the next version. |
 | A collaborator is on a newer version of the app. Reload to update so you can keep editing together. | A peer runs a build with a newer P2P protocol. |
-| Part of the app couldn't load because a new version is live. Reload to update. | A piece of the old version was removed by the new deploy. |
+| Part of the app couldn't load because a new version is live. Reload to update. | A piece of the old version was removed by the new deploy. It only shows when the site's version.json names a newer build; while offline you get the offline notice instead. |
 | Your changes are saved first. | Under each of the above. If you're sharing, it also says guests are disconnected for a moment, or that you'll rejoin the room. |
 | Couldn't save: ... Your edits are still in this tab. | The save before the reload failed, so the page didn't reload. **Reload anyway** reloads without it. |
 
@@ -156,7 +159,7 @@ This card shows in the bottom corner. It never takes focus from the editor.
 
 | Text | When |
 | --- | --- |
-| Loading compiler assets... | The page is starting. |
+| Loading the editor... | The page is starting, and its code is still downloading. |
 | Opening project... / Opening from Google Drive... | A project is loading. |
 | Reading .zip... | A .zip is being unpacked. |
 

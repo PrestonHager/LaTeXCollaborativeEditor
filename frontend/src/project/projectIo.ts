@@ -4,6 +4,7 @@ import type { ProjectContent, ProjectDoc } from './projectDoc';
 // The zip code loads on first use (import or download), not with the page.
 import type { ZipEntry } from './zip';
 import { guessMainFile, isTextPath, normalizePath } from './paths';
+import { whenOnline } from '../app/lazy';
 
 export const STARTER_TEX = '\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n\n\\end{document}\n';
 
@@ -56,7 +57,7 @@ export async function loadProject(provider: StorageProvider, projectId: string, 
 
 /** Make a project from an uploaded .zip, named after the zip file. */
 export async function projectFromZip(fileName: string, bytes: Uint8Array, blobs: BlobStore): Promise<ProjectContent> {
-  const { readZip } = await import('./zip');
+  const { readZip } = await whenOnline(() => import('./zip'));
   const zip = await readZip(bytes);
   if (!zip.files.length) throw new Error('That .zip has no files in it.');
   return contentFromFiles(fileName.replace(/\.zip$/i, '') || 'Imported project', zip.files, zip.folders, blobs);
@@ -82,6 +83,6 @@ export async function projectToZip(
       else skipped.push(entry.path);
     }
   }
-  const { createZip } = await import('./zip');
+  const { createZip } = await whenOnline(() => import('./zip'));
   return { zip: await createZip(entries, project.folderPaths()), skipped };
 }

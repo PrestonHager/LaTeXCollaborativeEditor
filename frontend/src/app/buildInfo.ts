@@ -45,11 +45,6 @@ export function commitUrl(commit: string): string | null {
   return /^[0-9a-f]{7,40}$/.test(commit) ? `${REPO_URL}/commit/${commit}` : null;
 }
 
-/** Link to the GitHub release for a version (it exists once the vX.Y.Z tag is pushed). */
-export function releaseUrl(version: string): string {
-  return `${REPO_URL}/releases/tag/v${version}`;
-}
-
 /** The build date as YYYY-MM-DD, or "" if there isn't a usable one. */
 export function formatBuildDate(builtAt: string): string {
   const time = Date.parse(builtAt);

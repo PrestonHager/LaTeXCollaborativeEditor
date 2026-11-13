@@ -127,14 +127,33 @@ describe('setupUpdateFlow', () => {
     expect(deps.showNotice).toHaveBeenCalledWith(expect.stringMatching(/older version/));
   });
 
-  it('offers a reload when a lazy chunk from the old build is gone', () => {
-    const { win, root } = setup();
-    win.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: new Error('Unrelated') }));
-    expect(root.hidden).toBe(true);
-    win.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: new TypeError('Failed to fetch dynamically imported module: x.js') }));
-    expect(root.textContent).toContain("couldn't load");
-    root.hidden = true;
-    win.dispatchEvent(new Event('vite:preloadError'));
+  it('offers the reload for a missing chunk only when version.json names a newer build', async () => {
+    const { flow, root } = setup();
+    await expect(flow.newerBuildLive()).resolves.toBe(true);
     expect(root.hidden).toBe(false);
+    expect(root.textContent).toContain("Part of the app couldn't load because a new version is live.");
+  });
+
+  it('calls a missing chunk the network when the server still has this build', async () => {
+    const { flow, root } = setup({ fetch: vi.fn(async () => ({ ok: true, status: 200, json: async () => current })) });
+    await expect(flow.newerBuildLive()).resolves.toBe(false);
+    expect(root.hidden).toBe(true);
+  });
+
+  it('calls a missing chunk the network when version.json is out of reach', async () => {
+    const { flow, root } = setup({
+      fetch: vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    });
+    await expect(flow.newerBuildLive()).resolves.toBe(false);
+    expect(root.hidden).toBe(true);
+  });
+
+  it('no longer turns every failed chunk event into the update card', () => {
+    const { win, root } = setup();
+    win.dispatchEvent(Object.assign(new Event('unhandledrejection'), { reason: new TypeError('Failed to fetch dynamically imported module: x.js') }));
+    win.dispatchEvent(new Event('vite:preloadError'));
+    expect(root.hidden).toBe(true);
   });
 });

@@ -22,7 +22,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 ### Changed
 
 - **The live site only changes with a release.** It updates to numbered versions listed here, not with every change, so the update prompt shows up less often and always has release notes.
-- **Faster first load.** The page downloads about 33 kB less (gzipped) before the editor shows. Sharing, the lint gutter, the command palette, Settings, the Open and Upload dialogs, the tour, Add Files from Drive and the zip code now load just after the page, when you point at them, or on first use. If a part can't load because a new version was deployed, the update prompt offers a reload.
+- **Faster first load.** The page downloads about 33 kB less (gzipped) before the editor shows. Sharing, the lint gutter, the command palette, Settings, About, the Open, Upload and conflict dialogs, the tour, Add Files from Drive and the zip code now load just after the page, when you point at them, or on first use. If a part can't load because a new version was deployed, the update prompt offers a reload.
+- The loading bar at startup says "Loading the editor..." instead of "Loading compiler assets...".
 - **Wider Settings, and dialogs sized to fit.** Settings is wider, with keyboard shortcuts in their own column on large screens. Dialogs now use a few shared sizes, so Upload, Export, About, Open a project and the conflict dialog have more room, and Open a project's buttons no longer run past its edge.
 - **Breaking for open shared sessions:** the peer-to-peer library (Trystero) moved to 0.26, which changes how peers talk to each other. Tabs on the old build and tabs on this build can't sync with each other, so everyone in a session needs to reload. Open tabs see the update prompt and can reload from there. The P2P protocol version is now 2.
 - **In-app dialogs replace the browser's prompt and confirm boxes.** Renaming, creating, deleting, starting a new link and replacing the project now ask in a dialog that matches the theme, names the action on its button, and checks file and project names as you type. Risky actions have a red button with focus on Cancel.
@@ -35,6 +36,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 - Downloaded and exported `.zip` files now carry a real date (the time of the download) on each file. Before, every entry had an invalid date, which some zip tools showed as blank or rejected.
 - The "Leave site?" box no longer shows just because you typed in the last 4 seconds. Edits are written to this browser as you leave, and the box only shows when something could really be lost.
+- Going offline no longer brings up "a new version is live, reload to update". Opening Export, Settings, the palette or another part that loads on first use while offline now says you're offline, and opens it once you're back. The update prompt only offers a reload for a part that didn't load when the site really has a newer version.
+- Errors from background libraries (sharing, Google sign-in) no longer show as a red notice in the header, where they could replace one that mattered. They go to the browser console; errors from your own actions still show.
 
 ## [0.1.0] - 2026-11-13
 

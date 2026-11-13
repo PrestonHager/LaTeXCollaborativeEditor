@@ -6,7 +6,8 @@ import { manifestFromProject, saveProject, textRev, type SavedManifest } from '.
 import type { BlobStore } from '../project/blobStore';
 import type { PickerSelection } from '../storage/providers/googlePicker';
 import { takeTheirs } from '../storage/conflictResolution';
-import { addFilesFromDrive, addFromDriveNote, describeAddResult, mergeNewDriveFiles, type AddFromDriveDeps } from './driveAddFiles';
+import { addFilesFromDrive, describeAddResult, mergeNewDriveFiles, type AddFromDriveDeps } from './driveAddFiles';
+import { addFromDriveNote } from './driveNotes';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 

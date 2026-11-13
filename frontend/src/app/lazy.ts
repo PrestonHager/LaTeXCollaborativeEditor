@@ -6,30 +6,57 @@ import { isStaleChunkError } from './updateCheck';
 export type LazyModule<T> = {
   /**
    * The module, loading it on the first call. A failed load is forgotten, so the next call asks the
-   * browser again. Chrome and Firefox keep a failed module URL failed until the page reloads, so
-   * the real fix is the reload the update prompt offers (see lazyLoadProblem).
+   * browser again. While offline it fails with OfflineError without asking at all (see whenOnline).
    */
   get(): Promise<T>;
-  /** Start loading without waiting. Failures are left for get() to report. */
+  /** Start loading without waiting. Skipped while offline; failures are left for get() to report. */
   preload(): void;
   /** The module if it has loaded, else null. */
   current(): T | null;
 };
 
-export function lazyModule<T>(load: () => Promise<T>): LazyModule<T> {
+/** navigator.onLine. Only false means offline. */
+export const browserOnline = (): boolean => navigator.onLine !== false;
+
+/** A chunk load we didn't start because the browser is offline. */
+export class OfflineError extends Error {
+  constructor() {
+    super("You're offline.");
+    this.name = 'OfflineError';
+  }
+}
+
+/**
+ * Run `load` (a dynamic import) only while online, else reject with OfflineError. Chrome and
+ * Firefox remember a failed module load until the page reloads, even once the network is back, so
+ * an import tried offline would keep failing. Not trying keeps it loadable later.
+ */
+export function whenOnline<T>(load: () => Promise<T>, isOnline: () => boolean = browserOnline): Promise<T> {
+  return isOnline() ? load() : Promise.reject(new OfflineError());
+}
+
+/** True for an error from loading part of the app: offline, the network, or a deploy that removed the chunk. */
+export const isLoadFailure = (error: unknown): boolean => error instanceof OfflineError || isStaleChunkError(error);
+
+export function lazyModule<T>(load: () => Promise<T>, isOnline: () => boolean = browserOnline): LazyModule<T> {
   let promise: Promise<T> | null = null;
   let value: T | null = null;
-  const get = () =>
-    (promise ??= load().then(
+  const get = (): Promise<T> => {
+    if (value !== null) return Promise.resolve(value);
+    if (!promise && !isOnline()) return Promise.reject(new OfflineError());
+    return (promise ??= load().then(
       (module) => (value = module),
       (error: unknown) => {
         promise = null;
         throw error;
       },
     ));
+  };
   return {
     get,
-    preload: () => void get().catch(() => {}),
+    preload: () => {
+      if (isOnline()) void get().catch(() => {});
+    },
     current: () => value,
   };
 }
@@ -53,13 +80,46 @@ export function preloadOnIntent(element: Element | null | undefined, preload: ()
 }
 
 /**
- * What to tell someone when a lazy part of the app didn't load. After a deploy the old chunk is
- * gone from the server, and only a reload fixes that, so `staleChunk` is true and the caller
- * should offer the update prompt. Otherwise it's usually the network.
+ * Why a part of the app didn't load:
+ * - offline: the browser is offline, so the load wasn't tried (or failed for that). It works once back online.
+ * - update: a deploy removed the chunk; version.json names a newer build, and only a reload fixes it.
+ * - network: the chunk fetch failed while online and there's no newer build. The browser keeps
+ *   that failure until a reload, so that's the advice.
+ * - error: something else, like the module throwing as it started.
  */
-export function lazyLoadProblem(feature: string, error: unknown): { message: string; staleChunk: boolean } {
-  if (isStaleChunkError(error)) {
-    return { message: `${feature} couldn't load because a new version of the app is live. Reload to update.`, staleChunk: true };
+export type LoadFailureKind = 'offline' | 'update' | 'network' | 'error';
+
+export async function classifyLoadFailure(
+  error: unknown,
+  /** newerBuildLive resolves false when version.json can't be read (updateCheck.ts never rejects). */
+  deps: { isOnline: () => boolean; newerBuildLive: () => Promise<boolean> },
+): Promise<LoadFailureKind> {
+  if (error instanceof OfflineError || !deps.isOnline()) return 'offline';
+  if (!isStaleChunkError(error)) return 'error';
+  return (await deps.newerBuildLive()) ? 'update' : 'network';
+}
+
+/** What to tell someone. `feature` reads as the start of a sentence, like "Settings". */
+export function loadFailureMessage(kind: Exclude<LoadFailureKind, 'update'>, feature: string, willRetry = false): string {
+  if (kind === 'offline') {
+    return willRetry ? `You're offline. ${feature} will load when you're back online.` : `You're offline. ${feature} will work once you're back online.`;
   }
-  return { message: `${feature} couldn't load. Check your connection and try again.`, staleChunk: false };
+  if (kind === 'network') return `${feature} couldn't load. Check your connection, then reload the page.`;
+  return `${feature} couldn't load. Try again, or reload the page.`;
+}
+
+/**
+ * Keep what someone tried to open while offline, and run it when the browser says it's back online,
+ * as the offline notice promised. One pending action per key; a newer one replaces it.
+ * `onOnline` runs on every return, before the retries.
+ */
+export function createOnlineRetry(onOnline?: () => void, win: Pick<Window, 'addEventListener'> = window) {
+  const pending = new Map<string, () => void>();
+  win.addEventListener('online', () => {
+    const due = [...pending.values()];
+    pending.clear();
+    onOnline?.();
+    for (const run of due) run();
+  });
+  return { add: (key: string, run: () => void) => void pending.set(key, run) };
 }

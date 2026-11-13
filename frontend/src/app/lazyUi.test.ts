@@ -1,4 +1,5 @@
-import { lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './lazyUi';
+import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTour, lazyUploadDialog } from './lazyUi';
+import { mountAppShell } from '../test/appShell';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const el = () => document.createElement('div');
@@ -39,8 +40,20 @@ describe('lazyCommandPalette', () => {
     const lazy = lazyCommandPalette(el(), { onSelect: vi.fn() }, onError, { load });
     lazy.toggle();
     await settle();
-    expect(onError).toHaveBeenCalledWith('The command palette', error);
+    expect(onError).toHaveBeenCalledWith('The command palette', error, expect.any(Function));
     lazy.toggle();
+    await settle();
+    expect(palette.toggle).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands back a retry that does what was asked once it loads', async () => {
+    const palette = fakePalette();
+    const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ createCommandPalette: () => palette });
+    const onError = vi.fn();
+    lazyCommandPalette(el(), { onSelect: vi.fn() }, onError, { load }).toggle();
+    await settle();
+    const retry = onError.mock.calls[0][2] as () => void;
+    retry();
     await settle();
     expect(palette.toggle).toHaveBeenCalledTimes(1);
   });
@@ -96,7 +109,7 @@ describe('lazySettings', () => {
     const lazy = lazySettings(dialogEl(), {} as never, el(), {} as never, onError, { load: () => Promise.reject(error) });
     lazy.settingsDialog.open();
     await settle();
-    expect(onError).toHaveBeenCalledWith('Settings', error);
+    expect(onError).toHaveBeenCalledWith('Settings', error, expect.any(Function));
   });
 });
 
@@ -150,8 +163,8 @@ describe('lazyProjectsDialog and lazyUploadDialog', () => {
     lazyProjectsDialog(dialogEl(), {} as never, onError, { load: () => Promise.reject(error) }).open([]);
     lazyUploadDialog(dialogEl(), {} as never, onError, { load: () => Promise.reject(error) }).open();
     await settle();
-    expect(onError).toHaveBeenCalledWith('The Open dialog', error);
-    expect(onError).toHaveBeenCalledWith('The upload dialog', error);
+    expect(onError).toHaveBeenCalledWith('The Open dialog', error, expect.any(Function));
+    expect(onError).toHaveBeenCalledWith('The upload dialog', error, expect.any(Function));
   });
 
   it('load the real modules by default', async () => {
@@ -165,5 +178,31 @@ describe('lazyProjectsDialog and lazyUploadDialog', () => {
     lazySettings(dialogEl(), {} as never, el(), {} as never, onError).preload();
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('lazyAboutDialog', () => {
+  const info = { version: '0.1.0', commit: 'abc1234', builtAt: '' };
+
+  it('fills in the version and opens once loaded, from the real module', async () => {
+    mountAppShell();
+    HTMLDialogElement.prototype.showModal ??= function showModal(this: HTMLDialogElement) {
+      this.open = true;
+    };
+    const dialog = document.getElementById('about-dialog') as HTMLDialogElement;
+    const about = lazyAboutDialog(dialog, info, {}, vi.fn());
+    about.open();
+    await vi.waitFor(() => expect(dialog.open).toBe(true));
+    expect(dialog.querySelector('#about-version')?.textContent).toContain('0.1.0');
+  });
+
+  it('reports a failed load with a retry', async () => {
+    const onError = vi.fn();
+    const error = new Error('offline');
+    const about = lazyAboutDialog(dialogEl(), info, {}, onError, { load: () => Promise.reject(error) });
+    about.preload();
+    about.open();
+    await settle();
+    expect(onError).toHaveBeenCalledWith('About', error, expect.any(Function));
   });
 });

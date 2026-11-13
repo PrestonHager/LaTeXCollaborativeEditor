@@ -27,10 +27,9 @@ let pickerLoadPromise: Promise<void> | null = null;
 async function ensurePickerLoaded() {
   if (!pickerLoadPromise) {
     pickerLoadPromise = (async () => {
-      await Promise.all([
-        loadScript('https://apis.google.com/js/api.js', 'the Google Picker'),
-        loadScript('https://accounts.google.com/gsi/client', 'Google sign-in'),
-      ]);
+      // Only the Picker's own script. The access token comes from Drive connect, which loads Google
+      // sign-in itself, so a blocked accounts.google.com can't make the picker fail with a sign-in error.
+      await loadScript('https://apis.google.com/js/api.js', 'the Google Picker');
       if (!window.gapi?.load) throw new Error('Google Picker script loaded but gapi is missing');
       await new Promise<void>((resolve, reject) => {
         window.gapi.load('picker', { callback: () => resolve(), onerror: () => reject(new Error('Could not load the Google Picker')) });

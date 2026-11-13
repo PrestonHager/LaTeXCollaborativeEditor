@@ -8,9 +8,9 @@ import {
   isDifferentBuild,
   parseVersionInfo,
   readBuildInfo,
-  releaseUrl,
 } from './buildInfo';
-import { renderFooterVersion, renderVersionDetails } from '../ui/aboutDialog';
+import { renderVersionDetails } from '../ui/aboutDialog';
+import { renderFooterVersion } from '../ui/footerVersion';
 import { bugReportUrl } from '../ui/issueLinks';
 
 const REPO = 'https://github.com/PrestonHager/LaTeXCollaborativeEditor';
@@ -42,7 +42,6 @@ describe('formatting and links', () => {
     expect(commitUrl('abc1234')).toBe(`${REPO}/commit/abc1234`);
     expect(commitUrl('dev')).toBeNull();
     expect(commitUrl('not a sha')).toBeNull();
-    expect(releaseUrl('0.1.0')).toBe(`${REPO}/releases/tag/v0.1.0`);
   });
 
   it('shows the build date as YYYY-MM-DD', () => {

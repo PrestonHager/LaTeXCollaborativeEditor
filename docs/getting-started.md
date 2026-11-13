@@ -5,7 +5,7 @@
 Go to the address where the editor is hosted, like your team's GitHub Pages site.
 The site needs HTTPS so collaboration and the clipboard work.
 
-While the page loads, a bar under the header says "Loading compiler assets...".
+While the page loads, a bar under the header says "Loading the editor...". On a fast connection it is gone before you notice it.
 
 ## Main areas of the screen
 

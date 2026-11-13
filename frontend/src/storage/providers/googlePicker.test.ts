@@ -86,6 +86,16 @@ describe('Google Picker', () => {
     expect(calls).toContain('view FOLDERS');
   });
 
+  it("loads only the Picker's script, not Google sign-in, which Drive connect already loaded", async () => {
+    const { openGooglePicker } = await import('./googlePicker');
+    const { answer } = stubPicker();
+    answer({ action: 'cancel' });
+    await openGooglePicker({ accessToken: 't', apiKey: 'k', kind: 'project' });
+    const urls = loadScript.mock.calls.map((call) => (call as unknown[])[0]);
+    expect(urls).toContain('https://apis.google.com/js/api.js');
+    expect(urls).not.toContain('https://accounts.google.com/gsi/client');
+  });
+
   it('picks many files and folders inside the project folder', async () => {
     const { pickProjectFiles } = await import('./googlePicker');
     const { calls, answer } = stubPicker();

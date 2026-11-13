@@ -7,10 +7,6 @@ import { describeError } from '../storage/errors';
 import type { FileConflict } from '../storage/conflicts';
 import { isTextPath } from '../project/paths';
 
-// The short texts live in driveNotes.ts, so the initial bundle has them without this file, which
-// main.ts loads on the first "Add Files from Drive".
-export { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './driveNotes';
-
 /**
  * "Add Files from Drive". The app only has the drive.file scope, so it can't see files someone put
  * in the project folder from Drive itself. Picking them in the Google Picker grants access, then we
