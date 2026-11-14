@@ -327,6 +327,21 @@ async function shootTheme(browser, theme) {
   await shot(page, 'file-menu', theme);
   await page.keyboard.press('Escape');
 
+  // The hover preview card (#89): rest the mouse on View > Split View.
+  await page.mouse.move(VIEWPORT.width - 10, VIEWPORT.height - 10);
+  await page.click('.menu-trigger[aria-controls="menu-view"]');
+  await page.waitForSelector('#menu-view[aria-hidden="false"]');
+  await page.hover('#menu-view [data-command="view.layoutSplit"]');
+  await page.waitForSelector('#hover-preview:not([hidden]) .hover-preview-mock');
+  const card = await page.locator('#hover-preview').boundingBox();
+  const menu = await page.locator('#menu-view').boundingBox();
+  const clipX = Math.max(0, menu.x - 16);
+  await shot(page, 'hover-preview', theme, {
+    clip: { x: clipX, y: 0, width: card.x + card.width + 16 - clipX, height: Math.max(menu.y + menu.height, card.y + card.height) + 16 },
+  });
+  await page.mouse.move(VIEWPORT.width - 10, VIEWPORT.height - 10);
+  await page.keyboard.press('Escape');
+
   // The command palette.
   await page.keyboard.press('ControlOrMeta+P');
   await page.waitForSelector('#command-palette[aria-hidden="false"]');
