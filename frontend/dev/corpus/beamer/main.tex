@@ -1,0 +1,54 @@
+% Overleaf compiler: pdfLaTeX
+\documentclass{beamer}
+\usetheme{Madrid}
+\usecolortheme{beaver}
+\usepackage{amsmath}
+
+\title{Version Control for Papers}
+\subtitle{A short talk}
+\author{A. Speaker}
+\institute{Example University}
+\date{\today}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+\section{Why}
+\begin{frame}{Why track changes?}
+  \begin{itemize}
+    \item<1-> Undo mistakes
+    \item<2-> See who changed what
+    \item<3-> Work in parallel
+  \end{itemize}
+\end{frame}
+
+\section{How}
+\begin{frame}{Two columns}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{block}{Commits}
+        Small, focused changes.
+      \end{block}
+    \end{column}
+    \begin{column}{0.5\textwidth}
+      \begin{alertblock}{Merges}
+        Resolve conflicts early.
+      \end{alertblock}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{A formula}
+  \pause
+  The number of pairs among $n$ authors is
+  \[ \binom{n}{2} = \frac{n(n-1)}{2}. \]
+\end{frame}
+
+\end{document}

@@ -84,13 +84,23 @@ type Compile = (input: ProjectPreviewInput) => ProjectPreviewResult;
 
 /** Run one document through the preview pipeline, the same call the compile worker makes. */
 export function runDocument(doc: CorpusDocument, compile: Compile = projectToPreviewHtml): CorpusResult {
-  let result: ProjectPreviewResult;
+  const failed = (message: string): ProjectPreviewResult => ({
+    html: null,
+    errors: [{ path: doc.mainPath, line: 1, severity: 'error', message }],
+    missing: [],
+    changes: [],
+  });
+  // An empty project typesets to an empty page, which would read as a pass.
+  if (!doc.texts.has(doc.mainPath)) return summarize(doc, failed('The main file is missing.'));
   try {
-    result = compile({ mainPath: doc.mainPath, texts: doc.texts, binaryPaths: [], imageUrls: new Map() });
+    return summarize(doc, compile({ mainPath: doc.mainPath, texts: doc.texts, binaryPaths: [], imageUrls: new Map() }));
   } catch (error) {
     // The worker answers a throw with an error too, so count it as a failure, not a crash.
-    result = { html: null, errors: [{ path: doc.mainPath, line: 1, severity: 'error', message: String(error) }], missing: [], changes: [] };
+    return summarize(doc, failed(String(error)));
   }
+}
+
+function summarize(doc: CorpusDocument, result: ProjectPreviewResult): CorpusResult {
   return {
     id: doc.id,
     title: doc.title,

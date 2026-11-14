@@ -1,0 +1,22 @@
+% Overleaf compiler: pdfLaTeX
+\documentclass{report-note}
+
+\title{Cache Sizing for the Build Server}
+\author{A. Engineer}
+\date{November 2026}
+\notenumber{TN-042}
+
+\begin{document}
+\maketitle
+
+\begin{summarybox}
+A 20\,GB cache keeps the hit rate above 90\%.
+\end{summarybox}
+
+\section{Measurements}
+We replayed a week of builds against caches of 5, 10, 20 and 40\,GB.
+
+\section{Recommendation}
+Use 20\,GB. Going to 40\,GB adds only two points of hit rate.
+
+\end{document}

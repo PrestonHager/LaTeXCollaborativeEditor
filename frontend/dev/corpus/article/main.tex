@@ -1,0 +1,70 @@
+% Overleaf compiler: pdfLaTeX
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Notes on Heat Flow in a Thin Rod}
+\author{A. Writer}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We derive the one-dimensional heat equation, solve it by separation of variables
+and compare the first few modes.
+\end{abstract}
+
+\section{Introduction}\label{sec:intro}
+Heat flows from hot to cold. In a thin rod of length $L$ the temperature $u(x,t)$
+depends on one space variable only.\footnote{We ignore losses through the surface.}
+Section~\ref{sec:model} sets up the model and Section~\ref{sec:solution} solves it.
+
+\section{The model}\label{sec:model}
+Fourier's law and conservation of energy give
+\begin{equation}\label{eq:heat}
+  \frac{\partial u}{\partial t} = \alpha \frac{\partial^2 u}{\partial x^2}, \qquad 0 < x < L,\ t > 0,
+\end{equation}
+with $u(0,t) = u(L,t) = 0$ and $u(x,0) = f(x)$.
+
+\section{Solution}\label{sec:solution}
+Trying $u(x,t) = X(x)T(t)$ in \eqref{eq:heat} gives
+\begin{align*}
+  X'' + \lambda X &= 0, \\
+  T' + \alpha\lambda T &= 0,
+\end{align*}
+so that
+\[
+  u(x,t) = \sum_{n=1}^{\infty} b_n \sin\left(\frac{n\pi x}{L}\right) e^{-\alpha (n\pi/L)^2 t}.
+\]
+
+The steps are:
+\begin{enumerate}
+  \item separate the variables;
+  \item solve the eigenvalue problem for $X$;
+  \item match the initial condition with a Fourier sine series.
+\end{enumerate}
+
+\begin{table}[h]
+  \centering
+  \begin{tabular}{lcc}
+    \toprule
+    Mode $n$ & Decay rate & Half-life \\
+    \midrule
+    1 & $\alpha\pi^2/L^2$  & $0.070\,L^2/\alpha$ \\
+    2 & $4\alpha\pi^2/L^2$ & $0.018\,L^2/\alpha$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{The first two modes.}\label{tab:modes}
+\end{table}
+
+\section{Conclusion}
+Higher modes die out fast, as Table~\ref{tab:modes} shows. See
+\url{https://en.wikipedia.org/wiki/Heat_equation} for more.
+
+\end{document}

@@ -56,12 +56,21 @@ describe('compatCorpus helpers', () => {
   });
 
   it('counts a compiler that throws as a failure', () => {
-    const doc = { id: 'x', title: 'X', compiler: 'pdfLaTeX', mainPath: 'main.tex', texts: new Map() };
+    const doc = { id: 'x', title: 'X', compiler: 'pdfLaTeX', mainPath: 'main.tex', texts: new Map([['main.tex', '']]) };
     const result = runDocument(doc, () => {
       throw new Error('boom');
     });
     expect(result.status).toBe('fail');
     expect(result.diagnostics).toEqual([{ path: 'main.tex', line: 1, severity: 'error', message: 'Error: boom' }]);
+  });
+
+  it('fails a document whose main file is missing, without compiling it', () => {
+    const doc = { id: 'x', title: 'X', compiler: 'pdfLaTeX', mainPath: 'main.tex', texts: new Map([['other.tex', '']]) };
+    const compile = vi.fn();
+    const result = runDocument(doc, compile);
+    expect(compile).not.toHaveBeenCalled();
+    expect(result.status).toBe('fail');
+    expect(result.diagnostics[0].message).toBe('The main file is missing.');
   });
 
   it('formats a summary, each diagnostic, missing files and changes, and escapes pipes', () => {

@@ -1,0 +1,26 @@
+% Overleaf compiler: XeLaTeX
+\documentclass{article}
+\usepackage{fontspec}
+\setmainfont{TeX Gyre Pagella}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}[Scale=MatchLowercase]
+\newfontfamily\greekfont{GFS Didot}
+
+\title{Unicode Text with fontspec}
+\author{A. Typesetter}
+
+\begin{document}
+\maketitle
+
+\section{Direct Unicode}
+XeLaTeX reads UTF-8 directly: café, naïve, Zürich, Łódź, and “curly quotes” — with an em dash.
+
+\section{Font families}
+This is the main font. \textsf{This is the sans font.} \texttt{This is the mono font.}
+
+{\greekfont Ἐν ἀρχῇ ἦν ὁ λόγος.}
+
+\section{Math}
+Math still works: $e^{i\pi} + 1 = 0$.
+
+\end{document}
