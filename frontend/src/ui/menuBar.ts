@@ -11,6 +11,8 @@ export type CommandId =
   | 'file.saveAsTemplate'
   | 'file.openLocal'
   | 'file.openDrive'
+  | 'file.openFolder'
+  | 'file.saveToFolder'
   | 'file.download'
   | 'file.connectDrive'
   | 'file.disconnectDrive'

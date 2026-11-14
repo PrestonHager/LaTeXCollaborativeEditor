@@ -1,19 +1,17 @@
 # Builds the native desktop app (desktop/, Tauri 2) for Linux, Windows and macOS and uploads the
-# installers as workflow artifacts. They are UNSIGNED for now: see docs/desktop.md, "Signing", for
-# the maintainer setup that signing and notarization need, and "Releases" for how this fits the
-# release flow. It deploys nothing and attaches nothing to the GitHub release yet.
+# installers as workflow artifacts. They aren't code-signed for Windows or macOS yet (docs/desktop.md,
+# "Releases and signing"). With the updater key (TAURI_SIGNING_PRIVATE_KEY and the
+# TAURI_UPDATER_PUBKEY variable), the build also makes signed update bundles (issue #179).
 #
 # How it runs:
-# - Actions > Desktop app > Run workflow, on main or a branch, optionally with a tag to build.
-# - A vX.Y.Z tag pushed by hand runs it on the tag.
-# - Tags that tag-release.yml pushes don't start it on their own, because pushes made with
-#   GITHUB_TOKEN don't start workflows. release.yml can call it (workflow_call) once desktop
-#   builds should be part of every release; until then, run it by hand with the tag.
+# - release.yml calls it (workflow_call, release: true) for every release, after the GitHub
+#   release exists. The publish job then attaches the installers, their .sig files, SHA256SUMS.txt
+#   and latest.json, which installed apps read to update (docs/desktop.md, "Updates").
+# - Actions > Desktop app > Run workflow, on main or a branch, optionally with a tag to build. That
+#   only makes workflow artifacts.
 name: Desktop app
 
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       tag:
@@ -26,6 +24,11 @@ on:
       tag:
         required: true
         type: string
+      release:
+        description: Attach the installers and latest.json to the tag's GitHub release.
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -40,9 +43,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     # Same variables as the production site, so the app's peers meet the website's peers
-    # (VITE_P2P_APP_ID) and use the same STUN server. The Google ones are left out on purpose:
-    # Google blocks its sign-in inside an app's webview, so Drive waits for the desktop sign-in
-    # flow (docs/desktop.md, "Google sign-in").
+    # (VITE_P2P_APP_ID) and use the same STUN server. The web's VITE_GOOGLE_* ones are left out
+    # on purpose: Google blocks its sign-in inside an app's webview, so the app signs in through
+    # the system browser with its own Desktop OAuth client, given to the Rust build below
+    # (docs/desktop.md, "Google sign-in").
     environment: Production
     env:
       VITE_DEPLOY_ENV: production
@@ -95,15 +99,47 @@ jobs:
         run: |
           npm ci --prefix frontend
           npm ci --prefix desktop
-      - name: Check the desktop settings
+      - name: Check the desktop settings and release scripts
         working-directory: desktop
-        run: npm run check
+        run: |
+          npm run check
+          npm test
+      # The shell's own tests, including two native WebRTC peers connecting over loopback (#176).
+      # They embed frontend/dist, so the frontend is built first.
+      - name: Test the Rust shell
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          npm --prefix frontend run build:desktop
+          cargo test --manifest-path desktop/src-tauri/Cargo.toml
       # tauri.conf.json's beforeBuildCommand builds the frontend (npm run build in frontend/,
       # with its bundle size check) before Tauri bundles frontend/dist into the app.
       - name: Build the app
         working-directory: desktop
         shell: bash
-        run: npm run build -- --bundles "${{ matrix.bundles }}" ${{ matrix.args }}
+        # The Google Desktop OAuth client (#177). src-tauri/src/google_auth.rs reads them at build
+        # time; without them the app shows Google Drive as not configured. Google doesn't treat a
+        # Desktop client's secret as confidential, but it still stays out of the repository.
+        env:
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
+          # The updater key pair (#179). The Tauri CLI signs the update bundles with the private
+          # key; the public key goes into the app through scripts/updater-config.mjs. Without
+          # both, the build has no updater and no .sig files, and still succeeds.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ] && [ -n "$TAURI_UPDATER_PUBKEY" ]; then
+            node scripts/updater-config.mjs > "$RUNNER_TEMP/updater.conf.json"
+            extra+=(--config "$RUNNER_TEMP/updater.conf.json")
+          else
+            echo "::notice title=No updater::TAURI_SIGNING_PRIVATE_KEY or TAURI_UPDATER_PUBKEY isn't set, so this build has no updater (docs/desktop.md, Updates)."
+            unset TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+          fi
+          npm run build -- --bundles "${{ matrix.bundles }}" ${{ matrix.args }} ${extra[@]+"${extra[@]}"}
       - name: Upload the installers
         uses: actions/upload-artifact@v7
         with:
@@ -111,3 +147,37 @@ jobs:
           path: desktop/src-tauri/target/**/release/bundle/
           if-no-files-found: error
           retention-days: 14
+
+  # Attach the installers to the GitHub release (release.yml only). latest.json is what installed
+  # apps check: https://github.com/<repo>/releases/latest/download/latest.json (docs/desktop.md).
+  publish:
+    if: inputs.release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: desktop-*
+          path: ${{ runner.temp }}/artifacts
+      - name: Get the installers, checksums and latest.json ready
+        run: |
+          set -euo pipefail
+          node frontend/scripts/release-notes.mjs "$TAG" > "$RUNNER_TEMP/notes.md"
+          node desktop/scripts/release-assets.mjs "$RUNNER_TEMP/artifacts" "$RUNNER_TEMP/release" \
+            --tag "$TAG" --notes-file "$RUNNER_TEMP/notes.md" --repo "$GITHUB_REPOSITORY"
+      - name: Attach them to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # --clobber: a rerun of the same release replaces the files instead of failing.
+        run: gh release upload "$TAG" "$RUNNER_TEMP"/release/* --clobber --repo "$GITHUB_REPOSITORY"

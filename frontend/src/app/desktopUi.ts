@@ -2,10 +2,12 @@
 // isDesktopShell() so the website never downloads it (issue #181):
 // - external links open in the system browser, through the opener plugin (https only);
 // - text that says "this browser" says "this app", since the app keeps its own storage;
-// - a link the system browser couldn't open shows a notice with the link (issue #235).
+// - a link the system browser couldn't open shows a notice with the link (issue #235);
+// - app updates come from the shell's updater, not version.json (issue #179, desktopUpdates.ts).
 // The shell itself also blocks navigation away from the app and sends https pop-ups to the
 // browser (desktop/src-tauri/src/lib.rs), so this is the friendly path, not the only guard.
 import { openInSystemBrowser } from './desktopShell';
+import { setUpDesktopUpdates, type UpdateFlowLike } from './desktopUpdates';
 
 /**
  * Rewrites for the page's built-in text, most specific first. Whole sentences where the browser
@@ -132,11 +134,14 @@ export function linkFailedMessage(url: string): string {
 type DesktopUiOptions = LinkOptions & {
   /** Shows a notice. Without it (and without onFail), a link that couldn't be opened only logs a warning. */
   notify?: (message: string) => void;
+  /** The update flow (updateFlow.ts), for app updates (#179). Without it the app doesn't check. */
+  updates?: () => UpdateFlowLike | null;
 };
 
 /** Everything the desktop app changes in the page. Called once at startup, in the app only. Returns a stop for the link routing. */
 export function setUpDesktopUi(doc: Document, options: DesktopUiOptions): () => void {
   applyDesktopWording(doc.body);
-  const { notify, ...links } = options;
+  const { notify, updates, ...links } = options;
+  if (updates) setUpDesktopUpdates({ flow: updates });
   return routeExternalLinks(doc, { ...links, onFail: links.onFail ?? (notify && ((url) => notify(linkFailedMessage(url)))) });
 }

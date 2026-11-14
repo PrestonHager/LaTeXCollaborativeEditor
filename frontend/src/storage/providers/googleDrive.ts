@@ -19,6 +19,10 @@ import {
 import { forgetAccount, keepsSignedIn, rememberAccount, rememberedAccount, setKeepSignedInChoice, wasConnected } from './accountMemory';
 import { deleteToken, loadToken, saveToken } from './tokenVault';
 import type { TexEngine } from '../../project/texEngine';
+import { isDesktopShell } from '../../app/desktopShell';
+
+// The desktop app signs in through the system browser instead of GIS (#177). Its own small chunk.
+const loadDesktopAuth = () => import('./desktopGoogleAuth');
 
 export { EXPORTS_PROPERTY, FOLDER_MIME, LEGACY_PREFIX, TEMPLATE_PROPERTY, TEMPLATES_FOLDER_PROPERTY } from './driveShared';
 
@@ -177,6 +181,15 @@ export class GoogleDriveProvider implements StorageProvider {
     forgetAccount(PROVIDER_ID);
     await deleteToken(PROVIDER_ID);
     this.currentStatus = 'Drive: Disconnected';
+    // The desktop app: the shell forgets the keychain's refresh token and revokes it (#177).
+    if (isDesktopShell()) {
+      try {
+        await (await loadDesktopAuth()).desktopSignOut();
+      } catch (error) {
+        console.warn('Could not sign out of Google in the desktop app', error);
+      }
+      return;
+    }
     if (!token) return;
     try {
       await loadScript(GIS_SCRIPT, 'Google sign-in');
@@ -210,6 +223,7 @@ export class GoogleDriveProvider implements StorageProvider {
       return true;
     }
     this.clearAccessToken();
+    if (isDesktopShell()) return this.connectDesktop();
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
       this.currentStatus = 'Drive config missing';
@@ -246,6 +260,12 @@ export class GoogleDriveProvider implements StorageProvider {
   async restoreSession(): Promise<boolean> {
     if (this.hasUsableToken()) return true;
     if (!wasConnected(PROVIDER_ID)) return false;
+    // The desktop app: a new access token from the refresh token in the OS keychain, no browser.
+    if (isDesktopShell()) {
+      const ok = await this.desktopToken();
+      this.currentStatus = ok ? 'Drive: Session restored' : 'Drive: Sign-in expired';
+      return ok;
+    }
     const signOuts = this.signOuts;
     if (keepsSignedIn(PROVIDER_ID)) {
       const kept = await loadToken(PROVIDER_ID, TOKEN_EXPIRY_SLACK_MS);
@@ -734,6 +754,14 @@ export class GoogleDriveProvider implements StorageProvider {
    */
   private async trySilentRefresh(): Promise<boolean> {
     if (!this.isSignedIn()) return false;
+    if (isDesktopShell()) {
+      if (await this.desktopToken()) {
+        this.currentStatus = 'Drive: Connected';
+        return true;
+      }
+      this.endSession();
+      return false;
+    }
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (clientId) {
       try {
@@ -798,6 +826,44 @@ export class GoogleDriveProvider implements StorageProvider {
       });
       tokenClient.requestAccessToken({ prompt });
     });
+  }
+
+  /**
+   * Sign in through the system browser, in the desktop app (#177). The shell keeps the refresh token
+   * in the OS keychain; this page only gets the access token.
+   */
+  private async connectDesktop(): Promise<boolean> {
+    const signOuts = this.signOuts;
+    this.currentStatus = 'Drive: Finish signing in in your browser...';
+    try {
+      const { desktopSignIn } = await loadDesktopAuth();
+      const token = await desktopSignIn(rememberedAccount(PROVIDER_ID)?.account);
+      if (signOuts !== this.signOuts) {
+        this.currentStatus = 'Drive: Disconnected';
+        return false;
+      }
+      this.setAccessToken(token.accessToken, token.expiresAt);
+      this.currentStatus = 'Drive: Connected';
+      return true;
+    } catch (error) {
+      console.warn('Desktop Google sign-in failed', error);
+      this.currentStatus = `Drive: ${error instanceof Error && error.message ? error.message : 'Connection failed'}`;
+      return false;
+    }
+  }
+
+  /** A new access token from the shell, with no browser (desktop app only). False when signed out or offline. */
+  private async desktopToken(): Promise<boolean> {
+    const signOuts = this.signOuts;
+    try {
+      const token = await (await loadDesktopAuth()).desktopAccessToken();
+      if (signOuts !== this.signOuts) return false;
+      this.setAccessToken(token.accessToken, token.expiresAt);
+      return true;
+    } catch (error) {
+      console.warn('Could not get a Drive token from the desktop app', error);
+      return false;
+    }
   }
 
   private setAccessToken(accessToken: string, expiresAt: number) {

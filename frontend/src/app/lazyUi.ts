@@ -119,7 +119,7 @@ export function lazyProjectsDialog(
     (deps.load ?? (() => import('../ui/projectsDialog')))().then(({ createProjectsDialog }) => createProjectsDialog(dialog, options)),
   );
   return {
-    open: (list: ProjectSummary[]) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.open(list)),
+    open: (list: ProjectSummary[], source?: ProviderId) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.open(list, source)),
     chooseProvider: (ids: ProviderId[]) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.chooseProvider(ids)),
     preload: projects.preload,
   };

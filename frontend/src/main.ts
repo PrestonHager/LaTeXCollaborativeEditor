@@ -47,7 +47,7 @@ import { manifestFromProject, saveProject, type SavedManifest } from './storage/
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
-import { driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
+import { desktopGoogleClient, desktopNativeRtc, driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -155,8 +155,9 @@ const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
-// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205).
-const p2pAvailable = hasWebRtc();
+// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205), unless
+// the desktop app runs WebRTC in its shell instead (Linux, #176).
+const p2pAvailable = hasWebRtc() || desktopNativeRtc();
 
 // Now point every [data-help] link in the page at its docs section.
 wireHelpLinks(document, docsBase);
@@ -170,7 +171,7 @@ const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 // the system browser too, so openExternal needs no desktop branch.
 if (isDesktopShell()) {
   void import('./app/desktopUi')
-    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase), notify: (message) => showNotice(message, true, true) }))
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase), notify: (message) => showNotice(message, true, true), updates: () => updateFlow }))
     .catch(console.warn);
 }
 
@@ -183,7 +184,8 @@ if (driveProvider.isSignedIn() || driveProvider.wasConnected()) driveProvider.pr
 // Every place a project can be saved (#200). The Accounts panel, File > Open Project and the status bar read it.
 const storageProviders = createProviderRegistry([
   localStorageEntry(localAppProvider),
-  googleDriveEntry(driveProvider, import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined),
+  // The desktop app signs in through the system browser with its own client (#177).
+  googleDriveEntry(driveProvider, isDesktopShell() ? desktopGoogleClient() : (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)),
 ]);
 const blobs = new BlobStore();
 const projectState = new ProjectState(localAppProvider, driveProvider);
@@ -993,8 +995,8 @@ const exportDialog = {
 };
 
 const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
-  onPick: (summary) => {
-    if (!isClient) void openStoredProject(localAppProvider, summary.id);
+  onPick: (summary, source) => {
+    if (!isClient) void openStoredProject(source === 'googleDrive' ? driveProvider : localAppProvider, summary.id);
   },
   // The host already OK'd Open to get here, so this doesn't ask again.
   onImportZip: () => commands.importZipFromOpenDialog(),
@@ -1132,6 +1134,11 @@ function showStorageProvider() {
 }
 
 const ensureDrivePickerConfig = () => {
+  // The Picker needs a web origin, which the desktop app doesn't have (#177, docs/desktop.md).
+  if (isDesktopShell()) {
+    showNotice("The Google Drive picker doesn't work in the desktop app. Use the web app for this.", true);
+    return false;
+  }
   if (driveApiKey) return true;
   setStatus('Drive: API key missing');
   showNotice('Google Drive picker is not set up on this site (VITE_GOOGLE_API_KEY is missing).', true);
@@ -1159,6 +1166,27 @@ const pickFromDrive = async (kind: 'project' | 'folder') => {
 const switchToDrive = () => {
   if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
+
+// Folders on this computer as projects, in the desktop app only (#178). A lazy chunk the website never loads.
+const folders = isDesktopShell()
+  ? import('./app/desktopFolders')
+      .then(({ setUpFolders }) =>
+        setUpFolders({
+          registry: storageProviders,
+          projectState,
+          getProject: () => project,
+          useProvider,
+          openStoredProject,
+          holdConflict,
+          takeTheirs: (conflict) => (conflicts.set(conflict.id, conflict), resolveConflict(conflict, 'theirs')),
+          confirmDialog,
+          autosave,
+          setStatus,
+          showNotice,
+        }),
+      )
+      .catch((error: unknown) => (console.warn('Folder projects did not load', error), null))
+  : null;
 
 // Every shortcut label and key press reads from this one table.
 // Where the browser keeps a key for itself (a normal tab), the built-in fallback is used and shown instead.
@@ -1190,6 +1218,7 @@ const commands = createCommands({
   fileTree,
   projectsDialog,
   storageProviders,
+  folders,
   accountsPanel,
   uploadDialog,
   templates,
@@ -1469,6 +1498,12 @@ if (!isClient) {
           else showDriveAccount();
         });
       }
+      // The desktop app's last session saved to a folder (#178): pick it back up if it's still there.
+      const folder = projectState.awaitingFolder();
+      if (folder !== null) {
+        driveRestoreMessage = projectState.resumeFolder((await (await folders)?.reopen(folder)) ?? null);
+        showStorageProvider();
+      }
       if (!projectState.projectId && projectState.activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
         const mainId = project.getMainFileId();
         const mainPath = mainId ? project.get(mainId)?.path : undefined;
@@ -1649,7 +1684,8 @@ window.addEventListener('beforeunload', (event) => {
 updateFlow = setupUpdateFlow({
   root: document.getElementById('update-prompt') as HTMLElement,
   current: BUILD_INFO,
-  poll: import.meta.env.PROD,
+  // The desktop app's version.json is the bundled one; its updater checks instead (desktopUpdates.ts, #179).
+  poll: import.meta.env.PROD && !isDesktopShell(),
   baseUrl: document.baseURI,
   room: () => ({ isHost: !isClient, inRoom }),
   openChangelog: () => void changelogDialog.open('update'),
