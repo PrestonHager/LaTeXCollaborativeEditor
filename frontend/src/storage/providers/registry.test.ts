@@ -62,7 +62,7 @@ describe('provider registry', () => {
   });
 
   it('labels statuses and capabilities for people', () => {
-    expect(Object.keys(providerDescriptions)).toEqual(['local', 'googleDrive']);
+    expect(Object.keys(providerDescriptions)).toEqual(['local', 'googleDrive', 'localFolder']);
     expect(statusLabels).toEqual({ connected: 'Connected', expired: 'Expired', signedOut: 'Not connected', notConfigured: 'Not configured' });
     expect(describeCapabilities({ binaryFiles: true, folders: true, history: true, maxFileBytes: null })).toBe('Folders, images and other files, version history');
     expect(describeCapabilities({ binaryFiles: false, folders: false, history: true, maxFileBytes: 1 })).toBe('Version history');
@@ -92,6 +92,16 @@ describe('provider registry', () => {
       expect(keep.get()).toBe(false);
       await keep.set(true);
       expect(keep.get()).toBe(true);
+    });
+
+    it('has no "Keep me signed in" in the desktop app, which keeps the sign-in in the keychain (#177)', () => {
+      const drive = Object.assign(new FakeDrive(), { keepSignedIn: () => false, setKeepSignedIn: async () => {} });
+      vi.stubGlobal('__TAURI_INTERNALS__', {});
+      try {
+        expect(googleDriveEntry(drive, 'desktop').keepSignedIn).toBeUndefined();
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 });

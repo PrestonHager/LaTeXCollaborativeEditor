@@ -7,6 +7,8 @@ export const HOST_ONLY_COMMANDS: ReadonlySet<CommandId> = new Set<CommandId>([
   'file.saveAsTemplate',
   'file.openLocal',
   'file.openDrive',
+  'file.openFolder',
+  'file.saveToFolder',
   'file.importZip',
   'file.connectDrive',
   'file.saveToDrive',

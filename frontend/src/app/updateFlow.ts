@@ -33,13 +33,15 @@ export function setupUpdateFlow(deps: UpdateFlowDeps) {
     onWhatsNew: deps.openChangelog,
   });
   let shownFor: UpdateReason | null = null;
+  // The desktop app's updater (#179): set once it found an update. Then the card installs and restarts.
+  let install: (() => Promise<void>) | null = null;
   const warnedPeers = new Set<string>();
 
   function offer(reason: UpdateReason) {
     // A deploy we found ourselves outranks a peer's hint, so don't swap its text out.
     if (prompt.isOpen() && shownFor === 'deploy' && reason === 'peer') return;
     shownFor = reason;
-    const { message, detail } = updatePromptText(reason, deps.room());
+    const { message, detail } = updatePromptText(reason, deps.room(), Boolean(install));
     prompt.show(message, detail);
   }
 
@@ -52,7 +54,21 @@ export function setupUpdateFlow(deps: UpdateFlowDeps) {
       }
     }
     deps.beforeReload();
-    deps.reload();
+    if (!install) {
+      deps.reload();
+      return;
+    }
+    try {
+      await install();
+    } catch (error) {
+      prompt.showSaveError(`Couldn't install the update (${error instanceof Error ? error.message : String(error)}).`);
+    }
+  }
+
+  /** In the desktop app: from now on the card installs this update and restarts, instead of reloading. */
+  function useAppUpdater(installer: () => Promise<void>) {
+    install = installer;
+    prompt.setLabels('Restart to update', 'Restart anyway');
   }
 
   /** A peer said which build it runs. Only another protocol is worth interrupting for. */
@@ -84,5 +100,5 @@ export function setupUpdateFlow(deps: UpdateFlowDeps) {
     return true;
   }
 
-  return { checker, prompt, offer, onPeerVersion, reload, newerBuildLive };
+  return { checker, prompt, offer, onPeerVersion, reload, newerBuildLive, useAppUpdater };
 }

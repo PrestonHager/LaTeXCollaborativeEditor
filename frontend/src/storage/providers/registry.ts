@@ -1,6 +1,7 @@
 import type { StorageProvider } from './types';
 import type { CommandId } from '../../ui/menuBar';
 import { rememberedAccount, wasConnected } from './accountMemory';
+import { isDesktopShell } from '../../app/desktopShell';
 
 /**
  * The storage provider registry (#200). Every place a project can be saved is listed here once, with
@@ -11,7 +12,9 @@ import { rememberedAccount, wasConnected } from './accountMemory';
  * NOTE: nothing here goes to peers. Guests only ever hear the host's storage name (see
  * ProjectState.currentStorageLabel), never an account or a token.
  */
-export type ProviderId = 'local' | 'googleDrive';
+// 'localFolder' is a folder on this computer, only in the desktop app (#178). Its entry comes from a
+// lazy chunk (app/desktopFolders.ts), added with ProviderRegistry.add.
+export type ProviderId = 'local' | 'googleDrive' | 'localFolder';
 
 export type ProviderCapabilities = {
   /** Images, PDFs and other non-text files are stored as they are. */
@@ -38,7 +41,7 @@ export type ProviderEntry = {
   /** The name people see, like "Google Drive". */
   readonly name: string;
   /** A Lucide icon name, drawn with storageIcons in ui/icons.ts. */
-  readonly icon: 'hard-drive' | 'monitor';
+  readonly icon: 'hard-drive' | 'monitor' | 'folder';
   readonly capabilities: ProviderCapabilities;
   /** False for storage that needs no account, like this browser. */
   readonly needsSignIn: boolean;
@@ -46,6 +49,8 @@ export type ProviderEntry = {
   /** The commands the Accounts panel's Connect and Log out run, for providers with an account. */
   readonly connectCommand?: CommandId;
   readonly logOutCommand?: CommandId;
+  /** The Accounts panel's button for a provider without sign-in that still has an action, like "Save to a Folder". */
+  readonly actionLabel?: string;
   /** Whether this deployment has the keys it needs. */
   configured(): boolean;
   status(): AccountStatus;
@@ -66,6 +71,8 @@ export type ProviderRegistry = {
   get(id: ProviderId): ProviderEntry;
   /** The entry for a provider instance, like the one the open project saves to. */
   forProvider(provider: StorageProvider): ProviderEntry | undefined;
+  /** Add a provider that loads later, like the desktop app's folders. */
+  add(entry: ProviderEntry): void;
 };
 
 export function createProviderRegistry(entries: ProviderEntry[]): ProviderRegistry {
@@ -79,6 +86,11 @@ export function createProviderRegistry(entries: ProviderEntry[]): ProviderRegist
       return entry;
     },
     forProvider: (provider) => entries.find((entry) => entry.provider === provider),
+    add(entry) {
+      if (byId.has(entry.id)) throw new Error('Two storage providers share an id');
+      byId.set(entry.id, entry);
+      entries.push(entry);
+    },
   };
 }
 
@@ -106,7 +118,10 @@ export type DriveAccountSource = StorageProvider & {
   setKeepSignedIn?(on: boolean): Promise<void>;
 };
 
-/** Google Drive. `clientId` is VITE_GOOGLE_CLIENT_ID; without it the deployment can't sign in. */
+/**
+ * Google Drive. `clientId` is VITE_GOOGLE_CLIENT_ID, or desktopGoogleClient() in the desktop app;
+ * without it the deployment can't sign in.
+ */
 export function googleDriveEntry(provider: DriveAccountSource, clientId: string | undefined): ProviderEntry {
   return {
     id: 'googleDrive',
@@ -131,8 +146,9 @@ export function googleDriveEntry(provider: DriveAccountSource, clientId: string 
       const remembered = rememberedAccount('googleDrive');
       return provider.accountLabel() ?? (remembered?.connected ? remembered.account : null);
     },
+    // The desktop app always keeps the sign-in, in the OS keychain (#177), so it has no such option.
     keepSignedIn:
-      provider.keepSignedIn && provider.setKeepSignedIn
+      provider.keepSignedIn && provider.setKeepSignedIn && !isDesktopShell()
         ? { get: () => provider.keepSignedIn!(), set: (on) => provider.setKeepSignedIn!(on) }
         : undefined,
   };

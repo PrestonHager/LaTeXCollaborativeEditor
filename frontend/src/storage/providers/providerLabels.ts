@@ -7,6 +7,7 @@ import type { AccountStatus, ProviderCapabilities, ProviderId } from './registry
 export const providerDescriptions: Record<ProviderId, string> = {
   local: 'Saved in this browser on this device. Nothing is uploaded.',
   googleDrive: 'A folder in your Google Drive. The app only sees files it made or you picked.',
+  localFolder: 'A folder on this computer, as plain files. The app only sees folders you picked.',
 };
 
 export const statusLabels: Record<AccountStatus, string> = {

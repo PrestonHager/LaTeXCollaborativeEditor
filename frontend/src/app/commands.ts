@@ -1,8 +1,8 @@
-import { localPlace } from './desktopShell';
+import { isDesktopShell, localPlace } from './desktopShell';
 import type { CommandId, CommandState, MenuEntry } from '../ui/menuBar';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { KeybindCommand } from '../ui/keybindSettings';
-import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
+import { desktopPaletteCommands, devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 import type { ThemeMode } from '../state/appSession';
 import { canRunCommand, replaceProjectDialog, type ReplaceAction } from '../state/guestCommands';
 import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
@@ -23,6 +23,7 @@ import type { PreviewCompile } from './previewCompile';
 import type { Keymap, Shortcut } from './keymap';
 import { formatKeybind, keybindFromEvent } from '../ui/modifierShortcutLabels';
 import { isLoadFailure } from './lazy';
+import type { FolderCommands } from './desktopFolders';
 import { DEFAULT_TEX_ENGINE, ENGINE_LABELS, resolveEngine, type TexEngine } from '../project/texEngine';
 
 /** The engine each View menu engine command picks (issue #199). */
@@ -81,7 +82,9 @@ export type CommandContext = {
    * The Open a project dialog. With more than one provider set up, chooseProvider asks where the
    * project is first, and the dialog calls back openFromProvider (below) with the choice.
    */
-  projectsDialog: { open(projects: ProjectSummary[]): void; chooseProvider(providers: ProviderId[]): void };
+  projectsDialog: { open(projects: ProjectSummary[], source?: ProviderId): void; chooseProvider(providers: ProviderId[]): void };
+  /** Folders on this computer (desktopFolders.ts), in the desktop app only. null on the web. */
+  folders?: Promise<FolderCommands | null> | null;
   /** The Accounts panel (ui/accountsPanel.ts), which loads on first use. */
   accountsPanel: { open(): void };
   uploadDialog: { open(folder?: string): void };
@@ -273,6 +276,13 @@ export function createCommands(app: CommandContext) {
   /** Pick a project folder or .tex file in Drive and open it. Pass alreadyConfirmed when the host just OK'd replacing the project. */
   async function openFromDrive(alreadyConfirmed: boolean) {
     if (isClient) return;
+    // The desktop app has no Picker (it needs a web origin, #177): it lists the Drive projects the app made.
+    if (isDesktopShell()) {
+      if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
+      if (!(await ensureDriveConnected())) return;
+      projectsDialog.open(await driveProvider.listProjects(), 'googleDrive');
+      return;
+    }
     if (!ensureDrivePickerConfig()) return;
     if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
     if (!(await ensureDriveConnected())) return;
@@ -291,6 +301,7 @@ export function createCommands(app: CommandContext) {
   async function openFromProvider(id: ProviderId) {
     if (isClient) return;
     if (id === 'googleDrive') return openFromDrive(true);
+    if (id === 'localFolder') return void (await app.folders)?.open();
     projectsDialog.open(await localAppProvider.listProjects());
   }
 
@@ -332,6 +343,12 @@ export function createCommands(app: CommandContext) {
       else projectsDialog.open(await localAppProvider.listProjects());
     },
     'file.openDrive': () => openFromDrive(false),
+    'file.openFolder': async () => {
+      if (!isClient && app.folders && (await confirmReplace('open'))) await openFromProvider('localFolder');
+    },
+    'file.saveToFolder': async () => {
+      if (!isClient) await (await app.folders)?.saveTo();
+    },
     'file.importZip': () => importZip(false),
     'file.newFile': async () => {
       const folder = fileTree.currentFolder();
@@ -635,6 +652,8 @@ export function createCommands(app: CommandContext) {
       case 'file.openLocal':
       case 'file.openDrive':
       case 'file.importZip':
+      case 'file.openFolder':
+      case 'file.saveToFolder':
       case 'file.connectDrive':
       case 'file.saveToDrive':
       case 'file.renameDrive':
@@ -707,7 +726,7 @@ export function createCommands(app: CommandContext) {
     const themes = themeSwitchCommands
       .filter(({ theme }) => !(themeState.editorTheme === theme && themeState.previewTheme === theme))
       .map(({ id, section, label, description }) => ({ id, section, label, description, shortcut: app.keymap.labelFor(id), enabled: true }));
-    const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({
+    const extras = [...paletteOnlyCommands, ...desktopPaletteCommands(Boolean(app.folders)), ...devPaletteCommands].map((command) => ({
       ...command,
       shortcut: app.keymap.labelFor(command.id),
       enabled: getCommandState(command.id).enabled,
@@ -723,7 +742,7 @@ export function createCommands(app: CommandContext) {
         byId.set(entry.commandId, { id: entry.commandId, label: entry.label, section: entry.section, description: entry.description });
       }
     }
-    for (const { id, label, section, description } of [...themeSwitchCommands, ...paletteOnlyCommands, ...devPaletteCommands]) {
+    for (const { id, label, section, description } of [...themeSwitchCommands, ...paletteOnlyCommands, ...desktopPaletteCommands(Boolean(app.folders)), ...devPaletteCommands]) {
       if (!byId.has(id)) byId.set(id, { id, label, section, description });
     }
     return [...byId.values()];

@@ -170,4 +170,65 @@ describe('ProjectState', () => {
       expect(state.projectId).toBe('other');
     });
   });
+
+  describe('folders on this computer (#178)', () => {
+    it('reports folder mode and a storage label without the path', () => {
+      const { state } = setup();
+      const folder = new MemoryProvider();
+      state.folderProvider = folder;
+      state.use(folder, '/home/me/thesis');
+      expect(state.isFolder()).toBe(true);
+      expect(state.getProviderMode()).toBe('folder');
+      expect(state.currentStorageLabel()).toBe('Saved on host computer folder');
+      expect(state.currentStorageLabel()).not.toContain('/home');
+      expect(state.sessionFields().providerMode).toBe('folder');
+    });
+
+    it('waits for the folder code, keeping the folder in the session meanwhile', () => {
+      const { state, local } = setup();
+      expect(state.restore(session({ providerMode: 'folder', projectId: '/p', manifest: manifest('/p') }))).toBeNull();
+      expect(state.awaitingFolder()).toBe('/p');
+      expect(state.awaitingDrive()).toBe(false);
+      expect(state.projectId).toBeNull();
+      expect(state.activeProvider).toBe(local);
+      expect(state.sessionFields()).toMatchObject({ providerMode: 'folder', projectId: '/p' });
+      // A Drive resume doesn't touch a pending folder.
+      expect(state.resumeDrive(true)).toBeNull();
+      expect(state.awaitingFolder()).toBe('/p');
+
+      const folder = new MemoryProvider();
+      state.folderProvider = folder;
+      expect(state.resumeFolder(folder)).toBeNull();
+      expect(state.activeProvider).toBe(folder);
+      expect(state.projectId).toBe('/p');
+      expect(state.manifest?.projectId).toBe('/p');
+      expect(state.awaitingFolder()).toBeNull();
+      expect(state.resumeFolder(folder)).toBeNull();
+    });
+
+    it('stays in this app when the folder is gone', () => {
+      const { state, local } = setup();
+      state.restore(session({ providerMode: 'folder', projectId: '/p' }));
+      expect(state.resumeFolder(null)).toMatch(/couldn't be opened/);
+      expect(state.activeProvider).toBe(local);
+      expect(state.sessionFields().providerMode).toBe('local');
+    });
+
+    it("doesn't take the folder back when the person opened something else meanwhile", () => {
+      const { state, local } = setup();
+      state.restore(session({ providerMode: 'folder', projectId: '/p' }));
+      // use() drops the pending folder, so pretend a save made a project first.
+      state.projectId = 'other';
+      expect(state.resumeFolder(new MemoryProvider())).toBeNull();
+      expect(state.activeProvider).toBe(local);
+      expect(state.projectId).toBe('other');
+    });
+
+    it('treats a folder session without a folder as a local one', () => {
+      const { state } = setup();
+      state.restore(session({ providerMode: 'folder' }));
+      expect(state.awaitingFolder()).toBeNull();
+      expect(state.sessionFields().providerMode).toBe('local');
+    });
+  });
 });

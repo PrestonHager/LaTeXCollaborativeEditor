@@ -1,6 +1,6 @@
 import { createEditorPane } from './ui/editor';
 import { createMenuBar } from './ui/menuBar';
-import { createSettingsDialog } from './ui/settingsDialog';
+import { createSettingsDialog, formatBytes } from './ui/settingsDialog';
 import { mountAppShell } from './test/appShell';
 import { AutosaveController } from './storage/autosave';
 
@@ -87,6 +87,67 @@ describe('App integration behavior', () => {
     expect(onClearLocalDocs).toHaveBeenCalled();
     (document.getElementById('settings-done') as HTMLButtonElement).click();
     expect(dialog.isOpen()).toBe(false);
+  });
+
+  it('shows the Compile PDF engine files in settings and removes them (#241)', async () => {
+    mountAppShell();
+    let stored = { bytes: 123_400_000, files: 3 };
+    const remove = vi.fn(async () => {
+      stored = { bytes: 0, files: 0 };
+    });
+    const base = {
+      getState: () => ({ editorTheme: 'system' as const, previewTheme: 'system' as const, savingPaused: false, canChangeSaving: true }),
+      onEditorTheme: () => undefined,
+      onPreviewTheme: () => undefined,
+      onSavingPaused: () => undefined,
+      onClearLocalDocs: () => undefined,
+    };
+    const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, { ...base, texAssets: { usage: async () => stored, remove } });
+    const label = document.getElementById('settings-tex-assets')!;
+    const button = document.getElementById('settings-tex-assets-remove') as HTMLButtonElement;
+    expect(document.getElementById('settings-tex-assets-row')!.hidden).toBe(true);
+    dialog.open();
+    await vi.waitFor(() => expect(label.textContent).toBe('123.4 MB stored in this browser'));
+    expect(document.getElementById('settings-tex-assets-row')!.hidden).toBe(false);
+    expect(button.hidden).toBe(false);
+    button.click();
+    await vi.waitFor(() => expect(label.textContent).toBe('Not downloaded'));
+    expect(remove).toHaveBeenCalled();
+    expect(button.hidden).toBe(true);
+    expect(document.getElementById('settings-data-status')!.textContent).toContain('Removed the Compile PDF engine files');
+    dialog.close();
+
+    // A failed look-up or removal says so.
+    stored = { bytes: 5, files: 1 };
+    remove.mockRejectedValueOnce(new Error('no'));
+    dialog.open();
+    await vi.waitFor(() => expect(button.hidden).toBe(false));
+    button.click();
+    await vi.waitFor(() => expect(document.getElementById('settings-data-status')!.textContent).toContain("Couldn't remove"));
+    dialog.close();
+    const failing = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+      ...base,
+      texAssets: { usage: async () => Promise.reject(new Error('no')), remove },
+    });
+    failing.open();
+    await vi.waitFor(() => expect(label.textContent).toBe("Couldn't check"));
+    failing.close();
+  });
+
+  it('shows Not downloaded without an asset cache, and formats sizes', async () => {
+    mountAppShell();
+    const dialog = createSettingsDialog(document.getElementById('settings-dialog') as HTMLDialogElement, {
+      getState: () => ({ editorTheme: 'system', previewTheme: 'system', savingPaused: false, canChangeSaving: true }),
+      onEditorTheme: () => undefined,
+      onPreviewTheme: () => undefined,
+      onSavingPaused: () => undefined,
+      onClearLocalDocs: () => undefined,
+    });
+    dialog.open();
+    expect(document.getElementById('settings-tex-assets')!.textContent).toBe('Not downloaded');
+    expect(document.getElementById('settings-tex-assets-row')!.hidden).toBe(true);
+    (document.getElementById('settings-tex-assets-remove') as HTMLButtonElement).click();
+    expect([formatBytes(12), formatBytes(4500), formatBytes(2_500_000_000)]).toEqual(['12 B', '4.5 kB', '2.50 GB']);
   });
 
   it('disables saving controls in settings for guests', () => {
