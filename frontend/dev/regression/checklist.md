@@ -77,6 +77,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] The footer names the error, the file and the line, like `unknown macro: \foo (main.tex line 12)`.
 - [ ] Put the same thing in `chapters/text.tex`. The marker and footer point at that file instead.
 - [ ] Remove it again and the error clears.
+- [ ] Hover an error, warning and info marker (or the underlined text) with the editor theme on Dark, Light and Match system, in OS light and dark mode, and with the app theme set the other way from the OS. The tooltip matches the editor theme, and its text stays readable on its background and on the highlighted row under the pointer.
 
 ## Projects and files
 

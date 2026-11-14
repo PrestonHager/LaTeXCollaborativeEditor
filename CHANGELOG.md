@@ -6,6 +6,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+### Fixed
+
+- **Diagnostic tooltips are readable in a dark editor.** Hovering an error, warning or info marker showed light text on a light grey box. The tooltip, its hovered and selected rows, and the highlighted text under it now follow the editor theme, including Match system when the app and the OS disagree.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added
