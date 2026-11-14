@@ -1,8 +1,8 @@
 
 # Deployment
 
-Frontend deployment (GitHub Pages)
-- Configure the repository Pages source to trigger via GitHub Actions.
+Frontend deployment
+- Production is moving from GitHub Pages to Coolify (issue #249, "Production on Coolify" below). Until the Coolify secrets are set, a release still deploys to GitHub Pages, so keep the repository Pages source on GitHub Actions until then.
 - Set Actions secrets/variables as needed for runtime configuration, for example:
   - `VITE_P2P_APP_ID`
   - `VITE_P2P_RENDEZVOUS` (comma-separated WebTorrent tracker URLs, see below)
@@ -15,8 +15,8 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
   - `VITE_DISABLE_CSP` (optional; `1` ships without the Content Security Policy, see "Turning the CSP off" below)
-  - `VITE_DEPLOY_ENV` (`production` from `release.yml`, `staging` from the staging Dockerfile, see "Staging and production" below)
-- `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action.
+  - `VITE_DEPLOY_ENV` (`production` from `release.yml` or the production Coolify app, `staging` from the staging Dockerfile, see "Staging and production" below)
+- `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action, for GitHub Pages only. On Coolify the production app has the same values as build variables (see "Production on Coolify" below).
   The rendezvous and TURN values aren't passed to the production build yet, so production uses the defaults in `bootstrapConfig.ts`.
   Staging builds in Coolify from the repo-root `Dockerfile` instead, and takes every `VITE_*` value above, rendezvous and TURN included, as a build variable (see "Staging on Coolify" below).
 - Storage providers are listed once in `frontend/src/storage/providers/registry.ts` (#200): each has an id, name, icon, capabilities, and a `configured()` check against its build variables. The Accounts panel, File > Open Project and the status bar read the registry. A provider whose keys are missing stays listed as **Not configured**, so a deployment never has to hide it. Adding a provider (#202, #203, #204) means a registry entry plus its own build variables and app registration, documented here. Tokens stay in the browser tab that signed in and are never sent to peers.
@@ -35,13 +35,13 @@ Frontend deployment (GitHub Pages)
     The script finds these from `dist/index.html` and the Vite manifest (`dist/.vite/manifest.json`, turned on with `build.manifest` in `vite.config.ts`).
     The budget is **225 kB gzipped**, and going over it fails the build.
     That's the initial load after the trim pass (208.6 kB) plus about 15 kB of headroom, under the 250 kB ceiling below, so the bundle doesn't creep back up unnoticed.
-  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js` or `pdf.worker.min-*.js`. They load on demand and in parallel from the GitHub Pages CDN, so there's no total cap.
+  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js` or `pdf.worker.min-*.js`. They load on demand and in parallel from the production host, so there's no total cap.
     Each one warns above 1 MB gzipped and fails the build above 5 MB.
     The build also fails if a lazy chunk ended up in the initial load, either because a module that's imported dynamically is also imported statically, or because initial code statically imports a chunk outside the initial graph.
   - Where the 250 kB ceiling comes from: the goal is an editor you can type in within a few hundred milliseconds.
     Assume 10 Mbps (typical broadband or fast 4G, about 1.25 MB/s) and about 300 ms in total.
     Take off about 100 ms for latency and for parsing and running the script, which leaves about 200 ms of transfer, or 250 kB at 1.25 MB/s.
-    GitHub Pages serves gzip, so gzip size is what goes over the wire.
+    GitHub Pages and the Caddy proxy in front of Coolify serve gzip, so gzip size is what goes over the wire.
   - What loads later: sharing (Trystero and the P2P transport) loads on the first join, which is right away for a `?room=` guest or a host that had shared, and when the pointer or focus reaches Share.
     The lint gutter and autocompletion (`@codemirror/autocomplete`, with closing brackets) load just after the editor shows, and the command and environment list loads the first time it completes something. The command palette, Settings and its keybind editor, About, the Open, Upload and conflict dialogs and the tour load when the page is idle, or when the pointer or focus reaches the menus or toolbar.
     Export, the changelog, Add Files from Drive, the Google Picker, conflict resolution and the zip code load on first use.
@@ -56,15 +56,15 @@ Frontend deployment (GitHub Pages)
   - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
   - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
-- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder to production on a release. Staging runs the same two builds inside the `Dockerfile` on every push to the `staging` branch (see "Staging and production" below).
+- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder to GitHub Pages on a release. Staging, and production on Coolify, run the same two builds inside the `Dockerfile` on every push to the `staging` branch (see "Staging and production" below).
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
 - **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository, or **Production** or **staging** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/` (for staging, the staging site's URL under `/docs/`). Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
 
 Staging and production
-- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site on Coolify. A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
+- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site on Coolify. A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. The production Coolify app has auto-deploy off; only the release starts it. How to cut one is in [`docs/versioning.md`](versioning.md).
 - **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the tests. Coolify picks up that push like any other. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
 - **Staging is on its own origin.** If it were a path on the production site, it would share localStorage and IndexedDB with production, so a staging build's migration could damage real users' projects, and Google OAuth only allows exact origins anyway.
-  Staging is served at `https://staging.latex.apps.prestonhager.com/` from Coolify (https://coolify.prestonhager.com/). Production stays on GitHub Pages and shares nothing with it.
+  Staging is served at `https://staging.latex.apps.prestonhager.com/` from Coolify (https://coolify.prestonhager.com/). Production is a separate app in the same Coolify project's `production` environment (see "Production on Coolify"), on its own origin, and shares nothing with staging.
 - **Its own peers.** Peers only meet peers with the same `VITE_P2P_APP_ID`. A staging build always uses an app id with `staging` in it: the staging value as is if it already has one, else that value (or the default) plus `-staging`. So staging peers never meet production peers, even if staging inherits production's app id from a repository variable.
 - **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. `release.yml` and the staging `Dockerfile` set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
   It goes in `dist/version.json` as `env`. A staging build also shows a small **Staging** badge next to the project name, adds `<meta name="robots" content="noindex">` to every page, and ships a `robots.txt` that blocks every crawler (that covers the docs too). Production and dev builds have none of these.
@@ -73,7 +73,7 @@ Staging and production
 Staging on Coolify
 - Everything staging lives in the Coolify project **LaTeX Collaborative Editor**, in its `staging` environment, on the `mars` server.
   Our own tooling for testing (WebTorrent trackers, TURN or forwarding servers, and so on) goes in that environment too, as separate resources.
-  Never point production at anything in it. The project's `production` environment is empty, since production is on GitHub Pages.
+  Never point production at anything in it. Production lives in the project's `production` environment (see "Production on Coolify").
 - The site itself is the `staging-latex` application, built from this repo's `staging` branch (as a public repository) with the **Dockerfile** build pack.
   The `Dockerfile` builds the app (with `VITE_DEPLOY_ENV=staging`), builds the docs with MkDocs, and serves both from nginx on port 80 (`deploy/nginx.conf`).
   A GitHub webhook on this repo (Coolify's **Webhooks > Manual Git webhooks > GitHub** URL and secret, push events only) tells Coolify about each push, so there's no deploy workflow for staging.
@@ -100,10 +100,50 @@ Staging on Coolify
   6. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
   7. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
   8. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
-- **Why production deploys from `main`, not from the tag.** The github-pages environment only lets `main` deploy, and that's the setting most likely to be left as it is. A tag pushed with `GITHUB_TOKEN` doesn't start other workflows either.
+- **Why production deploys from `main`, not from the tag.** Coolify's production app builds `main`, and the github-pages environment only lets `main` deploy, and that's the setting most likely to be left as it is. A tag pushed with `GITHUB_TOKEN` doesn't start other workflows either.
   So when a release PR merges, `tag-release.yml` (a push to `main`) tags the merge commit and then calls `release.yml` as a reusable workflow. That run's ref is still `main`, so the deploy passes the default rule, and the code it builds is the tag's.
   Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 7's `v*` rule is in.
 - **Transition.** Once this setup merges, production stops updating from `main`, and stays on the last build from `main` until the first release. The first one is **v0.2.0**: the Trystero protocol break in Unreleased is a breaking change, which before 1.0 is a minor bump (`docs/versioning.md`). Cut it with Prepare release, version `0.2.0`.
+
+Production on Coolify
+- Issue #249 moves production (https://latex.prestonhager.com/) from GitHub Pages to Coolify, next to staging. Same domain, so users, the Google OAuth origin and everyone's local projects (localStorage and IndexedDB are per origin) stay as they are.
+- **The app.** A `production-latex` application in the `production` environment of the Coolify project **LaTeX Collaborative Editor**, on `mars`. It builds the same repo-root `Dockerfile` as staging, from the `main` branch, with `VITE_DEPLOY_ENV=production`, and nginx serves it on port 80 (`deploy/nginx.conf`, which sends `version.json`, `index.html` and `CHANGELOG.md` uncached).
+  **Auto-deploy is off**, and there's no webhook for it. Production only changes when `release.yml` asks for a deploy, so it still only ships releases. Nothing in it points at the `staging` environment.
+- **How a release deploys it.** `.github/workflows/release.yml` checks and tests the tag as before. When the secrets below are all set in the **Production** environment, the `deploy-coolify` job then:
+  1. refuses to deploy unless `main`'s head is the tagged commit, since Coolify builds `main`'s head, not a tag;
+  2. calls Coolify's API, `POST $COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_PRODUCTION_APP_UUID&force=false` with `Authorization: Bearer $COOLIFY_API_TOKEN`, and reads the `deployment_uuid` it queued;
+  3. polls `GET /api/v1/deployments/{uuid}` and the live `version.json` every 15 seconds, fails at once if the deployment ends `failed` or cancelled, and passes when `version.json` shows the release's version and commit with `env` `production`. It fails after 30 minutes otherwise. A build with any other `env` fails it too, since that means `VITE_DEPLOY_ENV` isn't set in Coolify.
+  The token reaches curl on stdin, never on a command line or in the log, and the job only has `contents: read`.
+  If any of the three secrets is missing, the release deploys to GitHub Pages as before (it warns if only some are set). Once production is on Coolify, a follow-up removes the Pages path.
+- **Secrets** (**Settings > Environments > Production > Environment secrets**):
+
+  | Name | Value |
+  | --- | --- |
+  | `COOLIFY_URL` | `https://coolify.prestonhager.com` (must be `https://`) |
+  | `COOLIFY_API_TOKEN` | A Coolify API token with the `deploy` and `read` permissions, nothing more |
+  | `COOLIFY_PRODUCTION_APP_UUID` | The production application's UUID, from its URL in Coolify |
+
+  The optional **Production** variable `PRODUCTION_URL` changes the site the job polls (default `https://latex.prestonhager.com/`).
+- **Build variables** (Application > Environment Variables, **Buildtime** on, **Runtime** off), the values `release.yml` takes from the Production environment today:
+
+  | Name | Value |
+  | --- | --- |
+  | `VITE_DEPLOY_ENV` | `production` (the `Dockerfile` defaults to `staging`, and the deploy check fails without it) |
+  | `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` | The Production environment's variables |
+  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY` | The Production environment's secrets |
+  | `DOCS_SITE_URL` | `https://latex.prestonhager.com/docs/` |
+  | `VITE_DISABLE_CSP` | Only to roll back the CSP (see "Turning the CSP off") |
+
+  Don't set the staging values here: production's `VITE_P2P_APP_ID` must not have `staging` in it, or production peers stop meeting the desktop app's. Keep **Advanced > Source commit availability** on **Available during build**, or `version.json` shows commit `dev` and the deploy check never passes.
+- **One-time setup** (a maintainer, once; nothing here can do it):
+  1. In Coolify, in the project's `production` environment, add a **Public Git Repository** application on `mars`: `https://github.com/PrestonHager/LaTeXCollaborativeEditor/tree/main`, build pack **Dockerfile**, ports exposes `80`, domain `http://latex.prestonhager.com` (the Caddy proxy in front of `mars` serves HTTPS, as for the other apps). Turn **Auto Deploy** off, and don't add a webhook.
+  2. Add the build variables above and set **Source commit availability** to **Available during build**. Deploy it once by hand and check it on the server before DNS moves.
+  3. Add the Caddy site for `latex.prestonhager.com` on the proxy (it isn't under the `*.apps` wildcard), pointing at the app, with its own certificate.
+  4. DNS: point `latex.prestonhager.com` at the Caddy proxy instead of GitHub Pages. Once the site answers from Coolify, remove the custom domain in **Settings > Pages** (or unpublish the Pages site), so Pages stops claiming it.
+  5. In Coolify, **Keys & Tokens > API tokens**: create a token with only `deploy` and `read`. Add it and the other two secrets to the **Production** environment here. Do this after DNS moves: from then on releases go to Coolify, and the job checks the live site at `latex.prestonhager.com`.
+  6. Google Cloud console: nothing changes. The origin `https://latex.prestonhager.com` is already in the OAuth client and the API key's website restrictions.
+  7. Run Actions > **Release** > Run workflow on `main` with the current tag. It deploys to Coolify and waits for the live `version.json` (if `main` has moved past that tag, cut the next release instead).
+- **Redeploying and rolling back.** Running **Release** on `main` with the tag at `main`'s head redeploys it, for example after changing a build variable. An older tag can't be redeployed this way, since Coolify always builds `main`. To go back, use the application's **Deployments** list in Coolify to redeploy an earlier image (rollback), then release a fix as the next patch.
 
 Desktop app (experimental, issue #122)
 - The plan, the webview and WebRTC findings, Google sign-in, signing and the updater are in [`docs/desktop.md`](desktop.md).
@@ -141,7 +181,7 @@ Runtime architecture (summary)
 - The compile runs in a module worker, built to its own `dist/assets/compile.worker-*.js` file.
   It's a plain static file, so static hosting still works. It's a lazy chunk, so it has the per-chunk limit but doesn't count toward the initial-load budget.
 - PDF figures in the preview are drawn with pdf.js (`pdfjs-dist`), which loads only when a document uses one. Its code is the lazy `dist/assets/pdfRender-*.js` chunk, and its own module worker is bundled to `dist/assets/pdf.worker.min-*.js`.
-  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so the CSP still needs no `'wasm-unsafe-eval'`. Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
+  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so pdf.js doesn't depend on `'wasm-unsafe-eval'` (which the policy now has for Compile PDF, see Content Security Policy below). Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
 - Compile PDF engine (issue #241, see `docs/wasm-tex-engine.md`): the worker is `src/compile/pdf/texEngine.worker.ts`, its own lazy chunk apart from the LaTeX.js compile worker, started only by the first Compile PDF through `texEngineClient.ts`. It never runs on page load.
   - **Assets** live on our own origin under `<base>/tex/`: a `manifest.json` (`src/compile/pdf/texAssetManifest.ts`) lists a `version`, the engine `glue` module, and each file's `name`, `path`, `sha256` and `size`, plus which files each engine (`pdflatex`, `xelatex`, `lualatex`) needs. Paths resolve against the manifest, and any that leave our origin make the whole manifest invalid, so nothing is fetched from a TeX Live server or CDN. Files are at most 100 MB each (the GitHub Pages limit).
   - **No assets yet is a normal state.** Until the asset-hosting issue publishes them, `tex/manifest.json` is a 404 and Compile PDF says it isn't available on this site. Nothing else in a deploy changes. A host that answers unknown paths with `index.html` (an HTML response) counts the same, and the staging nginx (`deploy/nginx.conf`) returns a real 404 under `/tex/`.
@@ -214,12 +254,17 @@ Content Security Policy
 - The sandboxed preview iframe uses `srcdoc`, so it inherits the same policy. That's why `style-src` has `'unsafe-inline'` (our theme and KaTeX font `<style>` tags, and LaTeX.js's `style` attributes), `img-src` has `data:` (project images), and `base-uri` allows the LaTeX.js CDN path (its `<base>` tag).
   `script-src` has no `'unsafe-inline'` or `'unsafe-eval'`, so a peer's document can't run inline script in the preview, and an injected `<img>` to another host is blocked, so it can't ping a tracker either.
   The one inline script we add to the preview, `PREVIEW_LINK_SCRIPT` in `src/ui/preview.ts`, is allowed by its `sha256-` hash in `script-src`. It's a fixed string (the scroll position and the zoom go in `data-scroll` and `data-zoom` attributes), so if you edit it, `cspPolicy.test.ts` fails and prints the new hash to put in `index.html`.
+- `script-src` has `'wasm-unsafe-eval'` (issue #240) so Compile PDF can compile its WebAssembly TeX engine (`docs/wasm-tex-engine.md`).
+  It allows `WebAssembly.compile` and `instantiate` only, not JavaScript `eval` or `new Function`, so the preview's protection above is unchanged; `cspPolicy.test.ts` checks it's there and that `'unsafe-eval'` never is.
+  The engine and its package files come from our own origin, under `connect-src 'self'` and `worker-src 'self'`, never from a TeX Live server.
+  Workers: a dedicated worker started from a same-origin URL uses the CSP of its own response, not the page's meta tag. GitHub Pages, the Coolify nginx (`deploy/nginx.conf`) and the desktop app send no CSP header, so the engine worker needs nothing more. If a host ever adds a CSP header, it needs `'wasm-unsafe-eval'` too.
+  Browsers that don't know the keyword (before Chrome 97, Firefox 102, Safari 16) block WebAssembly under this policy, so Compile PDF says it isn't available there. The live preview doesn't use WebAssembly (pdf.js runs with `useWasm: false`).
 - `frame-src` and `img-src` allow `blob:` for the PDF and image viewer, and `object-src` allows `blob:` too, because Chrome's PDF viewer in that iframe counts as a plugin.
 - `connect-src` lists the default trackers. If `VITE_P2P_RENDEZVOUS` lists others, the `csp` plugin in `vite.config.ts` adds their origins at build time.
   STUN and TURN aren't covered by CSP, so `VITE_STUN_URL` and `VITE_TURN_URL` need no change.
 - A meta tag can't set `frame-ancestors`, `report-uri`/`report-to` or `sandbox`; browsers ignore them there.
   So the CSP doesn't stop other sites from framing the app (clickjacking), and GitHub Pages can't send `X-Frame-Options` either.
-  If the site moves behind a host or proxy that can set headers (Cloudflare, Netlify, a custom server), send the same policy as a header and add `frame-ancestors 'none'`.
+  Production on Coolify is behind nginx (`deploy/nginx.conf`), which can set headers, so a follow-up can send the same policy as a header and add `frame-ancestors 'none'`.
 - `upgrade-insecure-requests` is left out on purpose: it would break `npm run dev` and `vite preview` on `http://localhost`.
 - After changing the policy, check the browser console on the live site for "violates the following Content Security Policy directive" while signing in to Google, opening the Picker, sharing a room and compiling.
 
@@ -272,9 +317,9 @@ Security
 Versions and releases
 - How to version, write the changelog, tag and release is in [`docs/versioning.md`](versioning.md).
 - Every merge to `staging` deploys to staging. Production only deploys a release: a `vX.Y.Z` tag on a commit that's already on `main`, which only gets `staging` through a release PR.
-- Prepare release (`.github/workflows/prepare-release.yml`) opens the release PR. When it merges, `tag-release.yml` tags it and calls `release.yml`, which checks the tag against both `package.json` files and the changelog, runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to Pages, and creates the GitHub release from the `CHANGELOG.md` section.
-  The release workflows need no secrets beyond the build's own: the default `GITHUB_TOKEN` is enough. Only staging needs `STAGING_DEPLOY_TOKEN`.
-- `dist/version.json` is served with GitHub Pages' default caching (about 10 minutes), so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
+- Prepare release (`.github/workflows/prepare-release.yml`) opens the release PR. When it merges, `tag-release.yml` tags it and calls `release.yml`, which checks the tag against both `package.json` files and the changelog, runs the tests, deploys it to production (Coolify, or GitHub Pages until the Coolify secrets are set, see "Production on Coolify"), and creates the GitHub release from the `CHANGELOG.md` section.
+  Besides the build's own, the release workflows only need the three Coolify secrets for a Coolify deploy, and the default `GITHUB_TOKEN`. Only staging needs `STAGING_DEPLOY_TOKEN`.
+- `dist/version.json` is served with `Cache-Control: no-cache` by nginx on Coolify, but with GitHub Pages' default caching (about 10 minutes) on Pages, so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
   The app's update check (`frontend/src/app/updateCheck.ts`) does both. It fetches `version.json` next to `index.html` on load, every 15 minutes, and when the tab gets focus or becomes visible (at most once a minute). A different build shows the "new version" card. Failed checks back off up to an hour, a 404 stops checking, and `npm run dev` never checks.
   Other static hosts need to serve `version.json` from the same folder as `index.html`. Without it the app works, it just never offers updates.
 
