@@ -93,6 +93,20 @@ describe('hover preview', () => {
     expect(card.hidden).toBe(true);
   });
 
+  it('never shows for a touch, even when focus moves after typing on a soft keyboard (#188)', () => {
+    const { card, byCommand } = setup();
+    const save = byCommand('file.saveNow');
+    // Typing in the editor with the on-screen keyboard counts as keyboard use...
+    key('a');
+    // ...but a tap resets that, so the focus the tap (or the menu it opens) moves doesn't preview.
+    pointer(save, 'pointerdown', 'touch');
+    pointer(save, 'pointerenter', 'touch');
+    save.dispatchEvent(new FocusEvent('focusin'));
+    vi.advanceTimersByTime(HOVER_PREVIEW_DELAY_MS * 2);
+    expect(card.hidden).toBe(true);
+    expect(save.hasAttribute('aria-describedby')).toBe(false);
+  });
+
   it('never runs the command on hover, and hides on press and click', () => {
     const { card, byCommand } = setup();
     const save = byCommand('file.saveNow');

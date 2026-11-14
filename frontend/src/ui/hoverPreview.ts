@@ -34,8 +34,10 @@ const GAP = 6;
  * anything is pressed, and follows its button if the page scrolls. It never runs a command: only a click does, and that goes to the button's
  * own handler.
  *
- * Touch has no hover, so a tap never shows it (#188 covers touch). The card ignores the pointer,
- * so it can't catch a hover or a click meant for what's underneath.
+ * Touch has no hover, so a tap never shows it, and neither does the focus a tap moves (#188). On touch
+ * screens the command palette has the same descriptions, and a long-press on a toolbar button shows
+ * its name (attachTouchTooltips in longPress.ts). The card ignores the pointer, so it can't catch a
+ * hover or a click meant for what's underneath.
  */
 export function createHoverPreview(card: HTMLElement, options: HoverPreviewOptions) {
   const delayMs = options.delayMs ?? HOVER_PREVIEW_DELAY_MS;
