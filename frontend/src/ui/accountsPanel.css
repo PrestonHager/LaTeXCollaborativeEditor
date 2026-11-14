@@ -9,6 +9,9 @@
 .accounts-row-account, .accounts-row-caps { margin: 0; overflow-wrap: anywhere; }
 .accounts-row-account { font-size: 0.8125rem; }
 .accounts-row-caps { font-size: 0.75rem; color: var(--muted-text); }
+.accounts-keep { display: grid; gap: 0.2rem; margin-top: 0.35rem; }
+.accounts-keep .label { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; font-weight: 400; }
+.accounts-keep-warning { margin: 0; font-size: 0.75rem; color: var(--muted-text); }
 .accounts-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
 .accounts-dialog footer { justify-content: space-between; }
 /* Narrow windows: the buttons go under the text, so a long email still fits. */

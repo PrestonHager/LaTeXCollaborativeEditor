@@ -78,8 +78,10 @@ More: [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 | Drive: Connecting... | The Google sign-in is open or loading. |
 | Drive: Connected | Signed in. Saves go to Drive. |
 | Drive: Connected (name the project to save) | Signed in, but the project needs a name before it can save. |
-| Drive: Session restored | After a reload, your Drive sign-in was still good. |
-| Drive needs you to reconnect; saving locally. Use File > Connect Google Drive. | You were saving to Drive, but this tab has no good sign-in. That happens in a new tab, a restarted browser, or a reload after the sign-in ran out. Saves go to this browser for now. |
+| Drive: Session restored | After a reload or on a new visit, your Drive sign-in was still good, or a quiet sign-in brought it back. |
+| Drive: Signing in... | On a new visit, the app is signing you back in to Drive without asking. Saving starts once it's done. |
+| Google Drive sign-in expired, so edits save in this browser. Use File > Connect Google Drive to sign in again. | You were saving to Drive on your last visit, but the quiet sign-in didn't work (usually the browser blocked Google's popup). Nothing is broken: click Connect once. |
+| Drive needs you to reconnect; saving locally. Use File > Connect Google Drive. | You were saving to Drive, but this tab has no good sign-in. That happens when this browser doesn't remember Drive (for example, you logged out in another tab). Saves go to this browser for now. |
 | Drive: Saving... / Drive: Saved name | **Save to Google Drive** is running, then done. |
 | Drive: Opening picker... | The Drive picker is loading. |
 | Drive: Selection canceled | You closed the picker without picking. |

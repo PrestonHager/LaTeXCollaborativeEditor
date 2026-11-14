@@ -241,8 +241,8 @@ The pill text for each state is in [Status and error messages](messages.md#autos
 
 ### Google Drive connected and expired
 
-The Drive sign-in lives in the tab's `sessionStorage`.
-A reload in the same tab keeps it, but a new tab or a restarted browser starts signed out.
+The Drive sign-in lives in the tab's `sessionStorage`, so a reload in the same tab keeps it.
+`localStorage` remembers only that Drive was connected and as whom (#201), so a new tab or a restarted browser tries a silent sign-in before saving starts: a token kept by "Keep me signed in on this browser" (IndexedDB), then Google with `prompt: 'none'`. If neither works, it saves locally and Accounts shows Drive as Expired.
 
 ```mermaid
 stateDiagram-v2
@@ -256,7 +256,10 @@ stateDiagram-v2
     Expired --> Local: saves fall back to this browser,<br/>notice in the header
     Local --> Connecting: File > Connect Google Drive
     Connected --> Local: File > Disconnect Google Drive<br/>(token revoked)
-    Connected --> Local: new tab, or reload after the token ran out<br/>("Drive needs you to reconnect")
+    Connected --> Restoring: new tab or restarted browser,<br/>Drive remembered
+    Restoring --> Connected: kept token, or silent sign-in worked<br/>("Drive: Session restored")
+    Restoring --> Local: silent sign-in failed<br/>("Google Drive sign-in expired")
+    Connected --> Local: reload after the token ran out,<br/>Drive not remembered ("Drive needs you to reconnect")
 ```
 
 ### Host and guest

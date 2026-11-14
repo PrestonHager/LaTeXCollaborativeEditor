@@ -16,6 +16,8 @@ function fakeProvider() {
     accountLabel: vi.fn(() => 'me@example.com'),
     loadAccount: vi.fn(async () => 'me@example.com'),
     disconnect: vi.fn(async () => {}),
+    restoreSession: vi.fn(async () => true),
+    setKeepSignedIn: vi.fn(async () => {}),
     currentProjectId: vi.fn((id: string) => `alias-${id}`),
     connect: vi.fn(async () => true),
     fileVersion: vi.fn(() => 'v1'),
@@ -178,5 +180,56 @@ describe('LazyGoogleDriveProvider', () => {
     expect(sessionStorage.getItem(TOKEN_KEY)).toBeNull();
     expect(drive.isSignedIn()).toBe(false);
     expect(drive.status()).toBe('Drive: Disconnected');
+  });
+
+  describe('sign-ins between visits (#201)', () => {
+    const remember = (entry: object) => localStorage.setItem('storage_accounts', JSON.stringify({ googleDrive: entry }));
+
+    it('restores without loading anything when Drive was never connected', async () => {
+      const { drive, loader } = setup();
+      expect(drive.wasConnected()).toBe(false);
+      await expect(drive.restoreSession()).resolves.toBe(false);
+      expect(loader).not.toHaveBeenCalled();
+    });
+
+    it('needs nothing loaded when this tab still has a token', async () => {
+      sessionStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken: 'kept', expiresAt: Date.now() + 3600_000 }));
+      const { drive, loader } = setup();
+      await expect(drive.restoreSession()).resolves.toBe(true);
+      expect(loader).not.toHaveBeenCalled();
+    });
+
+    it('loads the provider for a remembered account, and copes when it cannot', async () => {
+      remember({ connected: true, account: 'ada@example.com', keepSignedIn: true });
+      const { drive, provider } = setup();
+      expect(drive.wasConnected()).toBe(true);
+      expect(drive.keepSignedIn()).toBe(true);
+      await expect(drive.restoreSession()).resolves.toBe(true);
+      expect(provider.restoreSession).toHaveBeenCalled();
+      await drive.setKeepSignedIn(false);
+      expect(provider.setKeepSignedIn).toHaveBeenCalledWith(false);
+
+      const failing = setup(() => Promise.reject(new Error('gone')));
+      await expect(failing.drive.restoreSession()).resolves.toBe(false);
+    });
+
+    it('loads the provider to log out of a remembered account', async () => {
+      remember({ connected: true, account: 'ada@example.com', keepSignedIn: false });
+      const { drive, provider } = setup();
+      await drive.disconnect();
+      expect(provider.disconnect).toHaveBeenCalled();
+    });
+
+    it('forgets the account and kept sign-ins on log out even when the provider cannot load', async () => {
+      remember({ connected: true, account: 'ada@example.com', keepSignedIn: true });
+      const deleteDatabase = vi.fn();
+      vi.stubGlobal('indexedDB', { deleteDatabase });
+      const { drive } = setup(() => Promise.reject(new Error('gone')));
+      await drive.disconnect();
+      expect(localStorage.getItem('storage_accounts')).toBeNull();
+      expect(deleteDatabase).toHaveBeenCalledWith('latex-editor-sign-ins');
+      expect(drive.status()).toBe('Drive: Disconnected');
+      vi.unstubAllGlobals();
+    });
   });
 });

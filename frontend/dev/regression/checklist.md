@@ -192,8 +192,10 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 
 - [ ] Connect Google Drive opens a sign-in popup and the status says Drive is connected.
 - [ ] Settings, and hovering the save status, show which Google account is signed in.
-- [ ] Reloading the tab stays signed in, but a new tab asks you to connect again.
-- [ ] The Drive token is in `sessionStorage` only, never `localStorage` (check in dev tools).
+- [ ] Reloading the tab stays signed in. A new tab tries to sign in quietly; when the browser blocks it, Accounts shows Google Drive as Expired with your email and Connect, and edits save in the browser until you connect.
+- [ ] The Drive token is in `sessionStorage` only, never `localStorage` (check in dev tools). `localStorage` `storage_accounts` has only `connected`, the email and `keepSignedIn`.
+- [ ] Accounts > Keep me signed in on this browser shows the shared-computer warning. With it on, the token is also in IndexedDB `latex-editor-sign-ins`, and a new tab (within the hour) comes back signed in, saving to the same Drive project. Unticking it removes the IndexedDB row.
+- [ ] Log out (or Disconnect Google Drive) removes `storage_accounts`, the `sessionStorage` token and the IndexedDB row; the next new tab shows Google Drive as Not connected.
 - [ ] Disconnect Google Drive signs out and switches saving to the browser, without losing edits.
 - [ ] A blocked popup shows a message saying to allow popups.
 - [ ] Save to Google Drive makes a project folder in Drive with the same files and subfolders.

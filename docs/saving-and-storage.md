@@ -56,13 +56,33 @@ The status bar also has a badge for where the open project is stored, like **Thi
 
 **Edit > Accounts…** (also in the command palette, or click the storage badge) lists every place a project can be saved, with:
 
-- its status: **Connected**, **Expired** (the sign-in ran out; edits save in this browser until you connect again), **Not connected**, or **Not configured** (this site has no keys for it, see the [deployment guide](deployment.md));
+- its status: **Connected**, **Expired** (the sign-in ran out, or this is a new visit and a quiet sign-in didn't work; edits save in this browser until you connect again), **Not connected**, or **Not configured** (this site has no keys for it, see the [deployment guide](deployment.md));
 - the signed-in account, like "Signed in as ada@example.com";
 - what it keeps: folders, images and other files, version history;
+- **Keep me signed in on this browser**, for accounts that can sign in (see [Staying signed in](#staying-signed-in));
 - **Connect** and **Log out** buttons. Connect is the same as **File > Connect Google Drive**, and Log out the same as **Disconnect Google Drive**: saving moves to this browser first, so no edit is lost.
 
 **Log out of everything** signs out of every connected account at once. Browser storage needs no account, so it's always there and has no buttons.
-Sign-ins stay in this tab. They're never sent to the people in your room.
+Sign-ins are never sent to the people in your room.
+
+### Staying signed in
+
+Once you connect an account, this browser remembers that you did, and as whom, until you log out. When you come back, the app tries to sign you in again without asking. Only if that doesn't work does the account show **Expired** with a **Connect** button, and your edits save in this browser until you connect.
+
+- **By default** the sign-in itself (Google's access token) stays in the tab. Reloading the tab keeps you signed in. A new tab or a restarted browser tries a quiet sign-in with Google first, but most browsers block it because it needs a popup, so you'll usually click **Connect** once. Google remembers that you allowed the app, so that's one click with no consent screen.
+- **Keep me signed in on this browser** (a checkbox under the account in Accounts) also keeps the sign-in in this browser's storage, so new tabs and a restarted browser come back signed in. Don't turn it on for a shared or public computer: anyone who opens this browser can use your Google Drive until you log out. Google's sign-ins last about an hour, so after that you'll still be asked to connect again. You can tick it before connecting. Unticking it deletes the kept sign-in right away.
+- **Log out** (or **Disconnect Google Drive**) forgets everything below for that account and asks Google to cancel the sign-in.
+- A sign-in that ran out is deleted on its own and shows as **Expired**, not as an error.
+
+Exactly what's stored, and where:
+
+| What | Where | When |
+| --- | --- | --- |
+| That an account is connected, its email, and the Keep me signed in choice. Never a token. | `localStorage`, key `storage_accounts` | From the first connect until you log out |
+| The Google Drive access token, its expiry time and email | `sessionStorage`, key `drive_session_token` (this tab only) | While the tab is signed in. Gone when the tab closes, the token runs out, or you log out |
+| The same token, expiry time and email | IndexedDB, database `latex-editor-sign-ins` | Only with Keep me signed in. Deleted when it runs out, when you untick it, or when you log out |
+
+None of this is sent to the people in your room, put in a link, or written to the console.
 
 ![The Accounts panel with this browser and Google Drive connected](assets/accounts/accounts-connected.png)
 
@@ -217,7 +237,7 @@ Sign-in:
 
 - Sign-in opens a Google popup. If your browser blocks it, see [Popups blocked](troubleshooting.md#popups-blocked).
 - Sign-ins last about an hour. The app tries to renew quietly. If that fails, it saves to this browser and shows a notice, so nothing is lost. Use **Connect Google Drive** to switch back.
-- The sign-in only lasts for the current tab. Reloading the tab keeps you signed in, but a new tab or a restarted browser asks you to connect again, and saves go to this browser until you do.
+- Reloading the tab keeps you signed in. A new tab or a restarted browser tries to sign you in quietly, and asks you to connect only if that fails (saves go to this browser until you do). **Keep me signed in on this browser** in Accounts keeps the sign-in for new tabs too. See [Staying signed in](#staying-signed-in).
 - To see who's signed in, open **Settings** or hover over the save status in the header.
 
 When a save fails:

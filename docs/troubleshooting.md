@@ -43,7 +43,8 @@ Things to try:
 - **Access was denied** means you said no to Drive access. Try again and allow it, or the app can't save there.
 - **Connection failed** usually means the Google sign-in script couldn't load. Check your connection and any script blockers.
 - **Session expired** means your Google sign-in ran out. Sign-ins last about an hour. The app tries to renew quietly, and if that fails, it saves to this browser so nothing is lost. Use **File > Connect Google Drive** to switch back.
-- **Drive needs you to reconnect; saving locally** shows when you open the app in a new tab or a restarted browser. The sign-in is kept per tab in `sessionStorage`, so only a reload of the same tab stays signed in. Use **File > Connect Google Drive**.
+- **Google Drive sign-in expired, so edits save in this browser** shows when you open the app in a new tab or a restarted browser and the quiet sign-in didn't work, usually because the browser blocked Google's popup. Use **File > Connect Google Drive** (one click, no consent screen). To skip this on your own computer, tick **Keep me signed in on this browser** in **Edit > Accounts…**; see [Staying signed in](saving-and-storage.md#staying-signed-in).
+- **Drive needs you to reconnect; saving locally** shows when the last session saved to Drive but this browser no longer remembers Drive, like after logging out in another tab. Use **File > Connect Google Drive**.
 - To sign out on purpose, use **File > Disconnect Google Drive**. It revokes the token, and edits keep saving in this browser.
 
 If a Drive save fails:
