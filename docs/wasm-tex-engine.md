@@ -142,8 +142,8 @@ in the browser and on the peers, and rendezvous metadata is untouched.
 ## How it would fit in the app
 
 - **A new lazy chunk, `texEngine.worker.ts`**, separate from the LaTeX.js compile worker. It
-  loads only after the first Compile PDF, so the initial load (about 224.8 of 225 kB gzipped
-  today) doesn't change. The command that starts it is a dynamic import.
+  loads only after the first Compile PDF, so the initial load (about 214.8 of 225 kB gzipped
+  after #231) doesn't change. The command that starts it is a dynamic import.
 - **CSP:** add `'wasm-unsafe-eval'` to `script-src` in `index.html`. Without it a page can't
   compile WebAssembly under our policy. Check whether a dedicated worker served from GitHub Pages
   (which sends no CSP header) needs it too, and add it to the desktop CSP in `desktop/`.
