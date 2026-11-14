@@ -167,7 +167,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .share-link { color: var(--link-text); text-decoration: underline; }
 /* The Share popover (issue #224): a popover card, like the preview-changes one (docs/ui-sizing.md). */
 .share-menu { display: inline-flex; }
-.share-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; margin-top: 0.25rem; padding: 0.75rem 1rem; display: grid; gap: 0.5rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
+.share-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; margin-top: 0.25rem; margin-inline-start: var(--popover-shift, 0px); padding: 0.75rem 1rem; display: grid; gap: 0.5rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
 .share-popover-title { margin: 0; font-size: 1rem; font-weight: 600; }
 .share-popover-view { display: grid; gap: 0.5rem; }
 .share-popover-view[hidden] { display: none; }
@@ -211,7 +211,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 
 /* Menu bar. Basecoat styles the dropdowns, we only set sizes and the check spacing. */
 .menu-bar { display: inline-flex; align-items: center; gap: 0.125rem; }
-.menu-popover { min-width: var(--popover-menu); max-width: calc(100vw - var(--viewport-gutter)); margin-inline-start: var(--menu-shift, 0px); }
+.menu-popover { min-width: var(--popover-menu); max-width: calc(100vw - var(--viewport-gutter)); margin-inline-start: var(--popover-shift, 0px); }
 /* Basecoat fades `visibility` too, so an opening menu stays invisible for its first frame and
    focus() on its first item is dropped. Show it at once on open; closing still fades out. */
 .menu-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }

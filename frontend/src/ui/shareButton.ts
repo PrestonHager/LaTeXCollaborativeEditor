@@ -1,3 +1,5 @@
+import { keepOnScreen } from './keepOnScreen';
+
 /** The parts of the Share popover in index.html. */
 export type ShareElements = {
   /** Wraps the button and the popover, so clicks and focus inside it don't close it. */
@@ -99,6 +101,8 @@ export function setupShareButton(config: ShareConfig) {
     config.popover.setAttribute('aria-hidden', String(!next));
     // Hidden content shouldn't be reachable with Tab while the popover is closed.
     config.popover.inert = !next;
+    // On a phone Share sits beside the Menu button, too far right for the popover to open under it (#186).
+    if (next) keepOnScreen(config.popover);
     if (next) (roomId ? config.copyButton : config.startButton).focus();
     else if (restoreFocus) config.button.focus();
   };

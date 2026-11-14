@@ -1,4 +1,5 @@
 import { commandIcon } from './icons';
+import { keepOnScreen } from './keepOnScreen';
 
 export type CommandId =
   | 'app.commandPalette'
@@ -86,9 +87,6 @@ type MenuBarOptions = {
   arrowsBetweenMenus?: boolean;
 };
 
-/** Menus stay this far inside the window edge: half of `--viewport-gutter` (docs/ui-sizing.md). */
-const EDGE_GAP = 16;
-
 /**
  * Fill the one-button phone menu with a copy of every other menu's items, grouped under its name.
  * Called before the items are wired, so the copies get the same icons, state and keys as the originals.
@@ -173,18 +171,14 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
    * Keep an open menu inside the window (#186: at 390px the File menu ran 54px past the right edge).
    * The phone menu is a full-width sheet (style.css) that starts just under its button.
    */
-  const keepOnScreen = (menuRoot: HTMLElement, popover: HTMLElement) => {
-    popover.style.removeProperty('--menu-shift');
+  const placeMenu = (menuRoot: HTMLElement, popover: HTMLElement) => {
     if (menuRoot.hasAttribute('data-collapsed-menu')) {
       const trigger = menuRoot.querySelector<HTMLElement>('.menu-trigger');
       const bottom = trigger?.getBoundingClientRect().bottom ?? 0;
       popover.style.setProperty('--menu-top', `${Math.round(bottom + 4)}px`);
       return;
     }
-    // Offsets, not the popover's own box: it's still scaled down at this point, while it animates open.
-    const left = menuRoot.getBoundingClientRect().left + popover.offsetLeft;
-    const overflow = left + popover.offsetWidth - (window.innerWidth - EDGE_GAP);
-    if (overflow > 0) popover.style.setProperty('--menu-shift', `${-Math.min(overflow, Math.max(left - EDGE_GAP, 0))}px`);
+    keepOnScreen(popover);
   };
 
   const updateOpenState = () => {
@@ -198,7 +192,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
       const popover = menuRoot.querySelector<HTMLElement>('[data-popover]');
       if (popover) {
         popover.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
-        if (isOpen) keepOnScreen(menuRoot, popover);
+        if (isOpen) placeMenu(menuRoot, popover);
       }
     });
   };

@@ -564,9 +564,8 @@ describe('createMenuBar', () => {
     document.body.replaceChildren(container);
     const popover = container.querySelector<HTMLElement>('[data-popover]')!;
     const box = { left: 110, right: 444 };
-    const menuRoot = container.querySelector<HTMLElement>('.menu-root')!;
-    menuRoot.getBoundingClientRect = () => ({ left: box.left } as DOMRect);
-    Object.defineProperty(popover, 'offsetLeft', { configurable: true, get: () => 0 });
+    // jsdom has no layout, so offsetParent is null and offsetLeft stands for the left edge in the window.
+    Object.defineProperty(popover, 'offsetLeft', { configurable: true, get: () => box.left });
     Object.defineProperty(popover, 'offsetWidth', { configurable: true, get: () => box.right - box.left });
     const width = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
@@ -574,16 +573,16 @@ describe('createMenuBar', () => {
       const menuBar = createMenuBar(container, { getCommandState: () => ({ enabled: true }), onCommand: () => {} });
       container.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
       // 444 - (390 - 16) = 70px too far right.
-      expect(popover.style.getPropertyValue('--menu-shift')).toBe('-70px');
+      expect(popover.style.getPropertyValue('--popover-shift')).toBe('-70px');
       menuBar.closeMenus();
       // A menu that fits isn't moved, and a menu wider than the window stops at the left gap.
       box.right = 300;
       container.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
-      expect(popover.style.getPropertyValue('--menu-shift')).toBe('');
+      expect(popover.style.getPropertyValue('--popover-shift')).toBe('');
       menuBar.closeMenus();
       Object.assign(box, { left: 20, right: 500 });
       container.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
-      expect(popover.style.getPropertyValue('--menu-shift')).toBe('-4px');
+      expect(popover.style.getPropertyValue('--popover-shift')).toBe('-4px');
       menuBar.destroy();
     } finally {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });

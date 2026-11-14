@@ -73,6 +73,22 @@ describe('setupShareButton', () => {
     expect(controls.isOpen).toBe(false);
   });
 
+  it('keeps the popover inside the window when Share sits near the right edge (#186)', () => {
+    const { els } = setup();
+    // jsdom has no layout: offsetParent is null, so offsetLeft is the popover's left edge in the window.
+    Object.defineProperty(els.popover, 'offsetLeft', { configurable: true, get: () => 198 });
+    Object.defineProperty(els.popover, 'offsetWidth', { configurable: true, get: () => 328 });
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    try {
+      els.button.click();
+      // 198 + 328 - (360 - 16) = 182px too far right.
+      expect(els.popover.style.getPropertyValue('--popover-shift')).toBe('-182px');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    }
+  });
+
   it('Start sharing creates the room, then shows and copies the link', async () => {
     const { els, controls, startRoom, copyText, onStatus } = setup();
     els.button.click();
