@@ -16,6 +16,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 - **The preview says which packages it can't load.** Each package the preview takes out of `\usepackage` or `\RequirePackage` gets a diagnostic on its line: an info note for one it can leave out or stand in for, like `geometry` or `amsmath`, and a warning for one whose output will be missing, like `tikz`. Each says what will look different. `\RequirePackage` no longer stops the preview, and the footer leads with the worst diagnostic. The full list is in the Editing and preview docs.
 - **A clear message when a window can't share.** If the browser or the desktop app has no WebRTC (like the Linux desktop app today), Share and room links say "This window can't make peer-to-peer connections, so it can't share or join a room." instead of failing quietly, and the P2P code never starts. A browser suggests a supported one; the desktop app offers to open the room, or the web app, in your system browser.
 
+### Changed
+
+- **Dialogs fill the screen on phones.** Below 640px wide, Upload, Export, About, Open a project, the conflict dialog, Settings, What's new and the template dialogs open as full-screen sheets: the title stays at the top, the buttons at the bottom, and the middle scrolls. Short confirm and name dialogs stay a small card, and wider windows don't change.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added
