@@ -6,6 +6,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+### Changed
+
+- **Phone menus.** Under 640px wide, File, Edit, View and Help become one Menu button with every item grouped under its menu's name, and the toolbar keeps Compile now and Share and puts the rest under More actions (⋯). The keys and screen reader labels are the same as the desktop menus. Menus no longer run off the right edge of the window. Before, File ran about 54px off-screen at 390px.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added

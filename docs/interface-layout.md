@@ -181,14 +181,22 @@ When the window is narrower than 640px, like on most phones, the app shows one p
 - **Files** opens the file list as a drawer over the editor. Picking a file closes the drawer and shows that file in the editor. Tap outside the drawer, tap Files again, or press **Esc** to close it without picking.
 - **View > Editor Only** and **Preview Only** pick the pane too. The Split View, Editor Only and Preview Only toolbar buttons are hidden, since the bar does their job.
 - The buttons in the bar are 44px tall, so they're easy to tap.
+- **File**, **Edit**, **View** and **Help** become one **Menu** button. Its menu fills the width of the window and has every item from the four menus, in the same order, under a **File**, **Edit**, **View** or **Help** heading. It scrolls if it's taller than the window.
+- The toolbar keeps **Compile now** and **Share and copy link**. **New file**, **Upload files**, **Save now**, **Export**, **Command palette** and **Documentation** move into the **More actions** menu (the **⋯** button at the right end of the toolbar). The toolbar buttons and menu items are 44px tall.
 
 With a keyboard, **Tab** reaches Files, Editor and Preview, and Enter or Space presses them. Screen readers announce Editor and Preview as toggle buttons, and Files as expanded or collapsed.
+
+**Menu** and **More actions** work like the menus on a wider screen. Enter, Space or **Down** opens one on its first item. **Up** and **Down** move through the items, skipping grayed-out ones, and **Home** and **End** jump to the first and last. **Escape** closes the menu and puts focus back on its button. In the toolbar, **Left** and **Right** move between Compile now, Share and More actions. Screen readers announce each part of **Menu** as a group named File, Edit, View or Help when you move into it.
 
 Tablets and wider windows keep the layout above.
 
 | Editor | Preview | Files |
 |--------|---------|-------|
 | ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/phone-layout/after-390x844-editor.png) | ![The preview on a phone](assets/phone-layout/after-390x844-preview.png) | ![The file list open as a drawer over the editor](assets/phone-layout/after-390x844-files.png) |
+
+| Menu | More actions |
+|------|--------------|
+| ![The Menu button's menu on a phone, with File, Edit, View and Help items under headings](assets/phone-menu/after-390x844-menu.png) | ![The toolbar's More actions menu on a phone](assets/phone-menu/after-390x844-more.png) |
 
 ## Header status pills
 

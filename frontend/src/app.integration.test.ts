@@ -37,8 +37,12 @@ describe('App integration behavior', () => {
       getCommandState: () => ({ enabled: true }),
       onCommand: (id) => calls.push(id),
     });
-    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.menu-item[data-command]'));
+    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('#menu-bar .menu-root:not([data-collapsed-menu]) .menu-item[data-command]'));
     expect(items.length).toBe(menuBar.entries().length);
+    // The one-button phone menu (#186) has a copy of every item, in the same order.
+    const phoneItems = Array.from(document.querySelectorAll<HTMLButtonElement>('#menu-bar [data-collapsed-menu] .menu-item[data-command]'));
+    expect(phoneItems.map((item) => item.dataset.command)).toEqual(items.map((item) => item.dataset.command));
+    expect(phoneItems.every((item) => item.querySelector('svg'))).toBe(true);
     expect(items.every((item) => item.querySelector('svg'))).toBe(true);
     const settingsItem = items.find((item) => item.dataset.command === 'app.openSettings')!;
     expect(settingsItem.closest('.menu-root')?.getAttribute('data-menu-label')).toBe('Edit');

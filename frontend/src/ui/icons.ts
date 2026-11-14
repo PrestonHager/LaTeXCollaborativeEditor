@@ -65,6 +65,8 @@ import {
   TriangleAlert,
   LayoutTemplate,
   UserPen,
+  Menu,
+  Ellipsis,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -126,6 +128,8 @@ const commandIcons: Record<CommandId, IconNode> = {
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
 const staticIcons = {
   CircleHelp,
+  Ellipsis,
+  Menu,
   Info,
   Play,
   Save,

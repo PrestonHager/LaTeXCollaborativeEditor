@@ -73,7 +73,7 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 
 | Name | Width | Today | Planned in #123 |
 |------|-------|-------|-----------------|
-| Phone | under 640px (`sm`) | Every dialog is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | Dialogs become full-screen sheets (below). |
+| Phone | under 640px (`sm`) | Every dialog is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). One Menu button instead of File, Edit, View and Help, and a More actions menu in the toolbar (#186). | Dialogs become full-screen sheets (below). |
 | Tablet | 640px to 1023px | Dialogs use the scale. `dialog-lg` is capped by the window, so Settings is one column. | Same as today. |
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
@@ -87,7 +87,7 @@ This PR doesn't build it, but this is the plan, so new dialogs shouldn't fight i
 - `dialog-md`, `dialog-lg`: full-screen sheets below 640px. The box fills the window (`100dvw` by `100dvh`, no rounded corners), the header sticks to the top and the footer to the bottom, and the body scrolls. The rules above for header, body and footer already give this shape, so a sheet only changes the box size.
 - `dialog-palette`: full width, pinned to the top, so the soft keyboard doesn't cover the list.
 - Popover cards (`--popover-card`): full width minus the gutter, pinned to the bottom of the window. The tour card already shrinks to the window, but still covers part of each pane (#123).
-- Menus (`--popover-menu`): today a dropdown can run past the right edge of a phone-width window, because it opens under its menu button. On phones the menu bar becomes one menu button (#123), and its menu should be a sheet or a full-width list.
+- Menus (`--popover-menu`): on phones (#186) File, Edit, View and Help are one **Menu** button whose menu is a full-width list (the window minus `--viewport-gutter`), starting just under the button and scrolling inside itself. The toolbar's **More actions** menu opens under its button at the right edge. At every width, `menuBar.ts` moves a dropdown left when it would run past the right edge, so it stays 1rem inside the window, and caps it at the window width minus `--viewport-gutter`. Before #186, File ran 54px past the edge at 390px.
 
 ### Touch targets
 
