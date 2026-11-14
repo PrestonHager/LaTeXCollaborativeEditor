@@ -162,7 +162,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] With Google Drive connected, type and close the tab within 4 seconds. The "Leave site?" box shows.
 - [ ] An error from a library in the background (dev tools console: `Promise.reject(new Error('test'))`) only shows in the console. No red notice replaces the one in the header. A failed command (like a Drive action with the network blocked) still shows its red notice.
 - [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
-- [ ] Open Local Project (Ctrl+O) lists saved projects and opens the one you pick.
+- [ ] File > Open Project… (Ctrl+O) asks where the project is (This browser, Google Drive). This browser lists saved projects and opens the one you pick; Choose another place goes back. On a site with no Google keys it goes straight to the list.
 - [ ] Clear Local Projects asks first, then removes the saved projects. Templates saved in this browser stay.
 
 ## Templates and profile
@@ -210,6 +210,16 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 - [ ] A full Drive shows "Google Drive is full" and stops retrying.
 - [ ] After the sign-in expires (about an hour), the app renews it or shows a notice and saves to the browser.
 
+## Accounts
+
+- [ ] Edit > Accounts… (also in the palette) lists This browser (Connected, no buttons) and Google Drive with its status and capabilities.
+- [ ] On a site with no Google keys, Google Drive says Not configured and its Connect button is turned off. Log out of everything is turned off.
+- [ ] Not signed in: Google Drive says Not connected with Connect. Connect opens Google's sign-in, then the row says Connected and "Signed in as" your account, with Log out. Saving moves to Drive, the same as File > Connect Google Drive.
+- [ ] Log out on Google Drive signs out, switches saving to the browser without losing edits, and the row goes back to Connect. Log out of everything does the same for every signed-in account.
+- [ ] Let the Drive sign-in run out (or wait an hour): the row says Expired with both Connect and Log out, and the status bar badge gets a coloured border.
+- [ ] The status bar badge says This browser or Google Drive for the open project, with the account in its tooltip. Clicking it opens Accounts. In a guest tab it says "Host: Google Drive" (or "Host: local storage") and does nothing on click; Accounts is turned off.
+- [ ] At 360 x 640 the panel is a full-screen sheet, buttons sit under each account, and nothing scrolls sideways.
+
 ## Sharing and collaboration
 
 Use two browser windows, or a normal and a private window, so each has its own storage.
@@ -232,11 +242,11 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
 - [ ] No WebRTC (issue #205): in a window where `RTCPeerConnection` is missing (Firefox with `media.peerconnection.enabled` off in `about:config`, or the Linux desktop app), the badge says Can't connect in this window. Share opens **Can't share from this window** with "This window can't make peer-to-peer connections, so it can't share or join a room." and a supported-browser suggestion, and no link shows. Opening a `?room=` link shows **Can't join from this window**, and the Files panel says so instead of Waiting for the host. The Network tab shows no `p2pTransport` chunk and no tracker connection, even after hovering Share.
-- [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
+- [ ] Guests can't use New Project, Open Project…, Accounts…, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
-- [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
+- [ ] With a guest connected, the host's Open Project…, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
 - [ ] With a guest connected, New Project's Start new project button is red and focus starts on Cancel.
-- [ ] With a guest connected, Choose a project on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.
+- [ ] With a guest connected, Choose a project on Open Project…, then This browser, and then Upload .zip in that dialog asks only once and opens the file picker.
 - [ ] With nobody connected, those three open straight away without asking.
 - [ ] With a guest connected, leaving the Upload .zip dialog open for more than 5 seconds and then clicking Choose a .zip (or Tab to it and Enter) still opens the file picker. If the browser ever blocks it, a notice says so and the next Upload .zip opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
@@ -337,6 +347,13 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
 - [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
 - [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] The header shows one Menu button instead of File, Edit, View and Help. Its menu is the window's width minus 1rem on each side, starts under the button, and has every item from the four menus under File, Edit, View and Help headings. It scrolls to About at 360 x 640, and nothing runs past the edge.
+- [ ] Items in Menu work like the desktop menus: grayed out when they don't apply, the check marks on Pause Saving and the layout items, the keybinds on the right, and a tap runs the command and closes the menu.
+- [ ] With a keyboard, Enter or Down on Menu opens it on New Project. Up and Down move through every group, skipping grayed-out items, Home and End jump to the ends, and Escape closes it with focus back on Menu. A screen reader reads the File, Edit, View and Help headings as groups.
+- [ ] The toolbar shows only Compile now, Share and the More actions (⋯) button at the right. More actions has New file, Upload files, Save now, Export, Command palette and Documentation, with their keybinds, and stays inside the window. Its tooltip doesn't cover the open menu.
+- [ ] In the toolbar, Left and Right move between Compile now, Share and More actions. Down on More actions opens it, and Escape goes back to the button.
+- [ ] Share sits beside Menu in the header. Its popover opens fully inside the window at 360 and 390 wide, 1rem from the right edge, with Start sharing in view.
+- [ ] Widening the window past 640px with Menu or More actions open closes it and brings back File, Edit, View and Help and the full toolbar. Tab still lands on a toolbar button that shows.
 - [ ] Preview zoom on a phone: the preview opens at Fit width (↔ pressed, about 120%), with narrow side margins and body text easy to read at 360px wide, and no sideways scrolling. The zoom buttons are finger-sized. Pinching the preview zooms only the preview (the bars and the toolbar stay the same size) and the level follows; Fit width brings it back. Pinching the toolbar or bars doesn't zoom the preview.
 - [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
 - [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
@@ -348,7 +365,7 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] The build's lazy chunks list `p2pTransport`, `commandPalette`, `settingsDialog`, `keybindSettings`, `tour`, `projectsDialog`, `uploadDialog`, `aboutDialog`, `conflictDialog`, `driveAddFiles`, `googlePicker` and `zip` chunks, and the initial load is under the budget it prints.
-- [ ] In `npm run preview` with the Network tab open and nothing touched, `p2pTransport` doesn't load until you hover or focus Share (or open a `?room=` link, where it loads right away). Ctrl+P, Ctrl+, (Settings), Help > Tour, File > Open Local Project and File > Upload Files each open on the first press, right after a reload too. The lint gutter shows a marker on a broken line, and the editor text doesn't jump sideways when the page finishes loading.
+- [ ] In `npm run preview` with the Network tab open and nothing touched, `p2pTransport` doesn't load until you hover or focus Share (or open a `?room=` link, where it loads right away). Ctrl+P, Ctrl+, (Settings), Help > Tour, File > Open Project… and File > Upload Files each open on the first press, right after a reload too. The lint gutter shows a marker on a broken line, and the editor text doesn't jump sideways when the page finishes loading.
 - [ ] In `npm run preview`, block the `commandPalette-*.js` request in dev tools (Network > Block request URL), reload, and press Ctrl+P: a red notice says the command palette couldn't load and to check your connection, then reload. No update card shows, since `version.json` still names this build. Unblock it and reload: Ctrl+P works.
 - [ ] Same as above, but first edit `dist/version.json` to another commit: now the update card says part of the app couldn't load because a new version is live, and offers Reload to update.
 - [ ] In `npm run preview`, open the app, set dev tools to Offline (Network > No throttling > Offline) and press Ctrl+Shift+E. A notice says "You're offline. Export will load when you're back online." and no update card shows. Go back online: the notice clears and the Export dialog opens by itself. Help > About and Ctrl+P also work after going back online.
@@ -375,3 +392,6 @@ Needs the desktop build (`npm run build` in `desktop/`, or an artifact from the 
 - [ ] Ctrl+W (⌘W on a Mac) doesn't close the window when it's bound to a command. On a Mac, ⌘Q still quits and ⌘C, ⌘V and ⌘Z work in the editor.
 - [ ] Projects made in the app are still there after quitting and opening it again, and are separate from the browser's.
 - [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, where the system WebKitGTK has no WebRTC, Share opens **Can't share from this window** with **Open in browser** and **Not now**. Open in browser opens the web app in the system browser. A build without an https `VITE_DOCS_BASE_URL` only explains, with a Close button.
+- [ ] Links (issue #181): Help > Documentation, Help > Report a Bug, a help link in a notice, a link in What's new, and an `\href{https://...}` clicked in the preview each open in the system browser, and the app window stays on the editor. An `\href{http://...}` link opens nothing. The Privacy and ToS links in the footer open the website's pages in the browser. Dragging a link or file onto the window doesn't replace the app.
+- [ ] Wording (issue #181): Settings says "Shortcuts are saved in this app only…" and "Themes, layout, shortcuts and your profile are saved in this app.", the reset list has "Profile (this app only)", Edit profile says "Saved in this app", Document language and Paper size offer "Match this computer", and File > Open Local Project's description says "saved in this app". None of them say "browser". In a browser tab they still say "this browser".
+- [ ] Offline preview (issue #181): turn off the network (or block `cdn.jsdelivr.net`) and open the app. The preview still renders with the Computer Modern fonts and KaTeX math, the dev tools Network panel (where available) shows the styles and fonts from `/latexjs/`, and the console has no CORS or CSP errors. HTML export with Work offline still bundles the fonts; with it off, the saved file links the jsDelivr styles, not `tauri://localhost`.

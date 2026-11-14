@@ -17,6 +17,8 @@ export const HOST_ONLY_COMMANDS: ReadonlySet<CommandId> = new Set<CommandId>([
   'file.clearLocalDocs',
   'file.rename',
   'view.togglePauseSaving',
+  // Accounts signs the host in and out of storage, which moves where the shared project saves.
+  'app.accounts',
 ]);
 
 /** Check if this tab may run a command. Guests can't run host-only ones. */

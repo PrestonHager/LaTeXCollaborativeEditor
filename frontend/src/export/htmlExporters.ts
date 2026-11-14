@@ -4,6 +4,7 @@ import { isPreviewableImage, mimeType } from '../project/paths';
 import { withPreviewTheme } from '../ui/preview';
 import { encodeYjsState } from '../state/appSession';
 import type { ProjectPreviewResult } from '../compile/latexJsPreview';
+import { publicLatexJsUrl } from '../compile/latexJsAssets';
 import { FigureImages, compileWithFigures } from '../compile/figureImages';
 import { mainPath, needsMainFile, notSyncedWarning } from './sourceExporters';
 import { safeFileName, throwIfAborted, type ExportRun, type ExportSource, type Exporter } from './types';
@@ -59,6 +60,16 @@ export function standaloneDocument(html: string, title: string): Document {
   for (const el of Array.from(doc.querySelectorAll('script, base, .lc-preview-note'))) el.remove();
   doc.title = title;
   return doc;
+}
+
+/**
+ * Point the style sheets that are still links at the CDN. In the desktop app the preview loads
+ * them from the app's own copy (issue #181), which a saved file can't reach.
+ */
+export function linkPublicStyles(doc: Document, base?: string): void {
+  for (const link of Array.from(doc.querySelectorAll<HTMLLinkElement>('link[href]'))) {
+    link.setAttribute('href', publicLatexJsUrl(link.getAttribute('href')!, base));
+  }
 }
 
 export const serializeDocument = (doc: Document) => `<!DOCTYPE html>\n${doc.documentElement.outerHTML}`;
@@ -151,6 +162,7 @@ export const htmlExporter: Exporter = {
         warnings.push("Couldn't download the styles and fonts, so the file loads them from the internet when it opens.");
       }
     }
+    linkPublicStyles(doc);
     return { files: [{ name: safeFileName(source.name, '.html'), data: new Blob([serializeDocument(doc)], { type: 'text/html;charset=utf-8' }) }], warnings };
   },
 };

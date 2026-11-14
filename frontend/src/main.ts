@@ -4,13 +4,10 @@ import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
 import { bindPreviewZoomControls, createPreviewZoomState } from './ui/previewZoom';
 import { createMenuBar, type CommandId } from './ui/menuBar';
-import { setupShareButton, type ShareControls } from './ui/shareButton';
-import { renderStaticIcons } from './ui/icons';
+import { icon, renderStaticIcons, storageIcons } from './ui/icons';
 import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
-import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
-import { createHoverPreview } from './ui/hoverPreview';
 import { attachTouchTooltips } from './ui/longPress';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
@@ -18,7 +15,7 @@ import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
 import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { lazyAboutDialog, lazyAccountsPanel, lazyCommandPalette, lazyDialogs, lazyFileViewer, lazyProjectsDialog, lazySettings, lazyShareButton, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -27,9 +24,10 @@ import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from 
 import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
 import { LocalDownloadStorage } from './storage/localDownload';
-import { GoogleDriveProvider } from './storage/providers/googleDrive';
+import { LazyGoogleDriveProvider } from './storage/providers/lazyGoogleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
+import { createProviderRegistry, googleDriveEntry, localStorageEntry } from './storage/providers/registry';
 import type { StorageProvider } from './storage/providers/types';
 import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
@@ -48,7 +46,6 @@ import { createPreviewChanges, previewChangesElements } from './ui/previewChange
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
-import { confirmDialog, noticeDialog, promptDialog } from './ui/dialogs';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
 import { isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
@@ -73,6 +70,8 @@ import { completionProjectFrom } from './ui/completionProject';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
+// Confirm, prompt and notice dialogs load on first use (issue #231). See lazyDialogs for a failed load.
+const { confirmDialog, promptDialog, noticeDialog, preload: preloadAppDialogs } = lazyDialogs((feature, error) => lazyLoadFailed(feature, error));
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
@@ -86,6 +85,8 @@ const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
 const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
+const storageProviderEl = document.getElementById('storage-provider') as HTMLButtonElement;
+const storageProviderNameEl = document.getElementById('storage-provider-name')!;
 const connectionStatusEl = document.getElementById('connection-status')!;
 const diagnosticsHelpEl = document.getElementById('diagnostics-help') as HTMLAnchorElement;
 const editorEmptyEl = document.getElementById('editor-empty') as HTMLElement;
@@ -165,10 +166,24 @@ const makeBugUrl = (area?: IssueArea, summary?: string) =>
   bugReportUrl({ appVersion: formatVersion(BUILD_INFO), userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
+// The desktop app's links and wording (issue #181). Its shell sends window.open's https URLs to
+// the system browser too, so openExternal needs no desktop branch.
+if (isDesktopShell()) {
+  void import('./app/desktopUi')
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase) }))
+    .catch(console.warn);
+}
 
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
-const driveProvider = new GoogleDriveProvider();
+// The Drive provider is a lazy chunk (issue #231). A tab that's already signed in needs it now.
+const driveProvider = new LazyGoogleDriveProvider();
+if (driveProvider.isSignedIn()) driveProvider.preload();
+// Every place a project can be saved (#200). The Accounts panel, File > Open Project and the status bar read it.
+const storageProviders = createProviderRegistry([
+  localStorageEntry(localAppProvider),
+  googleDriveEntry(driveProvider, import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined),
+]);
 const blobs = new BlobStore();
 const projectState = new ProjectState(localAppProvider, driveProvider);
 const { conflicts, overwrite } = projectState;
@@ -192,7 +207,7 @@ let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
 let inRoom = isClient;
 /** The Share popover, once the page is set up. The palette's "Copy share link" goes through it. */
-let share: ShareControls | null = null;
+let share: ReturnType<typeof lazyShareButton> | null = null;
 
 /**
  * Show a short message in the header, then clear it after a few seconds unless it's sticky.
@@ -306,6 +321,7 @@ const session: SessionController = new SessionController({
   onRemoteMetadata: ({ storage }) => {
     hostStorageText = storage;
     setStatus(storage);
+    showStorageProvider();
   },
   getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
@@ -475,6 +491,7 @@ driveProvider.onSessionLost(() => {
 /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
 function useProvider(provider: StorageProvider, id: string | null, loaded: SavedManifest | null = null) {
   projectState.use(provider, id, loaded);
+  showStorageProvider();
   persistAppSession();
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
@@ -616,9 +633,10 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const fileViewer = createFileViewer(document.getElementById('file-viewer')!, {
+// Loads on the first binary file opened, or when the browser is idle (issue #231).
+const fileViewer = lazyFileViewer(document.getElementById('file-viewer')!, {
   onDownload: (path) => void downloadFile(path),
-});
+}, lazyLoadFailed);
 
 /**
  * A rename or delete redraws the file tree, which drops the button the dialog gave focus back to.
@@ -938,7 +956,7 @@ const exportDialogModule = lazyModule<ExportDialog>(() =>
           driveChoice({
             api: driveProvider,
             isGuest: () => isClient,
-            configured: () => Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+            configured: () => storageProviders.get('googleDrive').configured(),
             signedIn: () => driveProvider.hasUsableToken(),
             // Not ensureDriveConnected: signing in to export doesn't change where autosave goes or what the pill says.
             signIn: async () => {
@@ -979,6 +997,15 @@ const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dial
   },
   // The host already OK'd Open to get here, so this doesn't ask again.
   onImportZip: () => commands.importZipFromOpenDialog(),
+  registry: storageProviders,
+  onProvider: (id) => void commands.openFromProvider(id),
+}, lazyLoadFailed);
+
+// Edit > Accounts (#200). Connect and Log out run each provider's File menu commands.
+const accountsPanel = lazyAccountsPanel(document.getElementById('accounts-dialog') as HTMLDialogElement, {
+  registry: storageProviders,
+  docsBase,
+  runCommand: (commandId) => executeCommand(commandId),
 }, lazyLoadFailed);
 
 // File > New Project's template picker, Save as Template and the profile (#74). They load on first use.
@@ -1083,7 +1110,24 @@ function showDriveAccount() {
   const account = driveProvider.accountLabel();
   autosaveStatusEl.title = account ? `Google Drive: ${account}` : '';
   if (settingsDialog.isOpen()) settingsDialog.refresh();
+  accountsPanel.refresh();
+  showStorageProvider();
   refreshCommands();
+}
+
+/**
+ * The status bar badge for where the open project is stored, from the registry. A guest sees the
+ * host's storage, from the room's metadata, which only ever carries a name like "Google Drive".
+ */
+function showStorageProvider() {
+  const entry = storageProviders.forProvider(projectState.activeProvider) ?? storageProviders.get('local');
+  const account = entry.account();
+  storageProviderNameEl.textContent = isClient ? `Host: ${hostStorageText.replace(/^Saved on host /, '')}` : entry.name;
+  storageProviderEl.title = isClient ? hostStorageText : `Stored in ${entry.name}${account ? ` as ${account}` : ''}. Click for Accounts.`;
+  // An expired sign-in gets a coloured border (style.css).
+  storageProviderEl.dataset.status = entry.status();
+  storageProviderEl.disabled = isClient;
+  storageProviderEl.querySelector('svg')?.replaceWith(icon(storageIcons[entry.icon]));
 }
 
 const ensureDrivePickerConfig = () => {
@@ -1144,6 +1188,8 @@ const commands = createCommands({
   editor,
   fileTree,
   projectsDialog,
+  storageProviders,
+  accountsPanel,
   uploadDialog,
   templates,
   zipInput,
@@ -1253,6 +1299,7 @@ bindSettings({
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
   shortcutLabel,
+  isCollapsed: isPhone,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
@@ -1305,19 +1352,45 @@ const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettin
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
   getCommandState,
   shortcutLabel,
+  isCollapsed: isPhone,
   onCommand: (commandId) => executeCommand(commandId),
+});
+// On a phone the menus collapse into one Menu button and the toolbar into a few buttons and More (#186).
+phoneMedia?.addEventListener('change', () => {
+  menuBar.closeMenus();
+  toolbar.viewportChanged();
 });
 
 // After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).
 // The pictures are a lazy chunk; until they load the card shows the palette description.
+// The card's code is a lazy chunk too (issue #231). It loads when the browser is idle, or as the
+// pointer or focus reaches the menus or toolbar, which is well before the card's delay is up. If it
+// can't load there are no cards, only the tooltips, and the next visit to the menus tries again.
 const menuDescriptions = new Map(menuBar.entries().map((entry) => [entry.commandId, entry.description]));
-const hoverPreview = createHoverPreview(document.getElementById('hover-preview')!, {
-  description: (commandId) => menuDescriptions.get(commandId),
-  shortcutLabel,
-  loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
-});
-hoverPreview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
-hoverPreview.attach(document.getElementById('toolbar')!, 'button[data-command]', 'bottom');
+const hoverPreview = lazyModule(() =>
+  import('./ui/hoverPreview').then(({ createHoverPreview, replayHover }) => {
+    const preview = createHoverPreview(document.getElementById('hover-preview')!, {
+      description: (commandId) => menuDescriptions.get(commandId),
+      shortcutLabel,
+      loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
+    });
+    const targets = [
+      [document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right'],
+      [document.getElementById('toolbar')!, 'button[data-command]', 'bottom'],
+    ] as const;
+    for (const [root, selector, side] of targets) preview.attach(root, selector, side);
+    // The pointer that started the load may already be resting on a button.
+    for (const [root, selector] of targets) replayHover(root, selector);
+    return preview;
+  }),
+);
+const preloadHoverPreview = () => {
+  if (!hoverPreview.current()) hoverPreview.preload();
+};
+for (const id of ['menu-bar', 'toolbar']) {
+  for (const type of ['pointerover', 'focusin'] as const) document.getElementById(id)?.addEventListener(type, preloadHoverPreview, { passive: true });
+}
+whenIdle(preloadHoverPreview);
 // Touch has no hover: holding a finger on a toolbar button or other tooltip shows its name instead (#188).
 attachTouchTooltips(document.body);
 
@@ -1336,21 +1409,26 @@ const tour = lazyTour(document.getElementById('tour')!, document.getElementById(
   seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
 }, lazyLoadFailed);
 
-// The palette, Settings, About and the Open and Upload dialogs load on first use. Fetch them once the page
+// The palette, Settings, About, the Open and Upload dialogs and Google Drive load on first use. Fetch them once the page
 // is idle, or as soon as the pointer or focus reaches the menus or toolbar, so they open at once.
 const preloadDialogs = () => {
   commandPalette.preload();
   preloadSettings();
   projectsDialog.preload();
+  accountsPanel.preload();
   uploadDialog.preload();
   tour.preload();
   aboutDialog.preload();
   conflictDialog.preload();
   templates.preload();
+  driveProvider.preload();
+  preloadAppDialogs();
+  fileViewer.preload();
 };
 preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
 preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);
 whenIdle(preloadDialogs);
+whenIdle(() => void menuBar.loadIcons());
 
 // The empty states have their own buttons for the next step, like New file.
 document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #preview-empty [data-command]').forEach((button) => {
@@ -1437,6 +1515,9 @@ window.addEventListener('pagehide', () => presence.stop());
 window.addEventListener('pageshow', (event) => {
   if (event.persisted && inRoom) startPresence();
 });
+// The storage badge opens Accounts, where the host can connect or log out.
+storageProviderEl.addEventListener('click', () => executeCommand('app.accounts'));
+showStorageProvider();
 renderConnection();
 layout.installSplitter();
 layout.applyLayoutMode();
@@ -1455,7 +1536,7 @@ const hostJoined = (id: string) => {
   renderConnection();
   return id;
 };
-share = setupShareButton({
+share = lazyShareButton({
   root: byId('share-menu'),
   button: shareButtonEl,
   popover: byId('share-popover'),
@@ -1509,7 +1590,8 @@ share = setupShareButton({
       destructive: true,
     }),
   unavailable: p2pAvailable ? undefined : () => explainP2pUnavailable('share'),
-});
+}, lazyLoadFailed);
+preloadOnIntent(shareButtonEl, share.preload);
 
 // Guests can't rename the host's project, so the title is just a label for them.
 if (isClient) {

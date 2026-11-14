@@ -186,7 +186,7 @@ Buttons for things you can't easily undo are red, and focus starts on **Cancel**
 | Title | Buttons | From |
 | --- | --- | --- |
 | Replace the whole project? | Cancel, **Start new project** | **New Project**. Always asks, starts on Cancel so Enter does nothing, and says every file and folder closes and to use **New File** to add one file. Red while a guest is connected, and it says it's for everyone in the room. |
-| Open another project? | Cancel, **Choose a project** | **Open Local Project** or **Open from Google Drive**, while a guest is connected. Says it replaces the project for everyone in the room. |
+| Open another project? | Cancel, **Choose a project** | **Open Project…** or **Open from Google Drive**, while a guest is connected. Says it replaces the project for everyone in the room. |
 | Upload a .zip as a new project? | Cancel, **Choose a .zip** | **Upload .zip as New Project**, while a guest is connected. |
 | Name this project | Cancel, **Save project** | **Save Now** or **Save to Google Drive** on an unnamed project. |
 | Rename project | Cancel, **Rename project** | Clicking the title, or **Rename Project**. |

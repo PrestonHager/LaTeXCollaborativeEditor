@@ -1,4 +1,4 @@
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './lazyUi';
+import { lazyAboutDialog, lazyAccountsPanel, lazyCommandPalette, lazyDialogs, lazyFileViewer, lazyProjectsDialog, lazySettings, lazyShareButton, lazyTemplates, lazyTour, lazyUploadDialog } from './lazyUi';
 import { mountAppShell } from '../test/appShell';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -145,7 +145,7 @@ describe('lazyTour', () => {
 
 describe('lazyProjectsDialog and lazyUploadDialog', () => {
   it('open the dialog with its arguments once loaded', async () => {
-    const projects = { open: vi.fn() };
+    const projects = { open: vi.fn(), chooseProvider: vi.fn() };
     const upload = { open: vi.fn() };
     const lazyProjects = lazyProjectsDialog(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createProjectsDialog: () => projects }) as never });
     const lazyUpload = lazyUploadDialog(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createUploadDialog: () => upload }) as never });
@@ -155,6 +155,29 @@ describe('lazyProjectsDialog and lazyUploadDialog', () => {
     await settle();
     expect(projects.open).toHaveBeenCalledWith(list);
     expect(upload.open).toHaveBeenCalledWith('figures');
+    lazyProjects.chooseProvider(['local', 'googleDrive']);
+    await settle();
+    expect(projects.chooseProvider).toHaveBeenCalledWith(['local', 'googleDrive']);
+  });
+});
+
+describe('lazyAccountsPanel', () => {
+  it('loads on open, refreshes only once loaded, and reports a failed load', async () => {
+    const panel = { open: vi.fn(), refresh: vi.fn() };
+    const lazy = lazyAccountsPanel(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createAccountsPanel: () => panel }) as never });
+    lazy.refresh();
+    expect(panel.refresh).not.toHaveBeenCalled();
+    lazy.open();
+    await settle();
+    expect(panel.open).toHaveBeenCalled();
+    lazy.refresh();
+    expect(panel.refresh).toHaveBeenCalled();
+
+    const onError = vi.fn();
+    const failed = lazyAccountsPanel(dialogEl(), {} as never, onError, { load: async () => Promise.reject(new Error('offline')) });
+    failed.open();
+    await settle();
+    expect(onError).toHaveBeenCalledWith('Accounts', expect.any(Error), expect.any(Function));
   });
 
   it('report failed loads by name', async () => {
@@ -229,5 +252,119 @@ describe('lazyTemplates', () => {
     const error = new TypeError('Failed to fetch dynamically imported module');
     const templates = lazyTemplates({} as never, { load: () => Promise.reject(error) });
     await expect(templates.openNew()).rejects.toBe(error);
+  });
+});
+
+describe('lazyShareButton', () => {
+  const shareConfig = () => {
+    const button = document.createElement('button');
+    const popover = el();
+    return { button, popover, config: { button, popover, guestRoomId: 'room-1' } as never };
+  };
+
+  it('keeps the popover closed and out of the tab order, then loads and opens on the first click', async () => {
+    const instance = { open: vi.fn(), copyOrOpen: vi.fn() };
+    const setupShareButton = vi.fn(() => instance);
+    const { button, popover, config } = shareConfig();
+    const onError = vi.fn();
+    lazyShareButton(config, onError, { load: async () => ({ setupShareButton }) as never });
+    expect(popover.inert).toBe(true);
+    expect(button.dataset.sharing).toBe('true');
+    expect(setupShareButton).not.toHaveBeenCalled();
+    button.click();
+    await settle();
+    expect(setupShareButton).toHaveBeenCalledWith(config);
+    expect(instance.open).toHaveBeenCalledTimes(1);
+    // From then on the real popover's own click handler runs, so the stand-in stays out of the way.
+    button.click();
+    await settle();
+    expect(instance.open).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('copies the link through the loaded popover, and reports a failed load', async () => {
+    const instance = { open: vi.fn(), copyOrOpen: vi.fn() };
+    const error = new Error('chunk gone');
+    const load = vi.fn().mockRejectedValueOnce(error).mockResolvedValue({ setupShareButton: () => instance });
+    const onError = vi.fn();
+    const share = lazyShareButton(shareConfig().config, onError, { load });
+    share.copyOrOpen();
+    await settle();
+    expect(onError).toHaveBeenCalledWith('Sharing', error, expect.any(Function));
+    share.copyOrOpen();
+    await settle();
+    expect(instance.copyOrOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('lazyDialogs', () => {
+  it('shows the dialogs once their code loads', async () => {
+    const module = { confirmDialog: vi.fn(async () => true), promptDialog: vi.fn(async () => 'name'), noticeDialog: vi.fn(async () => {}) };
+    const onError = vi.fn();
+    const dialogs = lazyDialogs(onError, { load: async () => module as never });
+    await expect(dialogs.confirmDialog({ title: 'Delete?', message: 'Sure?' } as never)).resolves.toBe(true);
+    await expect(dialogs.promptDialog({ title: 'Name' } as never)).resolves.toBe('name');
+    await expect(dialogs.noticeDialog({ title: 'Done', message: 'Saved' })).resolves.toBeUndefined();
+    expect(module.confirmDialog).toHaveBeenCalledWith({ title: 'Delete?', message: 'Sure?' });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('counts a dialog that cannot load as cancelled, and says why', async () => {
+    const error = new Error('chunk gone');
+    const onError = vi.fn();
+    const dialogs = lazyDialogs(onError, { load: () => Promise.reject(error) });
+    await expect(dialogs.confirmDialog({ title: 'Delete?' } as never)).resolves.toBe(false);
+    await expect(dialogs.promptDialog({ title: 'Name' } as never)).resolves.toBeNull();
+    await expect(dialogs.noticeDialog({ title: 'Done', message: 'Saved' })).resolves.toBeUndefined();
+    expect(onError).toHaveBeenCalledWith('The dialog', error);
+  });
+});
+
+describe('lazyFileViewer', () => {
+  const fakeViewer = () => ({ show: vi.fn(), hide: vi.fn() });
+
+  it('runs only the latest show or hide once it loads, then calls straight through', async () => {
+    const viewer = fakeViewer();
+    let resolve!: (module: never) => void;
+    const load = vi.fn(() => new Promise<never>((done) => (resolve = done)));
+    const lazy = lazyFileViewer(el(), { onDownload: vi.fn() }, vi.fn(), { load });
+    lazy.hide();
+    expect(load).not.toHaveBeenCalled();
+    lazy.show({ path: 'a.png', bytes: null });
+    lazy.show({ path: 'b.png', bytes: null });
+    expect(load).toHaveBeenCalledTimes(1);
+    resolve({ createFileViewer: () => viewer } as never);
+    await settle();
+    expect(viewer.show).toHaveBeenCalledTimes(1);
+    expect(viewer.show).toHaveBeenCalledWith({ path: 'b.png', bytes: null });
+    lazy.hide();
+    expect(viewer.hide).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed load with a retry', async () => {
+    const viewer = fakeViewer();
+    const error = new Error('offline');
+    const load = vi.fn().mockRejectedValueOnce(error).mockResolvedValue({ createFileViewer: () => viewer });
+    const onError = vi.fn();
+    const lazy = lazyFileViewer(el(), { onDownload: vi.fn() }, onError, { load });
+    lazy.show({ path: 'a.pdf', bytes: null });
+    await settle();
+    expect(onError).toHaveBeenCalledWith('The file viewer', error, expect.any(Function));
+    lazy.show({ path: 'b.pdf', bytes: null });
+    await settle();
+    expect(viewer.show).toHaveBeenCalledWith({ path: 'b.pdf', bytes: null });
+  });
+});
+
+describe('lazyFileViewer retry', () => {
+  it('shows the file that was asked for when the retry runs', async () => {
+    const viewer = { show: vi.fn(), hide: vi.fn() };
+    const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ createFileViewer: () => viewer });
+    const onError = vi.fn();
+    lazyFileViewer(el(), { onDownload: vi.fn() }, onError, { load }).show({ path: 'a.png', bytes: null });
+    await settle();
+    (onError.mock.calls[0][2] as () => void)();
+    await settle();
+    expect(viewer.show).toHaveBeenCalledWith({ path: 'a.png', bytes: null });
   });
 });

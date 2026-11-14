@@ -11,7 +11,12 @@ import type { createKeybindSettings } from '../ui/keybindSettings';
 import type { createTour, TourSeen } from '../ui/tour';
 import type { createProjectsDialog } from '../ui/projectsDialog';
 import type { createUploadDialog } from '../ui/uploadDialog';
+import type { createAccountsPanel } from '../ui/accountsPanel';
+import type { ProviderId } from '../storage/providers/registry';
 import type { createAboutDialog } from '../ui/aboutDialog';
+import type { setupShareButton } from '../ui/shareButton';
+import type { createFileViewer, ViewerFile } from '../ui/fileViewer';
+import type { ConfirmOptions, NoticeOptions, PromptOptions } from '../ui/dialogs';
 import type { TemplatesUiDeps } from '../templates/templatesUi';
 import type { BuildInfo } from './buildInfo';
 import type { ProjectSummary } from '../storage/providers/types';
@@ -115,7 +120,26 @@ export function lazyProjectsDialog(
   );
   return {
     open: (list: ProjectSummary[]) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.open(list)),
+    chooseProvider: (ids: ProviderId[]) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.chooseProvider(ids)),
     preload: projects.preload,
+  };
+}
+
+/** The Accounts panel (#200). */
+export function lazyAccountsPanel(
+  dialog: HTMLDialogElement,
+  options: Parameters<typeof createAccountsPanel>[1],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/accountsPanel')> = {},
+) {
+  const accounts = lazyModule(() =>
+    (deps.load ?? (() => import('../ui/accountsPanel')))().then(({ createAccountsPanel }) => createAccountsPanel(dialog, options)),
+  );
+  return {
+    open: () => withInstance(accounts.get, 'Accounts', onError, (instance) => instance.open()),
+    // Until it loads, the panel can't be open, so there's nothing to redraw.
+    refresh: () => accounts.current()?.refresh(),
+    preload: accounts.preload,
   };
 }
 
@@ -160,5 +184,102 @@ export function lazyAboutDialog(
   return {
     open: () => withInstance(about.get, 'About', onError, (instance) => instance.open()),
     preload: about.preload,
+  };
+}
+
+/**
+ * The Share button's popover (issue #231). The button is on screen from the start, so until the
+ * popover's code loads, a click loads it and then opens it. Until then the popover stays closed and
+ * out of the tab order, as setupShareButton leaves it. The code is preloaded when the pointer or
+ * focus reaches Share, with the P2P code.
+ */
+export function lazyShareButton(
+  config: Parameters<typeof setupShareButton>[0],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/shareButton')> = {},
+) {
+  const share = lazyModule(() => (deps.load ?? (() => import('../ui/shareButton')))().then(({ setupShareButton }) => setupShareButton(config)));
+  config.button.dataset.sharing = String(Boolean(config.guestRoomId));
+  config.popover.inert = true;
+  // Once loaded, setupShareButton's own click handler takes over.
+  config.button.addEventListener('click', () => {
+    if (!share.current()) withInstance(share.get, 'Sharing', onError, (instance) => instance.open());
+  });
+  return {
+    copyOrOpen: () => withInstance(share.get, 'Sharing', onError, (instance) => instance.copyOrOpen()),
+    preload: share.preload,
+  };
+}
+
+/**
+ * The in-app confirm, prompt and notice dialogs (ui/dialogs.ts, issue #231). They're already
+ * promises, so these wait for the code and then show the dialog. If it can't load, onError says so
+ * and the dialog counts as cancelled: confirm gives false and prompt null, so nothing destructive runs.
+ */
+export function lazyDialogs(onError: LazyLoadError, deps: Loader<typeof import('../ui/dialogs')> = {}) {
+  const dialogs = lazyModule(deps.load ?? (() => import('../ui/dialogs')));
+  const run = <T>(cancelled: T, show: (module: typeof import('../ui/dialogs')) => Promise<T>): Promise<T> =>
+    dialogs.get().then(show, (error: unknown) => {
+      onError('The dialog', error);
+      return cancelled;
+    });
+  return {
+    confirmDialog: (options: ConfirmOptions) => run(false, (module) => module.confirmDialog(options)),
+    promptDialog: (options: PromptOptions) => run<string | null>(null, (module) => module.promptDialog(options)),
+    noticeDialog: (options: NoticeOptions) => run<void>(undefined, (module) => module.noticeDialog(options)),
+    preload: dialogs.preload,
+  };
+}
+
+
+/**
+ * The viewer for images, PDFs and other binary files (issue #231). Until it loads, only the latest
+ * show or hide is kept, and it runs once the code is in, so the viewer always ends up showing the
+ * file that's open now.
+ */
+export function lazyFileViewer(
+  root: HTMLElement,
+  options: Parameters<typeof createFileViewer>[1],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/fileViewer')> = {},
+) {
+  type Viewer = ReturnType<typeof createFileViewer>;
+  const viewer = lazyModule(() => (deps.load ?? (() => import('../ui/fileViewer')))().then(({ createFileViewer }) => createFileViewer(root, options)));
+  let pending: ((instance: Viewer) => void) | null = null;
+  let loading = false;
+  const load = () => {
+    loading = true;
+    viewer.get().then(
+      (loaded) => {
+        loading = false;
+        const next = pending;
+        pending = null;
+        next?.(loaded);
+      },
+      (error: unknown) => {
+        loading = false;
+        onError('The file viewer', error, () => {
+          if (!loading && pending) load();
+        });
+      },
+    );
+  };
+  const run = (use: (instance: Viewer) => void) => {
+    const instance = viewer.current();
+    if (instance) {
+      use(instance);
+      return;
+    }
+    pending = use;
+    if (!loading) load();
+  };
+  return {
+    show: (file: ViewerFile) => run((instance) => instance.show(file)),
+    hide: () => {
+      // Nothing to hide before the viewer has shown anything.
+      if (!viewer.current() && pending === null) return;
+      run((instance) => instance.hide());
+    },
+    preload: viewer.preload,
   };
 }

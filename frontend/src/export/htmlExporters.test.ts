@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import { BlobStore } from '../project/blobStore';
 import { ProjectDoc } from '../project/projectDoc';
 import { LATEX_JS_ASSET_BASE, projectToPreviewHtml, type ProjectPreviewInput } from '../compile/latexJsPreview';
-import { htmlExporter, inlineStylesheet, previewPdfExporter, printCss, standaloneDocument } from './htmlExporters';
+import { htmlExporter, inlineStylesheet, linkPublicStyles, previewPdfExporter, printCss, standaloneDocument } from './htmlExporters';
 import { defaultOptions, type ExportRun, type ExportServices, type ExportSource } from './types';
 
 const CSS = {
@@ -146,5 +146,17 @@ describe('HTML and PDF exporters', () => {
     project.putBinaryFile('a.png', await blobs.put(new Uint8Array([1])), 1);
     controller.abort();
     await expect(htmlExporter.run(source, {}, run)).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('linkPublicStyles', () => {
+  it("points links at the app's own LaTeX.js copy to the CDN, so a saved file still finds them", () => {
+    const doc = new DOMParser().parseFromString(
+      '<html><head><link rel="stylesheet" href="tauri://localhost/latexjs/css/katex.css"><link rel="stylesheet" href="https://example.com/a.css"></head></html>',
+      'text/html',
+    );
+    linkPublicStyles(doc, 'tauri://localhost/latexjs/');
+    const hrefs = Array.from(doc.querySelectorAll('link')).map((link) => link.getAttribute('href'));
+    expect(hrefs).toEqual([`${LATEX_JS_ASSET_BASE}css/katex.css`, 'https://example.com/a.css']);
   });
 });

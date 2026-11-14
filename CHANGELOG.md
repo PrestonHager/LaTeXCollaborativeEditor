@@ -8,6 +8,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Added
 
+- **Accounts.** Edit > Accounts… lists every place a project can be saved (this browser and Google Drive) with its status (Connected, Expired, Not connected or Not configured), who's signed in, and Connect and Log out buttons, plus Log out of everything. File > Open Project now asks where the project is first, and a badge in the status bar shows where the open project is stored; click it for Accounts. Sign-ins stay in your tab and are never sent to your room.
 - **Preview zoom.** The preview's bar has Fit width, Zoom out and Zoom in, from 50% to 300%. Fit width is the default on phones: the page's margins shrink and the text is scaled up so it reads well at 360px wide. Pinching the preview on a touch screen, or a trackpad pinch over it, zooms the preview and not the whole app. The page reflows, so there's no sideways scrolling, and the zoom holds when the preview updates.
 - **Touch screens.** On phones and tablets, buttons, menu items and file rows are at least 44px tall. Hold a finger on a file or folder to open its menu (Set as main file, Rename or move, Delete), which a right-click, the Menu key or Shift+F10 also opens with a mouse or keyboard. The splitter between the editor and the preview drags with a finger, and is easier to catch than it looks. Tooltips don't stick after a tap any more: hold a finger on a toolbar button to see its name and shortcut. The hover preview cards stay mouse and keyboard only; the command palette has the same descriptions.
 - **Editing on phones and tablets.** The cursor line stays in view above the on-screen keyboard, and while the editor has focus on a touch screen a key bar above the keyboard types `\`, `{`, `}`, `$`, `%`, `[`, `]` and `&`. The keys are ordinary typing: collaborators see them and undo takes them back.
@@ -21,8 +22,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Changed
 
+- **Desktop app polish.** Links in the desktop app (help, bug reports, What's new, and links in the preview) open in your system browser, and only `https` ones; the app window can no longer be navigated away from the app. Settings and the File menu say "this app" instead of "this browser". The app now carries LaTeX.js's styles and fonts, so its preview works offline without jsDelivr. The website still loads them from jsDelivr.
 - **Sharing only starts when you ask for it.** Share now opens a small popover that explains what sharing does, and only **Start sharing** makes a room and a link. While sharing, it shows the link with Copy, New link and the new **Stop sharing**, which leaves the room and forgets the link. Reloading a tab no longer rejoins its room on its own: the popover offers **Resume sharing (same link)** instead. Nothing connects to the trackers until you start. Guests opening a link join as before. The badge says "Not sharing" when you aren't.
 - **Dialogs fill the screen on phones.** Below 640px wide, Upload, Export, About, Open a project, the conflict dialog, Settings, What's new and the template dialogs open as full-screen sheets: the title stays at the top, the buttons at the bottom, and the middle scrolls. Short confirm and name dialogs stay a small card, and wider windows don't change.
+- **Phone menus.** Under 640px wide, File, Edit, View and Help become one Menu button with every item grouped under its menu's name, and the toolbar keeps Compile now and Share and puts the rest under More actions (⋯). The keys and screen reader labels are the same as the desktop menus. Menus no longer run off the right edge of the window. Before, File ran about 54px off-screen at 390px.
 
 ### Fixed
 

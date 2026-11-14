@@ -13,7 +13,7 @@ Put one size class on the `<dialog class="dialog ...">` element. It sizes the bo
 | Class | Token | Width | Use it for | Used by |
 |-------|-------|-------|------------|---------|
 | `dialog-sm` | `--dialog-sm` | 28rem (448px) | One question with one or two buttons: confirm, prompt, notice. | `confirmDialog`, `promptDialog` and `noticeDialog` in `frontend/src/ui/dialogs.ts` |
-| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Conflict |
+| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Accounts, Conflict |
 | `dialog-lg` | `--dialog-lg` | 52rem (832px) | Dense content: long lists, sections side by side, long text to read. | Settings, What's new (changelog, #140) |
 | `dialog-palette` | `--dialog-palette` | 40rem (640px) | The command palette. | `.command-palette` uses the token. The palette is a `div`, not a `<dialog>`. |
 
@@ -73,7 +73,7 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 
 | Name | Width | Today | Planned in #123 |
 |------|-------|-------|-----------------|
-| Phone | under 640px (`sm`) | `dialog-md` and `dialog-lg` are full-screen sheets (#187). `dialog-sm` is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | The palette, popover cards and menus (below). |
+| Phone | under 640px (`sm`) | `dialog-md` and `dialog-lg` are full-screen sheets (#187). `dialog-sm` is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | The palette, popover cards and menus (below). One Menu button instead of File, Edit, View and Help, and a More actions menu in the toolbar (#186). |
 | Tablet | 640px to 1023px | Dialogs use the scale. `dialog-lg` is capped by the window, so Settings is one column. | Same as today. |
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
@@ -87,7 +87,7 @@ The dialog sizes are built (#187). The palette, popover cards and menus are stil
 - `dialog-md`, `dialog-lg` (built in #187): full-screen sheets below 640px, in the `@media (max-width: 39.99rem)` block after the scale in `style.css`. The box fills the window (`100%` by `100dvh`, with a `100vh` fallback, no rounded corners) and its padding grows to the safe-area insets so a notch or home bar doesn't cover it. The header stays at the top, the footer is pushed to the bottom (`margin-top: auto`, so a dialog with no `<section>`, like Conflict, works too), and the body scrolls between them with its rows packed at the top (`align-content: start`). The changelog drops its own `max-height` and fills the sheet. Settings is already one column below 1024px. Nothing else changes, so a new `dialog-md` or `dialog-lg` gets the sheet for free: keep the `header`, `section`, `footer` shape and don't give the box its own width or height.
 - `dialog-palette`: full width, pinned to the top, so the soft keyboard doesn't cover the list.
 - Popover cards (`--popover-card`): full width minus the gutter, pinned to the bottom of the window. The tour card already shrinks to the window, but still covers part of each pane (#123).
-- Menus (`--popover-menu`): today a dropdown can run past the right edge of a phone-width window, because it opens under its menu button. On phones the menu bar becomes one menu button (#123), and its menu should be a sheet or a full-width list.
+- Menus (`--popover-menu`): on phones (#186) File, Edit, View and Help are one **Menu** button whose menu is a full-width list (the window minus `--viewport-gutter`), starting just under the button and scrolling inside itself. The toolbar's **More actions** menu opens under its button at the right edge. At every width, `keepOnScreen()` (`frontend/src/ui/keepOnScreen.ts`) moves a dropdown, and the Share popover, left when it would run past the right edge, so it stays 1rem inside the window. Both are capped at the window width minus `--viewport-gutter`. Before #186, File ran 54px past the edge at 390px.
 
 ### Touch targets
 
