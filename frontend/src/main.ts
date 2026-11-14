@@ -9,12 +9,13 @@ import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
+import { createHoverPreview } from './ui/hoverPreview';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
-import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle } from './app/lazy';
+import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
 import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
@@ -1276,6 +1277,17 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
   shortcutLabel,
   onCommand: (commandId) => executeCommand(commandId),
 });
+
+// After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).
+// The pictures are a lazy chunk; until they load the card shows the palette description.
+const menuDescriptions = new Map(menuBar.entries().map((entry) => [entry.commandId, entry.description]));
+const hoverPreview = createHoverPreview(document.getElementById('hover-preview')!, {
+  description: (commandId) => menuDescriptions.get(commandId),
+  shortcutLabel,
+  loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
+});
+hoverPreview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
+hoverPreview.attach(document.getElementById('toolbar')!, 'button[data-command]', 'bottom');
 
 const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, {
   version: BUILD_INFO.version,

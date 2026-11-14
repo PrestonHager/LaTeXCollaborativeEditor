@@ -6,6 +6,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+### Added
+
+- **Preview cards on hover.** Rest the mouse on a menu item or toolbar button, or reach it with the keyboard, and after a moment a card shows what it does: a small picture for things like the layouts, Share, New File and Export, and the same description as the command palette. It hides as soon as you move away, and hovering never runs anything. Touch screens don't show it.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added

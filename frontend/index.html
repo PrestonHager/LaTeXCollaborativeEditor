@@ -154,7 +154,7 @@
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.saveNow" aria-label="Save now" data-tooltip="Save now" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.compileNow" aria-label="Compile now" data-tooltip="Compile now" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.export" aria-label="Export" data-tooltip="Export" data-side="bottom"></button>
-        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-description="Start sharing this project and copy its link. Anyone who opens it joins this room and edits with you." data-side="bottom"></button>
         <span class="toolbar-separator" aria-hidden="true"></span>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutSplit" aria-label="Split view" data-tooltip="Split view" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutEditorOnly" aria-label="Editor only" data-tooltip="Editor only" data-side="bottom"></button>
@@ -588,6 +588,8 @@
     </section>
 
     <!-- First-run tour. tour.ts walks through the steps below and puts this card next to each target. -->
+    <!-- Hover preview for menu items and toolbar buttons (src/ui/hoverPreview.ts). -->
+    <div id="hover-preview" class="hover-preview" hidden></div>
     <div id="tour" class="tour" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-body" hidden>
       <p class="tour-count" data-tour-count></p>
       <h2 id="tour-title" class="tour-title" data-tour-title></h2>
