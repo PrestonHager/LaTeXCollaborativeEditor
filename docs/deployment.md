@@ -141,7 +141,7 @@ Runtime architecture (summary)
 - The compile runs in a module worker, built to its own `dist/assets/compile.worker-*.js` file.
   It's a plain static file, so static hosting still works. It's a lazy chunk, so it has the per-chunk limit but doesn't count toward the initial-load budget.
 - PDF figures in the preview are drawn with pdf.js (`pdfjs-dist`), which loads only when a document uses one. Its code is the lazy `dist/assets/pdfRender-*.js` chunk, and its own module worker is bundled to `dist/assets/pdf.worker.min-*.js`.
-  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so the CSP still needs no `'wasm-unsafe-eval'`. Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
+  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so pdf.js doesn't depend on `'wasm-unsafe-eval'` (which the policy now has for Compile PDF, see Content Security Policy below). Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.
   Older builds kept it in `localStorage` as `drive_access_token`; the app deletes that key on load.
@@ -207,6 +207,11 @@ Content Security Policy
 - The sandboxed preview iframe uses `srcdoc`, so it inherits the same policy. That's why `style-src` has `'unsafe-inline'` (our theme and KaTeX font `<style>` tags, and LaTeX.js's `style` attributes), `img-src` has `data:` (project images), and `base-uri` allows the LaTeX.js CDN path (its `<base>` tag).
   `script-src` has no `'unsafe-inline'` or `'unsafe-eval'`, so a peer's document can't run inline script in the preview, and an injected `<img>` to another host is blocked, so it can't ping a tracker either.
   The one inline script we add to the preview, `PREVIEW_LINK_SCRIPT` in `src/ui/preview.ts`, is allowed by its `sha256-` hash in `script-src`. It's a fixed string (the scroll position and the zoom go in `data-scroll` and `data-zoom` attributes), so if you edit it, `cspPolicy.test.ts` fails and prints the new hash to put in `index.html`.
+- `script-src` has `'wasm-unsafe-eval'` (issue #240) so Compile PDF can compile its WebAssembly TeX engine (`docs/wasm-tex-engine.md`).
+  It allows `WebAssembly.compile` and `instantiate` only, not JavaScript `eval` or `new Function`, so the preview's protection above is unchanged; `cspPolicy.test.ts` checks it's there and that `'unsafe-eval'` never is.
+  The engine and its package files come from our own origin, under `connect-src 'self'` and `worker-src 'self'`, never from a TeX Live server.
+  Workers: a dedicated worker started from a same-origin URL uses the CSP of its own response, not the page's meta tag. GitHub Pages, the Coolify nginx (`deploy/nginx.conf`) and the desktop app send no CSP header, so the engine worker needs nothing more. If a host ever adds a CSP header, it needs `'wasm-unsafe-eval'` too.
+  Browsers that don't know the keyword (before Chrome 97, Firefox 102, Safari 16) block WebAssembly under this policy, so Compile PDF says it isn't available there. The live preview doesn't use WebAssembly (pdf.js runs with `useWasm: false`).
 - `frame-src` and `img-src` allow `blob:` for the PDF and image viewer, and `object-src` allows `blob:` too, because Chrome's PDF viewer in that iframe counts as a plugin.
 - `connect-src` lists the default trackers. If `VITE_P2P_RENDEZVOUS` lists others, the `csp` plugin in `vite.config.ts` adds their origins at build time.
   STUN and TURN aren't covered by CSP, so `VITE_STUN_URL` and `VITE_TURN_URL` need no change.
