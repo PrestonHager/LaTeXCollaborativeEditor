@@ -260,6 +260,15 @@ describe('commands', () => {
       expect(commands.getCommandState('file.disconnectDrive').enabled).toBe(false);
     });
 
+    it('lets you log out of a Drive account remembered from an earlier visit (#201)', async () => {
+      const { commands, drive, run } = setup();
+      drive.signedIn = false;
+      const remembered = Object.assign(drive, { wasConnected: () => true });
+      expect(commands.getCommandState('file.disconnectDrive').enabled).toBe(true);
+      await run('file.disconnectDrive');
+      expect(remembered.disconnect).toHaveBeenCalled();
+    });
+
     it('checks Pause Saving while saving is paused', () => {
       const { commands, projectState } = setup();
       expect(commands.getCommandState('view.togglePauseSaving')).toEqual({ enabled: true, checked: false });

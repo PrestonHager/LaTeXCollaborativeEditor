@@ -178,7 +178,8 @@ const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
 // The Drive provider is a lazy chunk (issue #231). A tab that's already signed in needs it now.
 const driveProvider = new LazyGoogleDriveProvider();
-if (driveProvider.isSignedIn()) driveProvider.preload();
+// It's also needed right away when Drive was connected on an earlier visit, for the silent sign-in (#201).
+if (driveProvider.isSignedIn() || driveProvider.wasConnected()) driveProvider.preload();
 // Every place a project can be saved (#200). The Accounts panel, File > Open Project and the status bar read it.
 const storageProviders = createProviderRegistry([
   localStorageEntry(localAppProvider),
@@ -1455,6 +1456,19 @@ if (!isClient) {
   void localAppProvider
     .connect()
     .then(async () => {
+      // Drive was connected on an earlier visit: sign back in without asking before saving starts (#201).
+      if (projectState.awaitingDrive()) {
+        setStatus('Drive: Signing in...');
+        driveRestoreMessage = projectState.resumeDrive(await driveProvider.restoreSession());
+        showStorageProvider();
+        showDriveAccount();
+      } else if (driveProvider.wasConnected() && !driveProvider.hasUsableToken()) {
+        // The last session saved here, but the Accounts panel can still show Drive as connected.
+        void driveProvider.restoreSession().then((ok) => {
+          if (ok) void driveProvider.loadAccount().then(showDriveAccount);
+          else showDriveAccount();
+        });
+      }
       if (!projectState.projectId && projectState.activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
         const mainId = project.getMainFileId();
         const mainPath = mainId ? project.get(mainId)?.path : undefined;

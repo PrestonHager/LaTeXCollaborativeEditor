@@ -16,6 +16,8 @@ import {
   TOKEN_STORAGE_KEY,
   type StoredToken,
 } from './driveShared';
+import { forgetAccount, keepsSignedIn, rememberAccount, rememberedAccount, setKeepSignedInChoice, wasConnected } from './accountMemory';
+import { deleteToken, loadToken, saveToken } from './tokenVault';
 
 export { EXPORTS_PROPERTY, FOLDER_MIME, LEGACY_PREFIX, TEMPLATE_PROPERTY, TEMPLATES_FOLDER_PROPERTY } from './driveShared';
 
@@ -62,6 +64,10 @@ const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 // Don't hold up a disconnect for long if Google never answers the revoke call.
 const TOKEN_REVOKE_TIMEOUT_MS = 5_000;
+// A silent sign-in on page load gets less time, since saving waits on it.
+const SILENT_SIGN_IN_TIMEOUT_MS = 8_000;
+// The registry id, for what accountMemory.ts and tokenVault.ts keep.
+const PROVIDER_ID = 'googleDrive';
 
 /**
  * Projects in Google Drive. A project is a Drive folder and every project file is a real
@@ -146,6 +152,8 @@ export class GoogleDriveProvider implements StorageProvider {
       if (!account || this.accessToken !== token) return null;
       this.account = account;
       this.writeStoredToken();
+      rememberAccount(PROVIDER_ID, account);
+      if (keepsSignedIn(PROVIDER_ID)) await this.keepToken();
       return account;
     } catch (error) {
       console.warn('Could not look up the Drive account', error);
@@ -164,6 +172,9 @@ export class GoogleDriveProvider implements StorageProvider {
     this.indexes.clear();
     this.aliases.clear();
     this.forgetLegacyFile();
+    // Log out forgets everything kept for Drive: the account, "Keep me signed in" and its token.
+    forgetAccount(PROVIDER_ID);
+    await deleteToken(PROVIDER_ID);
     this.currentStatus = 'Drive: Disconnected';
     if (!token) return;
     try {
@@ -222,6 +233,61 @@ export class GoogleDriveProvider implements StorageProvider {
       this.currentStatus = 'Drive: Connection failed';
       return false;
     }
+  }
+
+  /**
+   * Sign back in on page load without asking (#201), for an account connected on an earlier visit and
+   * not logged out since: first the token "Keep me signed in" kept, then a GIS token request with
+   * prompt 'none'. False when neither works, so the person is asked to connect only then.
+   * NOTE: GIS still needs a popup for prompt 'none', and browsers block those outside a click, so in
+   * practice the kept token is what makes a new tab come back signed in.
+   */
+  async restoreSession(): Promise<boolean> {
+    if (this.hasUsableToken()) return true;
+    if (!wasConnected(PROVIDER_ID)) return false;
+    const signOuts = this.signOuts;
+    if (keepsSignedIn(PROVIDER_ID)) {
+      const kept = await loadToken(PROVIDER_ID, TOKEN_EXPIRY_SLACK_MS);
+      if (signOuts !== this.signOuts) return false;
+      if (kept) {
+        this.accessToken = kept.accessToken;
+        this.tokenExpiresAt = kept.expiresAt;
+        this.account = kept.account ?? rememberedAccount(PROVIDER_ID)?.account ?? null;
+        this.writeStoredToken();
+        this.currentStatus = 'Drive: Session restored';
+        return true;
+      }
+    }
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      try {
+        await loadScript(GIS_SCRIPT, 'Google sign-in');
+        const oauth2 = window.google?.accounts?.oauth2;
+        if (oauth2?.initTokenClient) {
+          const result = await withTimeout(this.requestAccessToken(oauth2, clientId, 'none'), SILENT_SIGN_IN_TIMEOUT_MS);
+          if (result.ok) {
+            this.currentStatus = 'Drive: Session restored';
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn('Silent Drive sign-in failed', error);
+      }
+    }
+    this.currentStatus = 'Drive: Sign-in expired';
+    return false;
+  }
+
+  /** Whether "Keep me signed in on this browser" is on. */
+  keepSignedIn(): boolean {
+    return keepsSignedIn(PROVIDER_ID);
+  }
+
+  /** Turn "Keep me signed in on this browser" on (keeps the current token) or off (deletes it). */
+  async setKeepSignedIn(on: boolean): Promise<void> {
+    setKeepSignedInChoice(PROVIDER_ID, on);
+    if (!on) await deleteToken(PROVIDER_ID);
+    else if (this.hasUsableToken()) await this.keepToken();
   }
 
   async listProjects(): Promise<ProjectSummary[]> {
@@ -666,12 +732,7 @@ export class GoogleDriveProvider implements StorageProvider {
         await loadScript(GIS_SCRIPT, 'Google sign-in');
         const oauth2 = window.google?.accounts?.oauth2;
         if (oauth2?.initTokenClient) {
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          const timeout = new Promise<TokenResult>((resolve) => {
-            timer = setTimeout(() => resolve({ ok: false, reason: 'Timed out' }), TOKEN_REFRESH_TIMEOUT_MS);
-          });
-          const result = await Promise.race([this.requestAccessToken(oauth2, clientId), timeout]);
-          clearTimeout(timer);
+          const result = await withTimeout(this.requestAccessToken(oauth2, clientId), TOKEN_REFRESH_TIMEOUT_MS);
           if (result.ok) {
             this.currentStatus = 'Drive: Connected';
             return true;
@@ -689,6 +750,9 @@ export class GoogleDriveProvider implements StorageProvider {
   private endSession() {
     const wasSignedIn = this.isSignedIn();
     this.clearAccessToken();
+    // An expired token is no use to anyone, so a kept one goes too. The account stays remembered, so
+    // the Accounts panel says "Expired" and the next visit can try a silent sign-in.
+    void deleteToken(PROVIDER_ID);
     this.currentStatus = 'Drive: Session expired';
     if (wasSignedIn) this.sessionLostHandler?.();
   }
@@ -697,12 +761,15 @@ export class GoogleDriveProvider implements StorageProvider {
    * Ask Google for a token. We only make one request: GIS shows the consent screen on its own
    * when needed, and a second popup after an await gets blocked since it's no longer a user click.
    */
-  private requestAccessToken(oauth2: any, clientId: string): Promise<TokenResult> {
+  private requestAccessToken(oauth2: any, clientId: string, prompt: '' | 'none' = ''): Promise<TokenResult> {
     const signOuts = this.signOuts;
+    // The remembered account, so Google skips the account chooser. It's an email, never a token.
+    const hint = this.account ?? rememberedAccount(PROVIDER_ID)?.account ?? undefined;
     return new Promise((resolve) => {
       const tokenClient = oauth2.initTokenClient({
         client_id: clientId,
         scope: 'https://www.googleapis.com/auth/drive.file',
+        ...(hint ? { login_hint: hint } : {}),
         callback: (resp: GoogleTokenResponse) => {
           if (signOuts !== this.signOuts) {
             resolve({ ok: false, reason: 'Disconnected' });
@@ -721,7 +788,7 @@ export class GoogleDriveProvider implements StorageProvider {
           resolve({ ok: false, reason: describeTokenError(err?.type, err?.message) });
         },
       });
-      tokenClient.requestAccessToken({ prompt: '' });
+      tokenClient.requestAccessToken({ prompt });
     });
   }
 
@@ -729,6 +796,14 @@ export class GoogleDriveProvider implements StorageProvider {
     this.accessToken = accessToken;
     this.tokenExpiresAt = expiresAt;
     this.writeStoredToken();
+    // Remember that Drive is connected (never the token) so the next visit can sign in silently.
+    rememberAccount(PROVIDER_ID, this.account);
+    if (keepsSignedIn(PROVIDER_ID)) void this.keepToken();
+  }
+
+  /** "Keep me signed in": the token goes to IndexedDB (tokenVault.ts) too. */
+  private keepToken() {
+    return saveToken(PROVIDER_ID, { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt, ...(this.account ? { account: this.account } : {}) });
   }
 
   private writeStoredToken() {
@@ -761,6 +836,19 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 }
 
+/** A token request that gives up after ms, so a popup that never answers can't hold things up. */
+async function withTimeout(request: Promise<TokenResult>, ms: number): Promise<TokenResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<TokenResult>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, reason: 'Timed out' }), ms);
+  });
+  try {
+    return await Promise.race([request, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Map GIS error codes to something a person can act on. */
 function describeTokenError(code?: string, message?: string): string {
   switch (code) {
@@ -768,6 +856,11 @@ function describeTokenError(code?: string, message?: string): string {
       return 'Sign-in popup was blocked. Allow popups for this site and try again.';
     case 'popup_closed':
       return 'Sign-in was canceled.';
+    // A silent sign-in (prompt 'none') that Google needs the person for. The sign-in ran out, it isn't broken.
+    case 'interaction_required':
+    case 'login_required':
+    case 'consent_required':
+      return 'Sign-in expired. Connect Google Drive to sign in again.';
     case 'access_denied':
       return 'Access was denied. Grant Drive access to save files.';
     case undefined:

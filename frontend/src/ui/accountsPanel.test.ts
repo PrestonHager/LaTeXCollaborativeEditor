@@ -162,4 +162,50 @@ describe('accounts panel', () => {
     drive.token = 'none';
     expect(accountLine(entry)).toMatch(/^A folder in your Google Drive/);
   });
+
+  describe('"Keep me signed in on this browser" (#201)', () => {
+    function keepSetup() {
+      mountAppShell();
+      const drive = Object.assign(new FakeDrive(), {
+        kept: false,
+        keepSignedIn() {
+          return this.kept;
+        },
+        setKeepSignedIn: vi.fn(async function (this: { kept: boolean }, on: boolean) {
+          this.kept = on;
+        }),
+      });
+      const dialog = document.getElementById('accounts-dialog') as HTMLDialogElement;
+      const panel = createAccountsPanel(dialog, { registry: createProviderRegistry([localStorageEntry(new MemoryProvider()), googleDriveEntry(drive, 'client')]), runCommand: vi.fn() });
+      const box = () => dialog.querySelector<HTMLInputElement>('#accounts-googleDrive-keep');
+      return { panel, drive, dialog, box };
+    }
+
+    it('shows the option with a shared-computer warning, and saves the choice', async () => {
+      const { panel, drive, dialog, box } = keepSetup();
+      panel.open();
+      expect(box()!.checked).toBe(false);
+      // Browser storage has no sign-in to keep.
+      expect(dialog.querySelector('#accounts-local-keep')).toBeNull();
+      const warning = dialog.querySelector('#accounts-googleDrive-keep-warning')!;
+      expect(warning.textContent).toMatch(/shared or public computer/);
+      expect(box()!.getAttribute('aria-describedby')).toBe(warning.id);
+      box()!.checked = true;
+      box()!.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(box()!.checked).toBe(true));
+      expect(drive.setKeepSignedIn).toHaveBeenCalledWith(true);
+      expect(box()!.disabled).toBe(false);
+    });
+
+    it('can be chosen before connecting, but not where the site has no Drive keys', () => {
+      const { panel, drive, box } = keepSetup();
+      drive.token = 'none';
+      panel.open();
+      expect(box()).not.toBeNull();
+      mountAppShell();
+      const dialog = document.getElementById('accounts-dialog') as HTMLDialogElement;
+      createAccountsPanel(dialog, { registry: createProviderRegistry([googleDriveEntry(drive, undefined)]), runCommand: vi.fn() }).open();
+      expect(dialog.querySelector('#accounts-googleDrive-keep')).toBeNull();
+    });
+  });
 });

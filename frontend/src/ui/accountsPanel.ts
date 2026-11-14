@@ -1,4 +1,4 @@
-import type { ProviderEntry, ProviderRegistry } from '../storage/providers/registry';
+import type { KeepSignedIn, ProviderEntry, ProviderRegistry } from '../storage/providers/registry';
 import type { CommandId } from './menuBar';
 import { describeCapabilities, providerDescriptions, statusLabels } from '../storage/providers/providerLabels';
 import { icon, renderStaticIcons, storageIcons } from './icons';
@@ -10,7 +10,7 @@ import './accountsPanel.css';
 const MARKUP = `<div>
   <header>
     <h2 id="accounts-dialog-title">Accounts</h2>
-    <p id="accounts-dialog-description">Where projects can be saved, and who's signed in. Sign-ins stay in this tab and are never shared with your room.</p>
+    <p id="accounts-dialog-description">Where projects can be saved, and who's signed in. This browser remembers which accounts you connected, but not their sign-ins unless you choose to keep them. Sign-ins are never shared with your room.</p>
   </header>
   <section class="accounts-dialog-body">
     <ul id="accounts-list" class="accounts-list" aria-label="Storage providers"></ul>
@@ -111,6 +111,32 @@ export function createAccountsPanel(dialog: HTMLDialogElement, options: Accounts
     return el;
   }
 
+  /**
+   * "Keep me signed in on this browser" (#201), with the shared-computer warning. It can be set before
+   * connecting too; turning it off deletes the kept sign-in right away.
+   */
+  function keepSignedInOption(entry: ProviderEntry, keep: KeepSignedIn) {
+    const wrap = document.createElement('div');
+    wrap.className = 'accounts-keep';
+    const label = document.createElement('label');
+    label.className = 'label';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'input';
+    box.id = `accounts-${entry.id}-keep`;
+    box.checked = keep.get();
+    box.disabled = busy;
+    const warning = document.createElement('p');
+    warning.id = `accounts-${entry.id}-keep-warning`;
+    warning.className = 'accounts-keep-warning';
+    warning.textContent = `Don't use this on a shared or public computer: anyone who opens this browser can use your ${entry.name} until you log out.`;
+    box.setAttribute('aria-describedby', warning.id);
+    box.addEventListener('change', () => void run(() => keep.set(box.checked)));
+    label.append(box, ' Keep me signed in on this browser');
+    wrap.append(label, warning);
+    return wrap;
+  }
+
   function row(entry: ProviderEntry) {
     const status = entry.status();
     const li = document.createElement('li');
@@ -138,6 +164,7 @@ export function createAccountsPanel(dialog: HTMLDialogElement, options: Accounts
     caps.className = 'accounts-row-caps';
     caps.textContent = describeCapabilities(entry.capabilities);
     body.append(title, account, caps);
+    if (entry.keepSignedIn && entry.needsSignIn && status !== 'notConfigured') body.append(keepSignedInOption(entry, entry.keepSignedIn));
 
     const actions = document.createElement('div');
     actions.className = 'accounts-row-actions';

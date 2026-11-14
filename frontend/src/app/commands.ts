@@ -43,6 +43,8 @@ export type CommandContext = {
   driveProvider: StorageProvider & {
     moveProject(projectId: string, folderId: string): Promise<void>;
     isSignedIn(): boolean;
+    /** Connected on an earlier visit and not logged out (#201), so Log out has something to clear. */
+    wasConnected?(): boolean;
     disconnect(): Promise<void>;
   };
   blobs: BlobStore;
@@ -251,6 +253,11 @@ export function createCommands(app: CommandContext) {
     zipInput.click();
   }
 
+  /** Signed in to Drive in this tab, or remembered from an earlier visit. */
+  function driveSignInKept() {
+    return driveProvider.isSignedIn() || Boolean(driveProvider.wasConnected?.());
+  }
+
   /** Pick a project folder or .tex file in Drive and open it. Pass alreadyConfirmed when the host just OK'd replacing the project. */
   async function openFromDrive(alreadyConfirmed: boolean) {
     if (isClient) return;
@@ -366,7 +373,7 @@ export function createCommands(app: CommandContext) {
       if (app.project.getName()) autosave.markDirty();
     },
     'file.disconnectDrive': async () => {
-      if (isClient || !driveProvider.isSignedIn()) return;
+      if (isClient || !driveSignInKept()) return;
       // First, point saves at this browser, so the next save keeps every edit.
       if (projectState.isDrive()) useProvider(localAppProvider, null);
       // Then let a Drive save that's already running finish before the token goes away.
@@ -598,7 +605,7 @@ export function createCommands(app: CommandContext) {
       case 'file.addFromDrive':
         return { enabled: !isClient && projectState.isDrive() };
       case 'file.disconnectDrive':
-        return { enabled: !isClient && driveProvider.isSignedIn() };
+        return { enabled: !isClient && driveSignInKept() };
       case 'file.newFile':
       case 'file.newFolder':
       case 'file.upload':

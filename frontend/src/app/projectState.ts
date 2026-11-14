@@ -6,6 +6,8 @@ import type { StorageProvider } from '../storage/providers/types';
 /** The bits of the Drive provider this needs, so tests can pass a fake. */
 export type DriveLike = StorageProvider & {
   hasUsableToken(): boolean;
+  /** Connected on an earlier visit and not logged out (#201), so a silent sign-in is worth a try. */
+  wasConnected?(): boolean;
   legacyProjectId(documentId: string | undefined, fileName: string): string | null;
 };
 
@@ -29,6 +31,9 @@ export class ProjectState {
   documentId = createDocumentId();
   savingPaused = false;
   readonly driveProvider: DriveLike;
+  // The Drive project the last session saved to, while a silent sign-in runs on load (#201). Saves go
+  // nowhere meanwhile: main.ts turns autosave on after resumeDrive.
+  private pendingDrive: { projectId: string | null; manifest: SavedManifest | null } | null = null;
 
   constructor(localProvider: StorageProvider, driveProvider: DriveLike) {
     this.activeProvider = localProvider;
@@ -64,8 +69,17 @@ export class ProjectState {
         driveRestoreMessage = 'Drive: Session restored';
         // Sessions from before projects saved to one Drive file, so keep saving there.
         if (!this.projectId) this.projectId = this.driveProvider.legacyProjectId(restored.documentId, toTexName(restored.documentName));
+      } else if (this.driveProvider.wasConnected?.()) {
+        // Drive was connected on an earlier visit, so main.ts tries a silent sign-in and then calls
+        // resumeDrive. Only if that fails is the person asked to connect.
+        this.pendingDrive = {
+          projectId: this.projectId ?? this.driveProvider.legacyProjectId(restored.documentId, toTexName(restored.documentName)),
+          manifest: this.manifest,
+        };
+        this.projectId = null;
+        this.manifest = null;
       } else {
-        // The token only lives in this tab's sessionStorage, so a new tab or browser lands here too.
+        // Nothing remembers Drive (never connected here, or logged out), so ask.
         driveRestoreMessage = 'Drive needs you to reconnect; saving locally. Use File > Connect Google Drive.';
         this.projectId = null;
         this.manifest = null;
@@ -74,11 +88,34 @@ export class ProjectState {
     return driveRestoreMessage;
   }
 
+  /** Whether a silent Drive sign-in should run before saving starts. */
+  awaitingDrive() {
+    return this.pendingDrive !== null;
+  }
+
+  /**
+   * Finish what restore started once the silent sign-in is done. Signed in: saving goes back to the
+   * Drive project, unless the person has moved on. Not: it stays in this browser, and the message
+   * says the sign-in expired (not that anything broke).
+   */
+  resumeDrive(signedIn: boolean): string | null {
+    const pending = this.pendingDrive;
+    this.pendingDrive = null;
+    if (!pending) return null;
+    if (!signedIn) return 'Google Drive sign-in expired, so edits save in this browser. Use File > Connect Google Drive to sign in again.';
+    if (this.isDrive() || this.projectId !== null) return null;
+    this.activeProvider = this.driveProvider;
+    this.projectId = pending.projectId;
+    this.manifest = pending.manifest;
+    return 'Drive: Session restored';
+  }
+
   /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
   use(provider: StorageProvider, id: string | null, loaded: SavedManifest | null = null) {
     this.activeProvider = provider;
     this.projectId = id;
     this.manifest = loaded;
+    this.pendingDrive = null;
     this.conflicts.clear();
     this.overwrite.clear();
   }
@@ -93,12 +130,14 @@ export class ProjectState {
 
   /** The fields of the app session this owns. */
   sessionFields() {
+    // While the silent sign-in runs, keep the Drive project, so a tab closed meanwhile still finds it.
+    const pending = this.pendingDrive;
     return {
       documentId: this.documentId,
-      providerMode: this.getProviderMode(),
+      providerMode: pending ? 'drive' : this.getProviderMode(),
       saveNowEnabled: !this.savingPaused,
-      projectId: this.projectId ?? undefined,
-      manifest: this.manifest ?? undefined,
+      projectId: (pending ? pending.projectId : this.projectId) ?? undefined,
+      manifest: (pending ? pending.manifest : this.manifest) ?? undefined,
     };
   }
 }

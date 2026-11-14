@@ -47,8 +47,8 @@ Check [What's supported](whats-supported.md) for what the preview can show.
 ## How do I sign out of Google Drive?
 
 Use **File > Disconnect Google Drive**.
-It revokes the app's token, and your edits keep saving in this browser.
-The sign-in only lasts for the tab anyway, so a new tab starts signed out.
+It revokes the app's token, forgets the account and any kept sign-in on this browser, and your edits keep saving in this browser.
+**Log out** in **Edit > Accounts…** does the same. Until you log out, the browser remembers the account and tries to sign you back in on your next visit; see [Staying signed in](saving-and-storage.md#staying-signed-in).
 To see who's signed in, open **Settings** or hover the autosave pill.
 
 ## What if a file changes in Drive while I'm working on it?

@@ -68,4 +68,30 @@ describe('provider registry', () => {
     expect(describeCapabilities({ binaryFiles: false, folders: false, history: true, maxFileBytes: 1 })).toBe('Version history');
     expect(describeCapabilities({ binaryFiles: false, folders: false, history: false, maxFileBytes: null })).toBe('Text files only');
   });
+
+  describe('remembered sign-ins (#201)', () => {
+    beforeEach(() => localStorage.clear());
+
+    it('shows a Drive account from an earlier visit as expired until a sign-in', () => {
+      const drive = new FakeDrive();
+      const entry = googleDriveEntry(drive, 'client');
+      expect(entry.status()).toBe('signedOut');
+      localStorage.setItem('storage_accounts', JSON.stringify({ googleDrive: { connected: true, account: 'ada@example.com', keepSignedIn: false } }));
+      expect(entry.status()).toBe('expired');
+      expect(entry.account()).toBe('ada@example.com');
+      // A "Keep me signed in" choice alone isn't a connection.
+      localStorage.setItem('storage_accounts', JSON.stringify({ googleDrive: { connected: false, account: null, keepSignedIn: true } }));
+      expect(entry.status()).toBe('signedOut');
+      expect(entry.account()).toBeNull();
+    });
+
+    it('offers "Keep me signed in" only when the provider can keep tokens', async () => {
+      expect(googleDriveEntry(new FakeDrive(), 'client').keepSignedIn).toBeUndefined();
+      const drive = Object.assign(new FakeDrive(), { kept: false, keepSignedIn() { return this.kept; }, async setKeepSignedIn(on: boolean) { this.kept = on; } });
+      const keep = googleDriveEntry(drive, 'client').keepSignedIn!;
+      expect(keep.get()).toBe(false);
+      await keep.set(true);
+      expect(keep.get()).toBe(true);
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import type { StorageProvider } from './types';
 import type { CommandId } from '../../ui/menuBar';
+import { rememberedAccount, wasConnected } from './accountMemory';
 
 /**
  * The storage provider registry (#200). Every place a project can be saved is listed here once, with
@@ -25,7 +26,8 @@ export type ProviderCapabilities = {
 
 /**
  * - connected: ready to save. Browser storage is always connected.
- * - expired: was signed in, but the token ran out and a silent refresh hasn't brought it back yet.
+ * - expired: was signed in (in this tab, or on an earlier visit, see accountMemory.ts), but the token
+ *   ran out and a silent sign-in hasn't brought it back yet.
  * - signedOut: set up on this site, but nobody signed in in this tab.
  * - notConfigured: this deployment has no app registration for it (see docs/deployment.md).
  */
@@ -49,6 +51,14 @@ export type ProviderEntry = {
   status(): AccountStatus;
   /** The signed-in account (an email or name), when known. */
   account(): string | null;
+  /** "Keep me signed in on this browser" (#201), for providers whose tokens can be kept. */
+  readonly keepSignedIn?: KeepSignedIn;
+};
+
+export type KeepSignedIn = {
+  get(): boolean;
+  /** Turning it off deletes the kept token right away. */
+  set(on: boolean): Promise<void>;
 };
 
 export type ProviderRegistry = {
@@ -92,6 +102,8 @@ export type DriveAccountSource = StorageProvider & {
   hasUsableToken(): boolean;
   isSignedIn(): boolean;
   accountLabel(): string | null;
+  keepSignedIn?(): boolean;
+  setKeepSignedIn?(on: boolean): Promise<void>;
 };
 
 /** Google Drive. `clientId` is VITE_GOOGLE_CLIENT_ID; without it the deployment can't sign in. */
@@ -111,9 +123,17 @@ export function googleDriveEntry(provider: DriveAccountSource, clientId: string 
     status() {
       if (!clientId) return 'notConfigured';
       if (provider.hasUsableToken()) return 'connected';
-      // An expired token is kept until a refresh fails, so it still counts as signed in.
-      return provider.isSignedIn() ? 'expired' : 'signedOut';
+      // An expired token is kept until a refresh fails, so it still counts as signed in. So does an
+      // account from an earlier visit that wasn't logged out: it shows "Expired" until a sign-in.
+      return provider.isSignedIn() || wasConnected('googleDrive') ? 'expired' : 'signedOut';
     },
-    account: () => provider.accountLabel(),
+    account() {
+      const remembered = rememberedAccount('googleDrive');
+      return provider.accountLabel() ?? (remembered?.connected ? remembered.account : null);
+    },
+    keepSignedIn:
+      provider.keepSignedIn && provider.setKeepSignedIn
+        ? { get: () => provider.keepSignedIn!(), set: (on) => provider.setKeepSignedIn!(on) }
+        : undefined,
   };
 }

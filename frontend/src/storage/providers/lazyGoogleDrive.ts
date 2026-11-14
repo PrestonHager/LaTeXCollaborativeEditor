@@ -11,6 +11,7 @@ import type { ProjectListing, ProjectSummary, StorageProvider, WriteOptions, Wri
 import { StorageError } from '../errors';
 import { lazyModule, OfflineError, type LazyModule } from '../../app/lazy';
 import { forgetLegacyFile, legacyProjectId, readStoredToken, removeOldToken, TOKEN_EXPIRY_SLACK_MS, TOKEN_STORAGE_KEY } from './driveShared';
+import { forgetAccount, keepsSignedIn, TOKEN_DB_NAME, wasConnected } from './accountMemory';
 
 type Loader = () => Promise<{ GoogleDriveProvider: new () => GoogleDriveProvider }>;
 
@@ -108,8 +109,8 @@ export class LazyGoogleDriveProvider implements StorageProvider {
   }
 
   async disconnect(): Promise<void> {
-    if (!this.loaded() && !readStoredToken()) {
-      // Never signed in this tab, so there's nothing to revoke.
+    if (!this.loaded() && !readStoredToken() && !wasConnected('googleDrive') && !keepsSignedIn('googleDrive')) {
+      // Never signed in, so there's nothing to revoke or forget.
       forgetLegacyFile();
       this.loadStatus = 'Drive: Disconnected';
       return;
@@ -117,15 +118,49 @@ export class LazyGoogleDriveProvider implements StorageProvider {
     try {
       await (await this.get()).disconnect();
     } catch {
-      // Without the provider the token can't be revoked, but this tab still forgets it.
+      // Without the provider the token can't be revoked, but this browser still forgets everything.
       try {
         sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       } catch {
         // Nothing else to do if storage is locked down.
       }
+      forgetAccount('googleDrive');
+      // Drive is the only provider with kept tokens so far, so the whole database can go.
+      try {
+        indexedDB.deleteDatabase(TOKEN_DB_NAME);
+      } catch {
+        // No IndexedDB, so nothing was kept there.
+      }
       forgetLegacyFile();
       this.loadStatus = 'Drive: Disconnected';
     }
+  }
+
+  /** Whether Drive was connected on an earlier visit and not logged out, so restoreSession is worth a try. */
+  wasConnected(): boolean {
+    return wasConnected('googleDrive');
+  }
+
+  /**
+   * Sign back in without asking, on page load (#201). Loads the provider only when Drive was connected
+   * before; false when it wasn't, or the silent sign-in didn't work.
+   */
+  async restoreSession(): Promise<boolean> {
+    if (this.hasUsableToken()) return true;
+    if (!wasConnected('googleDrive')) return false;
+    try {
+      return await (await this.get()).restoreSession();
+    } catch {
+      return false;
+    }
+  }
+
+  keepSignedIn(): boolean {
+    return keepsSignedIn('googleDrive');
+  }
+
+  async setKeepSignedIn(on: boolean): Promise<void> {
+    await (await this.get()).setKeepSignedIn(on);
   }
 
   currentProjectId(projectId: string): string {

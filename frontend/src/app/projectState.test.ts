@@ -6,6 +6,10 @@ import { ProjectState, toTexName, type DriveLike } from './projectState';
 // A memory provider standing in for Drive, with a token we can turn on and off.
 class FakeDrive extends MemoryProvider {
   tokenOk = true;
+  remembered = false;
+  wasConnected() {
+    return this.remembered;
+  }
   hasUsableToken() {
     return this.tokenOk;
   }
@@ -112,5 +116,58 @@ describe('ProjectState', () => {
     state.use(drive, null);
     expect(state.recordSave(local, manifest('p2'))).toBe(false);
     expect(state.projectId).toBeNull();
+  });
+
+  describe('a Drive account remembered from an earlier visit (#201)', () => {
+    function pending(overrides: Partial<AppSessionState> = {}) {
+      const ctx = setup();
+      ctx.drive.tokenOk = false;
+      ctx.drive.remembered = true;
+      const message = ctx.state.restore(session({ providerMode: 'drive', projectId: 'folder-1', manifest: manifest('folder-1'), ...overrides }));
+      return { ...ctx, message };
+    }
+
+    it('waits for the silent sign-in, keeping the Drive project in the saved session', () => {
+      const { state, local, message } = pending();
+      expect(message).toBeNull();
+      expect(state.awaitingDrive()).toBe(true);
+      expect(state.activeProvider).toBe(local);
+      expect(state.projectId).toBeNull();
+      expect(state.sessionFields()).toMatchObject({ providerMode: 'drive', projectId: 'folder-1', manifest: manifest('folder-1') });
+    });
+
+    it('goes back to the Drive project once signed in', () => {
+      const { state, drive } = pending();
+      expect(state.resumeDrive(true)).toBe('Drive: Session restored');
+      expect(state.awaitingDrive()).toBe(false);
+      expect(state.activeProvider).toBe(drive);
+      expect(state.projectId).toBe('folder-1');
+      expect(state.manifest).toEqual(manifest('folder-1'));
+      // Only once.
+      expect(state.resumeDrive(true)).toBeNull();
+    });
+
+    it('finds an old single Drive file too', () => {
+      const { state } = pending({ projectId: undefined, manifest: undefined, documentId: 'doc-1' });
+      state.resumeDrive(true);
+      expect(state.projectId).toBe('legacy:doc-1:Paper.tex');
+    });
+
+    it('says the sign-in expired and saves in this browser when it fails', () => {
+      const { state, local } = pending();
+      expect(state.resumeDrive(false)).toMatch(/sign-in expired/);
+      expect(state.activeProvider).toBe(local);
+      expect(state.projectId).toBeNull();
+      expect(state.sessionFields()).toMatchObject({ providerMode: 'local', projectId: undefined });
+    });
+
+    it('stays put when the person moved on before the sign-in finished', () => {
+      const { state, local } = pending();
+      state.use(local, 'other');
+      expect(state.awaitingDrive()).toBe(false);
+      expect(state.resumeDrive(true)).toBeNull();
+      expect(state.activeProvider).toBe(local);
+      expect(state.projectId).toBe('other');
+    });
   });
 });
