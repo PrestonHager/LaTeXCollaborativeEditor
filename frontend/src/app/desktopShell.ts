@@ -31,3 +31,11 @@ export async function openInSystemBrowser(url: string, win: object | undefined =
     return false;
   }
 }
+
+/**
+ * Where this copy of the app keeps its projects and settings, for UI text: "this browser" on the
+ * web, "this app" in the desktop app, which keeps its own storage (docs/desktop.md).
+ */
+export function localPlace(win: object | undefined = globalThis.window): 'this browser' | 'this app' {
+  return isDesktopShell(win) ? 'this app' : 'this browser';
+}

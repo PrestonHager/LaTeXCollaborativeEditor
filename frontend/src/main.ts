@@ -165,6 +165,13 @@ const makeBugUrl = (area?: IssueArea, summary?: string) =>
   bugReportUrl({ appVersion: formatVersion(BUILD_INFO), userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
+// The desktop app's links and wording (issue #181). Its shell sends window.open's https URLs to
+// the system browser too, so openExternal needs no desktop branch.
+if (isDesktopShell()) {
+  void import('./app/desktopUi')
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase) }))
+    .catch(console.warn);
+}
 
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
