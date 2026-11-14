@@ -37,12 +37,16 @@ describe('App integration behavior', () => {
       getCommandState: () => ({ enabled: true }),
       onCommand: (id) => calls.push(id),
     });
-    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.menu-item[data-command]'));
+    const items = Array.from(document.querySelectorAll<HTMLButtonElement>('#menu-bar .menu-root:not([data-collapsed-menu]) .menu-item[data-command]'));
     expect(items.length).toBe(menuBar.entries().length);
     // The icons are a lazy chunk (issue #231); each item keeps an icon-sized slot until it loads.
     expect(items.every((item) => item.querySelector('[data-icon-slot]'))).toBe(true);
     await menuBar.loadIcons();
     expect(items.every((item) => item.querySelector('svg') && !item.querySelector('[data-icon-slot]'))).toBe(true);
+    // The one-button phone menu (#186) has a copy of every item, in the same order, with icons too.
+    const phoneItems = Array.from(document.querySelectorAll<HTMLButtonElement>('#menu-bar [data-collapsed-menu] .menu-item[data-command]'));
+    expect(phoneItems.map((item) => item.dataset.command)).toEqual(items.map((item) => item.dataset.command));
+    expect(phoneItems.every((item) => item.querySelector('svg'))).toBe(true);
     const settingsItem = items.find((item) => item.dataset.command === 'app.openSettings')!;
     expect(settingsItem.closest('.menu-root')?.getAttribute('data-menu-label')).toBe('Edit');
     settingsItem.click();

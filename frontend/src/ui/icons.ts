@@ -39,6 +39,8 @@ import {
   Users,
   X,
   FileImage,
+  Ellipsis,
+  Menu,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -65,6 +67,8 @@ export const toolbarCommandIcons = {
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
 const staticIcons = {
   CircleHelp,
+  Ellipsis,
+  Menu,
   MoveHorizontal,
   ZoomIn,
   ZoomOut,

@@ -1,6 +1,6 @@
 /* Loads with the Share popover's code (ui/shareButton.ts, issue #231). .share-menu stays in style.css, since the button shows from the start. */
 /* The Share popover (issue #224): a popover card, like the preview-changes one (docs/ui-sizing.md). */
-.share-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; margin-top: 0.25rem; padding: 0.75rem 1rem; display: grid; gap: 0.5rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
+.share-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; margin-top: 0.25rem; margin-inline-start: var(--popover-shift, 0px); padding: 0.75rem 1rem; display: grid; gap: 0.5rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
 .share-popover-title { margin: 0; font-size: 1rem; font-weight: 600; }
 .share-popover-view { display: grid; gap: 0.5rem; }
 .share-popover-view[hidden] { display: none; }

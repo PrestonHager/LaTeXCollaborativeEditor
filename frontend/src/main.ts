@@ -1299,6 +1299,7 @@ bindSettings({
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
   shortcutLabel,
+  isCollapsed: isPhone,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
@@ -1351,7 +1352,13 @@ const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettin
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
   getCommandState,
   shortcutLabel,
+  isCollapsed: isPhone,
   onCommand: (commandId) => executeCommand(commandId),
+});
+// On a phone the menus collapse into one Menu button and the toolbar into a few buttons and More (#186).
+phoneMedia?.addEventListener('change', () => {
+  menuBar.closeMenus();
+  toolbar.viewportChanged();
 });
 
 // After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).

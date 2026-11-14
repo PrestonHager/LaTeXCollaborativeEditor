@@ -125,6 +125,12 @@
               </div>
             </div>
           </div>
+          <div class="menu-root menu-root-collapsed dropdown-menu" data-menu-label="Menu" data-collapsed-menu id="menu-collapsed-root">
+            <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-all" aria-expanded="false"><i data-lucide="menu"></i>Menu</button>
+            <div id="menu-all" class="menu-popover" data-popover aria-hidden="true">
+              <div class="menu-list" role="menu" aria-label="Main menu"></div>
+            </div>
+          </div>
         </nav>
 
         <div id="share-area" class="share-area">
@@ -187,6 +193,12 @@
         <span class="toolbar-separator" aria-hidden="true"></span>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="app.commandPalette" aria-label="Command palette" data-tooltip="Command palette" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="help.documentation" aria-label="Documentation" data-tooltip="Documentation" data-side="bottom"></button>
+        <div class="toolbar-more menu-root dropdown-menu" data-menu-label="More">
+          <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="icon-sm" aria-haspopup="menu" aria-controls="toolbar-more-menu" aria-expanded="false" aria-label="More actions" data-tooltip="More actions" data-side="bottom" data-align="end"><i data-lucide="ellipsis"></i></button>
+          <div id="toolbar-more-menu" class="menu-popover" data-popover data-align="end" aria-hidden="true">
+            <div class="menu-list" role="menu" aria-label="More actions"></div>
+          </div>
+        </div>
       </div>
 
       <div id="app-loading" class="app-loading is-active" role="status" aria-live="polite">
