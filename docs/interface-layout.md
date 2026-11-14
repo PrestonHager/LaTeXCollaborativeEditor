@@ -30,7 +30,7 @@ On a touch screen there's no hover, so there's no preview card. The [command pal
 | Item | Shortcut | What it does |
 | --- | --- | --- |
 | New Project | Ctrl+Shift+N (Alt+Shift+N in a browser tab) | Starts a fresh project after you confirm. Host only. |
-| Open Local Project | Ctrl+O | Lists projects saved in this browser. Host only. |
+| Open Project… | Ctrl+O | Asks where the project is saved (this browser or a connected account), then lists or picks it. Host only. |
 | Open from Google Drive | Ctrl+Shift+O | Opens the Drive picker. Host only. |
 | Upload .zip as New Project | | Makes a new project from a `.zip`. Host only. |
 | New File | Ctrl+N (Alt+N in a browser tab) | Adds a text file to the current folder. |

@@ -31,6 +31,7 @@ import {
   FolderOpen,
   FolderPlus,
   HardDrive,
+  Monitor,
   PencilLine,
   Search,
   Star,
@@ -86,6 +87,7 @@ const staticIcons = {
   FolderOpen,
   FolderPlus,
   HardDrive,
+  Monitor,
   PencilLine,
   Search,
   Share2,
@@ -98,6 +100,9 @@ const staticIcons = {
 
 /** Icons for file tree rows, picked by kind. */
 export const fileIcons = { File, FileImage, FileText, Folder, FolderOpen };
+
+/** Icons for storage providers, by the name a registry entry gives (storage/providers/registry.ts). */
+export const storageIcons: Record<string, IconNode> = { 'hard-drive': HardDrive, monitor: Monitor };
 
 /** Build an SVG icon. Icons are decorative, so screen readers skip them. */
 export function icon(node: IconNode, className = 'size-4'): SVGElement {

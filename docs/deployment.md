@@ -10,7 +10,7 @@ Frontend deployment (GitHub Pages)
   - `VITE_TURN_URL` (optional)
   - `VITE_TURN_USERNAME` (optional)
   - `VITE_TURN_CREDENTIAL` (optional; public once built, see "TURN credentials are public" below)
-  - `VITE_GOOGLE_CLIENT_ID`
+  - `VITE_GOOGLE_CLIENT_ID` (without it, Google Drive shows as **Not configured** in Accounts and File > Open Project only offers this browser)
   - `VITE_GOOGLE_API_KEY`
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
@@ -19,6 +19,7 @@ Frontend deployment (GitHub Pages)
 - `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action.
   The rendezvous and TURN values aren't passed to the production build yet, so production uses the defaults in `bootstrapConfig.ts`.
   Staging builds in Coolify from the repo-root `Dockerfile` instead, and takes every `VITE_*` value above, rendezvous and TURN included, as a build variable (see "Staging on Coolify" below).
+- Storage providers are listed once in `frontend/src/storage/providers/registry.ts` (#200): each has an id, name, icon, capabilities, and a `configured()` check against its build variables. The Accounts panel, File > Open Project and the status bar read the registry. A provider whose keys are missing stays listed as **Not configured**, so a deployment never has to hide it. Adding a provider (#202, #203, #204) means a registry entry plus its own build variables and app registration, documented here. Tokens stay in the browser tab that signed in and are never sent to peers.
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
