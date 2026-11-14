@@ -31,6 +31,7 @@ import type { StorageProvider } from './storage/providers/types';
 import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
+import { createPhoneLayout, PHONE_QUERY } from './app/phoneLayout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
@@ -96,7 +97,33 @@ const activeFileMainEl = document.getElementById('active-file-main') as HTMLElem
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
 // The person's own settings (themes, layout, keybinds). Kept apart from the session, never sent to peers.
 const settings = createSettingsStore();
-const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange: ({ mode, splitRatio }) => settings.update({ layoutMode: mode, splitRatio }) });
+const phoneMedia = typeof window.matchMedia === 'function' ? window.matchMedia(PHONE_QUERY) : null;
+const isPhone = () => Boolean(phoneMedia?.matches);
+// Phones show one pane at a time and the file tree as a drawer (issue #185). It does nothing at 640px and up.
+const phone = createPhoneLayout({
+  root: document.getElementById('app')!,
+  editorButton: document.getElementById('phone-show-editor') as HTMLButtonElement,
+  previewButton: document.getElementById('phone-show-preview') as HTMLButtonElement,
+  filesButton: document.getElementById('phone-files') as HTMLButtonElement,
+  filePane: document.getElementById('file-pane')!,
+  backdrop: document.getElementById('file-drawer-backdrop')!,
+  content: splitRoot,
+  editorPane,
+  isPhone,
+  onPaneChange: () => editor.getView()?.requestMeasure(),
+});
+phoneMedia?.addEventListener('change', () => phone.viewportChanged());
+const layout = createLayout({
+  splitRoot,
+  splitter,
+  editorPane,
+  previewPane,
+  onChange: ({ mode, splitRatio }) => {
+    settings.update({ layoutMode: mode, splitRatio });
+    // On a phone, View > Editor only and Preview only pick the pane to show.
+    if (isPhone() && mode !== 'split') phone.showPane(mode === 'editor-only' ? 'editor' : 'preview');
+  },
+});
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
@@ -514,7 +541,10 @@ const compile = createPreviewCompile({
 const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
-  onOpen: (entry) => openFile(entry.id),
+  onOpen: (entry) => {
+    openFile(entry.id);
+    if (entry.kind !== 'folder') phone.fileOpened();
+  },
   onRename: async (path) => {
     const isFolder = project.folderPaths().includes(path);
     const next = await promptDialog({
@@ -1112,7 +1142,11 @@ const commands = createCommands({
   loadFailed: (feature, error) => lazyLoadFailed(feature, error),
   persistAppSession,
   runFileOp,
-  openFile,
+  // A new file opens in the editor, so on a phone close the file drawer too.
+  openFile: (id: string | null) => {
+    openFile(id);
+    if (id) phone.fileOpened();
+  },
   downloadFile,
   switchProject,
   openStoredProject,

@@ -167,7 +167,17 @@
         <span id="app-loading-label" class="app-loading-label">Loading the editor...</span>
       </div>
 
+      <!-- Phones only (under 640px): one pane at a time, and the file tree as a drawer. See src/app/phoneLayout.ts. -->
+      <nav id="phone-bar" class="phone-bar" aria-label="Panes">
+        <button id="phone-files" type="button" class="btn" data-variant="outline" aria-controls="file-pane" aria-expanded="false"><i data-lucide="folder-open"></i>Files</button>
+        <div class="phone-switch" role="group" aria-label="Show">
+          <button id="phone-show-editor" type="button" class="btn" data-variant="ghost" aria-controls="editor-pane" aria-pressed="true">Editor</button>
+          <button id="phone-show-preview" type="button" class="btn" data-variant="ghost" aria-controls="preview-pane" aria-pressed="false">Preview</button>
+        </div>
+      </nav>
+
       <div class="workspace">
+        <div id="file-drawer-backdrop" class="file-drawer-backdrop" hidden></div>
         <aside id="file-pane" class="file-pane" aria-label="Project files">
           <header class="file-pane-header">
             <span class="file-pane-title">Files</span>

@@ -173,6 +173,23 @@ Under **View**:
 The active layout has a check mark in the menu.
 The layout and the splitter position are remembered in this browser, like your other [settings](saving-and-storage.md#your-settings).
 
+## On a phone
+
+When the window is narrower than 640px, like on most phones, the app shows one pane at a time instead of the split:
+
+- A bar under the toolbar has **Files**, then **Editor** and **Preview**. Tap Editor or Preview to switch. The pane you picked stays picked when you reload, until you close the tab.
+- **Files** opens the file list as a drawer over the editor. Picking a file closes the drawer and shows that file in the editor. Tap outside the drawer, tap Files again, or press **Esc** to close it without picking.
+- **View > Editor Only** and **Preview Only** pick the pane too. The Split View, Editor Only and Preview Only toolbar buttons are hidden, since the bar does their job.
+- The buttons in the bar are 44px tall, so they're easy to tap.
+
+With a keyboard, **Tab** reaches Files, Editor and Preview, and Enter or Space presses them. Screen readers announce Editor and Preview as toggle buttons, and Files as expanded or collapsed.
+
+Tablets and wider windows keep the layout above.
+
+| Editor | Preview | Files |
+|--------|---------|-------|
+| ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/phone-layout/after-390x844-editor.png) | ![The preview on a phone](assets/phone-layout/after-390x844-preview.png) | ![The file list open as a drawer over the editor](assets/phone-layout/after-390x844-files.png) |
+
 ## Header status pills
 
 The three pills at the top right are connection, compile, and autosave.

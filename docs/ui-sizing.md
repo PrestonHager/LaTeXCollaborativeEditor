@@ -73,7 +73,7 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 
 | Name | Width | Today | Planned in #123 |
 |------|-------|-------|-----------------|
-| Phone | under 640px (`sm`) | Every dialog is the window width minus 2rem. Footer buttons stack. | Dialogs become full-screen sheets (below). |
+| Phone | under 640px (`sm`) | Every dialog is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | Dialogs become full-screen sheets (below). |
 | Tablet | 640px to 1023px | Dialogs use the scale. `dialog-lg` is capped by the window, so Settings is one column. | Same as today. |
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
