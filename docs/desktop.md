@@ -222,9 +222,9 @@ The first release after that is the first one installed apps can update **from**
 **Now:** `.github/workflows/desktop.yml` builds on Linux (Ubuntu 22.04, for older glibc: `.deb`, `.rpm`, AppImage), Windows (`.msi`, NSIS `.exe`) and macOS (a universal `.app` and `.dmg`). It runs:
 
 - from `release.yml` for every release, which attaches the installers, their updater `.sig` files, `SHA256SUMS.txt` and `latest.json` to the GitHub release ("Updates" above);
-- from Actions > **Desktop app** > Run workflow (optionally with a tag), which only uploads workflow artifacts, kept for 14 days.
+- from Actions > **Desktop app** > Run workflow (optionally with a tag), which only uploads workflow artifacts, kept for 14 days. A manual run doesn't use the Production environment, because Production only allows deployments from `main` and tags, which refused a run on `staging` before any runner started. So it builds with no Production variables or secrets: unsigned installers, no updater, Google Drive not configured, and the default P2P app id. That's enough to check that the app builds on each OS. Only a release (`release.yml`, `release: true`) runs in Production.
 
-The builds use the Production environment's `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL`, so the app meets the website's peers.
+Release builds use the Production environment's `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL`, so the app meets the website's peers.
 
 The builds aren't code-signed for Windows or macOS yet (the updater's signature is separate), so people see warnings:
 
