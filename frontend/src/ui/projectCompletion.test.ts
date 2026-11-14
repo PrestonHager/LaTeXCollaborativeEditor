@@ -8,7 +8,9 @@ import {
   citationSource,
   cleanBibValue,
   extractBibEntries,
+  extractDefinitions,
   extractLabels,
+  extractPackages,
   labelSource,
   pathSource,
   ProjectIndex,
@@ -110,6 +112,50 @@ describe('relativePath', () => {
   });
 });
 
+describe('extractPackages', () => {
+  it('reads \\usepackage lists with options, \\RequirePackage and the class, and skips comments', () => {
+    const text = '\\documentclass[11pt]{beamer}\n\\usepackage[fleqn]{amsmath, amssymb,\n}\n% \\usepackage{tikz}\n\\RequirePackage{xcolor}\\usepackage{}';
+    expect(extractPackages(text)).toEqual(['beamer', 'amsmath', 'amssymb', 'xcolor']);
+  });
+});
+
+describe('extractDefinitions', () => {
+  const brief = (text: string) => extractDefinitions(text, 'f.tex').map((d) => [d.kind[0], d.name, d.args, d.optional ?? null, d.via, d.text ?? null, d.line]);
+
+  it('reads commands with their arguments, in order, with their lines', () => {
+    const text = [
+      '\\newcommand{\\R}{\\mathbb{R}}',
+      '\\renewcommand*\\vec[1]{\\mathbf{#1}} \\providecommand{\\note}[2][red]{#2}',
+      '% \\newcommand{\\gone}{}',
+      '\\DeclareMathOperator*{\\argmax}{arg\\,max} \\DeclareMathOperator\\Tr{Tr}',
+      '\\def\\pair#1#2{(#1,#2)} \\makeatletter\\newcommand{\\my@internal}{}',
+      '\\NewDocumentCommand{\\norm}{o m}{} \\DeclareRobustCommand{\\x}{}',
+    ].join('\n');
+    expect(brief(text)).toEqual([
+      ['c', 'R', 0, null, '\\newcommand', null, 1],
+      ['c', 'vec', 1, null, '\\renewcommand', null, 2],
+      ['c', 'note', 2, 'red', '\\providecommand', null, 2],
+      ['c', 'argmax', 0, null, '\\DeclareMathOperator', 'arg\\,max', 4],
+      ['c', 'Tr', 0, null, '\\DeclareMathOperator', 'Tr', 4],
+      ['c', 'pair', 2, null, '\\def', null, 5],
+      ['c', 'norm', 2, '', '\\NewDocumentCommand', null, 6],
+      ['c', 'x', 0, null, '\\DeclareRobustCommand', null, 6],
+    ]);
+  });
+
+  it('reads environments and theorems', () => {
+    const text = '\\newenvironment{boxed}[1][Note]{}{}\n\\renewenvironment{proof}{}{}\n\\newtheorem{theorem}{Theorem}[section]\n\\newtheorem{lemma}[theorem]{Lemma}\n\\newtheorem*{remark}{}\n\\NewDocumentEnvironment{panel}{m}{}{}';
+    expect(brief(text)).toEqual([
+      ['e', 'boxed', 1, 'Note', '\\newenvironment', null, 1],
+      ['e', 'proof', 0, null, '\\renewenvironment', null, 2],
+      ['e', 'theorem', 0, null, '\\newtheorem', 'Theorem', 3],
+      ['e', 'lemma', 0, null, '\\newtheorem', 'Lemma', 4],
+      ['e', 'remark', 0, null, '\\newtheorem', null, 5],
+      ['e', 'panel', 1, null, '\\NewDocumentEnvironment', null, 6],
+    ]);
+  });
+});
+
 describe('ProjectIndex', () => {
   it('only rebuilds after a change, and only rereads files whose text changed', () => {
     let version = 0;
@@ -131,6 +177,24 @@ describe('ProjectIndex', () => {
     files.splice(1, 1);
     version++;
     expect(index.labels().map((l) => l.key)).toEqual(['main']);
+  });
+
+  it('reads packages and definitions from .tex and .sty files, and follows changes', () => {
+    let version = 0;
+    let macros = '\\newcommand{\\R}{\\mathbb{R}}';
+    const files = [
+      { path: 'main.tex', kind: 'text' as const, text: () => '\\documentclass{article}\n\\usepackage{amsmath}\n\\usepackage{macros}' },
+      { path: 'macros.sty', kind: 'text' as const, text: () => `\\RequirePackage{xcolor}\n${macros}` },
+      { path: 'notes.txt', kind: 'text' as const, text: () => '\\usepackage{nope}\\newcommand{\\nope}{}' },
+    ];
+    const index = new ProjectIndex({ version: () => version, files: () => files, mainPath: () => 'main.tex' });
+    expect([...index.packages()]).toEqual(['article', 'amsmath', 'macros', 'xcolor']);
+    const first = index.definitions();
+    expect(first.map((d) => `${d.name} ${d.path}:${d.line}`)).toEqual(['R macros.sty:2']);
+    expect(index.definitions()).toBe(first);
+    macros = '\\newcommand{\\C}{\\mathbb{C}}';
+    version++;
+    expect(index.definitions().map((d) => d.name)).toEqual(['C']);
   });
 
   it('keeps one index per project', () => {
@@ -279,6 +343,18 @@ describe('completionProjectFrom', () => {
     peerProject.createTextFile('late.tex');
     Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer, Y.encodeStateVector(doc)));
     expect(completion.version()).toBe(after);
+  });
+
+  it('picks up a package and a command a peer adds', () => {
+    const { doc, completion } = projectWith({ 'main.tex': '\\documentclass{article}' });
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+    const peerProject = new ProjectDoc(peer);
+    expect(projectIndex(completion).packages().has('amsmath')).toBe(false);
+    peerProject.createTextFile('defs.tex', '\\usepackage{amsmath}\n\\newcommand{\\peer}{}');
+    Y.applyUpdate(doc, Y.encodeStateAsUpdate(peer, Y.encodeStateVector(doc)));
+    expect(projectIndex(completion).packages().has('amsmath')).toBe(true);
+    expect(projectIndex(completion).definitions().map((d) => d.name)).toEqual(['peer']);
   });
 
   it('has no main path for a project without .tex files', () => {

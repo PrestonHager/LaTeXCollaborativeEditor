@@ -21,8 +21,24 @@ Type `\begin{` and the start of an environment name, and the list shows environm
 - Accepting a `\begin` completion puts in `\begin{}` and opens the environment list.
 - It doesn't show in `%` comments or after `\\`.
 
-The list covers about 250 common commands (structure, references and citations, text, math, siunitx and Beamer) and about 50 environments.
+The list always has about 200 of LaTeX's own commands (structure, references and citations, text, math) and about 20 environments.
 It comes with the app and loads just after the editor shows, so nothing you type is sent anywhere to complete it.
+
+#### Packages and your own commands
+
+The list also offers commands and environments from the packages the project loads, and the ones it defines itself.
+Like the rest of the list, they follow the project as you and your collaborators edit it.
+
+- **Packages**: a package's commands only show once a `.tex` or `.sty` file in the project loads it with `\usepackage` or `\RequirePackage`.
+  For example, `\includegraphics` shows after `\usepackage{graphicx}`, and `\begin{align` after `\usepackage{amsmath}`.
+  The app knows amsmath, amssymb and amsfonts, amsthm, mathtools, graphicx, hyperref and url, booktabs, xcolor, siunitx, cleveref, TikZ and pgfplots, natbib, biblatex, csquotes, multirow, tabularx, longtable, listings, minted, subcaption and appendix.
+  A package that loads another brings its commands too, like TikZ with xcolor, and so do the Beamer, amsart and amsbook classes in `\documentclass`.
+  The package lists come with the app, in a file of their own that loads the first time the list needs one.
+  Packages it doesn't know add nothing.
+- **Your own commands**: commands defined with `\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\DeclareMathOperator`, `\def` or `\NewDocumentCommand` in any `.tex` or `.sty` file, and environments defined with `\newenvironment`, `\renewenvironment`, `\newtheorem` or `\NewDocumentEnvironment`.
+  Each goes in with a placeholder for each argument you have to give, and its info box says what defined it and where, and the default of an optional first argument.
+  A command you define takes the place of a built-in one with the same name.
+  Commented-out definitions, and internal names with `@` in them, are left out.
 Undo takes back an accepted completion like any other typing, and collaborators see the text it puts in.
 
 #### Labels, citations and paths
