@@ -220,6 +220,38 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 @media (min-width: 40rem) {
   .dialog > * > footer { flex-wrap: wrap; }
 }
+/*
+ * Phones (under 40rem, Tailwind's sm, #187): dialog-md and dialog-lg become full-screen sheets.
+ * The box fills the window with no rounded corners. It's already a flex column, so the header
+ * stays at the top, the footer at the bottom, and the <section> scrolls between them.
+ * The padding adds the safe-area insets so notches and home bars don't cover the buttons.
+ * dialog-sm stays a centred card (the rule above).
+ */
+@media (max-width: 39.99rem) {
+  .dialog:is(.dialog-md, .dialog-lg) > * {
+    top: 0;
+    left: 0;
+    translate: none;
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    padding: max(1.5rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left));
+  }
+  /* The body fills the sheet; keep a grid body's rows packed at the top instead of spread out (About, Upload). */
+  .dialog:is(.dialog-md, .dialog-lg) > * > section { align-content: start; }
+  /* Pin the footer to the bottom, also in a dialog with no <section> to push it there (Conflict). */
+  .dialog:is(.dialog-md, .dialog-lg) > * > footer { margin-top: auto; }
+  /* The header's close (X) button sits in the corner; keep it clear of a notch too. */
+  .dialog:is(.dialog-md, .dialog-lg) > * > :is(button, form[method='dialog']) {
+    top: max(1rem, env(safe-area-inset-top));
+    inset-inline-end: max(1rem, env(safe-area-inset-right));
+  }
+  /* The changelog caps its own height for the centred box; in a sheet it fills the space instead. */
+  .dialog.dialog-lg .changelog-body { max-height: none; }
+}
 
 /* Command palette. Basecoat styles the box, we handle the overlay since it isn't a <dialog>. */
 .command-palette-overlay { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgb(0 0 0 / 0.4); backdrop-filter: blur(2px); z-index: 50; }
