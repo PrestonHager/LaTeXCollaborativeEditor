@@ -20,6 +20,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Changed
 
+- **Desktop app polish.** Links in the desktop app (help, bug reports, What's new, and links in the preview) open in your system browser, and only `https` ones; the app window can no longer be navigated away from the app. Settings and the File menu say "this app" instead of "this browser". The app now carries LaTeX.js's styles and fonts, so its preview works offline without jsDelivr. The website still loads them from jsDelivr.
 - **Sharing only starts when you ask for it.** Share now opens a small popover that explains what sharing does, and only **Start sharing** makes a room and a link. While sharing, it shows the link with Copy, New link and the new **Stop sharing**, which leaves the room and forgets the link. Reloading a tab no longer rejoins its room on its own: the popover offers **Resume sharing (same link)** instead. Nothing connects to the trackers until you start. Guests opening a link join as before. The badge says "Not sharing" when you aren't.
 - **Dialogs fill the screen on phones.** Below 640px wide, Upload, Export, About, Open a project, the conflict dialog, Settings, What's new and the template dialogs open as full-screen sheets: the title stays at the top, the buttons at the bottom, and the middle scrolls. Short confirm and name dialogs stay a small card, and wider windows don't change.
 

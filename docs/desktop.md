@@ -12,7 +12,8 @@ Issue #122 plans native apps for Windows, macOS and Linux, then tablets and phon
 | Framework | Tauri 2 (below) |
 | `desktop/` scaffold | Builds on Linux. `cargo check`, `cargo clippy` and `tauri build` (deb, rpm, AppImage) passed on Ubuntu 24.04 |
 | CI | `.github/workflows/desktop.yml` builds unsigned Linux, Windows and macOS installers as workflow artifacts |
-| Desktop detection in the frontend | `frontend/src/app/desktopShell.ts`. The keymap uses it, and Share uses it to offer the system browser when WebRTC is missing |
+| Desktop detection in the frontend | `frontend/src/app/desktopShell.ts`. The keymap uses it, Share uses it to offer the system browser when WebRTC is missing, and a lazy chunk (`frontend/src/app/desktopUi.ts`) changes the wording and sends links to the browser |
+| Links, wording, offline preview | Done (#181, below): links open in the system browser, the window can't leave the app, text says "this app", and LaTeX.js is bundled |
 | WebRTC | Windows and macOS are expected to work but are **not checked yet**. On Linux, the distro WebKitGTK we checked has **no WebRTC** (below) |
 | Google sign-in, local folders, updater, signing | Follow-ups (below) |
 | First numbers (Linux, from the sandbox) | `.deb` 2.4 MB and `.rpm` 2.4 MB. The AppImage is 78 MB because it carries WebKitGTK and GStreamer. After load, the app used about 420 MB PSS across its three processes, under Xvfb with software rendering. That's not a fair desktop number: measure on real hardware against a browser tab |
@@ -34,7 +35,8 @@ Tauri's main risk is that each OS has a different webview. The rest of this page
 
 ## How the shell works
 
-- `desktop/src-tauri/` is a standard Tauri 2 app. `tauri.conf.json` points `build.frontendDist` at `../../frontend/dist`, and `beforeBuildCommand` runs `npm run build` in `frontend/`, so the desktop app gets the same build as the website, budget check included. In development, `npm run dev` in `desktop/` opens the Vite dev server (`http://localhost:5173`) in the window.
+- `desktop/src-tauri/` is a standard Tauri 2 app. `tauri.conf.json` points `build.frontendDist` at `../../frontend/dist`, and `beforeBuildCommand` runs `npm run build:desktop` in `frontend/`: the same build as the website, budget check included, plus LaTeX.js's styles and fonts in `dist/latexjs/` ("Offline preview" below). In development, `npm run dev` in `desktop/` runs `npm run dev:desktop` and opens the Vite dev server (`http://localhost:5173`) in the window.
+- The main window is declared in `tauri.conf.json` with `"create": false`, and `src/lib.rs` builds it from that entry (`WebviewWindowBuilder::from_config`), so it can add the link guard and the asset header below.
 - The window loads the build from inside the app bundle, never from a remote URL. The page's origin is `tauri://localhost` on macOS and Linux and `https://tauri.localhost` on Windows (`useHttpsScheme: true`).
 - **The app keeps its own storage.** IndexedDB and localStorage belong to the app's webview profile, so local projects in the app and in a browser are separate. The profile is tied to the bundle `identifier` and, on Windows, to `useHttpsScheme`. Changing either later would lose every local project, so `desktop/scripts/check-desktop-config.mjs` guards `useHttpsScheme`, and the identifier must never change.
 - **Versions.** `tauri.conf.json` reads its `version` from `frontend/package.json`, the one app version (`docs/versioning.md`). So the Prepare release workflow needs no change, and a web build and a desktop build of the same commit always have the same number. The `Cargo.toml` version is a `0.0.0` placeholder that nothing reads, and `desktop/package.json` has no version.
@@ -42,7 +44,30 @@ Tauri's main risk is that each OS has a different webview. The rest of this page
   - `VITE_DEPLOY_ENV` already says where a build deploys (production, staging or dev). It also picks the P2P app id, and the desktop app must stay on production's so it can join rooms with website users.
   - A separate desktop build would double the build and test matrix.
 
-  The check adds a few dozen bytes to the initial load. Anything bigger that only the desktop needs, like the updater UI or the folder picker, goes in a lazy chunk loaded behind `isDesktopShell()`.
+  The check adds a few dozen bytes to the initial load. Anything bigger that only the desktop needs, like the updater UI or the folder picker, goes in a lazy chunk loaded behind `isDesktopShell()`. `frontend/src/app/desktopUi.ts` is the first one (links and wording, below).
+
+## Links and navigation
+
+The app has one window, and only the app loads in it (issue #181):
+
+- **In the page:** `desktopUi.ts` catches clicks on links that would leave the app. An `https` link to another site opens in the system browser through `openInSystemBrowser()` (the opener plugin). The app's own pages that open in a new tab on the web (`privacy.html`, `tos.html`) open on the website instead, since the app has no second window; without an https `VITE_DOCS_BASE_URL` they don't open. Commands that opened a tab (Help > Documentation, Report a Bug and the like) call the opener too. If it fails, a notice says so.
+- **In the shell, as the guard:** `src/lib.rs` sets `on_navigation` and `on_new_window` on the window. Navigation is allowed only to the app itself (`tauri://localhost`, `http(s)://tauri.localhost`, and the dev server in `tauri dev`) and to the frames the page makes (`about:srcdoc`, `about:blank`, `blob:`). Anything else is cancelled; if it's `https`, Rust opens it in the system browser with the opener's Rust API. Every new-window request (`window.open`, `target="_blank"`, preview links) is denied the same way, with `https` sent to the browser. `http:`, `file:`, `mailto:` and other schemes go nowhere.
+- No new permission: the Rust side doesn't go through capabilities, and the page still has only `opener:allow-open-url` for `https://*`.
+
+## Wording
+
+The app keeps its own storage, so "saved in this browser" is wrong there. `localPlace()` in `desktopShell.ts` gives "this browser" or "this app" for text built in code (the profile and template dialogs, notices). The static text in `index.html` (menus, Settings, dialog descriptions) is rewritten once at startup by `applyDesktopWording()` in `desktopUi.ts`: whole sentences where the browser wording doesn't carry over ("shared with its other tabs"), then "this browser" to "this app". It never touches the editor, inputs or anything people typed. "Match this browser" for the language and paper guesses reads "Match this computer".
+
+## Offline preview
+
+On the web, the preview's generated document loads LaTeX.js's styles, fonts and `base.js` from jsDelivr (`latex.js@0.12.6`). The desktop app ships them instead, so the preview works with no network:
+
+- `npm run build:desktop` and `npm run dev:desktop` in `frontend/` run the normal scripts with `VITE_LATEXJS_ASSETS=bundled` (`scripts/with-bundled-latexjs.mjs`, so it works on Windows too). Then `scripts/latexjs-assets.mjs` copies `node_modules/latex.js/dist/{css,fonts,js}` (about 8 MB, mostly fonts) to `dist/latexjs/`, or serves them there in dev. The copied files are static files, not JS chunks, so the bundle budget doesn't count them, and the version is always the npm dependency's.
+- `latexJsAssetBase()` (`frontend/src/compile/latexJsAssets.ts`) is `/latexjs/` on the page's origin in that build and the CDN otherwise. It's read in the compile worker too, which is why it's a root path: the desktop page always sits at the root of its origin.
+- **CORS.** The preview frame is sandboxed without `allow-same-origin`, so its origin is opaque, and fonts always load with CORS. Tauri answers its own scheme with `Access-Control-Allow-Origin` set to the window's origin, which an opaque origin doesn't match. So `on_web_resource_request` in `src/lib.rs` sets `Access-Control-Allow-Origin: *` on responses under `/latexjs/` only, the same header jsDelivr sends. They're public static files. The dev server does the same for its copy.
+- **CSP.** No change. The files come from the app's own origin, which `'self'` already allows in every directive the preview uses, including `base-uri`. jsDelivr stays in the policy for the web build.
+- **Exports.** HTML export with Work offline inlines the styles from the app's copy. Without it, or if that fails, the saved file's links are moved to the jsDelivr URLs (`publicLatexJsUrl()`), since `tauri://localhost` means nothing outside the app.
+- **Why only the desktop build.** The website is online by definition, and jsDelivr's copy is cached across sites and served from a CDN near the reader; bundling would add 8 MB of fonts to every deploy for no gain there. The web build is byte-for-byte what it was, and `desktop/scripts/check-desktop-config.mjs` checks that the desktop build commands use `build:desktop` and `dev:desktop`.
 - The P2P protocol is the same code on both sides, so desktop and web peers meet in the same rooms. The `hello` handshake and `PROTOCOL_VERSION` (`docs/protocol.md`) cover a desktop app that's behind the website because its user hasn't updated.
 
 ## WebRTC in each webview
@@ -163,8 +188,8 @@ The builds are unsigned, so people see warnings:
 - **IPC in the CSP.** The opener goes through Tauri IPC, so the meta policy's `connect-src` has `ipc: http://ipc.localhost` (it means nothing on the web). `frontend/src/security/cspPolicy.test.ts` allows exactly those.
 - `withGlobalTauri` is off, and the asset protocol is off. The frontend imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads.
 - `freezePrototype` is off. Freezing `Object.prototype` breaks code that assigns over an inherited property (the "override mistake"), and LaTeX.js, pdf.js and CodeMirror haven't been tested with it.
-- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts.
-- **Links (follow-up):** open the other external links (docs, GitHub, Drive) in the system browser with the opener, which the app already has for room links, and block navigation away from the app inside the window.
+- **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview").
+- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the one permission, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
 
 ## Building locally
 
@@ -184,14 +209,14 @@ The builds are unsigned, so people see warnings:
    - check it on the three OSes against the #122 prototype list (open, edit, preview, join a room with a browser peer; startup time and memory against the browser);
    - Linux WebRTC;
    - Google sign-in;
-   - external links;
+   - external links (done, #181);
    - macOS menu keys;
    - signing.
 3. **Desktop 1.0:**
    - local folder projects;
    - the updater;
    - installers attached to every GitHub release;
-   - LaTeX.js and its fonts bundled so the preview works offline (today the preview loads them from jsDelivr, as on the web).
+   - LaTeX.js and its fonts bundled so the preview works offline (done, #181).
 4. **Later:** a real TeX engine in the native build (#43), and iOS and Android from the same Tauri project once the web layout works on phones and tablets (#123).
 
 ## Follow-up issues
@@ -204,4 +229,4 @@ These are listed in the PR that added this page, to be filed:
 - Desktop: a local folder storage provider.
 - Desktop: auto-updater, and installers attached to releases.
 - Desktop: macOS notarization and Windows code signing (maintainer setup).
-- Desktop: shell polish (external links in the browser, navigation lock, the macOS menu and Cmd+W, the web update card replaced in the app, offline preview assets).
+- Desktop: shell polish, #181 (external links in the browser, navigation lock, wording, offline preview assets: done). Still open: the macOS menu and Cmd+W, and the web update card replaced in the app.

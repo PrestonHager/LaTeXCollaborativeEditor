@@ -10,6 +10,7 @@ import { returnFocusOnClose } from '../ui/focusReturn';
 import { icon, keybindIcons } from '../ui/icons';
 import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
 import { describeError } from '../storage/errors';
+import { localPlace } from '../app/desktopShell';
 import type { ProjectSummary, StorageProvider } from '../storage/providers/types';
 import { cleanDisplayName, MAX_DISPLAY_NAME_LENGTH, type SettingsStore } from '../state/settings';
 import { emptyProfile, isEmptyProfile, type Profile, type ProfileField } from '../state/profile';
@@ -165,14 +166,20 @@ function fieldFor(def: PlaceholderDef, value: string): { row: HTMLElement; field
   return { row, field: { def, control } };
 }
 
+/** "this browser" on the web, "this app" in the desktop app (issue #181). */
+const here = () => localPlace();
+const Here = () => (here() === 'this app' ? 'This app' : 'This browser');
+/** The language and paper guesses follow the browser, or in the desktop app the computer's settings. */
+const matchLabel = () => (here() === 'this app' ? 'Match this computer' : 'Match this browser');
+
 const profileDefs = (): PlaceholderDef[] => [
   { key: 'name', label: 'Name', profile: 'name' },
   { key: 'affiliation', label: 'Affiliation', profile: 'affiliation', hint: 'University, company or group.' },
   { key: 'email', label: 'Email', profile: 'email' },
   { key: 'orcid', label: 'ORCID iD', profile: 'orcid', hint: 'Like 0000-0002-1825-0097.' },
   { key: 'address', label: 'Postal address', profile: 'address', multiline: true, hint: 'One line per line. Letters use it.' },
-  { key: 'language', label: 'Document language', profile: 'language', options: [{ value: '', label: 'Match this browser' }, ...PROFILE_LANGUAGES] },
-  { key: 'paper', label: 'Paper size', profile: 'paper', options: [{ value: '', label: 'Match this browser' }, ...PAPER_SIZES] },
+  { key: 'language', label: 'Document language', profile: 'language', options: [{ value: '', label: matchLabel() }, ...PROFILE_LANGUAGES] },
+  { key: 'paper', label: 'Paper size', profile: 'paper', options: [{ value: '', label: matchLabel() }, ...PAPER_SIZES] },
 ];
 
 /** The safe file name for a template .zip. */
@@ -182,7 +189,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
   const driveTemplates = createDriveTemplates(deps.drive);
   const localStore: TemplateStore = {
     source: 'local',
-    label: 'In this browser',
+    label: `In ${here()}`,
     provider: deps.local,
     list: () => deps.local.listTemplates(),
     create: (name) => deps.local.createTemplate(name),
@@ -224,7 +231,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
       'dialog-md',
       'profile',
       'Your profile',
-      'Templates fill in {{name}}, {{affiliation}} and the rest from these. Saved in this browser, and in your Google Drive Templates folder while Drive is connected. Never sent to people in your room.',
+      `Templates fill in {{name}}, {{affiliation}} and the rest from these. Saved in ${here()}, and in your Google Drive Templates folder while Drive is connected. Never sent to people in your room.`,
     );
     let touched = false;
     const fields: Field[] = [];
@@ -266,14 +273,14 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
       if (displayName) deps.settings.set('displayName', displayName);
       m.close();
       void syncWithDrive();
-      deps.notify(deps.drive.isSignedIn() ? 'Saved your profile in this browser and Google Drive.' : 'Saved your profile in this browser.');
+      deps.notify(deps.drive.isSignedIn() ? `Saved your profile in ${here()} and Google Drive.` : `Saved your profile in ${here()}.`);
     });
     clear.addEventListener('click', async () => {
       const ok = await deps.confirmDialog({
         title: 'Clear your profile?',
         message: deps.drive.isSignedIn()
-          ? 'This removes your details from this browser and deletes the copy in your Google Drive Templates folder. Projects you already made keep their text.'
-          : 'This removes your details from this browser. If you saved them to Google Drive before, connect Drive and clear again to delete that copy too.',
+          ? `This removes your details from ${here()} and deletes the copy in your Google Drive Templates folder. Projects you already made keep their text.`
+          : `This removes your details from ${here()}. If you saved them to Google Drive before, connect Drive and clear again to delete that copy too.`,
         confirmLabel: 'Clear profile',
         destructive: true,
       });
@@ -288,7 +295,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
         } catch (error) {
           deps.notify(`Cleared your profile here, but not in Google Drive: ${describeError(error)}`, true);
         }
-      } else deps.notify('Cleared your profile in this browser.');
+      } else deps.notify(`Cleared your profile in ${here()}.`);
     });
     (fields[0].control as HTMLElement).focus();
     // A newer profile from Drive fills the form, unless they've started typing.
@@ -336,7 +343,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
       local: el('div', { className: 'template-group' }),
       drive: el('div', { className: 'template-group' }),
     };
-    const groupTitles = { builtin: 'Built-in', local: 'My templates in this browser', drive: 'My templates in Google Drive' };
+    const groupTitles = { builtin: 'Built-in', local: `My templates in ${here()}`, drive: 'My templates in Google Drive' };
     for (const key of ['builtin', 'local', 'drive'] as const) {
       const heading = el('h3', { className: 'template-group-title', textContent: groupTitles[key] });
       groups[key].append(heading);
@@ -573,7 +580,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
       const store = storeFor(entry.summary.source);
       const ok = await deps.confirmDialog({
         title: `Delete ${entry.summary.name}?`,
-        message: store.source === 'drive' ? 'The template folder goes to your Google Drive trash. Projects made from it stay.' : 'This deletes the template from this browser. Projects made from it stay.',
+        message: store.source === 'drive' ? 'The template folder goes to your Google Drive trash. Projects made from it stay.' : `This deletes the template from ${here()}. Projects made from it stay.`,
         confirmLabel: 'Delete template',
         destructive: true,
       });
@@ -655,7 +662,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
         key: 'template_store',
         label: 'Save to',
         options: [
-          { value: 'local', label: 'This browser' },
+          { value: 'local', label: Here() },
           { value: 'drive', label: deps.drive.isSignedIn() ? 'Google Drive (Templates folder)' : 'Google Drive (connect it first)' },
         ],
       },
@@ -715,7 +722,7 @@ export function createTemplatesUi(deps: TemplatesUiDeps) {
         );
         m.close();
         const missing = skipped.length ? ` ${skipped.join(', ')} hadn't arrived yet, so ${skipped.length === 1 ? "it isn't" : "they aren't"} in it.` : '';
-        deps.notify(`Saved the template ${summary.name} ${store.source === 'drive' ? 'in your Google Drive Templates folder' : 'in this browser'}. Find it in File > New Project.${missing}`);
+        deps.notify(`Saved the template ${summary.name} ${store.source === 'drive' ? 'in your Google Drive Templates folder' : `in ${here()}`}. Find it in File > New Project.${missing}`);
       } catch (error) {
         save.disabled = false;
         save.textContent = 'Save template';

@@ -1,4 +1,4 @@
-import { isDesktopShell, openInSystemBrowser } from './desktopShell';
+import { isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
 
 describe('isDesktopShell', () => {
   it('sees the Tauri globals and nothing else', () => {
@@ -47,5 +47,13 @@ describe('openInSystemBrowser', () => {
     });
     await expect(openInSystemBrowser('https://example.com/', { __TAURI_INTERNALS__: { invoke } })).resolves.toBe(false);
     warn.mockRestore();
+  });
+});
+
+describe('localPlace', () => {
+  it('names where local data lives', () => {
+    expect(localPlace({ __TAURI_INTERNALS__: {} })).toBe('this app');
+    expect(localPlace({})).toBe('this browser');
+    expect(localPlace()).toBe('this browser');
   });
 });

@@ -4,6 +4,7 @@ import { defineConfig, loadEnv, searchForWorkspaceRoot, type Plugin } from 'vite
 import tailwindcss from '@tailwindcss/vite';
 import { changelogFilePlugin, deployEnvPlugin, resolveBuildInfo, versionJsonPlugin } from './scripts/build-info.mjs';
 import { addConnectSources, removeCspMeta } from './src/security/csp';
+import { bundledLatexJsPlugin } from './scripts/latexjs-assets.mjs';
 
 // The version, commit and build time go in the About dialog, the footer, the bug report form,
 // the P2P hello message and dist/version.json. package.json is the source of truth (docs/versioning.md).
@@ -53,6 +54,8 @@ export default defineConfig({
     versionJsonPlugin(buildInfo, () => deployEnv.api.env),
     changelogFilePlugin(CHANGELOG_PATH),
     cspPlugin(),
+    // Desktop build only: LaTeX.js styles and fonts in dist/latexjs/, for an offline preview (#181).
+    bundledLatexJsPlugin(APP_ROOT),
   ],
   build: {
     // scripts/check-bundle-size.mjs reads dist/.vite/manifest.json to find the initial-load graph.

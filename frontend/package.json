@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:desktop": "node scripts/with-bundled-latexjs.mjs dev",
     "build": "tsc && vite build && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
+    "build:desktop": "node scripts/with-bundled-latexjs.mjs build",
     "check:pages": "node scripts/check-build-pages.mjs",
     "preview": "vite preview",
     "test": "vitest",

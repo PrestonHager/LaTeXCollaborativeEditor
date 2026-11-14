@@ -4,7 +4,9 @@
 // - its version is frontend/package.json's;
 // - the Content-Security-Policy is the web one: Tauri adds no header of its own, and the bundled
 //   index.html still has the CSP <meta> tag (a desktop build must not use VITE_DISABLE_CSP=1);
-// - the window's only Tauri permission opens https links in the browser, and no remote origin gets any.
+// - the window's only Tauri permission opens https links in the browser, and no remote origin gets any;
+// - the build bundles LaTeX.js for an offline preview (build:desktop), and the shell builds the
+//   window itself so navigation away from the app is blocked and https links go to the browser.
 // Run with `npm run check` in desktop/. The desktop workflow runs it before building.
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,12 +27,30 @@ const conf = json(join(tauriDir, 'tauri.conf.json'));
 
 check(conf.version === '../../frontend/package.json', 'tauri.conf.json "version" must be "../../frontend/package.json", the one app version.');
 check(conf.build?.frontendDist === '../../frontend/dist', 'build.frontendDist must be "../../frontend/dist", the bundled web build.');
+// The desktop build ships LaTeX.js's styles and fonts, so the preview works offline (issue #181).
+check(
+  /\brun build:desktop\b/.test(conf.build?.beforeBuildCommand ?? ''),
+  'build.beforeBuildCommand must run "npm run build:desktop" in frontend/, which bundles the LaTeX.js assets.',
+);
+check(/\brun dev:desktop\b/.test(conf.build?.beforeDevCommand ?? ''), 'build.beforeDevCommand must run "npm run dev:desktop" in frontend/.');
 for (const window of conf.app?.windows ?? []) {
   const url = window.url ?? 'index.html';
   check(!/^[a-z][a-z0-9+.-]*:/i.test(url), `Window "${window.label}" must load a bundled page, not ${url}.`);
   // Changing this moves IndexedDB and localStorage on Windows, losing every local project (docs/desktop.md).
   check(window.useHttpsScheme === true, `Window "${window.label}" must keep "useHttpsScheme": true.`);
+  // src/lib.rs builds it, with the navigation guard and the CORS header for the LaTeX.js assets.
+  check(window.create === false, `Window "${window.label}" must have "create": false: src-tauri/src/lib.rs builds it with its link guards.`);
 }
+
+// The guards in src/lib.rs (docs/desktop.md, "Links"). A text check, since cargo needs WebKitGTK.
+const libRs = read(join(tauriDir, 'src', 'lib.rs'));
+check(/\.on_navigation\(/.test(libRs), 'src/lib.rs must keep the on_navigation guard that blocks leaving the app.');
+check(/\.on_new_window\([\s\S]*?NewWindowResponse::Deny/.test(libRs), 'src/lib.rs must keep denying new windows (https goes to the browser).');
+check(/fn open_https[\s\S]*?scheme\(\) != "https"/.test(libRs), 'src/lib.rs must only open https URLs in the browser.');
+check(
+  /ACCESS_CONTROL_ALLOW_ORIGIN/.test(libRs) && /const LATEXJS_PATH: &str = "\/latexjs\/";/.test(libRs),
+  'src/lib.rs may only widen CORS for the bundled LaTeX.js assets under /latexjs/.',
+);
 
 const security = conf.app?.security ?? {};
 check(security.csp === null, 'app.security.csp must stay null: the CSP <meta> tag in frontend/index.html is the policy (docs/desktop.md, Security).');
@@ -63,4 +83,4 @@ if (errors.length) {
   process.exit(1);
 }
 const version = json(join(repo, 'frontend', 'package.json')).version;
-console.log(`Desktop config OK: version ${version}, bundled frontend, web CSP, only the https opener.`);
+console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, only the https opener, links guarded.`);

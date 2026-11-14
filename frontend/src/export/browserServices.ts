@@ -1,5 +1,5 @@
 import { CompileScheduler } from '../compile/compileScheduler';
-import { LATEX_JS_ASSET_BASE } from '../compile/latexJsAssets';
+import { LATEX_JS_ASSET_BASE, latexJsAssetBase } from '../compile/latexJsAssets';
 import type { ExportServices } from './types';
 
 /**
@@ -16,9 +16,12 @@ const PRINT_FRAME_LIFETIME_MS = 10 * 60 * 1000;
 
 const abortError = () => new DOMException('Export canceled', 'AbortError');
 
-/** Only the LaTeX.js assets the preview already loads may be fetched, so an export never calls anywhere else. */
-export function isBundleableAsset(url: string): boolean {
-  return url.startsWith(LATEX_JS_ASSET_BASE);
+/**
+ * Only the LaTeX.js assets the preview already loads may be fetched, so an export never calls
+ * anywhere else: the CDN copy, or the app's own copy in the desktop build.
+ */
+export function isBundleableAsset(url: string, base = latexJsAssetBase()): boolean {
+  return url.startsWith(LATEX_JS_ASSET_BASE) || url.startsWith(base);
 }
 
 /**
