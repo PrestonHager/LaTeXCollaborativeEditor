@@ -497,6 +497,10 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
+// The Compile PDF asset cache (#241), its own chunk. Only Settings and Compile PDF load it.
+const texAssetCacheModule = lazyModule(() => import('./compile/pdf/texAssetCache'));
+const loadTexAssetCache = async () => (await texAssetCacheModule.get()).browserTexAssetCache();
+
 // Loads on first use, or with the other dialogs once the page is idle (see preloadDialogs).
 const conflictDialog = lazyModule(() =>
   import('./ui/conflictDialog').then(({ createConflictDialog }) => createConflictDialog(document.getElementById('conflict-dialog') as HTMLDialogElement)),
@@ -1336,6 +1340,11 @@ const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettin
   onExportSettings: () => localDownload.download(settingsFileName(), settings.exportJson(), 'application/json'),
   onImportSettings: (file) => importSettingsFile(settings, file),
   onResetSettings: (scope) => resetSettings(settings, scope),
+  // The Compile PDF engine files (#241). The cache code is its own chunk, loaded when Settings opens.
+  texAssets: {
+    usage: async () => (await loadTexAssetCache())?.usage() ?? { bytes: 0, files: 0 },
+    remove: async () => (await loadTexAssetCache())?.remove(),
+  },
 }, document.getElementById('settings-keybinds')!, {
   keymap,
   contextLabel: () => describeKeyContext(keyContext.current()),

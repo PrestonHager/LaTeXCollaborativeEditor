@@ -34,7 +34,20 @@ type SettingsDialogOptions = {
   onImportSettings?: (file: File) => Promise<string>;
   /** Put settings back to their defaults. Returns a message saying what happened. */
   onResetSettings?: (scope: ResetScope) => string;
+  /**
+   * The Compile PDF engine files stored in this browser (issue #241): how much they take and a
+   * way to remove them. Both load the asset cache on demand, so the dialog stays small.
+   */
+  texAssets?: { usage(): Promise<{ bytes: number; files: number }>; remove(): Promise<void> };
 };
+
+/** "12.3 MB", for download and storage sizes. */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1000) return `${bytes} B`;
+  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`;
+  if (bytes < 1_000_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
+}
 
 // How long Reset waits for the second click before it lets go.
 const RESET_CONFIRM_MS = 5000;
@@ -58,6 +71,47 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
   const resetButton = find<HTMLButtonElement>('#settings-reset');
   const dataStatus = find<HTMLElement>('#settings-data-status');
   const storageNote = find<HTMLElement>('#settings-storage-note');
+  // Only shows once something was downloaded, so nobody sees a setting for a feature they haven't used.
+  const texAssetsRow = find<HTMLElement>('#settings-tex-assets-row');
+  const texAssets = find<HTMLElement>('#settings-tex-assets');
+  const texAssetsRemove = find<HTMLButtonElement>('#settings-tex-assets-remove');
+
+  // Each look-up gets a number, so a slow one can't overwrite a newer answer.
+  let texAssetsSeq = 0;
+  const showTexAssets = async () => {
+    const seq = ++texAssetsSeq;
+    if (!options.texAssets) {
+      texAssets.textContent = 'Not downloaded';
+      texAssetsRemove.hidden = true;
+      return;
+    }
+    try {
+      const { bytes, files } = await options.texAssets.usage();
+      if (seq !== texAssetsSeq) return;
+      texAssets.textContent = files ? `${formatBytes(bytes)} stored in this browser` : 'Not downloaded';
+      texAssetsRemove.hidden = files === 0;
+      // Stays up after Remove, so the person sees it worked.
+      if (files) texAssetsRow.hidden = false;
+    } catch {
+      if (seq !== texAssetsSeq) return;
+      texAssets.textContent = "Couldn't check";
+      texAssetsRemove.hidden = true;
+    }
+  };
+  texAssetsRemove.addEventListener('click', () => {
+    if (!options.texAssets) return;
+    texAssetsRemove.disabled = true;
+    void options.texAssets
+      .remove()
+      .then(
+        () => say('Removed the Compile PDF engine files. Compile PDF asks before downloading them again.'),
+        () => say("Couldn't remove the Compile PDF engine files."),
+      )
+      .finally(() => {
+        texAssetsRemove.disabled = false;
+        void showTexAssets();
+      });
+  });
 
   const close = () => {
     // NOTE: jsdom has no dialog methods, so fall back to the open attribute there.
@@ -146,6 +200,8 @@ export function createSettingsDialog(dialog: HTMLDialogElement, options: Setting
     say('');
     disarm();
     options.onOpen?.();
+    texAssetsRow.hidden = true;
+    void showTexAssets();
     focusReturn.remember();
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
