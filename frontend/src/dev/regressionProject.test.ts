@@ -23,6 +23,7 @@ describe('regressionProject', () => {
       'main.tex',
       'refs.bib',
       ...['abbrv', 'alpha', 'apalike', 'biblatex', 'citations', 'ieeetr', 'natbib', 'unknown', 'unsrt'].map((name) => `styles/${name}.tex`),
+      'unsupported-packages.tex',
     ]);
   });
 
@@ -99,8 +100,23 @@ describe('regressionProject', () => {
       const result = projectToPreviewHtml({ mainPath, texts, binaryPaths, imageUrls: new Map() });
       expect(result.html, mainPath).toContain('References');
       expect(result.missing, mainPath).toEqual([]);
-      expect(result.errors.map((error) => error.severity), mainPath).toEqual(mainPath === 'styles/unknown.tex' ? ['warning', 'info'] : []);
+      // natbib and biblatex get a package note too, from the \usepackage that picks the style.
+      const bibliography = result.errors.filter((error) => !error.message.includes(' package.'));
+      expect(bibliography.map((error) => error.severity), mainPath).toEqual(mainPath === 'styles/unknown.tex' ? ['warning', 'info'] : []);
     }
+  });
+
+  it('compiles unsupported-packages.tex with a note on each package line and the tikz warning', async () => {
+    const content = await regressionProject(new BlobStore());
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    const result = projectToPreviewHtml({ mainPath: 'unsupported-packages.tex', texts, binaryPaths: [], imageUrls: new Map() });
+    expect(result.html).toContain('The preview still shows this text');
+    expect(result.errors.map((error) => [error.path, error.line, error.severity])).toEqual([
+      ['unsupported-packages.tex', 5, 'info'],
+      ['unsupported-packages.tex', 7, 'warning'],
+      ['unsupported-packages.tex', 10, 'info'],
+    ]);
+    expect(result.errors[1].message).toContain('tikzpicture');
   });
 });
 

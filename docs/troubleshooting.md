@@ -109,7 +109,7 @@ Things to try:
 - If the error is in another file, open that file from the Files panel.
 - If the footer says **Not found in the project**, check the path in `\input`, `\includegraphics`, or `\bibliography`. Paths are relative to the project root, and folders use `/`.
 - If an image file is there but the preview shows a note instead, it might be a PDF or EPS. The preview can't show those yet. Use PNG, JPG, or SVG.
-- If a package isn't supported, try the preview without it, or wrap package-specific code so it only runs in real LaTeX.
+- If a package isn't supported, its `\usepackage` line has a warning that says what's missing. Try the preview without it, or wrap package-specific code so it only runs in real LaTeX. See [Packages](editing-and-preview.md#packages).
 - If the compile pill says **No main file**, click the star next to the `.tex` file that has `\documentclass`.
 - Use **View > Compile Now** (**Ctrl+Enter**) to force a fresh preview.
 

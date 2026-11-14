@@ -80,6 +80,8 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
 /**
  * Typeset LaTeX into a document, with dangerous URLs stripped. `changes` lists what the adapter
  * removed or rewrote; the preview pane shows it next to the preview, not inside the document.
+ * `errors` has the parse error first, if there is one, then a note for each package the preview
+ * couldn't load.
  */
 function typeset(
   source: string,
@@ -99,11 +101,11 @@ function typeset(
     markPageBreaks(doc);
     addKatexFontFallbacks(doc);
     insertVerbatimBlocks(doc, blocks);
-    return { doc, errors: [], changes };
+    return { doc, errors: adapted.diagnostics, changes };
   } catch (err) {
     return {
       doc: null,
-      errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }],
+      errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }, ...adapted.diagnostics],
       changes,
     };
   }
@@ -160,7 +162,7 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
   const expanded = expandProjectSource(input.mainPath, verbatim.texts, input.binaryPaths);
   expanded.missing.push(...verbatim.missing.filter((name) => !expanded.missing.includes(name)));
   const { doc, errors: sourceErrors, changes } = typeset(expanded.source, verbatim.blocks, verbatim.changes);
-  // LaTeX.js errors come first, since they stop the preview. Bibliography notes follow.
+  // LaTeX.js errors come first, since they stop the preview. Package and bibliography notes follow.
   const errors: ProjectDiagnostic[] = [
     ...sourceErrors.map((error) => {
       const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };

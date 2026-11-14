@@ -80,8 +80,6 @@ const SETUP_COMMANDS: Record<string, number> = {
   NewTCBListing: 3,
 };
 
-const STAND_IN_PACKAGES = new Set(['listings', 'minted', 'fancyvrb', 'alltt', 'verbatim', 'comment']);
-
 // Quick check for anything this file handles, so most files skip the scan.
 const VERBATIM_HINT =
   /\\(?:begin|verb|Verb|lst|mint|inputminted|newminted|setminted|usemintedstyle|fvset|DefineVerbatim|CustomVerbatim|RecustomVerbatim|newtcblisting|renewtcblisting|DeclareTCBListing|NewTCBListing|listoflistings|(?:re)?newenvironment)/;
@@ -457,14 +455,6 @@ function rewriteFile(source: string, ctx: Context): string {
         i = file.end;
         continue;
       }
-    }
-
-    // The packages this file stands in for. LaTeX.js can't load them and logs an error for each.
-    const usepackage = at(/\\usepackage\s*(?:\[[^\]]*]\s*)?\{([^{}]*)\}/y);
-    if (usepackage && usepackage[1].split(',').every((name) => STAND_IN_PACKAGES.has(name.trim()))) {
-      out += keepLineBreaks(usepackage[0]);
-      i += usepackage[0].length;
-      continue;
     }
 
     // Setup commands LaTeX.js would stop at.
