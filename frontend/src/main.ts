@@ -7,7 +7,6 @@ import { createMenuBar, type CommandId } from './ui/menuBar';
 import { renderStaticIcons } from './ui/icons';
 import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
-import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
 import { attachTouchTooltips } from './ui/longPress';
 import { renderFooterVersion } from './ui/footerVersion';
@@ -16,7 +15,7 @@ import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
 import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyShareButton, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { lazyAboutDialog, lazyCommandPalette, lazyDialogs, lazyFileViewer, lazyProjectsDialog, lazySettings, lazyShareButton, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -46,7 +45,6 @@ import { createPreviewChanges, previewChangesElements } from './ui/previewChange
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
-import { confirmDialog, noticeDialog, promptDialog } from './ui/dialogs';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
 import { isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
@@ -71,6 +69,8 @@ import { completionProjectFrom } from './ui/completionProject';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
+// Confirm, prompt and notice dialogs load on first use (issue #231). See lazyDialogs for a failed load.
+const { confirmDialog, promptDialog, noticeDialog, preload: preloadAppDialogs } = lazyDialogs((feature, error) => lazyLoadFailed(feature, error));
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
@@ -616,9 +616,10 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const fileViewer = createFileViewer(document.getElementById('file-viewer')!, {
+// Loads on the first binary file opened, or when the browser is idle (issue #231).
+const fileViewer = lazyFileViewer(document.getElementById('file-viewer')!, {
   onDownload: (path) => void downloadFile(path),
-});
+}, lazyLoadFailed);
 
 /**
  * A rename or delete redraws the file tree, which drops the button the dialog gave focus back to.
@@ -1368,10 +1369,13 @@ const preloadDialogs = () => {
   conflictDialog.preload();
   templates.preload();
   driveProvider.preload();
+  preloadAppDialogs();
+  fileViewer.preload();
 };
 preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
 preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);
 whenIdle(preloadDialogs);
+whenIdle(() => void menuBar.loadIcons());
 
 // The empty states have their own buttons for the next step, like New file.
 document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #preview-empty [data-command]').forEach((button) => {

@@ -165,16 +165,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .status-badges .pill { gap: 0.3rem; }
 .muted { color: var(--muted-text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .share-link { color: var(--link-text); text-decoration: underline; }
-/* The Share popover (issue #224): a popover card, like the preview-changes one (docs/ui-sizing.md). */
 .share-menu { display: inline-flex; }
-.share-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; margin-top: 0.25rem; padding: 0.75rem 1rem; display: grid; gap: 0.5rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
-.share-popover-title { margin: 0; font-size: 1rem; font-weight: 600; }
-.share-popover-view { display: grid; gap: 0.5rem; }
-.share-popover-view[hidden] { display: none; }
-.share-popover-points { margin: 0; padding-left: 1.1rem; list-style: disc; display: grid; gap: 0.2rem; color: var(--muted-text); }
-.share-popover-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.share-popover-actions [hidden] { display: none; }
-.share-popover .share-link { overflow-wrap: anywhere; font-size: 12px; }
 /* Who's in the room (issue #22). Avatars are 32px like Basecoat's sm buttons, 44px on touch screens (docs/ui-sizing.md).
    Every peer colour has 4.5:1 or more against the white initials (collab/presence.ts). */
 .presence-bar { display: inline-flex; align-items: center; gap: 0.25rem; }
@@ -219,17 +210,6 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .menu-item-label { flex: 1; text-align: left; }
 .menu-item-indicator { display: inline-flex; }
 .menu-item-shortcut { color: var(--muted-text); font-size: 12px; }
-
-/* Hover preview card for menu items and toolbar buttons (#89, ui/hoverPreview.ts). It ignores the pointer, so it never
-   catches a hover or click. The pictures' own styles load with them (ui/hoverPreviewMocks.css). */
-.hover-preview { position: fixed; z-index: 380; width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); padding: 0.75rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; pointer-events: none; }
-.hover-preview[hidden] { display: none; }
-.hover-preview-header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-.hover-preview-title { font-weight: 600; }
-.hover-preview-shortcut { color: var(--muted-text); font-family: inherit; font-size: 12px; }
-.hover-preview-text { margin: 0; color: var(--muted-text); }
-/* The card has the tooltip's text and more, so don't show both. */
-[data-hover-preview]::before, [data-hover-preview]::after { display: none; }
 
 /*
  * Dialog and popover size scale (#141). docs/ui-sizing.md says which size each kind of dialog uses.
@@ -293,62 +273,10 @@ body.is-resizing { cursor: col-resize; user-select: none; }
   .dialog.dialog-lg .changelog-body { max-height: none; }
 }
 
-/* Command palette. Basecoat styles the box, we handle the overlay since it isn't a <dialog>. */
+/* Command palette overlay. It isn't a <dialog>, so these keep its markup hidden until it opens; the rest is in ui/commandPalette.css. */
 .command-palette-overlay { position: fixed; inset: 0; display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; background: rgb(0 0 0 / 0.4); backdrop-filter: blur(2px); z-index: 50; }
 .command-palette-overlay.is-open { display: flex; }
-.command-palette { width: min(var(--dialog-palette), calc(100vw - var(--viewport-gutter))); border: 1px solid var(--panel-border); box-shadow: 0 18px 40px rgb(0 0 0 / 0.35); }
-.command-palette-list { max-height: 48vh; }
-/* We render our own empty message, so hide Basecoat's built-in one. */
-.command-palette .command-palette-list::before { display: none; }
-.command-palette-main { flex: 1; min-width: 0; display: flex; flex-direction: column; text-align: left; }
-.command-palette-description { font-size: 12px; color: var(--muted-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.command-palette-item.active .command-palette-description { color: inherit; opacity: 0.8; }
-.command-palette-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.75rem; border-top: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); }
-.command-palette-empty { color: var(--muted-text); padding: 1.5rem 0.65rem; font-size: 13px; text-align: center; }
 
-/* Settings dialog (dialog-lg). Basecoat handles the box, we lay out the rows. The body scrolls like every dialog's. */
-.settings-dialog-body { display: grid; gap: 1rem; }
-/*
- * Wide windows: two columns. Appearance, saving, Drive, profile and "Your settings" on the left; keyboard
- * shortcuts on the right, since that list is the tall part. The last row (1fr) takes up the
- * extra height of the shortcuts column, so the left rows stay packed at the top.
- */
-@media (min-width: 64rem) {
-  .settings-dialog-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); grid-template-rows: repeat(6, auto) 1fr; column-gap: 2rem; align-content: start; }
-  .settings-dialog-body > * { grid-column: 1; }
-  .settings-dialog-body > .settings-keybinds { grid-column: 2; grid-row: 1 / -1; align-content: start; padding-left: 2rem; border-left: 1px solid var(--border); }
-  .settings-dialog-body .keybind-list { max-height: 22rem; }
-}
-.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-label.settings-row { justify-content: flex-start; }
-.settings-dialog footer { justify-content: space-between; align-items: center; }
-.settings-keybinds { display: grid; gap: 0.5rem; min-width: 0; }
-.settings-keybinds h3 { margin: 0; }
-.settings-data { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; min-width: 0; }
-.settings-data h3 { margin: 0; }
-.settings-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-#settings-storage-note { color: var(--destructive, inherit); }
-.settings-hint { margin: 0; max-width: none; font-size: 0.8125rem; white-space: normal; overflow: visible; text-overflow: clip; }
-.keybind-search { width: 100%; height: 2rem; padding: 0 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: 0.875rem; }
-.keybind-search:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.keybind-list { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-md); }
-.keybind-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.25rem 0.75rem; padding: 0.375rem 0.5rem; border-bottom: 1px solid var(--border); }
-.keybind-row:last-child { border-bottom: 0; }
-.keybind-name { display: flex; flex-direction: column; font-size: 0.875rem; min-width: 0; }
-.keybind-section { font-size: 0.75rem; color: var(--muted-foreground); }
-.keybind-chips { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.25rem; }
-.keybind-chip { display: inline-flex; align-items: center; gap: 0.125rem; padding-left: 0.375rem; border: 1px solid var(--border); border-radius: calc(var(--radius-md) - 2px); background: var(--muted); font-size: 0.8125rem; }
-.keybind-chip kbd { font-family: inherit; white-space: nowrap; }
-.keybind-chip[data-source="rule"] { border-color: var(--primary); }
-.keybind-chip[data-off] { background: transparent; color: var(--muted-foreground); }
-.keybind-chip[data-off] kbd { text-decoration: line-through; }
-.keybind-chip .keybind-chip-button { height: 1.5rem; min-width: 1.5rem; width: auto; padding: 0 0.25rem; font-size: 0.75rem; }
-.keybind-recorder { font-size: 0.8125rem; }
-.keybind-notes { list-style: none; margin: 0; padding: 0; width: 100%; display: grid; gap: 0.125rem; }
-.keybind-note { display: flex; align-items: flex-start; gap: 0.375rem; font-size: 0.75rem; line-height: 1.25rem; color: var(--muted-foreground); }
-.keybind-note > svg { color: var(--destructive); flex: none; margin-top: 0.25rem; }
-.keybind-note .btn { height: auto; padding: 0; margin-left: 0.375rem; font-size: 0.75rem; vertical-align: baseline; }
-.keybind-empty { padding: 0.5rem; font-size: 0.875rem; }
 .about-dialog-body { display: grid; gap: 0.5rem; font-size: 14px; }
 #about-version a { color: var(--link-text); text-decoration: underline; text-underline-offset: 2px; }
 .about-links { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem; }
@@ -383,16 +311,6 @@ label.settings-row { justify-content: flex-start; }
 .app-dialog-error { margin: 0; font-size: 0.8125rem; color: var(--destructive); overflow-wrap: anywhere; }
 .app-dialog-error[hidden] { display: none; }
 .app-dialog-error .app-dialog-suggest { height: auto; padding: 0; vertical-align: baseline; font-size: inherit; font-weight: 500; white-space: normal; text-align: start; color: var(--foreground); text-decoration: underline; text-underline-offset: 2px; }
-
-/* First-run tour card. tour.ts sets top and left next to the part it's pointing at. */
-/* Narrower gutter than dialogs: tour.ts keeps the card 0.75rem from the window edge. */
-.tour { position: fixed; z-index: 400; width: min(var(--popover-card), calc(100vw - 1.5rem)); padding: 1rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
-.tour-count { margin: 0; font-size: 12px; color: var(--muted-text); }
-.tour-title { margin: 0; font-size: 1rem; font-weight: 600; }
-.tour-body { margin: 0; font-size: 14px; }
-.tour-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem; }
-.tour-buttons { display: inline-flex; gap: 0.25rem; margin-left: auto; }
-.tour-highlight { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--radius-sm); }
 
 /* "New version" prompt: a small card in the bottom corner, styled like the tour card but out of the way. */
 .update-prompt { position: fixed; z-index: 390; right: 0.75rem; bottom: 2.5rem; width: min(var(--popover-card), calc(100vw - 1.5rem)); padding: 0.75rem 1rem; display: grid; gap: 0.35rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 18px 40px rgb(0 0 0 / 0.3); }
@@ -433,12 +351,7 @@ label.settings-row { justify-content: flex-start; }
 .editor-pane > .editor { flex: 1; min-height: 0; height: auto; }
 .editor-pane.is-viewing > .editor, .editor-pane.is-empty > .editor { display: none; }
 .editor-empty { flex: 1; border: 0; }
-/* LaTeX key bar (#189): touch devices only, pinned above the on-screen keyboard while the editor has focus. */
 :root { --touch-key-bar-height: 3rem; }
-.touch-key-bar { position: fixed; left: 0; right: 0; bottom: var(--keyboard-inset, 0px); z-index: 300; display: flex; gap: 0.25rem; height: var(--touch-key-bar-height); padding: 0.125rem 0.5rem; overflow-x: auto; border-top: 1px solid var(--panel-border); background: var(--bg); }
-.touch-key-bar[hidden] { display: none; }
-.touch-key { flex: 1 0 2.75rem; min-width: 2.75rem; height: 2.75rem; padding: 0; border: 1px solid var(--panel-border); border-radius: var(--radius-md, 0.375rem); background: var(--surface); color: inherit; font-family: var(--font-mono); font-size: 1.125rem; touch-action: manipulation; }
-.touch-key:active { background: var(--surface-3); }
 .has-touch-key-bar #app { padding-bottom: var(--touch-key-bar-height); }
 
 /* Preview pane: a small bar on top, then the preview frame, or an empty state when there's no main file. */
@@ -492,34 +405,6 @@ label.settings-row { justify-content: flex-start; }
 .project-item { width: 100%; text-align: left; }
 .project-item:hover { background: var(--surface-3); }
 .projects-dialog footer, .upload-dialog footer { justify-content: space-between; }
-
-/* Export dialog. exportDialog.ts fills the Format and Save to menus and the options. */
-.export-dialog-body { display: grid; gap: 1rem; min-width: 0; }
-.export-pickers { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0.75rem; }
-.export-field { display: grid; gap: 0.5rem; min-width: 0; }
-.export-field .select { width: 100%; }
-.export-format-info { display: flex; align-items: flex-start; gap: 0.625rem; padding: 0.5rem 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--muted); }
-.export-format-icon { flex: none; margin-top: 0.15rem; color: var(--muted-foreground); }
-.export-format-body { display: grid; gap: 0.125rem; min-width: 0; }
-.export-destination-info { display: grid; gap: 0.5rem; }
-.export-destination-info[hidden], .export-folder[hidden], .export-option-hint[hidden] { display: none; }
-.export-folder { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; font-size: 0.8125rem; }
-.export-folder-label { min-width: 0; overflow-wrap: anywhere; }
-.export-note a { text-decoration: underline; }
-.export-format-badge { font-size: 0.6875rem; font-weight: 400; vertical-align: middle; }
-.export-format-description, .export-option-hint { font-size: 0.8125rem; color: var(--muted-foreground); margin: 0; white-space: normal; }
-.export-format-status { font-size: 0.75rem; color: var(--muted-foreground); }
-.export-format-status.is-error, .export-note.is-error { color: var(--diag-text); }
-.export-options { display: grid; gap: 0.5rem; }
-.export-options[hidden] { display: none; }
-.export-option { flex-wrap: wrap; }
-.export-option .export-option-hint { flex-basis: 100%; }
-.export-note { margin: 0; font-size: 0.8125rem; }
-.export-progress { display: grid; gap: 0.25rem; font-size: 0.8125rem; }
-.export-progress[hidden] { display: none; }
-.export-progress progress { width: 100%; }
-.export-dialog footer { justify-content: space-between; align-items: center; }
-.export-actions { display: inline-flex; gap: 0.5rem; }
 
 /* Split view. */
 .split { flex: 1; min-width: 0; display: grid; grid-template-columns: 50% 8px 50%; min-height: 0; }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createHoverPreview, HOVER_PREVIEW_DELAY_MS, type MockRenderer } from './hoverPreview';
+import { createHoverPreview, HOVER_PREVIEW_DELAY_MS, replayHover, type MockRenderer } from './hoverPreview';
 import type { CommandId } from './menuBar';
 
 const pointer = (el: Element, type: string, pointerType = 'mouse') => {
@@ -330,5 +330,32 @@ describe('hover preview', () => {
     // Attaching twice doesn't double up.
     preview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
     preview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
+  });
+});
+
+describe('replayHover', () => {
+  it('sends pointerenter again to the button under the pointer', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<button data-command="a"></button><button data-command="b"></button>';
+    const [first, second] = Array.from(root.querySelectorAll('button'));
+    const entered = vi.fn();
+    second.addEventListener('pointerenter', entered);
+    first.addEventListener('pointerenter', entered);
+    vi.spyOn(root, 'querySelector').mockImplementation((selector: string) => (selector === 'button[data-command]:hover' ? second : null));
+    const hadPointerEvent = typeof PointerEvent === 'function';
+    if (!hadPointerEvent) vi.stubGlobal('PointerEvent', class extends MouseEvent { pointerType: string; constructor(type: string, init: PointerEventInit = {}) { super(type, init); this.pointerType = init.pointerType ?? ''; } });
+    replayHover(root, 'button[data-command]');
+    expect(entered).toHaveBeenCalledTimes(1);
+    expect((entered.mock.calls[0][0] as PointerEvent).pointerType).toBe('mouse');
+    vi.unstubAllGlobals();
+  });
+
+  it('does nothing when nothing is hovered or :hover is unsupported', () => {
+    const root = document.createElement('div');
+    expect(() => replayHover(root, 'button')).not.toThrow();
+    vi.spyOn(root, 'querySelector').mockImplementation(() => {
+      throw new SyntaxError('bad selector');
+    });
+    expect(() => replayHover(root, 'button')).not.toThrow();
   });
 });

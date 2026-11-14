@@ -1,4 +1,5 @@
 import type { CommandId } from './menuBar';
+import './hoverPreview.css';
 
 /** Draws a small picture of what a command does, or null when a picture wouldn't help. */
 export type MockRenderer = (commandId: CommandId) => HTMLElement | null;

@@ -13,6 +13,8 @@ import type { createProjectsDialog } from '../ui/projectsDialog';
 import type { createUploadDialog } from '../ui/uploadDialog';
 import type { createAboutDialog } from '../ui/aboutDialog';
 import type { setupShareButton } from '../ui/shareButton';
+import type { createFileViewer, ViewerFile } from '../ui/fileViewer';
+import type { ConfirmOptions, NoticeOptions, PromptOptions } from '../ui/dialogs';
 import type { TemplatesUiDeps } from '../templates/templatesUi';
 import type { BuildInfo } from './buildInfo';
 import type { ProjectSummary } from '../storage/providers/types';
@@ -185,5 +187,78 @@ export function lazyShareButton(
   return {
     copyOrOpen: () => withInstance(share.get, 'Sharing', onError, (instance) => instance.copyOrOpen()),
     preload: share.preload,
+  };
+}
+
+/**
+ * The in-app confirm, prompt and notice dialogs (ui/dialogs.ts, issue #231). They're already
+ * promises, so these wait for the code and then show the dialog. If it can't load, onError says so
+ * and the dialog counts as cancelled: confirm gives false and prompt null, so nothing destructive runs.
+ */
+export function lazyDialogs(onError: LazyLoadError, deps: Loader<typeof import('../ui/dialogs')> = {}) {
+  const dialogs = lazyModule(deps.load ?? (() => import('../ui/dialogs')));
+  const run = <T>(cancelled: T, show: (module: typeof import('../ui/dialogs')) => Promise<T>): Promise<T> =>
+    dialogs.get().then(show, (error: unknown) => {
+      onError('The dialog', error);
+      return cancelled;
+    });
+  return {
+    confirmDialog: (options: ConfirmOptions) => run(false, (module) => module.confirmDialog(options)),
+    promptDialog: (options: PromptOptions) => run<string | null>(null, (module) => module.promptDialog(options)),
+    noticeDialog: (options: NoticeOptions) => run<void>(undefined, (module) => module.noticeDialog(options)),
+    preload: dialogs.preload,
+  };
+}
+
+
+/**
+ * The viewer for images, PDFs and other binary files (issue #231). Until it loads, only the latest
+ * show or hide is kept, and it runs once the code is in, so the viewer always ends up showing the
+ * file that's open now.
+ */
+export function lazyFileViewer(
+  root: HTMLElement,
+  options: Parameters<typeof createFileViewer>[1],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/fileViewer')> = {},
+) {
+  type Viewer = ReturnType<typeof createFileViewer>;
+  const viewer = lazyModule(() => (deps.load ?? (() => import('../ui/fileViewer')))().then(({ createFileViewer }) => createFileViewer(root, options)));
+  let pending: ((instance: Viewer) => void) | null = null;
+  let loading = false;
+  const load = () => {
+    loading = true;
+    viewer.get().then(
+      (loaded) => {
+        loading = false;
+        const next = pending;
+        pending = null;
+        next?.(loaded);
+      },
+      (error: unknown) => {
+        loading = false;
+        onError('The file viewer', error, () => {
+          if (!loading && pending) load();
+        });
+      },
+    );
+  };
+  const run = (use: (instance: Viewer) => void) => {
+    const instance = viewer.current();
+    if (instance) {
+      use(instance);
+      return;
+    }
+    pending = use;
+    if (!loading) load();
+  };
+  return {
+    show: (file: ViewerFile) => run((instance) => instance.show(file)),
+    hide: () => {
+      // Nothing to hide before the viewer has shown anything.
+      if (!viewer.current() && pending === null) return;
+      run((instance) => instance.hide());
+    },
+    preload: viewer.preload,
   };
 }

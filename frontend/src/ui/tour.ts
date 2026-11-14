@@ -1,4 +1,5 @@
 import type { CommandId } from './menuBar';
+import './tour.css';
 
 /** Whether this person has seen the tour. Settings keeps the flag (see state/settings.ts). */
 export type TourSeen = { has: () => boolean; mark: () => void };

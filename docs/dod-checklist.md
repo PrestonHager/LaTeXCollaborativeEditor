@@ -153,6 +153,7 @@ A box above is only checked when it was actually seen working.
 - Bundle size: verified locally after the initial-load trim, which lowered the budget from 250 kB to 225 kB.
   `npm run build` reported an initial load of 208.6 kB gzip, down from 241.8 kB (index.html 9.8 kB, entry JS 180.7 kB, CSS 15.7 kB, shared helpers 2.4 kB).
   The biggest lazy chunks are the compile worker (191.4 kB gzip) and the P2P transport with Trystero (22.6 kB gzip), which loads on the first join or when the pointer reaches Share.
+  Issue #231 brought it from 224.8 kB back to 214.8 kB without changing the budget, by moving the Google Drive provider, the Share popover, hover cards, menu icons, app dialogs, file viewer, touch key bar and their CSS into lazy chunks (see `docs/deployment.md`).
 - Load time: verified locally with `npm run test:load-time`.
   At 10 Mbps and a 50 ms round trip the editor was interactive in a median of 480 ms after the trim, against 576 ms for the same machine before it (986 ms against 1161 ms with 4x CPU slowdown).
 - UI: failed.

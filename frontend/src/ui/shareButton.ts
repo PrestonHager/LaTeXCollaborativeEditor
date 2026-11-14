@@ -1,3 +1,4 @@
+import './shareButton.css';
 /** The parts of the Share popover in index.html. */
 export type ShareElements = {
   /** Wraps the button and the popover, so clicks and focus inside it don't close it. */

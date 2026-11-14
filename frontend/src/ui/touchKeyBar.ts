@@ -1,5 +1,5 @@
 import { EditorView } from '@codemirror/view';
-import { COARSE_POINTER } from './editor';
+import './touchKeyBar.css';
 
 /**
  * On phones and tablets: a bar of LaTeX keys above the on-screen keyboard, and keeping the
@@ -26,6 +26,9 @@ export const TOUCH_KEYS: ReadonlyArray<{ text: string; label: string }> = [
 const CURSOR_MARGIN = 24;
 /** A keyboard is open when it covers more than this many pixels. Smaller gaps are browser toolbars. */
 const KEYBOARD_THRESHOLD = 80;
+// The same query editor.ts uses to decide whether to load this module. Not imported from there, so
+// this lazy chunk doesn't import from the initial bundle (issue #231).
+const COARSE_POINTER = '(pointer: coarse)';
 
 /**
  * Put `text` in place of the selection as if it was typed. It's a normal editor transaction, so
