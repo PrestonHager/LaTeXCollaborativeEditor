@@ -3,8 +3,27 @@
 ## Editor
 
 The editor is made for LaTeX source.
-It has syntax highlighting, line numbers, bracket matching, and auto-closing brackets.
+It has syntax highlighting, line numbers, bracket matching, auto-closing brackets, and autocompletion.
 **Tab** indents the line.
+
+### Autocompletion
+
+Type `\` and the start of a command, and a list of matching commands shows under the cursor, each with its arguments and what it does.
+Type `\begin{` and the start of an environment name, and the list shows environments.
+
+- **Enter** accepts the highlighted one, the arrow keys move through the list, and **Escape** closes it.
+  **Ctrl+Space** opens the list whenever you want it (**⌃Space**, **⌥`** or **⌥I** on a Mac).
+- A command with arguments goes in with a placeholder in each one, like `\section{title}` with "title" selected, so you can type over it.
+  **Tab** goes to the next placeholder and **Shift+Tab** to the one before.
+  Moving the cursor out of them, or pressing **Escape**, leaves the placeholders.
+- An environment goes in with its matching `\end{...}` and the cursor on the line between them, like `\begin{itemize}`, `\item` and `\end{itemize}`.
+  If closing brackets already put a `}` after the cursor, it's used rather than doubled.
+- Accepting a `\begin` completion puts in `\begin{}` and opens the environment list.
+- It doesn't show in `%` comments or after `\\`.
+
+The list covers about 250 common commands (structure, references and citations, text, math, siunitx and Beamer) and about 50 environments.
+It comes with the app and loads just after the editor shows, so nothing you type is sent anywhere to complete it.
+Undo takes back an accepted completion like any other typing, and collaborators see the text it puts in.
 
 The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
