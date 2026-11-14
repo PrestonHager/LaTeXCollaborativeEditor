@@ -23,10 +23,10 @@ beforeAll(() => {
 
 const views: EditorView[] = [];
 
-/** A view with `|` marking the cursor. */
+/** A view with the first `|` marking the cursor. Any later `|` is part of the text. */
 function viewWith(text: string, extensions: Extension = []) {
   const pos = text.indexOf('|');
-  const doc = text.replace('|', '');
+  const doc = text.slice(0, pos) + text.slice(pos + 1);
   const state = EditorState.create({ doc, selection: { anchor: pos }, extensions });
   const view = new EditorView({ state, parent: document.body });
   views.push(view);
