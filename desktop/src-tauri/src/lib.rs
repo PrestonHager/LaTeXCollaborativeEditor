@@ -5,10 +5,12 @@
 //! system browser, with the refresh token in the OS keychain (issue #177, src/google_auth.rs), and
 //! signed updates through the updater plugin when a release build configures it (#179, src/updates.rs).
 //! Where the webview has no RTCPeerConnection (distro WebKitGTK), the page's WebRTC peer
-//! connections run here instead, over IPC (#176, src/native_rtc.rs).
+//! connections run here instead, over IPC (#176, src/native_rtc.rs). When the person turns it on,
+//! it can also compile with a TeX Live installed on the computer (#264, src/local_tex.rs).
 //! See docs/desktop.md for the plan.
 
 mod google_auth;
+mod local_tex;
 pub mod native_rtc;
 mod updates;
 
@@ -47,7 +49,8 @@ pub fn run() {
             native_rtc::commands::rtc_set_description,
             native_rtc::commands::rtc_add_ice_candidate,
             native_rtc::commands::rtc_send,
-            native_rtc::commands::rtc_close
+            native_rtc::commands::rtc_close,
+            local_tex::tex_compile
         ])
         .setup(|app| {
             // Updates (#179): only release builds add plugins.updater (a public key and the

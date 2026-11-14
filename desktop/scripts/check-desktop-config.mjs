@@ -64,6 +64,9 @@ const ALLOWED_PLAIN_PERMISSIONS = [
   'allow-rtc-add-ice-candidate',
   'allow-rtc-send',
   'allow-rtc-close',
+  // Local TeX Live (#264, src/local_tex.rs): one command, off until the person turns it on, that
+  // runs only latexmk, pdflatex, xelatex or lualatex on a temporary copy of the project.
+  'allow-tex-compile',
 ];
 // The app commands build.rs may declare, each with its allow-* permission above.
 const APP_COMMANDS = [
@@ -79,6 +82,7 @@ const APP_COMMANDS = [
   'rtc_add_ice_candidate',
   'rtc_send',
   'rtc_close',
+  'tex_compile',
 ];
 
 
@@ -124,8 +128,8 @@ check(
   JSON.stringify(declared) === JSON.stringify(APP_COMMANDS),
   `build.rs must declare exactly the app commands ${APP_COMMANDS.join(', ')} in its AppManifest, so each needs a permission.`,
 );
-const handlers = [...(libRs.match(/generate_handler!\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/(?:google_auth|updates|native_rtc::commands)::([a-z_]+)/g)].map((match) => match[1]);
-check(JSON.stringify(handlers) === JSON.stringify(APP_COMMANDS), 'src/lib.rs may only register the Google sign-in, update and WebRTC commands with invoke_handler.');
+const handlers = [...(libRs.match(/generate_handler!\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/(?:google_auth|updates|native_rtc::commands|local_tex)::([a-z_]+)/g)].map((match) => match[1]);
+check(JSON.stringify(handlers) === JSON.stringify(APP_COMMANDS), 'src/lib.rs may only register the Google sign-in, update, WebRTC and local TeX commands with invoke_handler.');
 const authRs = read(join(tauriDir, 'src', 'google_auth.rs'));
 const accessTokenStruct = authRs.match(/pub struct AccessToken \{([^}]*)\}/)?.[1] ?? '';
 check(
@@ -165,6 +169,23 @@ check(/\.plugin\(tauri_plugin_updater::Builder::new\(\)\.build\(\)\)/.test(libRs
 check(/\.manage\(native_rtc::NativeRtc::new\(true\)\)/.test(libRs), 'src/lib.rs must run the shell WebRTC with mDNS host candidates (NativeRtc::new(true)).');
 const rtcRs = read(join(tauriDir, 'src', 'native_rtc.rs'));
 check(!/add_track|on_track\(|TrackLocal/.test(rtcRs), 'src/native_rtc.rs is for data channels only; it must not handle audio or video.');
+
+// Local TeX Live (#264): the guarantees docs/desktop.md promises, as text checks on the source.
+const texRs = read(join(tauriDir, 'src', 'local_tex.rs'));
+check(
+  /pub const PROGRAMS: \[&str; 4\] = \["latexmk", "pdflatex", "xelatex", "lualatex"\];/.test(texRs),
+  'src/local_tex.rs may only run latexmk, pdflatex, xelatex and lualatex.',
+);
+check(!/Command::new\("(?:sh|bash|cmd|powershell)/i.test(texRs) && !/"-c"|"\/C"/.test(texRs), 'src/local_tex.rs must start TeX directly, never through a shell.');
+check(
+  /"-no-shell-escape"/.test(texRs) && /"-norc"/.test(texRs) && /\.env\("openout_any", "p"\)/.test(texRs) && /\.env\("openin_any", "p"\)/.test(texRs),
+  'src/local_tex.rs must pass -no-shell-escape (and -norc to latexmk) and set openout_any=p and openin_any=p.',
+);
+check(
+  /refuse_runnable_files\(&files\)\?;/.test(texRs) && /"bat"/.test(texRs) && /"exe"/.test(texRs) && /\.env\("NoDefaultCurrentDirectoryInExePath", "1"\)/.test(texRs) && /dir\.is_absolute\(\)/.test(texRs),
+  'src/local_tex.rs must refuse projects with runnable files, set NoDefaultCurrentDirectoryInExePath=1 and drop relative PATH entries, so latexmk never runs a program from the project.',
+);
+check(/impl Drop for WorkDir/.test(texRs) && /tokio::time::timeout\(limits\.timeout/.test(texRs), 'src/local_tex.rs must remove its temporary copy and stop TeX at the time limit.');
 
 const security = conf.app?.security ?? {};
 check(security.csp === null, 'app.security.csp must stay null: the CSP <meta> tag in frontend/index.html is the policy (docs/desktop.md, Security).');
@@ -207,4 +228,4 @@ if (errors.length) {
   process.exit(1);
 }
 const version = json(join(repo, 'frontend', 'package.json')).version;
-console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP with WebAssembly, https opener, picked-folder access, Google sign-in, update and WebRTC commands only, links guarded.`);
+console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP with WebAssembly, https opener, picked-folder access, Google sign-in, update, WebRTC and local TeX commands only, links guarded.`);

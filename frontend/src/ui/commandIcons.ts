@@ -72,6 +72,8 @@ const commandIcons: Record<CommandId, IconNode> = {
   'file.openDrive': HardDrive,
   'file.openFolder': FolderOpen,
   'file.saveToFolder': Folder,
+  'file.compileLocalTex': FileDown,
+  'app.localTexSetup': Settings,
   'file.download': Download,
   'file.connectDrive': Link,
   'file.disconnectDrive': Unlink,

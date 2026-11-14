@@ -13,6 +13,8 @@ export type CommandId =
   | 'file.openDrive'
   | 'file.openFolder'
   | 'file.saveToFolder'
+  | 'file.compileLocalTex'
+  | 'app.localTexSetup'
   | 'file.download'
   | 'file.connectDrive'
   | 'file.disconnectDrive'

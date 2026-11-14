@@ -684,8 +684,10 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
 });
 
 // Loads on the first binary file opened, or when the browser is idle (issue #231).
+// A PDF the desktop app compiled with local TeX (#264): shown in the file viewer, not in the project.
+let compiledPdf: { path: string; bytes: Uint8Array } | null = null;
 const fileViewer = lazyFileViewer(document.getElementById('file-viewer')!, {
-  onDownload: (path) => void downloadFile(path),
+  onDownload: (path) => (compiledPdf?.path === path ? localDownload.download(path, compiledPdf.bytes, 'application/pdf') : void downloadFile(path)),
 }, lazyLoadFailed);
 
 /**
@@ -1269,6 +1271,26 @@ const folders = isDesktopShell()
       .catch((error: unknown) => (console.warn('Folder projects did not load', error), null))
   : null;
 
+// Compiling with a TeX Live on this computer, in the desktop app only (#264). Loads on first use.
+const localTex = isDesktopShell()
+  ? lazyModule(() =>
+      import('./app/desktopLocalTex').then(({ createLocalTex }) =>
+        createLocalTex({
+          getProject: () => project,
+          getBlob: (hash) => blobs.get(hash),
+          confirmDialog,
+          promptDialog,
+          showNotice,
+          setStatus,
+          showPdf: (path, bytes) => {
+            compiledPdf = { path, bytes };
+            fileViewer.show({ path, bytes, size: bytes.length });
+          },
+        }),
+      ),
+    ).get
+  : null;
+
 // Every shortcut label and key press reads from this one table.
 // Where the browser keeps a key for itself (a normal tab), the built-in fallback is used and shown instead.
 // Going fullscreen or opening in an app window gives those keys back, so follow that.
@@ -1300,6 +1322,7 @@ const commands = createCommands({
   projectsDialog,
   storageProviders,
   folders,
+  localTex,
   accountsPanel,
   uploadDialog,
   templates,

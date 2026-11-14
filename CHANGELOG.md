@@ -8,6 +8,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Added
 
+- **Compile with your own TeX Live (desktop app).** If TeX Live is installed on your computer, the desktop app can use it to make a PDF: turn it on with Set Up Local TeX in the command palette, then choose Compile with Local TeX. It runs on a copy of the project with shell escape off, and the PDF opens in the app. It's off until you turn it on.
 - **Sharing in the desktop app on Linux.** The Linux desktop app can now share and join rooms. Its built-in web view has no WebRTC, so the app makes the peer-to-peer connections itself; collaborators in a browser see no difference, and your document still only goes directly between you.
 - **Desktop app updates.** The desktop app checks for a new release when it starts and every few hours. When there is one, the update card offers Restart to update: it saves your work, installs the update and restarts. Every release on GitHub now includes the Windows, macOS and Linux installers and their checksums.
 - **Google Drive in the desktop app.** Connect Google Drive in the app opens Google's sign-in page in your web browser, and the app is connected when you come back. The app keeps the sign-in in your computer's keychain, so it stays connected after a restart until you log out. Open from Google Drive lists the projects the app saved in your Drive; adding other Drive files and moving the project folder still need the web app.
