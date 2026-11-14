@@ -252,6 +252,10 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Arrow keys move through menu items and between menus, and Escape closes them.
 - [ ] With one menu open, moving the mouse over another menu (File, Edit, View, Help) switches to it without clicking. Hovering never runs a command, and with no menu open hovering does nothing.
 - [ ] After switching menus by hover, arrow keys still move between menus and Escape closes the menu.
+- [ ] Resting the mouse on a menu item for about a second opens a preview card beside the menu (never on top of its items), with the item's name, its shortcut, and what it does. View > Split View, Editor Only and Preview Only show the pane layout; New File, New Folder, Upload, Save Now, Export, Compile Now, Command Palette and the theme toggles show a small picture too; Help > Documentation shows only text. Moving to the next item swaps the card after a short wait. Moving off the menu closes it at once, and hovering never runs the command.
+- [ ] Opening a menu with Enter or the arrow keys and resting on an item shows the same card, and arrowing on moves it. Enter hides the card and runs the item. Opening a menu with a click doesn't show a card until you hover an item.
+- [ ] Toolbar buttons show their tooltip at once, then after about a second the preview card replaces it, under the button. Share shows the link being copied. Tabbing into the toolbar shows it too. Near the right edge of a narrow window the card stays on screen, and it reads well in the light and dark app themes.
+- [ ] On a phone or tablet (touch), tapping a menu item or toolbar button never shows the preview card.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
@@ -295,6 +299,19 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] In a fresh private window, the first-run tour shows once. Skip tour and Esc close it, and Help > Show Tour runs it again.
 - [ ] Each tour card sits next to what it points at without covering it: beside the file list, editor and preview, below the menus and toolbar. In a small window the card stays fully on screen and covers as little of the highlighted part as it can.
 - [ ] The page works at phone width without scrolling sideways.
+
+### Phone pass (under 640px)
+
+Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
+
+- [ ] The editor and preview never show side by side. A bar under the toolbar has Files, Editor and Preview, each at least 44px tall, and the Split, Editor only and Preview only toolbar buttons are hidden.
+- [ ] Tapping Preview shows only the preview, and Editor shows only the editor. The pressed one is highlighted. Reloading the tab keeps the choice, and a new tab starts on the editor.
+- [ ] Files opens the file list as a drawer over the editor, with a dimmed backdrop. Picking a file closes the drawer and opens that file in the editor, even if the preview was showing.
+- [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
+- [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
+- [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
+- [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
 
 ## Build
 
