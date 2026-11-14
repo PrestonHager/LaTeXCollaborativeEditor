@@ -97,6 +97,23 @@ describe('saveProject', () => {
     expect(t.provider.text(id, 'main.tex')).toBe('x');
   });
 
+  it('saves the TeX engine once, and only when it changes (#199)', async () => {
+    const t = setup();
+    t.project.setName('P');
+    t.project.createTextFile('main.tex', 'x');
+    await t.save();
+    expect(t.provider.calls).not.toContain('engine null');
+    t.project.setEngine('xelatex');
+    await t.save();
+    expect(t.provider.calls).toEqual(['engine xelatex']);
+    await t.save();
+    expect(t.provider.calls).toEqual([]);
+    t.project.setEngine(null);
+    await t.save();
+    expect(t.provider.calls).toEqual(['engine null']);
+    expect(manifestFromProject('p', t.project).engine).toBeNull();
+  });
+
   it('picks up a new project id from the provider', async () => {
     const t = setup();
     t.project.setName('P');

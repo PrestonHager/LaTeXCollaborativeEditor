@@ -1,6 +1,6 @@
 # Builds the app and the docs into one nginx image.
-# Coolify uses this for the staging site (the staging branch).
-# Production still deploys to GitHub Pages from a release, see docs/deployment.md.
+# Coolify uses this for the staging site (the staging branch) and for production (main, deployed
+# only by release.yml on a release, with VITE_DEPLOY_ENV=production). See docs/deployment.md.
 
 FROM node:22-alpine AS app
 WORKDIR /src/frontend

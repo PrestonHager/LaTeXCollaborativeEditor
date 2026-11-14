@@ -20,6 +20,7 @@ describe('regressionProject', () => {
       'chapters/packages.tex',
       'chapters/text.tex',
       'checks.tex',
+      'engine-fontspec.tex',
       'figures/chart.pdf',
       'figures/quadrants.png',
       'figures/wave.eps',
@@ -134,6 +135,19 @@ describe('regressionProject', () => {
       ['unsupported-packages.tex', 10, 'info'],
     ]);
     expect(result.errors[1].message).toContain('tikzpicture');
+  });
+
+  it('compiles engine-fontspec.tex with a fontspec warning only under pdfLaTeX (#199)', async () => {
+    const content = await regressionProject(new BlobStore());
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    const input = { mainPath: 'engine-fontspec.tex', texts, binaryPaths: [], imageUrls: new Map() };
+    const underPdf = projectToPreviewHtml(input);
+    expect(underPdf.html).toContain('The engine only changes which notes show');
+    expect(underPdf.errors.map((error) => [error.line, error.severity])).toEqual([
+      [7, 'info'],
+      [7, 'warning'],
+    ]);
+    expect(projectToPreviewHtml({ ...input, engine: 'xelatex' }).errors.map((error) => error.severity)).toEqual(['info']);
   });
 });
 

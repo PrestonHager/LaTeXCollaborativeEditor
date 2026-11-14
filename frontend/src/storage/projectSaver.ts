@@ -3,6 +3,7 @@ import type { ProjectDoc } from '../project/projectDoc';
 import type { BlobStore } from '../project/blobStore';
 import { isInside, replacePrefix } from '../project/paths';
 import { ConflictError, type FileConflict } from './conflicts';
+import type { TexEngine } from '../project/texEngine';
 
 /**
  * What we last wrote to storage, so the next save only sends what changed.
@@ -12,6 +13,8 @@ export type SavedManifest = {
   projectId: string;
   name: string;
   mainPath: string | null;
+  /** The TeX engine storage has (issue #199). Missing in manifests from before it, which reads as none. */
+  engine?: TexEngine | null;
   files: Record<string, SavedFile>;
   /**
    * Files a save put in the provider's trash, by file id, with the token restore() takes. When an
@@ -198,6 +201,12 @@ export async function saveProject(options: {
     manifest.mainPath = mainPath;
     step();
   }
+  const engine = project.getEngine();
+  if ((manifest.engine ?? null) !== engine && provider.setEngine) {
+    await provider.setEngine(manifest.projectId, engine);
+    manifest.engine = engine;
+    step();
+  }
 
   // Some providers change the id while saving, like Drive making a folder for an old single file.
   const canonical = provider.currentProjectId?.(manifest.projectId);
@@ -234,6 +243,7 @@ export function manifestFromProject(projectId: string, project: ProjectDoc, vers
     projectId,
     name: project.getName(),
     mainPath: mainId ? (project.get(mainId)?.path ?? null) : null,
+    engine: project.getEngine(),
     files,
   };
 }

@@ -4,6 +4,7 @@ import type { ProjectContent, ProjectDoc } from './projectDoc';
 // The zip code loads on first use (import or download), not with the page.
 import type { ZipEntry } from './zip';
 import { guessMainFile, isTextPath, normalizePath } from './paths';
+import { isTexEngine } from './texEngine';
 import { whenOnline } from '../app/lazy';
 
 export const STARTER_TEX = '\\documentclass{article}\n\\usepackage{graphicx}\n\\begin{document}\n\n\\end{document}\n';
@@ -23,6 +24,7 @@ export async function contentFromFiles(
   folders: string[],
   blobs: BlobStore,
   mainPath?: string | null,
+  engine?: string | null,
 ): Promise<ProjectContent> {
   const content: ProjectContent = { name, files: [] };
   for (const folder of folders) {
@@ -41,6 +43,7 @@ export async function contentFromFiles(
   }
   const textFiles = content.files.filter((file) => file.kind === 'text');
   content.mainPath = mainPath && textFiles.some((file) => file.path === mainPath) ? mainPath : guessMainFile(textFiles);
+  if (isTexEngine(engine)) content.engine = engine;
   return content;
 }
 
@@ -52,7 +55,7 @@ export async function loadProject(provider: StorageProvider, projectId: string, 
     if (entry.kind === 'file') files.push({ path: entry.path, data: await provider.readFile(listing.id, entry.path) });
   }
   const folders = listing.entries.filter((entry) => entry.kind === 'folder').map((entry) => entry.path);
-  return contentFromFiles(listing.name, files, folders, blobs, listing.mainPath);
+  return contentFromFiles(listing.name, files, folders, blobs, listing.mainPath, listing.engine);
 }
 
 /** Make a project from an uploaded .zip, named after the zip file. */
