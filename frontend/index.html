@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget: Android shrinks the page for the on-screen keyboard, so the editor and its key bar stay above it (src/ui/touchKeyBar.ts). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <!--
       Content Security Policy. GitHub Pages can't send headers, so it's a meta tag, which means
       frame-ancestors, report-to and sandbox can't be set here (see docs/deployment.md).
@@ -154,7 +155,7 @@
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.saveNow" aria-label="Save now" data-tooltip="Save now" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.compileNow" aria-label="Compile now" data-tooltip="Compile now" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.export" aria-label="Export" data-tooltip="Export" data-side="bottom"></button>
-        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-description="Start sharing this project and copy its link. Anyone who opens it joins this room and edits with you." data-side="bottom"></button>
         <span class="toolbar-separator" aria-hidden="true"></span>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutSplit" aria-label="Split view" data-tooltip="Split view" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutEditorOnly" aria-label="Editor only" data-tooltip="Editor only" data-side="bottom"></button>
@@ -169,7 +170,17 @@
         <span id="app-loading-label" class="app-loading-label">Loading the editor...</span>
       </div>
 
+      <!-- Phones only (under 640px): one pane at a time, and the file tree as a drawer. See src/app/phoneLayout.ts. -->
+      <nav id="phone-bar" class="phone-bar" aria-label="Panes">
+        <button id="phone-files" type="button" class="btn" data-variant="outline" aria-controls="file-pane" aria-expanded="false"><i data-lucide="folder-open"></i>Files</button>
+        <div class="phone-switch" role="group" aria-label="Show">
+          <button id="phone-show-editor" type="button" class="btn" data-variant="ghost" aria-controls="editor-pane" aria-pressed="true">Editor</button>
+          <button id="phone-show-preview" type="button" class="btn" data-variant="ghost" aria-controls="preview-pane" aria-pressed="false">Preview</button>
+        </div>
+      </nav>
+
       <div class="workspace">
+        <div id="file-drawer-backdrop" class="file-drawer-backdrop" hidden></div>
         <aside id="file-pane" class="file-pane" aria-label="Project files">
           <header class="file-pane-header">
             <span class="file-pane-title">Files</span>
@@ -578,6 +589,8 @@
     </section>
 
     <!-- First-run tour. tour.ts walks through the steps below and puts this card next to each target. -->
+    <!-- Hover preview for menu items and toolbar buttons (src/ui/hoverPreview.ts). -->
+    <div id="hover-preview" class="hover-preview" hidden></div>
     <div id="tour" class="tour" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-body" hidden>
       <p class="tour-count" data-tour-count></p>
       <h2 id="tour-title" class="tour-title" data-tour-title></h2>

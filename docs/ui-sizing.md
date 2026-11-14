@@ -21,7 +21,7 @@ Floating UI that isn't a dialog uses two more tokens:
 
 | Token | Width | Used by |
 |-------|-------|---------|
-| `--popover-card` | 22rem (352px) | The tour card, the update prompt and the preview-changes popover. |
+| `--popover-card` | 22rem (352px) | The tour card, the update prompt, the preview-changes popover and the hover preview card (#89). |
 | `--popover-menu` | 15rem minimum | The menu bar's dropdowns. They grow to fit their longest item. |
 
 Every size is capped at `calc(100vw - var(--viewport-gutter))`. `--viewport-gutter` is 2rem, so there's 1rem on each side and nothing scrolls sideways.
@@ -73,7 +73,7 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 
 | Name | Width | Today | Planned in #123 |
 |------|-------|-------|-----------------|
-| Phone | under 640px (`sm`) | `dialog-md` and `dialog-lg` are full-screen sheets (#187). `dialog-sm` is the window width minus 2rem. Footer buttons stack. | The palette, popover cards and menus (below). |
+| Phone | under 640px (`sm`) | `dialog-md` and `dialog-lg` are full-screen sheets (#187). `dialog-sm` is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | The palette, popover cards and menus (below). |
 | Tablet | 640px to 1023px | Dialogs use the scale. `dialog-lg` is capped by the window, so Settings is one column. | Same as today. |
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
@@ -124,3 +124,9 @@ These are from #187, at 360 x 640: Upload, About, Open a project, Conflict, Expo
 | Before | After |
 |--------|-------|
 | ![Phone dialogs before: cards with a 1rem gutter](assets/ui-sizing/phone-dialogs-before-360x640.png) | ![Phone dialogs after: full-screen sheets, New File still a card](assets/ui-sizing/phone-dialogs-after-360x640.png) |
+
+The hover preview card (#89) is `--popover-card` wide. It sits beside a menu (flipping to the left side at the window edge) or under a toolbar button, and stays 12px inside the window:
+
+| Toolbar, 1280 x 800 | Menu, 1280 x 800 | 390 x 844 |
+|---------------------|------------------|-----------|
+| ![Share's preview card under the toolbar](assets/hover-preview/toolbar-share.png) | ![New File's preview card beside the File menu](assets/hover-preview/menu-new-file.png) | ![The card at phone width, inside the window](assets/hover-preview/narrow-390.png) |

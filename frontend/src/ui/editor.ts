@@ -10,6 +10,7 @@ import { diagnosticsExtensions, lintGutterPlaceholder, loadLintExtensions, setEd
 import { latexSyntaxHighlighting } from './syntaxHighlight';
 import { yUndoManagerKeymap } from 'y-codemirror.next';
 import { isAssignableKeybind, normalizeKeybind, type Platform } from './modifierShortcutLabels';
+import { createTouchKeyBar } from './touchKeyBar';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
@@ -102,6 +103,8 @@ export function createEditorPane(container: HTMLElement) {
   });
 
   const view = new EditorView({ state, parent: host });
+  // LaTeX keys above the on-screen keyboard, on touch devices while the editor has focus.
+  const touchKeyBar = createTouchKeyBar(view, container);
   // Lines with problems are highlighted without it, so if it can't load, just log that.
   const lintReady = loadLintExtensions().then(
     (extensions) => view.dispatch({ effects: lintCompartment.reconfigure(extensions) }),
@@ -117,6 +120,8 @@ export function createEditorPane(container: HTMLElement) {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
     getText() { return view.state.doc.toString(); },
     getView() { return view; },
+    /** The bar of LaTeX keys shown above the on-screen keyboard. */
+    getTouchKeyBar() { return touchKeyBar.element; },
     /** Resolves once the lint gutter is in (or failed to load). For tests. */
     lintReady() { return lintReady; },
     /** Resolves once autocompletion is in (or failed to load). For tests. */
@@ -136,6 +141,7 @@ export function createEditorPane(container: HTMLElement) {
           EditorState.readOnly.of(!isEditable),
         ]),
       });
+      touchKeyBar.refresh();
     },
     focus() { view.focus(); },
     selectAll() {

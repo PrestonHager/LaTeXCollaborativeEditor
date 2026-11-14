@@ -31,6 +31,16 @@ The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 - Each file has its own undo history, and it starts over when you switch files.
 - File operations have a history of their own. See [Undoing file operations](#undoing-file-operations).
 
+### Phones and tablets
+
+When the on-screen keyboard opens, the page shrinks to the part above it, and the line with the cursor scrolls into view so it isn't hidden behind the keyboard.
+Android browsers do this through `interactive-widget=resizes-content` in the page's viewport tag; on iPhone and iPad the editor follows the browser's `visualViewport` instead.
+
+While the editor has focus on a touch screen, a **key bar** sits just above the keyboard with the LaTeX keys phone keyboards hide: `\` `{` `}` `$` `%` `[` `]` `&`.
+Tapping one puts that character at the cursor (or in place of the selection) without closing the keyboard.
+It's ordinary typing as far as the editor is concerned: collaborators see it, undo takes it back, and `\` opens [autocompletion](#autocompletion) like a typed one.
+The bar doesn't show with a mouse, in a read-only file, or when the editor doesn't have focus.
+
 ### Undoing file operations
 
 Creating, renaming, moving, deleting and uploading files and folders, and **Add Files from Drive**, can be undone.

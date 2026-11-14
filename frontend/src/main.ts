@@ -9,12 +9,13 @@ import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
+import { createHoverPreview } from './ui/hoverPreview';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
-import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle } from './app/lazy';
+import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
 import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
@@ -31,6 +32,7 @@ import type { StorageProvider } from './storage/providers/types';
 import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
+import { createPhoneLayout, PHONE_QUERY } from './app/phoneLayout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
@@ -98,7 +100,33 @@ const activeFileMainEl = document.getElementById('active-file-main') as HTMLElem
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
 // The person's own settings (themes, layout, keybinds). Kept apart from the session, never sent to peers.
 const settings = createSettingsStore();
-const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange: ({ mode, splitRatio }) => settings.update({ layoutMode: mode, splitRatio }) });
+const phoneMedia = typeof window.matchMedia === 'function' ? window.matchMedia(PHONE_QUERY) : null;
+const isPhone = () => Boolean(phoneMedia?.matches);
+// Phones show one pane at a time and the file tree as a drawer (issue #185). It does nothing at 640px and up.
+const phone = createPhoneLayout({
+  root: document.getElementById('app')!,
+  editorButton: document.getElementById('phone-show-editor') as HTMLButtonElement,
+  previewButton: document.getElementById('phone-show-preview') as HTMLButtonElement,
+  filesButton: document.getElementById('phone-files') as HTMLButtonElement,
+  filePane: document.getElementById('file-pane')!,
+  backdrop: document.getElementById('file-drawer-backdrop')!,
+  content: splitRoot,
+  editorPane,
+  isPhone,
+  onPaneChange: () => editor.getView()?.requestMeasure(),
+});
+phoneMedia?.addEventListener('change', () => phone.viewportChanged());
+const layout = createLayout({
+  splitRoot,
+  splitter,
+  editorPane,
+  previewPane,
+  onChange: ({ mode, splitRatio }) => {
+    settings.update({ layoutMode: mode, splitRatio });
+    // On a phone, View > Editor only and Preview only pick the pane to show.
+    if (isPhone() && mode !== 'split') phone.showPane(mode === 'editor-only' ? 'editor' : 'preview');
+  },
+});
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
@@ -518,7 +546,10 @@ const compile = createPreviewCompile({
 const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
-  onOpen: (entry) => openFile(entry.id),
+  onOpen: (entry) => {
+    openFile(entry.id);
+    if (entry.kind !== 'folder') phone.fileOpened();
+  },
   onRename: async (path) => {
     const isFolder = project.folderPaths().includes(path);
     const next = await promptDialog({
@@ -1116,7 +1147,11 @@ const commands = createCommands({
   loadFailed: (feature, error) => lazyLoadFailed(feature, error),
   persistAppSession,
   runFileOp,
-  openFile,
+  // A new file opens in the editor, so on a phone close the file drawer too.
+  openFile: (id: string | null) => {
+    openFile(id);
+    if (id) phone.fileOpened();
+  },
   downloadFile,
   switchProject,
   openStoredProject,
@@ -1242,6 +1277,17 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
   shortcutLabel,
   onCommand: (commandId) => executeCommand(commandId),
 });
+
+// After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).
+// The pictures are a lazy chunk; until they load the card shows the palette description.
+const menuDescriptions = new Map(menuBar.entries().map((entry) => [entry.commandId, entry.description]));
+const hoverPreview = createHoverPreview(document.getElementById('hover-preview')!, {
+  description: (commandId) => menuDescriptions.get(commandId),
+  shortcutLabel,
+  loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
+});
+hoverPreview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
+hoverPreview.attach(document.getElementById('toolbar')!, 'button[data-command]', 'bottom');
 
 const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, {
   version: BUILD_INFO.version,

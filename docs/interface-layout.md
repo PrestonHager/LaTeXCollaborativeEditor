@@ -13,6 +13,15 @@ Click a menu to open it, or focus it with **Tab** and use the arrow keys.
 **Escape** closes it.
 Items that don't apply right now are grayed out, for example host-only items when you're a guest.
 
+Rest the mouse on a menu item, or reach it with the arrow keys, and after a moment a preview card opens beside the menu.
+It shows what the command does: a small picture where one helps (the layouts show how the panes are arranged, Share shows the link being copied, New File shows the new file in the list), and a sentence about it.
+The card closes as soon as the mouse leaves, focus moves on, or you press a key or click.
+Hovering only shows the card. The command runs only when you click it or press **Enter**.
+On a touch screen there's no hover, so there's no preview card.
+
+![The preview card for View > Split View](assets/screenshots/hover-preview-light.png#only-light)
+![The preview card for View > Split View](assets/screenshots/hover-preview-dark.png#only-dark)
+
 ### File
 
 ![The File menu](assets/screenshots/file-menu-light.png#only-light)
@@ -90,6 +99,7 @@ Include the version when you report a problem. The bug form fills it in for you.
 
 The row of icon buttons under the menus covers the things you do most: new file, upload, save now, compile now, share, the three layout modes, the command palette, and the docs.
 Hover a button (or focus it) to see what it does and its shortcut.
+Keep the mouse there a little longer, or stay on it with the keyboard, and the tooltip turns into the same preview card as the menus, under the button.
 They run the same commands as the menus, so they're disabled in the same cases.
 
 With the keyboard, Tab moves into the toolbar, then the arrow keys move between buttons, and Home and End jump to the first and last.
@@ -172,6 +182,23 @@ Under **View**:
 
 The active layout has a check mark in the menu.
 The layout and the splitter position are remembered in this browser, like your other [settings](saving-and-storage.md#your-settings).
+
+## On a phone
+
+When the window is narrower than 640px, like on most phones, the app shows one pane at a time instead of the split:
+
+- A bar under the toolbar has **Files**, then **Editor** and **Preview**. Tap Editor or Preview to switch. The pane you picked stays picked when you reload, until you close the tab.
+- **Files** opens the file list as a drawer over the editor. Picking a file closes the drawer and shows that file in the editor. Tap outside the drawer, tap Files again, or press **Esc** to close it without picking.
+- **View > Editor Only** and **Preview Only** pick the pane too. The Split View, Editor Only and Preview Only toolbar buttons are hidden, since the bar does their job.
+- The buttons in the bar are 44px tall, so they're easy to tap.
+
+With a keyboard, **Tab** reaches Files, Editor and Preview, and Enter or Space presses them. Screen readers announce Editor and Preview as toggle buttons, and Files as expanded or collapsed.
+
+Tablets and wider windows keep the layout above.
+
+| Editor | Preview | Files |
+|--------|---------|-------|
+| ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/phone-layout/after-390x844-editor.png) | ![The preview on a phone](assets/phone-layout/after-390x844-preview.png) | ![The file list open as a drawer over the editor](assets/phone-layout/after-390x844-files.png) |
 
 ## Header status pills
 
