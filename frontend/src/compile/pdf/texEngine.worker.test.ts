@@ -8,6 +8,9 @@ describe('Compile PDF worker entry (#241)', () => {
     const { raw } = await fakeAssets();
     const respond = (body: unknown, status = 200) => (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
     expect(await fetchManifest(MANIFEST_URL, respond({}, 404))).toBeNull();
+    // A host's index.html fallback for an unknown path counts as no manifest.
+    const html = (async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html; charset=utf-8' } })) as unknown as typeof fetch;
+    expect(await fetchManifest(MANIFEST_URL, html)).toBeNull();
     await expect(fetchManifest(MANIFEST_URL, respond({}, 500))).rejects.toThrow('HTTP 500');
     expect((await fetchManifest(MANIFEST_URL, respond(raw)))!.version).toBe('2026.1-test');
     await expect(fetchManifest(MANIFEST_URL, respond({ version: 'x' }))).rejects.toThrow('broken');

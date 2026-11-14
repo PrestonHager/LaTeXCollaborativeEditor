@@ -16,11 +16,16 @@ declare const WorkerGlobalScope: unknown;
 
 type WorkerScope = { onmessage: unknown; postMessage(message: TexEngineResponse, transfer?: Transferable[]): void; location: Location };
 
-/** Fetch the manifest. A 404 means this site has no engine assets yet, which is a normal state. */
+/**
+ * Fetch the manifest. A 404 means this site has no engine assets yet, which is a normal state.
+ * So does an HTML page: hosts that send index.html for any unknown path (vite preview, an SPA
+ * fallback) answer a missing manifest that way.
+ */
 export async function fetchManifest(url: string, fetchFn: typeof fetch = fetch) {
   const response = await fetchFn(url, { credentials: 'same-origin', cache: 'no-cache' });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Couldn't load the Compile PDF manifest (HTTP ${response.status}).`);
+  if (/text\/html/i.test(response.headers.get('content-type') ?? '')) return null;
   return parseTexManifest(await response.json(), url);
 }
 
