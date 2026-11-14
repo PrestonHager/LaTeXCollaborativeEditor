@@ -1,4 +1,5 @@
 import { EditorView } from '@codemirror/view';
+import { COARSE_POINTER } from './editor';
 
 /**
  * On phones and tablets: a bar of LaTeX keys above the on-screen keyboard, and keeping the
@@ -25,7 +26,6 @@ export const TOUCH_KEYS: ReadonlyArray<{ text: string; label: string }> = [
 const CURSOR_MARGIN = 24;
 /** A keyboard is open when it covers more than this many pixels. Smaller gaps are browser toolbars. */
 const KEYBOARD_THRESHOLD = 80;
-const COARSE_POINTER = '(pointer: coarse)';
 
 /**
  * Put `text` in place of the selection as if it was typed. It's a normal editor transaction, so

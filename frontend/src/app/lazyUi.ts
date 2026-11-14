@@ -12,6 +12,7 @@ import type { createTour, TourSeen } from '../ui/tour';
 import type { createProjectsDialog } from '../ui/projectsDialog';
 import type { createUploadDialog } from '../ui/uploadDialog';
 import type { createAboutDialog } from '../ui/aboutDialog';
+import type { setupShareButton } from '../ui/shareButton';
 import type { TemplatesUiDeps } from '../templates/templatesUi';
 import type { BuildInfo } from './buildInfo';
 import type { ProjectSummary } from '../storage/providers/types';
@@ -160,5 +161,29 @@ export function lazyAboutDialog(
   return {
     open: () => withInstance(about.get, 'About', onError, (instance) => instance.open()),
     preload: about.preload,
+  };
+}
+
+/**
+ * The Share button's popover (issue #231). The button is on screen from the start, so until the
+ * popover's code loads, a click loads it and then opens it. Until then the popover stays closed and
+ * out of the tab order, as setupShareButton leaves it. The code is preloaded when the pointer or
+ * focus reaches Share, with the P2P code.
+ */
+export function lazyShareButton(
+  config: Parameters<typeof setupShareButton>[0],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/shareButton')> = {},
+) {
+  const share = lazyModule(() => (deps.load ?? (() => import('../ui/shareButton')))().then(({ setupShareButton }) => setupShareButton(config)));
+  config.button.dataset.sharing = String(Boolean(config.guestRoomId));
+  config.popover.inert = true;
+  // Once loaded, setupShareButton's own click handler takes over.
+  config.button.addEventListener('click', () => {
+    if (!share.current()) withInstance(share.get, 'Sharing', onError, (instance) => instance.open());
+  });
+  return {
+    copyOrOpen: () => withInstance(share.get, 'Sharing', onError, (instance) => instance.copyOrOpen()),
+    preload: share.preload,
   };
 }

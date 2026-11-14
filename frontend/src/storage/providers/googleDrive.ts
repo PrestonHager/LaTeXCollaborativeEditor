@@ -3,6 +3,21 @@ import { StorageError } from '../errors';
 import { ConflictError } from '../conflicts';
 import { loadScript } from './scriptLoader';
 import { basename, dirname, isInside, joinPath, mimeType, replacePrefix } from '../../project/paths';
+import {
+  EXPORTS_PROPERTY,
+  FOLDER_MIME,
+  forgetLegacyFile,
+  LEGACY_PREFIX,
+  legacyProjectId,
+  readStoredToken,
+  removeOldToken,
+  TEMPLATES_FOLDER_PROPERTY,
+  TOKEN_EXPIRY_SLACK_MS,
+  TOKEN_STORAGE_KEY,
+  type StoredToken,
+} from './driveShared';
+
+export { EXPORTS_PROPERTY, FOLDER_MIME, LEGACY_PREFIX, TEMPLATE_PROPERTY, TEMPLATES_FOLDER_PROPERTY } from './driveShared';
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -11,9 +26,6 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 type GoogleTokenError = { type?: string; message?: string };
-// The single Drive file an old session was saving to, from before projects.
-type DriveFileRef = { id: string; name: string; documentId?: string };
-type StoredToken = { accessToken: string; expiresAt: number; account?: string };
 type TokenResult = { ok: true } | { ok: false; reason: string };
 type DriveItem = { id: string; name: string; mimeType?: string; parents?: string[]; appProperties?: Record<string, string>; modifiedTime?: string; version?: string; md5Checksum?: string };
 
@@ -40,31 +52,16 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 // The about endpoint tells us who's signed in, and works with the drive.file scope we already have.
 const DRIVE_ABOUT_API = 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)';
-export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // What we ask Drive for to tell if a file changed under us.
 const VERSION_FIELDS = 'version,md5Checksum';
 // Project folders are tagged so "list projects" can find them without seeing the rest of Drive.
 const PROJECT_PROPERTY = 'latexProject';
-// The exports folder the Export dialog makes inside a project folder. openProject skips it, so
-// exports never become project files.
-export const EXPORTS_PROPERTY = 'latexExports';
-// The Templates folder (#74) at the top of My Drive, and each template folder in it. Templates aren't
-// tagged as projects, so they stay out of the project list; see templates/driveTemplates.ts.
-export const TEMPLATES_FOLDER_PROPERTY = 'latexTemplates';
-export const TEMPLATE_PROPERTY = 'latexTemplate';
-// Old single-file projects use ids like "file:<drive file id>".
-export const LEGACY_PREFIX = 'file:';
-const LEGACY_FILE_KEY = 'drive_active_file_ref';
-// Treat the token as expired a minute early so a save doesn't race the expiry.
-const TOKEN_EXPIRY_SLACK_MS = 60_000;
 // Give up on a silent refresh after this long, so a stuck popup can't stall autosave forever.
 const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
 // Drive error reasons that mean "slow down and try again".
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 // Don't hold up a disconnect for long if Google never answers the revoke call.
 const TOKEN_REVOKE_TIMEOUT_MS = 5_000;
-// Old builds kept the token here, where any script on the page could read it.
-const OLD_TOKEN_KEY = 'drive_access_token';
 
 /**
  * Projects in Google Drive. A project is a Drive folder and every project file is a real
@@ -90,8 +87,6 @@ export class GoogleDriveProvider implements StorageProvider {
   // What remove() put in the Drive trash this visit, by Drive id, so an undone delete untrashes the
   // same file instead of making a copy. Paths inside a trashed folder are kept relative to it.
   private readonly trashed = new Map<string, { projectId: string; parentId?: string; item: IndexItem; inside: [string, IndexItem][] }>();
-  // NOTE: the token lives in sessionStorage, so it survives a reload but not a new tab or a closed browser.
-  private static readonly tokenStorageKey = 'drive_session_token';
 
   constructor() {
     removeOldToken();
@@ -121,25 +116,12 @@ export class GoogleDriveProvider implements StorageProvider {
    * Sessions from before document ids only match by file name.
    */
   legacyProjectId(documentId: string | undefined, fileName: string): string | null {
-    let ref: DriveFileRef | null = null;
-    try {
-      const raw = localStorage.getItem(LEGACY_FILE_KEY);
-      ref = raw ? (JSON.parse(raw) as DriveFileRef) : null;
-    } catch {
-      ref = null;
-    }
-    if (!ref?.id || !ref.name) return null;
-    const matches = ref.documentId ? ref.documentId === documentId : ref.name === fileName;
-    return matches ? `${LEGACY_PREFIX}${ref.id}` : null;
+    return legacyProjectId(documentId, fileName);
   }
 
   /** Forget the old single-file link, once the session has moved on to projects. */
   forgetLegacyFile() {
-    try {
-      localStorage.removeItem(LEGACY_FILE_KEY);
-    } catch {
-      // Nothing to do if storage is locked down.
-    }
+    forgetLegacyFile();
   }
 
   /** The email (or name) of the signed-in Google account, if we know it. */
@@ -753,7 +735,7 @@ export class GoogleDriveProvider implements StorageProvider {
     try {
       const stored: StoredToken = { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt };
       if (this.account) stored.account = this.account;
-      sessionStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(stored));
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(stored));
     } catch (error) {
       console.warn('Could not keep the Drive token for this tab; you will need to reconnect after reload', error);
     }
@@ -764,37 +746,18 @@ export class GoogleDriveProvider implements StorageProvider {
     this.tokenExpiresAt = 0;
     this.account = null;
     try {
-      sessionStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     } catch {
       // Nothing else to do if storage is locked down.
     }
   }
 
   private readStoredAccessToken() {
-    try {
-      const raw = sessionStorage.getItem(GoogleDriveProvider.tokenStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as StoredToken;
-      if (!parsed?.accessToken || !parsed?.expiresAt) return;
-      if (parsed.expiresAt <= Date.now() + TOKEN_EXPIRY_SLACK_MS) {
-        sessionStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
-        return;
-      }
-      this.accessToken = parsed.accessToken;
-      this.tokenExpiresAt = parsed.expiresAt;
-      this.account = parsed.account ?? null;
-    } catch {
-      // Corrupt cache, just start signed out.
-    }
-  }
-}
-
-/** Drop a token an old build left in localStorage. */
-function removeOldToken() {
-  try {
-    localStorage.removeItem(OLD_TOKEN_KEY);
-  } catch {
-    // Nothing to do if storage is locked down.
+    const stored = readStoredToken();
+    if (!stored) return;
+    this.accessToken = stored.accessToken;
+    this.tokenExpiresAt = stored.expiresAt;
+    this.account = stored.account ?? null;
   }
 }
 

@@ -250,3 +250,19 @@ export function createHoverPreview(card: HTMLElement, options: HoverPreviewOptio
     },
   };
 }
+
+/**
+ * main.ts loads this module when the pointer reaches the menus or toolbar, so the pointer can already
+ * be resting on a button by the time attach() runs, and that button's pointerenter has gone by.
+ * Send it again for the button under a mouse or pen, so its card shows as if the code was always here.
+ */
+export function replayHover(root: ParentNode, selector: string) {
+  let hovered: HTMLElement | null = null;
+  try {
+    hovered = root.querySelector<HTMLElement>(`${selector}:hover`);
+  } catch {
+    // A browser without :hover in querySelector just waits for the next pointerenter.
+  }
+  if (!hovered || typeof PointerEvent !== 'function') return;
+  hovered.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+}

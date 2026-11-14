@@ -4,13 +4,11 @@ import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
 import { bindPreviewZoomControls, createPreviewZoomState } from './ui/previewZoom';
 import { createMenuBar, type CommandId } from './ui/menuBar';
-import { setupShareButton, type ShareControls } from './ui/shareButton';
 import { renderStaticIcons } from './ui/icons';
 import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
-import { createHoverPreview } from './ui/hoverPreview';
 import { attachTouchTooltips } from './ui/longPress';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
@@ -18,7 +16,7 @@ import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
 import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyShareButton, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -27,7 +25,7 @@ import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from 
 import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
 import { LocalDownloadStorage } from './storage/localDownload';
-import { GoogleDriveProvider } from './storage/providers/googleDrive';
+import { LazyGoogleDriveProvider } from './storage/providers/lazyGoogleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
 import type { StorageProvider } from './storage/providers/types';
@@ -168,7 +166,9 @@ const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
-const driveProvider = new GoogleDriveProvider();
+// The Drive provider is a lazy chunk (issue #231). A tab that's already signed in needs it now.
+const driveProvider = new LazyGoogleDriveProvider();
+if (driveProvider.isSignedIn()) driveProvider.preload();
 const blobs = new BlobStore();
 const projectState = new ProjectState(localAppProvider, driveProvider);
 const { conflicts, overwrite } = projectState;
@@ -192,7 +192,7 @@ let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
 let inRoom = isClient;
 /** The Share popover, once the page is set up. The palette's "Copy share link" goes through it. */
-let share: ShareControls | null = null;
+let share: ReturnType<typeof lazyShareButton> | null = null;
 
 /**
  * Show a short message in the header, then clear it after a few seconds unless it's sticky.
@@ -1310,14 +1310,34 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
 
 // After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).
 // The pictures are a lazy chunk; until they load the card shows the palette description.
+// The card's code is a lazy chunk too (issue #231). It loads when the browser is idle, or as the
+// pointer or focus reaches the menus or toolbar, which is well before the card's delay is up. If it
+// can't load there are no cards, only the tooltips, and the next visit to the menus tries again.
 const menuDescriptions = new Map(menuBar.entries().map((entry) => [entry.commandId, entry.description]));
-const hoverPreview = createHoverPreview(document.getElementById('hover-preview')!, {
-  description: (commandId) => menuDescriptions.get(commandId),
-  shortcutLabel,
-  loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
-});
-hoverPreview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
-hoverPreview.attach(document.getElementById('toolbar')!, 'button[data-command]', 'bottom');
+const hoverPreview = lazyModule(() =>
+  import('./ui/hoverPreview').then(({ createHoverPreview, replayHover }) => {
+    const preview = createHoverPreview(document.getElementById('hover-preview')!, {
+      description: (commandId) => menuDescriptions.get(commandId),
+      shortcutLabel,
+      loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
+    });
+    const targets = [
+      [document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right'],
+      [document.getElementById('toolbar')!, 'button[data-command]', 'bottom'],
+    ] as const;
+    for (const [root, selector, side] of targets) preview.attach(root, selector, side);
+    // The pointer that started the load may already be resting on a button.
+    for (const [root, selector] of targets) replayHover(root, selector);
+    return preview;
+  }),
+);
+const preloadHoverPreview = () => {
+  if (!hoverPreview.current()) hoverPreview.preload();
+};
+for (const id of ['menu-bar', 'toolbar']) {
+  for (const type of ['pointerover', 'focusin'] as const) document.getElementById(id)?.addEventListener(type, preloadHoverPreview, { passive: true });
+}
+whenIdle(preloadHoverPreview);
 // Touch has no hover: holding a finger on a toolbar button or other tooltip shows its name instead (#188).
 attachTouchTooltips(document.body);
 
@@ -1336,7 +1356,7 @@ const tour = lazyTour(document.getElementById('tour')!, document.getElementById(
   seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
 }, lazyLoadFailed);
 
-// The palette, Settings, About and the Open and Upload dialogs load on first use. Fetch them once the page
+// The palette, Settings, About, the Open and Upload dialogs and Google Drive load on first use. Fetch them once the page
 // is idle, or as soon as the pointer or focus reaches the menus or toolbar, so they open at once.
 const preloadDialogs = () => {
   commandPalette.preload();
@@ -1347,6 +1367,7 @@ const preloadDialogs = () => {
   aboutDialog.preload();
   conflictDialog.preload();
   templates.preload();
+  driveProvider.preload();
 };
 preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
 preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);
@@ -1455,7 +1476,7 @@ const hostJoined = (id: string) => {
   renderConnection();
   return id;
 };
-share = setupShareButton({
+share = lazyShareButton({
   root: byId('share-menu'),
   button: shareButtonEl,
   popover: byId('share-popover'),
@@ -1509,7 +1530,8 @@ share = setupShareButton({
       destructive: true,
     }),
   unavailable: p2pAvailable ? undefined : () => explainP2pUnavailable('share'),
-});
+}, lazyLoadFailed);
+preloadOnIntent(shareButtonEl, share.preload);
 
 // Guests can't rename the host's project, so the title is just a label for them.
 if (isClient) {
