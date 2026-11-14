@@ -11,6 +11,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:corpus": "vitest run src/dev/compatCorpus.test.ts",
+    "corpus:update": "UPDATE_CORPUS_BASELINE=1 vitest run src/dev/compatCorpus.test.ts",
     "check:size": "node scripts/check-bundle-size.mjs",
     "basecoat:subset": "node scripts/basecoat-subset.mjs"
   },

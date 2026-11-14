@@ -1,0 +1,13 @@
+\chapter{Methods}\label{ch:methods}
+\section{The zero-one principle}
+\begin{theorem}\label{thm:zeroone}
+A network sorts every input if and only if it sorts every input of zeros and ones.
+\end{theorem}
+\begin{proof}
+See \citet{knuth1998}, Section 5.3.4.
+\end{proof}
+
+By Theorem~\ref{thm:zeroone}, a network with $n$ inputs needs $2^n$ checks:
+\begin{equation}
+  C(n) = 2^n.
+\end{equation}
