@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "The main window gets no Tauri APIs yet. Add a permission only with the feature that needs it (docs/desktop.md, Security).",
+  "windows": ["main"],
+  "permissions": []
+}

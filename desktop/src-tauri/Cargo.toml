@@ -1,0 +1,34 @@
+[package]
+name = "latex-collaborative-editor"
+# Not the app's version. tauri.conf.json reads frontend/package.json's, which the release flow
+# bumps, so this placeholder never needs a release commit (docs/desktop.md, "Versions").
+version = "0.0.0"
+description = "Native desktop shell for the LaTeX Collaborative Editor"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/PrestonHager/LaTeXCollaborativeEditor"
+edition = "2021"
+rust-version = "1.90"
+publish = false
+
+[lib]
+# The _lib suffix keeps the lib and bin names apart, which Cargo on Windows needs.
+name = "latex_collaborative_editor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+
+# Only to turn on WebKitGTK's WebRTC setting (src/lib.rs). The same major version wry uses.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "2.0", features = ["v2_38"] }
+
+[profile.release]
+# Smaller installers. The shell is a thin wrapper, so speed of the Rust side barely matters.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

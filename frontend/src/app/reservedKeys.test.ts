@@ -246,3 +246,41 @@ describe('reserved keys', () => {
     expect(label(context('chromium', 'mac', true), 'file.new')).toBe('⇧⌘N');
   });
 });
+
+describe('in the desktop app (Tauri, docs/desktop.md)', () => {
+  const WEBKITGTK = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15';
+  const WKWEBVIEW = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)';
+  const desktopWindow = (userAgent: string) =>
+    ({ __TAURI_INTERNALS__: {}, navigator: nav(userAgent), matchMedia: () => ({ matches: false }) }) as unknown as Window;
+  const browserWindow = (userAgent: string) => ({ navigator: nav(userAgent), matchMedia: () => ({ matches: false }) }) as unknown as Window;
+  const label = (where: KeyContext, id: 'file.new' | 'file.newFile' | 'file.export') =>
+    createKeymap(shortcuts, () => where.platform, undefined, () => reservedKeys(where)).labelFor(id);
+
+  it('is its own window with no browser keys, even when the webview says it is Safari', () => {
+    const linux = detectKeyContext(desktopWindow(WEBKITGTK));
+    expect(linux).toMatchObject({ browser: 'other', os: 'linux', appWindow: true, desktop: true });
+    const kept = reservedKeys(linux);
+    for (const key of ['Mod+N', 'Mod+Shift+N', 'Mod+T', 'Mod+W', 'Mod+Shift+W', 'Mod+Tab']) expect(kept.has(key), key).toBe(false);
+    expect(kept.get('Alt+F4')).toMatchObject({ by: 'your system' });
+    expect(label(linux, 'file.newFile')).toBe('Ctrl+N');
+    expect(label(linux, 'file.export')).toBe('Ctrl+Shift+E');
+    expect(describeKeyContext(linux)).toBe('the desktop app');
+  });
+
+  it('keeps the macOS keys on a Mac, and frees the browser keys on Windows', () => {
+    const mac = detectKeyContext(desktopWindow(WKWEBVIEW));
+    expect(mac).toMatchObject({ os: 'mac', platform: 'mac', appWindow: true, desktop: true });
+    expect(reservedKeys(mac).get('Mod+Q')).toMatchObject({ by: 'macOS' });
+    expect(reservedKeys(mac).has('Mod+N')).toBe(false);
+    expect(label(mac, 'file.newFile')).toBe('⌘N');
+    const windows = detectKeyContext(desktopWindow(UA.edge));
+    expect(windows).toMatchObject({ os: 'windows', appWindow: true, desktop: true });
+    expect(reservedKeys(windows).has('Mod+W')).toBe(false);
+  });
+
+  it('is not the desktop app in a browser', () => {
+    const safari = detectKeyContext(browserWindow(UA.safariMac));
+    expect(safari).toMatchObject({ browser: 'safari', appWindow: false });
+    expect(safari.desktop).toBeUndefined();
+  });
+});

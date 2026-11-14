@@ -8,7 +8,6 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Added
 
-- **The editor is free software under GPL-3.0-or-later.** The repository has a `LICENSE` file, and Help > About shows the license with links to it and to the licenses of the libraries the editor includes, which now ship with the site as `third-party-licenses.txt`.
 - **Project templates.** File > New Project opens a template picker: an empty project, a blank article, a technical report, a letter, Beamer slides and a thesis with chapters, plus your own templates. File > Save as Template saves any project, with all its files, as a template in this browser or in a `Templates` folder in Google Drive. Templates can be edited, renamed, deleted, and shared as a `.zip`. The built-in templates use current packages (microtype, csquotes, siunitx, biblatex, cleveref and friends), each with a comment saying why it's there.
 - **Your profile fills in templates.** Edit > Profile… keeps your name, affiliation, email, ORCID iD, address, language and paper size, and templates fill `{{name}}`, `{{email}}` and the rest from it, escaped so special characters print as typed. It's saved in this browser and, with Drive connected, in your Drive `Templates` folder. It's never sent to people in your room, and Clear profile removes it everywhere. The same dialog edits the name people in a shared room see.
 - The preview now handles more of what modern documents use, instead of stopping with an error: `\cref`, `\enquote`, siunitx quantities, `equation` and `align` (without numbers), theorems and proofs, the `appendices` environment, and Beamer slides (one page per frame). Tables show a note in their place. Each approximation is listed under the preview's info button.
@@ -26,6 +25,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 - **Page breaks show in the preview and the HTML export.** `\newpage`, `\clearpage` and `\pagebreak` now show as a dashed line labeled "page break". The line isn't printed, and printing still starts a new page there.
 
 - **Undo file operations.** Creating, renaming, moving, deleting and uploading files and folders, and Add Files from Drive, can be undone and redone. Press Ctrl+Z in the Files panel, use Edit > Undo (it says what it'll undo, like "Undo Delete chapter.tex"), or click **Undo** in the notice after a delete, rename or move. Typing keeps its own undo in the editor. Only your own changes are undone, a file someone else has typed in since is never removed, deleted images come back too, and a file that comes back where someone made a new one is named "name (restored)". In Drive, the same file comes out of the trash instead of a copy being made.
+
+- **Desktop app (experimental).** A first native build for Windows, macOS and Linux, made with Tauri around the same app as the website. It isn't signed or published yet: maintainers can build it from the **Desktop app** workflow. In the app, Ctrl+N, Ctrl+W and the other keys browsers keep for tabs work like in an installed web app. Google Drive sign-in and joining shared rooms on Linux don't work in it yet.
 
 ### Changed
 

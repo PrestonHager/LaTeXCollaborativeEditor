@@ -88,28 +88,6 @@ Partly.
 Once the page is loaded, you can keep typing and it saves to your browser.
 Collaboration, Drive, and the preview styles need a connection.
 
-## What's the license?
-
-The editor is free software under the **GPL-3.0-or-later** license.
-The source is on [GitHub](https://github.com/PrestonHager/LaTeXCollaborativeEditor), and the full text is in its [LICENSE](https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/LICENSE) file.
-**Help > About** links to both, and to the licenses of the libraries the editor includes.
-Your documents are yours: the license covers the editor's code, not what you write with it.
-
-```text
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-```
-
 ## How do I report a bug?
 
 Open an issue on the [repository](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues).

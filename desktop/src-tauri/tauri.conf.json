@@ -1,0 +1,50 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "LaTeX Collaborative Editor",
+  "mainBinaryName": "latex-collaborative-editor",
+  "version": "../../frontend/package.json",
+  "identifier": "io.github.prestonhager.latexcollaborativeeditor",
+  "build": {
+    "frontendDist": "../../frontend/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "LaTeX Collaborative Editor",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 360,
+        "minHeight": 480,
+        "useHttpsScheme": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": ["main-window"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Write LaTeX together, peer to peer.",
+    "longDescription": "A collaborative LaTeX editor. Documents sync directly between peers over WebRTC; there is no document server.",
+    "license": "GPL-3.0-or-later",
+    "homepage": "https://github.com/PrestonHager/LaTeXCollaborativeEditor",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

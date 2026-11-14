@@ -275,7 +275,6 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Help > Report a Security Issue sits right under Report a Bug, has a shield icon in the palette, and opens GitHub's private Report a vulnerability form (`/security/advisories/new`), not a public issue.
 - [ ] Help > About shows the app version with links to the docs, the source and the policies.
 - [ ] Help > About says `Version X.Y.Z (commit abc1234, built YYYY-MM-DD)`, and the commit link opens that commit on GitHub.
-- [ ] Help > About has the line "Free software under GPL-3.0-or-later (third-party licenses)" under the version. GPL-3.0-or-later opens `LICENSE` on GitHub in a new tab. In `npm run preview`, third-party licenses opens `third-party-licenses.txt` with every library's license (it's a 404 in `npm run dev`, which doesn't build it).
 - [ ] Help > About > View changelog opens What's new on top of About. It shows "Unreleased (in this build)" first, then each version newest first with its date, and the running version has a "You're on this version" badge (none in `npm run dev`, which is a dev build). The list scrolls, Tab stays inside the dialog, and Esc or Close goes back to About with focus on View changelog. Links open GitHub in a new tab, and it reads well in the light and dark app themes.
 - [ ] The footer ends with a small `vX.Y.Z` link. Hovering it shows the commit and build date, and clicking it opens the commit.
 - [ ] The bug form's extra info says `App version: X.Y.Z+abc1234`.
@@ -311,3 +310,13 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Type something, then click Reload to update. The autosave pill shows Saving, then Saved, then the page reloads with no "Leave site?" box, and the edit is still there.
 - [ ] Later hides the card, and it doesn't come back for the same version. It shows again for another version.
 - [ ] `npm run dev` never fetches `version.json` on its own.
+
+## Desktop app (experimental)
+
+Needs the desktop build (`npm run build` in `desktop/`, or an artifact from the **Desktop app** workflow). See `docs/desktop.md`.
+
+- [ ] `npm run check` in `desktop/` passes, and the app opens on the editor with no network page in between (it loads the bundled build).
+- [ ] The File menu shows Ctrl+N for New File and Ctrl+Shift+N for New Project (⌘N and ⇧⌘N on a Mac), and both work. Settings > Keyboard shortcuts says "Keys shown are for the desktop app".
+- [ ] Ctrl+W (⌘W on a Mac) doesn't close the window when it's bound to a command. On a Mac, ⌘Q still quits and ⌘C, ⌘V and ⌘Z work in the editor.
+- [ ] Projects made in the app are still there after quitting and opening it again, and are separate from the browser's.
+- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, check what Share does when the system WebKitGTK has no WebRTC.

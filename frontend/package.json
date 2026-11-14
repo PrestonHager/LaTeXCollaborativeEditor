@@ -2,11 +2,10 @@
   "name": "frontend",
   "private": true,
   "version": "0.1.0",
-  "license": "GPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && node scripts/third-party-notices.mjs && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
+    "build": "tsc && vite build && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
     "check:pages": "node scripts/check-build-pages.mjs",
     "preview": "vite preview",
     "test": "vitest",
@@ -17,19 +16,19 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
-    "@vitest/coverage-v8": "^4.1.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "fake-indexeddb": "^6.2.8",
     "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.5",
-    "typescript": "~6.0.2",
+    "typescript": "~7.0.2",
     "vite": "^8.3.7",
-    "vitest": "^4.1.5"
+    "vitest": "^5.1.0"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
-    "@codemirror/language": "^6.12.3",
-    "@codemirror/legacy-modes": "^6.5.2",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/legacy-modes": "^6.5.5",
     "@codemirror/lint": "^6.9.7",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.1",
@@ -37,8 +36,8 @@
     "@trystero-p2p/torrent": "^0.26.0",
     "basecoat-css": "^1.1.0",
     "latex.js": "^0.12.6",
-    "lucide": "^1.70.0",
-    "pdfjs-dist": "^6.4.299",
+    "lucide": "^1.71.0",
+    "pdfjs-dist": "^6.5.438",
     "y-codemirror.next": "^0.3.6",
     "yjs": "^13.6.33"
   }

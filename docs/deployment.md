@@ -22,8 +22,7 @@ Frontend deployment (GitHub Pages)
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
 - Vite builds every page in `BUILD_PAGES` in `frontend/vite.config.ts`: `index.html`, `privacy.html` and `tos.html`. A new top-level HTML page that should ship has to be added there, or it won't reach `dist/`. `regression.html` is dev-only and stays off the list.
-- After `vite build`, `npm run build` runs `scripts/third-party-notices.mjs`. It writes `dist/third-party-licenses.txt` (every runtime dependency's name, version, license and license text; the About dialog links to it) and fails the build if a runtime dependency's license isn't GPLv3-compatible. The project is GPL-3.0-or-later; see `docs/licensing.md` for the audit and how to add a dependency.
-- Then it runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
+- After `vite build`, `npm run build` runs `scripts/check-build-pages.mjs`. It fails the build if `dist/` is missing a page from that list or has `regression.html` or a `dev/` folder.
 - The build bakes in the version from `frontend/package.json`, the short commit SHA (`git rev-parse --short HEAD`, else `$GITHUB_SHA`, else `dev`) and the build time, and writes them to `dist/version.json`.
   The page check fails the build if `version.json` is missing, malformed, or doesn't match `package.json`.
 - The build also copies the repo-root `CHANGELOG.md` to `dist/CHANGELOG.md` (`changelogFilePlugin` in `scripts/build-info.mjs`), read from the root file each build, so there's no second copy in the repo. The page check fails the build if it's missing.
@@ -92,6 +91,16 @@ Staging and production
   So when a release PR merges, `tag-release.yml` (a push to `main`) tags the merge commit and then calls `release.yml` as a reusable workflow. That run's ref is still `main`, so the deploy passes the default rule, and the code it builds is the tag's.
   Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 9's `v*` rule is in.
 - **Transition.** Once this setup merges, production stops updating from `main`, and stays on the last build from `main` until the first release. The first one is **v0.2.0**: the Trystero protocol break in Unreleased is a breaking change, which before 1.0 is a minor bump (`docs/versioning.md`). Cut it with Prepare release, version `0.2.0`.
+
+Desktop app (experimental, issue #122)
+- The plan, the webview and WebRTC findings, Google sign-in, signing and the updater are in [`docs/desktop.md`](desktop.md).
+- **What it is.** `desktop/` is a Tauri 2 shell that bundles `frontend/dist`, the same static build the website deploys, and loads it from inside the app, never from a URL. The website is unchanged and stays the main product.
+- **Building it.** `npm ci` in `frontend/` and `desktop/`, then `npm run build` in `desktop/`. Tauri runs the frontend build first (`beforeBuildCommand`), so the bundle size check still applies. It also needs Rust 1.90 or newer and, on Linux, the WebKitGTK 4.1 development packages listed in `docs/desktop.md`. `npm run check` in `desktop/` checks the version, CSP and permission settings.
+- **CI.** `.github/workflows/desktop.yml` builds **unsigned** Linux, Windows and macOS installers as workflow artifacts, kept for 14 days. Start it with Actions > **Desktop app** > Run workflow (optionally with a tag), or push a `vX.Y.Z` tag by hand. Releases tagged by `tag-release.yml` don't start it yet, so run it by hand after a release. Nothing is attached to the GitHub release or deployed.
+- **Settings it uses.** Its jobs run in the **Production** environment and read `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL` from there, so the app's peers meet the website's. It builds with `VITE_DEPLOY_ENV=production`. The Google variables are left out on purpose: Google blocks sign-in inside an app's webview, so Drive shows as not set up in the app until the desktop sign-in flow lands.
+- **Storage.** The app keeps its own IndexedDB and localStorage, separate from any browser. They're tied to the bundle identifier and, on Windows, to `useHttpsScheme`. Never change either in `tauri.conf.json`: that would lose every local project.
+- **Known gap.** On Linux, Ubuntu's WebKitGTK has no WebRTC, so the app can't share a room there yet (`docs/desktop.md`, "Linux: WebKitGTK").
+- **Signing (maintainer, later):** Apple Developer ID and notarization secrets, a Windows code-signing certificate or Azure Trusted Signing, and a Tauri updater key. The secret names and steps are in `docs/desktop.md`, "Releases and signing".
 
 Local development
 - The dev server always runs on `http://localhost:5173`. It won't pick another port if that one is taken, since Google OAuth only allows exact origins.

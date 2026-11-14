@@ -87,6 +87,9 @@ describe('Google Picker', () => {
   });
 
   it("loads only the Picker's script, not Google sign-in, which Drive connect already loaded", async () => {
+    // The module loads the script once and keeps the promise, so start from a fresh copy and a clean mock.
+    vi.resetModules();
+    loadScript.mockClear();
     const { openGooglePicker } = await import('./googlePicker');
     const { answer } = stubPicker();
     answer({ action: 'cancel' });

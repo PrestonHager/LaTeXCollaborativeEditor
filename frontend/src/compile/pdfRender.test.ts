@@ -111,7 +111,11 @@ describe('renderPdfFigure', () => {
     expect(await renderPdfFigure(new Uint8Array(), 1, null)).toEqual({ error: 'Invalid PDF structure.' });
     pdfjs.getDocument.mockReturnValue({ promise: Promise.reject('odd'), destroy: async () => {} });
     expect(await renderPdfFigure(new Uint8Array(), 1, null)).toEqual({ error: 'odd' });
-    // Every document shares the one pdf.js worker.
-    expect(pdfjs.PDFWorker).toHaveBeenCalledTimes(1);
+    // Every document shares the one pdf.js worker. Check the worker each getDocument call got,
+    // not PDFWorker's call count: the worker is made once per module, maybe in an earlier test.
+    const workers = pdfjs.getDocument.mock.calls.map((call) => (call[0] as { worker: unknown }).worker);
+    expect(workers).toHaveLength(4);
+    expect(new Set(workers).size).toBe(1);
+    expect(workers[0]).toBeInstanceOf(pdfjs.PDFWorker);
   });
 });

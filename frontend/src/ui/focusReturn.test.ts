@@ -1,5 +1,5 @@
 import { returnFocusOnClose } from './focusReturn';
-import { createAboutDialog, LICENSE_URL, renderLicenseLine, THIRD_PARTY_NOTICES_URL } from './aboutDialog';
+import { createAboutDialog } from './aboutDialog';
 import { mountAppShell } from '../test/appShell';
 
 // jsdom has no showModal, so stand in for it and fire close like a browser does.
@@ -77,28 +77,5 @@ describe('createAboutDialog', () => {
     about.open();
     el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(el.open).toBe(false);
-  });
-
-  it('shows the license with links to LICENSE and the third-party notices, once', () => {
-    mountAppShell();
-    const el = document.getElementById('about-dialog') as HTMLDialogElement;
-    createAboutDialog(el, { version: '1.2.3', commit: 'dev', builtAt: '' });
-    const body = el.querySelector<HTMLElement>('.about-dialog-body')!;
-    renderLicenseLine(body);
-    const lines = body.querySelectorAll('.about-license');
-    expect(lines).toHaveLength(1);
-    expect(lines[0].textContent).toBe('Free software under GPL-3.0-or-later (third-party licenses)');
-    expect(lines[0].previousElementSibling!.querySelector('#about-version')).not.toBeNull();
-    const links = [...lines[0].querySelectorAll('a')];
-    expect(links.map((a) => a.getAttribute('href'))).toEqual([LICENSE_URL, THIRD_PARTY_NOTICES_URL]);
-    expect(LICENSE_URL).toBe('https://github.com/PrestonHager/LaTeXCollaborativeEditor/blob/main/LICENSE');
-    expect(links.every((a) => a.target === '_blank' && a.rel === 'noreferrer')).toBe(true);
-  });
-
-  it('puts the license line first when there is no version line', () => {
-    const body = document.createElement('section');
-    body.append(document.createElement('ul'));
-    renderLicenseLine(body);
-    expect(body.firstElementChild!.className).toBe('about-license');
   });
 });
