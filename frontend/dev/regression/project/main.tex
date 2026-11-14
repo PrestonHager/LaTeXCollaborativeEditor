@@ -2,6 +2,8 @@
 % Each section lines up with a part of dev/regression/checklist.md.
 % If a section doesn't look like its comment says, that's a regression.
 \documentclass{article}
+% Expect: no marker on graphicx or hyperref, which the preview has, and an info marker on each \usepackage line
+% from listings to cleveref, saying the preview uses a stand-in for it. unsupported-packages.tex has the warnings.
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{listings}
