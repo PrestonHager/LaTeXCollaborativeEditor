@@ -1,0 +1,58 @@
+name: Sync main into staging
+
+# PRs merge into staging, and releases (and the odd hotfix) merge into main. After every push to main,
+# merge main back into staging, so the release commit and any hotfix are on staging too and the next
+# release PR from staging doesn't conflict with main.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: sync-staging
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Merge main into staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! git ls-remote --exit-code --heads origin staging > /dev/null; then
+            echo "::notice title=No staging branch::There's no staging branch yet, so there's nothing to sync. See docs/versioning.md."
+            exit 0
+          fi
+          git fetch -q origin staging
+          if git merge-base --is-ancestor origin/main origin/staging; then
+            echo "::notice title=Already in sync::staging already has everything on main."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -q -c staging origin/staging
+          if git merge --no-edit -m "Merge main into staging" origin/main; then
+            git push -q origin staging
+            # A push made with GITHUB_TOKEN doesn't start other workflows, so start the staging deploy and tests here.
+            gh workflow run staging.yml --ref staging
+            gh workflow run test.yml --ref staging
+            echo "::notice title=Synced::Merged main (${GITHUB_SHA::7}) into staging."
+          else
+            git merge --abort
+            # Leave the conflict to a person: a PR from main into staging. Its head is main, which is never deleted.
+            if [ -z "$(gh pr list --base staging --head main --state open --json number --jq '.[].number')" ]; then
+              gh pr create --base staging --head main --title "Merge main into staging" \
+                --body "Merging \`main\` into \`staging\` after ${GITHUB_SHA::7} has conflicts, so it needs a person. Resolve them on a branch from \`staging\`, or in this PR."
+            fi
+            echo "::warning title=Sync conflict::main doesn't merge cleanly into staging. Opened a PR from main into staging."
+          fi

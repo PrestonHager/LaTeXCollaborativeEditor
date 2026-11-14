@@ -116,15 +116,15 @@ When you change a stored format:
 
 PRs don't bump the version. They only add lines under `## [Unreleased]`, so parallel PRs don't fight over `package.json` and the changelog. A release bumps it once, in its own PR, made by a workflow.
 
-`main` deploys to staging on every push. Production only gets releases, so every production deploy is a version (`docs/deployment.md`, "Staging and production").
+PRs target the `staging` branch, and every push to it deploys to the staging site. `main` only gets `staging` through a release PR, and production only gets releases, so every production deploy is a version (`docs/deployment.md`, "Staging and production").
 
-1. Try `main` on staging. Pick the bump from the Unreleased section, using the table above.
-2. Actions > **Prepare release** > Run workflow, on `main`. Choose `patch`, `minor` or `major`, or type an exact version (like `0.2.0` or `1.0.0-rc.1`). It runs `frontend/scripts/prepare-release.mjs`, which:
+1. Try `staging` on the staging site. Pick the bump from the Unreleased section, using the table above.
+2. Actions > **Prepare release** > Run workflow, on `staging`. Choose `patch`, `minor` or `major`, or type an exact version (like `0.2.0` or `1.0.0-rc.1`). It runs `frontend/scripts/prepare-release.mjs`, which:
    - sets the version in both `package.json` files and both lockfiles;
    - renames `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD` (today, UTC), puts a fresh empty `## [Unreleased]` above it, and updates the compare links at the bottom;
    - fails, changing nothing, if Unreleased is empty, the version isn't newer, or the changelog already has that version.
 
-   Then it pushes the branch `release/vX.Y.Z` and opens the PR "Release vX.Y.Z" with the release notes in its description.
+   Then it pushes the branch `release/vX.Y.Z` (from `staging`, plus the version commit) and opens the PR "Release vX.Y.Z" into `main` with the release notes in its description. The PR's head is the release branch, never `staging`, so merging it never deletes `staging`.
 3. Check the PR. Edit the changelog wording on the branch if you like, but keep the version and the heading.
    A PR opened with `GITHUB_TOKEN` doesn't start other workflows, so its `pull_request` checks don't run on their own. Prepare release runs **Test and Coverage** on the branch itself (`workflow_dispatch`). If the checks still don't show on the PR, close and reopen it, or push a commit to the branch. Both start `pull_request` runs.
 4. Merge it. `.github/workflows/tag-release.yml` runs on the push to `main`. It sees the release when `frontend/package.json`'s version went up, or the commit message names `release/vX.Y.Z` for the current version (`frontend/scripts/release-tag.mjs`). Then it:
@@ -132,13 +132,14 @@ PRs don't bump the version. They only add lines under `## [Unreleased]`, so para
    - calls `.github/workflows/release.yml`, which checks the tag is on `main`, matches both `package.json` files and has a changelog section (`frontend/scripts/release-notes.mjs`), runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to GitHub Pages, and creates the GitHub release with that changelog section as the notes, marked as a pre-release if the version has a `-`.
 
    A normal PR that bumps the version by hand releases the same way when it merges.
+5. `.github/workflows/sync-staging.yml` merges `main` back into `staging`, so `staging` has the version commit and the next release PR starts clean.
 
 If the release fails after tagging, fix it in a new PR, then Actions > **Release** > Run workflow on `main` with the tag to retry. That's also how to redeploy a release (for example after changing a Production variable): it deploys the tag again and refreshes the GitHub release's notes.
 If the tagged commit itself is broken, release the fix as the next patch. Don't move a tag that's been deployed.
 
 You can still tag by hand (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`) on a commit on `main` whose version already matches. That runs `release.yml` on the tag, which can only deploy if the github-pages environment allows `v*` tags (`docs/deployment.md`, one-time setup). Running Release on `main` with the tag needs no such rule.
 
-Between releases, staging runs the last released version number from `main`, so the commit in `version.json` and the footer tells builds apart. `version.json`'s `env` says which site a build is for.
+Between releases, staging runs the last released version number, so the commit in `version.json` and the footer tells builds apart. `version.json`'s `env` says which site a build is for.
 
 The first release under this flow is **v0.2.0**. Unreleased has the Trystero protocol break, which before 1.0 goes in a minor bump (see the scheme above).
 

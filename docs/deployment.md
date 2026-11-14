@@ -48,12 +48,13 @@ Frontend deployment (GitHub Pages)
   - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
   - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
-- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder: to staging on every push to `main`, to production on a release (see "Staging and production" below).
+- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder: to staging on every push to the `staging` branch, to production on a release (see "Staging and production" below).
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
 - **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository, or **Production** or **staging** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/` (for staging, the staging site's URL under `/docs/`). Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
 
 Staging and production
-- **`main` is staging. Releases are production.** Every push to `main` deploys to the staging site (`.github/workflows/staging.yml`). Production (https://latex.prestonhager.com/) only deploys from a `vX.Y.Z` release (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
+- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site (`.github/workflows/staging.yml`). A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
+- **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the staging deploy and tests. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
 - **Staging is on its own origin.** If it were a path on the production site, it would share localStorage and IndexedDB with production, so a staging build's migration could damage real users' projects, and Google OAuth only allows exact origins anyway.
   GitHub Pages has one site per repo, so staging lives in a second repo, `PrestonHager/LaTeXCollaborativeEditor-staging`, served at `https://staging.latex.prestonhager.com/`.
   `staging.yml` builds the site and force-pushes it as one commit to that repo's `gh-pages` branch, with a `.nojekyll` file and a `CNAME` for the custom domain. Pages in the staging repo publishes it a minute or two later.
@@ -79,8 +80,8 @@ Staging and production
 - **One-time setup** (a maintainer, once):
   1. Create the public repo `PrestonHager/LaTeXCollaborativeEditor-staging`, with nothing in it. Pages on a free plan needs it public.
   2. Make a fine-grained personal access token: **Settings > Developer settings > Fine-grained tokens**, resource owner PrestonHager, **Only select repositories**: the staging repo, **Repository permissions > Contents: Read and write**, and nothing else. Give it an expiry and a calendar reminder to renew it.
-  3. In this repo, **Settings > Environments > New environment** `staging`. Add the secret `STAGING_DEPLOY_TOKEN` (the token) and the variables in the table above. Restrict its deployment branches to `main`.
-  4. Run **Deploy staging** (Actions, Run workflow, on `main`) once, so the staging repo gets a `gh-pages` branch.
+  3. In this repo, **Settings > Environments > New environment** `staging`. Add the secret `STAGING_DEPLOY_TOKEN` (the token) and the variables in the table above. Restrict its deployment branches to `staging`.
+  4. Run **Deploy staging** (Actions, Run workflow, on `staging`) once, so the staging repo gets a `gh-pages` branch.
   5. In the staging repo, **Settings > Pages**: Source **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`. Set the custom domain to `staging.latex.prestonhager.com` and tick **Enforce HTTPS** once the certificate is ready.
   6. DNS: add `CNAME staging.latex.prestonhager.com -> prestonhager.github.io`. Verifying the domain for the account (**Settings > Pages > Verified domains**) keeps anyone else from claiming it.
   7. Google Cloud console, the production OAuth client: add `https://staging.latex.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
@@ -239,11 +240,11 @@ Security
   The issue chooser (`.github/ISSUE_TEMPLATE/config.yml`), the top of the bug and feature forms, and **Help > Report a Security Issue** all point there.
 - `.github/dependabot.yml` checks npm in `frontend/`, `e2e/` and `tools/screenshots/`, and the GitHub Actions versions, every week.
   Dependabot alerts and security updates, and secret scanning with push protection, are switched on in **Settings > Code security** too. The `.env` files hold Google and TURN keys, so keep push protection on.
-- Only the live site and `main` get security fixes. There are no release branches.
+- Only the live site and `main` get security fixes. A security fix can go straight into `main` as a hotfix PR and then be released; `sync-staging.yml` carries it into `staging`.
 
 Versions and releases
 - How to version, write the changelog, tag and release is in [`docs/versioning.md`](versioning.md).
-- Every merge to `main` deploys to staging. Production only deploys a release: a `vX.Y.Z` tag on a commit that's already on `main`.
+- Every merge to `staging` deploys to staging. Production only deploys a release: a `vX.Y.Z` tag on a commit that's already on `main`, which only gets `staging` through a release PR.
 - Prepare release (`.github/workflows/prepare-release.yml`) opens the release PR. When it merges, `tag-release.yml` tags it and calls `release.yml`, which checks the tag against both `package.json` files and the changelog, runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to Pages, and creates the GitHub release from the `CHANGELOG.md` section.
   The release workflows need no secrets beyond the build's own: the default `GITHUB_TOKEN` is enough. Only staging needs `STAGING_DEPLOY_TOKEN`.
 - `dist/version.json` is served with GitHub Pages' default caching (about 10 minutes), so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
