@@ -20,6 +20,8 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` only the first time the list opens.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
+- [ ] Soft keyboard (a phone, or dev tools device mode with touch): tapping a line near the bottom of `main.tex` opens the keyboard, and the cursor line stays visible above it and the key bar.
+- [ ] Key bar: while the editor has focus on a touch screen, a bar with `\` `{` `}` `$` `%` `[` `]` `&` shows just above the keyboard. Each key types its character at the cursor without closing the keyboard, `\` opens autocompletion, one undo takes a key back, and a peer in the room sees it. The bar hides when the editor loses focus, and never shows with a mouse.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
 - [ ] The main file shows a "main" marker in the header and in the Files panel.
 
