@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-google-sign-out"
+description = "Enables the google_sign_out command without any pre-configured scope."
+commands.allow = ["google_sign_out"]
+
+[[permission]]
+identifier = "deny-google-sign-out"
+description = "Denies the google_sign_out command without any pre-configured scope."
+commands.deny = ["google_sign_out"]

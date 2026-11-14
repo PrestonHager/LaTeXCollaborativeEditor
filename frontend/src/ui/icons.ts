@@ -102,7 +102,7 @@ const staticIcons = {
 export const fileIcons = { File, FileImage, FileText, Folder, FolderOpen };
 
 /** Icons for storage providers, by the name a registry entry gives (storage/providers/registry.ts). */
-export const storageIcons: Record<string, IconNode> = { 'hard-drive': HardDrive, monitor: Monitor };
+export const storageIcons: Record<string, IconNode> = { 'hard-drive': HardDrive, monitor: Monitor, folder: Folder };
 
 /** Build an SVG icon. Icons are decorative, so screen readers skip them. */
 export function icon(node: IconNode, className = 'size-4'): SVGElement {

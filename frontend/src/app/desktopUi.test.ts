@@ -144,6 +144,20 @@ describe('setUpDesktopUi', () => {
     expect(document.getElementById('p')!.textContent).toBe('Saved in this app.');
   });
 
+  it('starts the app update checks when given the update flow (#179)', () => {
+    vi.useFakeTimers();
+    const invoke = vi.fn(async () => null);
+    vi.stubGlobal('__TAURI_INTERNALS__', { invoke });
+    try {
+      setUpDesktopUi(document, { webApp: null, open: async () => true, updates: () => null })();
+      vi.advanceTimersByTime(10_000);
+      expect(invoke).toHaveBeenCalledWith('update_check');
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
   const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
   it('shows a notice with the link when the browser could not open it (issue #235)', async () => {

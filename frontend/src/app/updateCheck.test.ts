@@ -158,6 +158,13 @@ describe('createUpdateChecker', () => {
 });
 
 describe('updatePromptText', () => {
+  it('says Restart in the desktop app (#179)', () => {
+    expect(updatePromptText('peer', { isHost: false, inRoom: true }, true)).toEqual({
+      message: 'A collaborator is on a newer version of the app. Restart to update so you can keep editing together.',
+      detail: "Your changes are saved first. You'll rejoin the room after the restart.",
+    });
+  });
+
   it('words the prompt for each reason and room role', () => {
     expect(updatePromptText('deploy', { isHost: true, inRoom: false })).toEqual({
       message: 'A new version of the app is available.',
