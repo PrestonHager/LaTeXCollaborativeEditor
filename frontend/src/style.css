@@ -66,6 +66,12 @@
   --editor-number: #f4ba6e;
   --editor-comment: #8b949e;
   --editor-operator: #d2d8e0;
+  --editor-tooltip-bg: #252a33;
+  --editor-tooltip-text: #e5e7eb;
+  --editor-tooltip-border: #4b5563;
+  --editor-diag-hover-bg: #323a48;
+  --editor-diag-selected-bg: #1d3d70;
+  --editor-diag-active-bg: #2e260c;
 }
 
 [data-editor-theme="light"] {
@@ -80,6 +86,12 @@
   --editor-gutter-active-bg: #e5e7eb;
   --editor-line-number: #5f6b7d;
   --editor-line-number-active: #1f2a3d;
+  --editor-tooltip-bg: #f8f9fb;
+  --editor-tooltip-text: #1f2a3d;
+  --editor-tooltip-border: #c4c9d2;
+  --editor-diag-hover-bg: #e5e7eb;
+  --editor-diag-selected-bg: #cfe0ff;
+  --editor-diag-active-bg: #fff4d6;
 }
 
 [data-preview-theme="dark"] {
@@ -109,6 +121,12 @@
     --editor-gutter-active-bg: #e5e7eb;
     --editor-line-number: #5f6b7d;
     --editor-line-number-active: #1f2a3d;
+  --editor-tooltip-bg: #f8f9fb;
+  --editor-tooltip-text: #1f2a3d;
+  --editor-tooltip-border: #c4c9d2;
+  --editor-diag-hover-bg: #e5e7eb;
+  --editor-diag-selected-bg: #cfe0ff;
+  --editor-diag-active-bg: #fff4d6;
   }
   :root:not([data-preview-theme="dark"]) {
     --preview-bg: #ffffff;
@@ -554,6 +572,25 @@ label.settings-row { justify-content: flex-start; }
 .cm-error-line { background: rgba(239, 68, 68, 0.18); }
 .cm-warning-line { background: rgba(234, 179, 8, 0.15); }
 .cm-info-line { background: rgba(59, 130, 246, 0.12); }
+/*
+ * Diagnostic tooltips and the lint panel (#228). @codemirror/lint only has light colors (a #f5f5f5 tooltip, #ddd
+ * selected rows), but the text takes the editor theme, so a dark editor showed light text on light grey. These use
+ * the --editor-* tokens above, so they follow the editor theme, including "system" when the app and the OS disagree.
+ * The selectors are longer than CodeMirror's own so they win whichever stylesheet loads last.
+ */
+.editor .cm-editor .cm-tooltip { background: var(--editor-tooltip-bg); color: var(--editor-tooltip-text); border: 1px solid var(--editor-tooltip-border); }
+.editor .cm-editor .cm-tooltip .cm-diagnostic { color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-tooltip-lint .cm-diagnostic:hover { background: var(--editor-diag-hover-bg); }
+.editor .cm-editor .cm-panel.cm-panel-lint { background: var(--editor-tooltip-bg); color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul li { color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul li:hover,
+.editor .cm-editor .cm-panel.cm-panel-lint ul [aria-selected] { background: var(--editor-diag-hover-bg); color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul:focus [aria-selected],
+.editor .cm-editor .cm-panel.cm-panel-lint ul li:active { background: var(--editor-diag-selected-bg); color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.editor .cm-editor .cm-panel.cm-panel-lint button { color: var(--editor-tooltip-text); }
+/* The text under a diagnostic while its tooltip is open. CodeMirror's #ffdd9980 washed out light text. */
+.editor .cm-editor .cm-lintRange-active { background-color: var(--editor-diag-active-bg); }
 
 /* Preview. */
 .preview { position: relative; width: 100%; height: 100%; border: 0; background: var(--preview-bg); overflow: hidden; color: var(--preview-text); }

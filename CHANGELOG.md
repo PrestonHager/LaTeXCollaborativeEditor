@@ -20,6 +20,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 - **Dialogs fill the screen on phones.** Below 640px wide, Upload, Export, About, Open a project, the conflict dialog, Settings, What's new and the template dialogs open as full-screen sheets: the title stays at the top, the buttons at the bottom, and the middle scrolls. Short confirm and name dialogs stay a small card, and wider windows don't change.
 
+### Fixed
+
+- **Diagnostic tooltips are readable in a dark editor.** Hovering an error, warning or info marker showed light text on a light grey box. The tooltip, its hovered and selected rows, and the highlighted text under it now follow the editor theme, including Match system when the app and the OS disagree.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added
