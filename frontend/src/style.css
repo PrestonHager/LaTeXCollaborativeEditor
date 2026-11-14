@@ -140,7 +140,9 @@
 html, body, #app { width: 100%; height: 100%; }
 body { overflow: hidden; font-family: var(--font-sans); }
 /* --app-height is the part of the window above the on-screen keyboard where the browser doesn't resize the page for it (iOS). */
-#app { min-height: var(--app-height, 100dvh); height: var(--app-height, 100dvh); display: flex; flex-direction: column; overflow: hidden; }
+/* clip, not just hidden: a hidden box can still be scrolled by focus(), and opening More right after Menu on a
+   phone scrolled #app 160px sideways, shifting the whole page off screen (#191). */
+#app { min-height: var(--app-height, 100dvh); height: var(--app-height, 100dvh); display: flex; flex-direction: column; overflow: hidden; overflow: clip; }
 body.is-resizing { cursor: col-resize; user-select: none; }
 
 .app-loading { display: none; align-items: center; gap: 0.7rem; padding: 0.4rem 1rem; border-bottom: 1px solid var(--panel-border); background: var(--surface); }
@@ -207,7 +209,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 
 /* Menu bar. Basecoat styles the dropdowns, we only set sizes and the check spacing. */
 .menu-bar { display: inline-flex; align-items: center; gap: 0.125rem; }
-.menu-popover { min-width: var(--popover-menu); max-width: calc(100vw - var(--viewport-gutter)); margin-inline-start: var(--popover-shift, 0px); }
+.menu-popover { min-width: var(--popover-menu); max-width: calc(100vw - var(--viewport-gutter)); max-height: var(--popover-room, none); overflow-y: auto; margin-inline-start: var(--popover-shift, 0px); }
 /* Basecoat fades `visibility` too, so an opening menu stays invisible for its first frame and
    focus() on its first item is dropped. Show it at once on open; closing still fades out. */
 .menu-popover[aria-hidden='false'] { transition-property: opacity, transform, translate, scale; }
@@ -420,7 +422,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 
 
 /* Split view. */
-.split { flex: 1; min-width: 0; display: grid; grid-template-columns: 50% 8px 50%; min-height: 0; }
+.split { flex: 1; min-width: 0; display: grid; grid-template-columns: minmax(0, 50fr) 8px minmax(0, 50fr); min-height: 0; }
 .pane { border-right: 1px solid var(--panel-border); min-height: 0; background: var(--surface); }
 .pane:last-child { border-right: 0; }
 .splitter { background: var(--surface-2); border-left: 1px solid var(--panel-border); border-right: 1px solid var(--panel-border); cursor: col-resize; }

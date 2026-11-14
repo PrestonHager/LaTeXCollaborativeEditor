@@ -17,6 +17,23 @@ const BASE_URL = `http://127.0.0.1:${PORT}/`;
 const VIEWPORT = { width: 1280, height: 800 };
 const THEMES = (process.env.SCREENSHOT_THEMES ?? 'light,dark').split(',');
 
+// Which window sizes to shoot (issue #191). `desktop` is the full set of docs shots at 1280x800 and is the default.
+// `phone` (390x844), `small-phone` (360x640) and `tablet` (768x1024) take the mobile set, named `<size>-<shot>-<theme>.png`.
+// For example SCREENSHOT_VIEWPORTS=desktop,phone,tablet does all three.
+const VIEWPORT_PRESETS = {
+  desktop: { name: 'desktop', width: VIEWPORT.width, height: VIEWPORT.height },
+  phone: { name: 'phone', width: 390, height: 844 },
+  'small-phone': { name: 'small-phone', width: 360, height: 640 },
+  tablet: { name: 'tablet', width: 768, height: 1024 },
+};
+const VIEWPORTS = (process.env.SCREENSHOT_VIEWPORTS ?? 'desktop').split(',').map((raw) => {
+  const preset = VIEWPORT_PRESETS[raw.trim()];
+  if (!preset) throw new Error(`Unknown SCREENSHOT_VIEWPORTS entry "${raw}". Use ${Object.keys(VIEWPORT_PRESETS).join(', ')}.`);
+  return preset;
+});
+// Under 640px the app uses its phone layout (frontend/src/app/phoneLayout.ts).
+const PHONE_MAX_WIDTH = 639;
+
 const MAIN_TEX = String.raw`\documentclass{article}
 \usepackage{graphicx}
 \title{Field Notes}
@@ -404,6 +421,87 @@ async function shootTheme(browser, theme) {
   await context.close();
 }
 
+/**
+ * The phone and tablet shots (issue #191): a touch screen at the given size, with no callouts.
+ * Phones get the editor, preview, Files drawer, Menu, More actions, a dialog as a sheet and Share.
+ * Tablets keep the split, so they get the main screen, a dialog and Share.
+ * These are at 2x so they stay sharp in the docs' narrow table cells.
+ */
+async function shootMobileTheme(browser, theme, viewport) {
+  const phone = viewport.width <= PHONE_MAX_WIDTH;
+  console.log(`${theme} theme, ${viewport.name} ${viewport.width}x${viewport.height}`);
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    colorScheme: theme,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  // Skip the tour so it doesn't cover the screen.
+  await context.addInitScript(() => {
+    localStorage.setItem('latex-editor.settings', JSON.stringify({ version: 1, values: { tourSeen: true }, updatedAt: {} }));
+  });
+  const page = await context.newPage();
+  page.on('dialog', (dialog) => dialog.accept());
+  const name = (shotName) => `${viewport.name}-${shotName}`;
+
+  await page.goto(BASE_URL);
+  await page.waitForSelector('#app-loading:not(.is-active)', { state: 'attached' });
+  await page.waitForSelector('.cm-content');
+  await clickAndAnswer(page, '#doc-title', 'Field Notes');
+  // No figure or chapter here, so the main file stands on its own.
+  const text = MAIN_TEX.replace('\\input{chapters/intro}', INTRO_TEX.trim()).replace(/\\includegraphics[^\n]*\n\n/, '');
+  await setEditorText(page, text);
+  await waitForCompile(page);
+  await page.waitForFunction(() => /Saved/.test(document.getElementById('autosave-status')?.textContent ?? ''), null, { timeout: 30_000 });
+  // Put the cursor at the top and drop focus, so the soft keyboard's key bar isn't showing.
+  await page.keyboard.press('ControlOrMeta+Home');
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  await page.waitForTimeout(300);
+
+  if (phone) {
+    await shot(page, name('editor'), theme);
+    await page.click('#phone-show-preview');
+    await page.waitForTimeout(800);
+    await shot(page, name('preview'), theme);
+    await page.click('#phone-show-editor');
+    await page.click('#phone-files');
+    await page.waitForTimeout(400);
+    await shot(page, name('files'), theme);
+    await page.keyboard.press('Escape');
+
+    await page.click('#menu-collapsed-root > .menu-trigger');
+    await page.waitForSelector('#menu-all[aria-hidden="false"]');
+    await page.waitForTimeout(300);
+    await shot(page, name('menu'), theme);
+    await page.keyboard.press('Escape');
+
+    await page.click('.toolbar-more > .menu-trigger');
+    await page.waitForSelector('#toolbar-more-menu[aria-hidden="false"]');
+    await page.waitForTimeout(300);
+    await shot(page, name('more'), theme);
+    await page.keyboard.press('Escape');
+  } else {
+    await shot(page, name('overview'), theme);
+  }
+
+  // Settings is dialog-lg, so on a phone it's a full-screen sheet (#187).
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.waitForSelector('#settings-dialog[open] #settings-editor-theme');
+  await page.waitForTimeout(400);
+  await shot(page, name('settings'), theme);
+  await page.click('#settings-done');
+
+  // Share before it starts, so nothing connects.
+  await page.click('#share-btn');
+  await page.waitForSelector('#share-popover[aria-hidden="false"]');
+  await page.waitForTimeout(300);
+  await shot(page, name('share'), theme);
+  await page.keyboard.press('Escape');
+
+  await context.close();
+}
+
 /** Download Playwright's Chromium if it's missing, unless we were told to use a browser that's already installed. */
 function installChromium() {
   if (process.env.SCREENSHOT_CHANNEL || process.env.SCREENSHOT_CHROMIUM) return;
@@ -422,7 +520,12 @@ async function main() {
     executablePath: process.env.SCREENSHOT_CHROMIUM || undefined,
   });
   try {
-    for (const theme of THEMES) await shootTheme(browser, theme);
+    for (const viewport of VIEWPORTS) {
+      for (const theme of THEMES) {
+        if (viewport.name === 'desktop') await shootTheme(browser, theme);
+        else await shootMobileTheme(browser, theme, viewport);
+      }
+    }
   } finally {
     await browser.close();
     server.kill();

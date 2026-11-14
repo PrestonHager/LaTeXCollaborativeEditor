@@ -35,7 +35,7 @@ describe('layout', () => {
     const { layout, splitRoot } = setup();
     layout.applyLayoutMode();
     expect(layout.mode).toBe('split');
-    expect(splitRoot.style.gridTemplateColumns).toBe('50% 8px 50%');
+    expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 50fr) 8px minmax(0px, 50fr)');
   });
 
   it('hides the other pane and the splitter in single-pane modes', () => {
@@ -58,13 +58,13 @@ describe('layout', () => {
     splitter.dispatchEvent(pointer('pointerdown'));
     expect(document.body.classList.contains('is-resizing')).toBe(true);
     window.dispatchEvent(pointer('pointermove', 300));
-    expect(splitRoot.style.gridTemplateColumns).toBe('30% 8px 70%');
+    expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 30fr) 8px minmax(0px, 70fr)');
     window.dispatchEvent(pointer('pointermove', 950));
-    expect(splitRoot.style.gridTemplateColumns).toBe('80% 8px 20%');
+    expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 80fr) 8px minmax(0px, 20fr)');
     window.dispatchEvent(pointer('pointerup'));
     expect(document.body.classList.contains('is-resizing')).toBe(false);
     window.dispatchEvent(pointer('pointermove', 500));
-    expect(splitRoot.style.gridTemplateColumns).toBe('80% 8px 20%');
+    expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 80fr) 8px minmax(0px, 20fr)');
   });
 
   it('ignores drags when only one pane shows', () => {
@@ -81,7 +81,7 @@ describe('layout', () => {
     layout.installSplitter();
     layout.restore({ mode: 'split', splitRatio: 0.95 });
     expect(layout.splitRatio).toBe(0.8);
-    expect(splitRoot.style.gridTemplateColumns).toBe('80% 8px 20%');
+    expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 80fr) 8px minmax(0px, 20fr)');
     expect(onChange).not.toHaveBeenCalled();
 
     splitter.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
@@ -113,11 +113,11 @@ describe('layout', () => {
       expect(down.defaultPrevented).toBe(true);
       expect(capture).toHaveBeenCalledWith(7);
       window.dispatchEvent(touch('pointermove', 400));
-      expect(splitRoot.style.gridTemplateColumns).toBe('40% 8px 60%');
+      expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 40fr) 8px minmax(0px, 60fr)');
       // A second finger on the screen doesn't move it, or end the drag.
       window.dispatchEvent(touch('pointermove', 700, 8));
       window.dispatchEvent(touch('pointerup', 700, 8));
-      expect(splitRoot.style.gridTemplateColumns).toBe('40% 8px 60%');
+      expect(splitRoot.style.gridTemplateColumns).toBe('minmax(0px, 40fr) 8px minmax(0px, 60fr)');
       expect(onChange).not.toHaveBeenCalled();
       window.dispatchEvent(touch('pointerup', 400));
       expect(onChange).toHaveBeenCalledWith({ mode: 'split', splitRatio: 0.4 });

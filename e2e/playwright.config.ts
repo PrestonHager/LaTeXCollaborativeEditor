@@ -53,11 +53,22 @@ export default defineConfig<SyncOptions>({
   // WebRTC differs between engines, so run host and guest in each one,
   // plus a mixed pair where the guest uses a different browser from the host.
   // CI runs each project in its own job (see .github/workflows/test.yml).
+  // The sync projects run sync.spec.ts only. mobile-layout runs the phone and tablet layout check (issue #191)
+  // in Chromium with touch, at the sizes listed in tests/mobile-layout.spec.ts.
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], ...chromiumLaunch } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
-    { name: 'chromium-host-firefox-guest', use: { ...devices['Desktop Chrome'], ...chromiumLaunch, guestBrowserName: 'firefox' } },
+    { name: 'chromium', testMatch: 'sync.spec.ts', use: { ...devices['Desktop Chrome'], ...chromiumLaunch } },
+    { name: 'firefox', testMatch: 'sync.spec.ts', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: 'sync.spec.ts', use: { ...devices['Desktop Safari'] } },
+    { name: 'chromium-host-firefox-guest', testMatch: 'sync.spec.ts', use: { ...devices['Desktop Chrome'], ...chromiumLaunch, guestBrowserName: 'firefox' } },
+    {
+      name: 'mobile-layout',
+      testMatch: 'mobile-layout.spec.ts',
+      // A coarse pointer and touch events like a phone or tablet. Each test sets its own viewport.
+      use: { ...devices['Desktop Chrome'], ...chromiumLaunch, hasTouch: true, isMobile: true, deviceScaleFactor: 1 },
+      // No WebRTC here, so the test needs less time than the sync one.
+      timeout: 60_000,
+      expect: { timeout: 10_000 },
+    },
   ],
   // Build the app and serve it with vite preview, unless E2E_BASE_URL points somewhere else.
   // A site at E2E_BASE_URL uses whatever trackers it was built with, so no local tracker then.

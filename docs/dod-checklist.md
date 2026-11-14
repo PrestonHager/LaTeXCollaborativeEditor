@@ -70,6 +70,7 @@ Checklist
 Verification guidance
 - Prefer automated tests where possible; accompany with manual QA for session join, realtime sync, and preview rendering.
 - `npm run test:e2e` runs a Playwright test in `e2e/` that opens a host and a guest in two browser contexts, shares a room, and checks the file tree, an uploaded image, and edits in both directions. It runs in Chromium, Firefox and WebKit, plus a Chromium host with a Firefox guest, as one CI job per browser. Peers meet through a WebTorrent tracker the test starts on `127.0.0.1` (test infrastructure only, see `docs/qa-runbook.md`), not the public trackers. Those jobs are still non-blocking.
+- The `mobile-layout` Playwright project (`e2e/tests/mobile-layout.spec.ts`, the non-blocking `e2e-mobile-layout` CI job) checks phone and tablet sizes (360×640, 390×844, 768×1024, 1024×768): no sideways scrolling, panes reachable, every `dialog-md` and `dialog-lg` dialog fits, and the Menu, More and Share popovers stay on screen. Before a release that touches sharing or the phone layout, do the hand check in "Mobile browsers" in `docs/qa-runbook.md` (mobile Safari and Chrome).
 - Maintain a runbook for reproducible test scenarios (local, remote, and cross-browser) in `docs/qa-runbook.md`.
 
 ## Verification log

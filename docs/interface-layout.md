@@ -201,13 +201,31 @@ With a keyboard, **Tab** reaches Files, Editor and Preview, and Enter or Space p
 
 Tablets and wider windows keep the layout above.
 
+- Dialogs like Settings, Upload, Export and Open a project fill the screen as a sheet: the title at the top, the buttons at the bottom, and the middle scrolls. Short questions stay a small card.
+
 | Editor | Preview | Files |
 |--------|---------|-------|
-| ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/phone-layout/after-390x844-editor.png) | ![The preview on a phone](assets/phone-layout/after-390x844-preview.png) | ![The file list open as a drawer over the editor](assets/phone-layout/after-390x844-files.png) |
+| ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/screenshots/phone-editor-light.png#only-light)![The editor on a phone, with the Files, Editor and Preview bar above it](assets/screenshots/phone-editor-dark.png#only-dark) | ![The preview on a phone, at Fit width](assets/screenshots/phone-preview-light.png#only-light)![The preview on a phone, at Fit width](assets/screenshots/phone-preview-dark.png#only-dark) | ![The file list open as a drawer over the editor](assets/screenshots/phone-files-light.png#only-light)![The file list open as a drawer over the editor](assets/screenshots/phone-files-dark.png#only-dark) |
 
-| Menu | More actions |
-|------|--------------|
-| ![The Menu button's menu on a phone, with File, Edit, View and Help items under headings](assets/phone-menu/after-390x844-menu.png) | ![The toolbar's More actions menu on a phone](assets/phone-menu/after-390x844-more.png) |
+| Menu | More actions | Settings |
+|------|--------------|----------|
+| ![The Menu button's menu on a phone, with File, Edit, View and Help items under headings](assets/screenshots/phone-menu-light.png#only-light)![The Menu button's menu on a phone, with File, Edit, View and Help items under headings](assets/screenshots/phone-menu-dark.png#only-dark) | ![The toolbar's More actions menu on a phone](assets/screenshots/phone-more-light.png#only-light)![The toolbar's More actions menu on a phone](assets/screenshots/phone-more-dark.png#only-dark) | ![Settings as a full-screen sheet on a phone](assets/screenshots/phone-settings-light.png#only-light)![Settings as a full-screen sheet on a phone](assets/screenshots/phone-settings-dark.png#only-dark) |
+
+| Share |
+|-------|
+| ![The Share popover on a phone, before sharing starts](assets/screenshots/phone-share-light.png#only-light)![The Share popover on a phone, before sharing starts](assets/screenshots/phone-share-dark.png#only-dark) |
+
+## On a tablet
+
+From 640px wide, like a tablet in either orientation, the app keeps the desktop layout: File, Edit, View and Help, the full toolbar, and the files, editor and preview side by side.
+With a finger as the pointer, menu items and buttons are 44px tall (see [On a touch screen](#on-a-touch-screen)), so a long menu stops above the bottom of the screen and scrolls.
+Dialogs are cards, and Settings is one column below 1024px wide.
+
+| Main screen | Settings | Share |
+|-------------|----------|-------|
+| ![The app on a 768 by 1024 tablet, with files, editor and preview side by side](assets/screenshots/tablet-overview-light.png#only-light)![The app on a 768 by 1024 tablet, with files, editor and preview side by side](assets/screenshots/tablet-overview-dark.png#only-dark) | ![Settings on a tablet](assets/screenshots/tablet-settings-light.png#only-light)![Settings on a tablet](assets/screenshots/tablet-settings-dark.png#only-dark) | ![The Share popover on a tablet](assets/screenshots/tablet-share-light.png#only-light)![The Share popover on a tablet](assets/screenshots/tablet-share-dark.png#only-dark) |
+
+An automated check opens every dialog and menu at 360×640, 390×844, 768×1024 and 1024×768 and fails if anything runs off the screen or the page scrolls sideways.
 
 ## On a touch screen
 

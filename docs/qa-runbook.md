@@ -23,7 +23,7 @@ npm ci --prefix e2e
 npx --prefix e2e playwright install chromium firefox webkit
 ```
 
-Then run all four from the repo root:
+Then run them all (the four sync projects and the `mobile-layout` check below) from the repo root:
 
 ```sh
 npm run test:e2e
@@ -41,6 +41,28 @@ The report and traces land in `e2e/playwright-report/` and `e2e/test-results/`, 
 To point the test at an app that's already running, set `E2E_BASE_URL`, for example `E2E_BASE_URL=https://latex.prestonhager.com/ npm run test:e2e`.
 That site uses the trackers it was built with, so no local tracker starts.
 To use another port for the local server, set `E2E_PORT`.
+
+## Phone and tablet layout check
+
+`e2e/tests/mobile-layout.spec.ts` is the `mobile-layout` Playwright project (issue #191).
+It runs in Chromium with touch turned on (a coarse pointer, like a phone) at four sizes: 360×640 and 390×844 (phones), 768×1024 and 1024×768 (a tablet both ways).
+At each size it checks that:
+
+- the page never scrolls sideways, on load and with each dialog or popover open;
+- the main panes can be reached: on a phone, the Files, Editor and Preview bar switches panes and opens the file drawer; on a tablet, the file list, editor and preview are all showing side by side;
+- every `dialog-md` and `dialog-lg` dialog (Settings, Upload, Export, Open a project, Accounts, About, What's new and the save conflict) opens from the menus and fits in the window, footer included, with nothing inside it wider than the box;
+- the Menu and More actions popovers on a phone, the File, Edit, View and Help menus on a tablet, and the Share popover open fully on screen.
+
+It doesn't start sharing, so it needs no tracker connection, but it uses the same build and `webServer` setup as the sync test.
+Run it from `e2e/`:
+
+```sh
+npx playwright install chromium
+npx playwright test --project=mobile-layout
+```
+
+In CI it's the `e2e-mobile-layout` job next to `e2e-sync`, non-blocking for now, and it uploads its report as `e2e-report-mobile-layout`.
+It's Chromium only. Real mobile Safari and Chrome need the hand check in [Mobile browsers](#mobile-browsers).
 
 ### Local tracker
 
@@ -118,3 +140,44 @@ Try at least these pairs:
 Also check that the preview renders and the menus work in each browser.
 The automated test covers each engine on its own and a Chromium host with a Firefox guest.
 It uses Playwright's own builds, so the other pairs and the branded browsers still need a manual check.
+
+## Mobile browsers
+
+The automated layout check emulates a phone in desktop Chromium. It can't run iOS Safari, Chrome on Android, a real soft keyboard or a real share sheet, so check those by hand before a release that touches sharing or the phone layout.
+Use a real phone (or a tablet) on the deployed site, or on your machine's dev server over the LAN (`npm run dev -- --host`, then open `http://<your-ip>:5173/`).
+WebRTC needs a secure origin outside `localhost`, so for sharing between devices use the staging or production site.
+
+Test at least these, each as host and as guest:
+
+- Safari on iPhone (iOS 17 or newer)
+- Chrome on Android
+- Safari or Chrome on an iPad, in both orientations
+
+### Host on the phone
+
+1. Open the site on the phone. The tour shows; check each step points at something on screen, then finish it.
+2. Check there's no sideways scrolling, and that the Files, Editor and Preview bar switches panes. Open **Files**, pick a file, and check the drawer closes.
+3. Tap in the editor. Check the soft keyboard doesn't cover the line you're typing on, and the key bar above it inserts `\`, `{`, `}`, `$` and the rest.
+4. Open **Menu** and **More actions** (**⋯**). Check they fit, scroll if needed, and close with a tap outside.
+5. Tap **Share**, then **Start sharing**. Check the link shows in full or wraps, and **Copy** puts it on the clipboard (paste it in another app to check).
+6. Send the link to a second device (a laptop or another phone) and open it there. Check both show Connected and edits go both ways.
+7. Lock the phone for a minute, unlock it, and check the room reconnects or says what happened.
+
+### Guest on the phone
+
+1. Start sharing on a laptop and open the link on the phone, from a messaging app (which may open it in its own browser) and from the phone's browser.
+2. Check the phone joins, shows the file tree in the drawer, and the preview renders.
+3. Type on the phone and on the laptop and check both update.
+4. Check host-only items (New Project, Open Project, Clear Local Projects) are grayed out in **Menu**.
+5. Rotate the phone and check the layout follows without sideways scrolling.
+
+### Recording results
+
+Note each browser, OS version and device, the network (Wi-Fi or mobile data), and pass or fail for each step in the PR or release notes.
+For a failure, add a screenshot or screen recording and open an issue with the `area: ui` label.
+
+| Date | Device and browser | Host | Guest | Notes |
+| --- | --- | --- | --- | --- |
+| | Safari on iPhone | not yet checked | not yet checked | |
+| | Chrome on Android | not yet checked | not yet checked | |
+| | iPad | not yet checked | not yet checked | |
