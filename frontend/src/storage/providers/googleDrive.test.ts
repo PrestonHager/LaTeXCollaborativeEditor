@@ -420,6 +420,9 @@ describe('GoogleDriveProvider', () => {
       const folder = drive.files.get(id)!;
       expect(folder.mimeType).toBe(FOLDER);
       expect(folder.appProperties).toMatchObject({ latexProject: '1', mainFile: 'main.tex' });
+      await provider.setEngine(id, 'xelatex');
+      expect(drive.files.get(id)!.appProperties).toMatchObject({ mainFile: 'main.tex', texEngine: 'xelatex' });
+      expect((await provider.openProject(id)).engine).toBe('xelatex');
       const figures = drive.find('figures')!;
       expect(figures.parents).toEqual([id]);
       expect(drive.find('plot.png')!.parents).toEqual([figures.id]);
@@ -449,6 +452,7 @@ describe('GoogleDriveProvider', () => {
         id: 'root1',
         name: 'Paper',
         mainPath: 'paper.tex',
+        engine: null,
         entries: [
           { path: 'img', kind: 'folder' },
           { path: 'img/x.png', kind: 'file' },
@@ -566,6 +570,7 @@ describe('GoogleDriveProvider', () => {
       await provider.writeFile(legacyId, 'essay.tex', 'edited');
       await provider.renameProject(legacyId, 'ignored');
       await provider.setMainFile(legacyId, 'essay.tex');
+      await provider.setEngine(legacyId, 'xelatex');
       expect(text(drive.files.get('old')!.content!)).toBe('edited');
       expect(provider.currentProjectId(legacyId)).toBe(legacyId);
 

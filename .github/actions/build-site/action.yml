@@ -1,5 +1,6 @@
 # Builds the site (the Vite app plus the MkDocs docs) into frontend/dist.
-# Used by release.yml (production, from a vX.Y.Z tag). Staging builds from the Dockerfile on Coolify.
+# Used by release.yml for a GitHub Pages production deploy, until the Coolify secrets are set.
+# Staging, and production on Coolify, build from the Dockerfile instead.
 # The calling job sets the VITE_* variables in its env from its GitHub environment
 # (Production or staging), and they reach these steps from there. See docs/deployment.md.
 name: Build site
