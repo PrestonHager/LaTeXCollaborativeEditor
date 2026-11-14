@@ -11,9 +11,14 @@ Rendezvous and session bootstrap
   The page's Content Security Policy only lets it open WebSockets to these trackers. The build adds any custom `VITE_P2P_RENDEZVOUS` trackers to `connect-src` (see `docs/deployment.md`).
 - Trackers only see the hashed room topic and WebRTC offers and answers, never document content.
 - No repository-owned signaling server is required.
-- The host's room id is kept in the tab's sessionStorage after Share, so reloading the host tab rejoins the same room and guest links keep working.
+- When a room starts and ends (issue #224):
+  - A host is never in a room on load or reload, and makes no tracker or WebRTC connection. Hovering Share only downloads the P2P code (`preloadTransport`); it doesn't join.
+  - A room starts only when the host clicks **Start sharing** (`ensureRoom()`, a new random room id) or **Resume sharing (same link)** (`join()` with the saved id) in the Share popover.
+  - The host's room id is kept in the tab's sessionStorage while it shares. After a reload it's only offered as Resume sharing, so a reload never re-shares on its own, but the same link can still be reused on purpose.
+  - **Stop sharing** calls `leave()`: it cancels any rejoin timer, disconnects from the room (peers see the host leave), clears the saved room id, and the badge goes back to Not sharing.
+  - **New link** leaves the current room and starts a fresh one, which disconnects anyone on the old link.
+  - A guest joins the room in its `?room=` link on load. Opening the link is its request to join.
 - The room id is stored apart from the saved document, since it's rendezvous metadata and not content.
-- The host can click New link to leave the current room and start a fresh one, which disconnects anyone on the old link.
 
 Transport behavior
 - The app uses a transport layer over a third-party rendezvous infrastructure (WebRTC-like semantics).
@@ -191,7 +196,8 @@ sequenceDiagram
     participant G as Guest tab
 
     Note over H: On load the badge says Not sharing.<br/>The host is not in a room yet.
-    H->>H: Share: ensureRoom() makes a random room id
+    H->>H: Share opens the popover. Nothing connects yet.
+    H->>H: Start sharing: ensureRoom() makes a random room id
     H->>H: Save the room id in sessionStorage
     H->>T: joinRoom(appId, roomId), announce
     Note over H: Badge: Waiting for peers

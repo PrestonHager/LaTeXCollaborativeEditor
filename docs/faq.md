@@ -73,7 +73,7 @@ Guests can edit, add files, and download a `.zip` of their copy.
 ## What happens if the host closes the tab?
 
 Guests keep their copy and can keep typing, but nothing gets saved.
-If the host just reloads the tab, it rejoins the same room, and edits sync back.
+If the host just reloads the tab, sharing pauses until they open **Share** and pick **Resume sharing (same link)**. That rejoins the same room, and edits sync back.
 If the host closes the tab and opens a new one, that's a new room, and guests need a new link.
 
 ## How do I undo a file delete?

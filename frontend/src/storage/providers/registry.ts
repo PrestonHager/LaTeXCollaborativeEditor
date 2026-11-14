@@ -1,9 +1,11 @@
 import type { StorageProvider } from './types';
+import type { CommandId } from '../../ui/menuBar';
 
 /**
  * The storage provider registry (#200). Every place a project can be saved is listed here once, with
  * what it can do and whether this deployment set it up. The Accounts panel, File > Open Project and
- * the status bar all read from it, so a new provider (#202, #203, #204) only needs an entry.
+ * the status bar all read from it, so a new provider (#202, #203, #204) only needs an entry, plus
+ * its words in providerLabels.ts. Those stay out of this file because it's in the initial load.
  *
  * NOTE: nothing here goes to peers. Guests only ever hear the host's storage name (see
  * ProjectState.currentStorageLabel), never an account or a token.
@@ -35,12 +37,13 @@ export type ProviderEntry = {
   readonly name: string;
   /** A Lucide icon name, drawn with storageIcons in ui/icons.ts. */
   readonly icon: 'hard-drive' | 'monitor';
-  /** One line on where the files go. */
-  readonly description: string;
   readonly capabilities: ProviderCapabilities;
   /** False for storage that needs no account, like this browser. */
   readonly needsSignIn: boolean;
   readonly provider: StorageProvider;
+  /** The commands the Accounts panel's Connect and Log out run, for providers with an account. */
+  readonly connectCommand?: CommandId;
+  readonly logOutCommand?: CommandId;
   /** Whether this deployment has the keys it needs. */
   configured(): boolean;
   status(): AccountStatus;
@@ -75,7 +78,6 @@ export function localStorageEntry(provider: StorageProvider): ProviderEntry {
     id: 'local',
     name: 'This browser',
     icon: 'monitor',
-    description: 'Saved in this browser on this device. Nothing is uploaded.',
     capabilities: { binaryFiles: true, folders: true, history: false, maxFileBytes: null },
     needsSignIn: false,
     provider,
@@ -98,11 +100,13 @@ export function googleDriveEntry(provider: DriveAccountSource, clientId: string 
     id: 'googleDrive',
     name: 'Google Drive',
     icon: 'hard-drive',
-    description: 'A folder in your Google Drive. The app only sees files it made or you picked.',
     // Drive keeps a file's earlier versions (Manage versions in Drive). 5 TB is Drive's own file limit.
     capabilities: { binaryFiles: true, folders: true, history: true, maxFileBytes: 5 * 1024 ** 4 },
     needsSignIn: true,
     provider,
+    // The File menu's own Drive commands, so the panel moves saving exactly as they do.
+    connectCommand: 'file.connectDrive',
+    logOutCommand: 'file.disconnectDrive',
     configured: () => Boolean(clientId),
     status() {
       if (!clientId) return 'notConfigured';
@@ -112,21 +116,4 @@ export function googleDriveEntry(provider: DriveAccountSource, clientId: string 
     },
     account: () => provider.accountLabel(),
   };
-}
-
-export const statusLabels: Record<AccountStatus, string> = {
-  connected: 'Connected',
-  expired: 'Expired',
-  signedOut: 'Not connected',
-  notConfigured: 'Not configured',
-};
-
-/** "Folders, binary files, version history" for the Accounts panel. */
-export function describeCapabilities(capabilities: ProviderCapabilities): string {
-  const parts: string[] = [];
-  if (capabilities.folders) parts.push('folders');
-  if (capabilities.binaryFiles) parts.push('images and other files');
-  if (capabilities.history) parts.push('version history');
-  const text = parts.join(', ');
-  return text ? text[0].toUpperCase() + text.slice(1) : 'Text files only';
 }

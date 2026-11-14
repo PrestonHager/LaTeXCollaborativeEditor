@@ -139,7 +139,7 @@ export function updatePromptText(reason: UpdateReason, room: { isHost: boolean; 
         ? "Part of the app couldn't load because a new version is live. Reload to update."
         : 'A new version of the app is available.';
   let detail = 'Your changes are saved first.';
-  if (room.inRoom) detail += room.isHost ? ' Guests are disconnected for a moment and rejoin on their own.' : " You'll rejoin the room after the reload.";
+  if (room.inRoom) detail += room.isHost ? " Sharing pauses until you pick Resume sharing (same link) under Share, then guests reconnect on their own." : " You'll rejoin the room after the reload.";
   return { message, detail };
 }
 

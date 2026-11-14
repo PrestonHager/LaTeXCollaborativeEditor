@@ -88,7 +88,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     uploadDialog: { open: vi.fn() },
     templates: { openNew: vi.fn(async () => {}), saveAsTemplate: vi.fn(async () => {}), editProfile: vi.fn(async () => {}) },
     zipInput: { click: vi.fn() } as unknown as HTMLInputElement,
-    shareButtonEl: { click: vi.fn() } as unknown as HTMLElement,
+    copyShareLink: vi.fn(),
     project,
     undo,
     activeFileId: project.getMainFileId() as string | null,
@@ -139,7 +139,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     commands.executeCommand(id);
     await settle();
   };
-  return { app, commands, run, local, drive, projectState, themeState, layout, project, undo, palette: () => palette };
+  return { app, commands, run, local, drive, storageProviders, projectState, themeState, layout, project, undo, palette: () => palette };
 }
 
 /** Let pending promises (like a dialog's answer) settle. */
@@ -451,31 +451,24 @@ describe('commands', () => {
       expect(guest.commands.getCommandState('app.accounts').enabled).toBe(false);
     });
 
-    it('connects and logs out of Drive from Accounts, the same way as the File menu', async () => {
-      const { app, commands, projectState, local, drive } = setup({ driveClientId: 'client' });
-      await commands.connectProvider('googleDrive');
+    it("runs Accounts' Connect and Log out through the registry's commands, and waits for them", async () => {
+      const { app, commands, projectState, local, drive, storageProviders } = setup({ driveClientId: 'client' });
+      const entry = storageProviders.get('googleDrive');
+      await commands.executeCommand(entry.connectCommand!);
       expect(app.ensureDriveConnected).toHaveBeenCalled();
       expect(projectState.activeProvider).toBe(drive);
-      // Browser storage has no account, so these do nothing.
-      await commands.connectProvider('local');
-      await commands.logOutProvider('local');
-      expect(drive.disconnect).not.toHaveBeenCalled();
-      await commands.logOutProvider('googleDrive');
+      // The returned promise settles after the command, so the panel can redraw with the new state.
+      await commands.executeCommand(entry.logOutCommand!);
       expect(drive.disconnect).toHaveBeenCalled();
       expect(projectState.activeProvider).toBe(local);
       expect(app.menuBar.refresh).toHaveBeenCalled();
-    });
-
-    it('logs out of everything that is signed in, and reports a failure as a notice', async () => {
-      const { app, commands, drive } = setup({ driveClientId: 'client' });
-      expect(await commands.logOutAll()).toEqual(['Google Drive']);
-      expect(drive.disconnect).toHaveBeenCalledTimes(1);
-      // Nothing left to log out of.
-      expect(await commands.logOutAll()).toEqual([]);
+      // A failure still becomes a notice, and the promise doesn't reject.
       drive.signedIn = true;
       drive.disconnect.mockRejectedValueOnce(new Error('revoke failed'));
-      await commands.logOutAll();
+      await commands.executeCommand('file.disconnectDrive');
       expect(app.showNotice).toHaveBeenCalledWith(expect.stringContaining('revoke failed'), true);
+      // Browser storage has no account to connect or log out of.
+      expect(storageProviders.get('local').connectCommand).toBeUndefined();
     });
 
     it('opens and imports without asking when no guest is in the room', async () => {
@@ -845,7 +838,7 @@ describe('commands', () => {
       await run('view.compileNow');
       expect(app.compile.compileNow).toHaveBeenCalled();
       await run('share.copyLink');
-      expect(app.shareButtonEl.click).toHaveBeenCalled();
+      expect(app.copyShareLink).toHaveBeenCalled();
       await run('app.openSettings');
       expect(app.settingsDialog.open).toHaveBeenCalled();
       await run('file.renameDrive');

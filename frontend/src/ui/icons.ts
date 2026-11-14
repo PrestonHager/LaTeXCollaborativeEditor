@@ -5,7 +5,6 @@ import {
   FlaskConical,
   ListChecks,
   ChevronRight,
-  ChevronLeft,
   File,
   FileArchive,
   FileDown,
@@ -66,7 +65,9 @@ import {
   TriangleAlert,
   LayoutTemplate,
   UserPen,
-  KeyRound,
+  MoveHorizontal,
+  ZoomIn,
+  ZoomOut,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -76,7 +77,8 @@ const commandIcons: Record<CommandId, IconNode> = {
   'app.commandPalette': Command,
   'app.openSettings': Settings,
   'app.editProfile': UserPen,
-  'app.accounts': KeyRound,
+  // Reuses Connect Google Drive's icon, so it adds nothing to the first load.
+  'app.accounts': Link,
   'file.new': FilePlus,
   'file.rename': SquarePen,
   'file.saveAsTemplate': LayoutTemplate,
@@ -129,12 +131,15 @@ const commandIcons: Record<CommandId, IconNode> = {
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
 const staticIcons = {
   CircleHelp,
+  MoveHorizontal,
+  ZoomIn,
+  ZoomOut,
   Info,
   Play,
   Save,
   Check,
   ChevronRight,
-  ChevronLeft,
+  Copy,
   Download,
   File,
   FileArchive,
@@ -144,7 +149,6 @@ const staticIcons = {
   FolderOpen,
   FolderPlus,
   HardDrive,
-  KeyRound,
   Monitor,
   PencilLine,
   Search,

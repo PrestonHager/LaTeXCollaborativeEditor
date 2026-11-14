@@ -1,0 +1,19 @@
+/* Loads with accountsPanel.ts, not with the page. */
+/* Accounts panel (#200, dialog-md, a sheet on phones). accountsPanel.ts draws one row per storage provider. */
+.accounts-dialog-body { display: grid; gap: 1rem; }
+.accounts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.accounts-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--panel-border); border-radius: var(--radius-lg); }
+.accounts-row figure { margin: 0; display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius-md); background: var(--surface-2); }
+.accounts-row-body { display: grid; gap: 0.2rem; min-width: 0; }
+.accounts-row-body h3 { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 500; }
+.accounts-row-account, .accounts-row-caps { margin: 0; overflow-wrap: anywhere; }
+.accounts-row-account { font-size: 0.8125rem; }
+.accounts-row-caps { font-size: 0.75rem; color: var(--muted-text); }
+.accounts-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.accounts-dialog footer { justify-content: space-between; }
+/* Narrow windows: the buttons go under the text, so a long email still fits. */
+@media (max-width: 39.99rem) {
+  .accounts-row { grid-template-columns: auto minmax(0, 1fr); }
+  .accounts-row-actions { grid-column: 1 / -1; justify-content: stretch; }
+  .accounts-row-actions .btn { flex: 1; min-height: 2.75rem; }
+}

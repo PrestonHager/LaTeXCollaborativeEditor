@@ -31,19 +31,11 @@ function setup(clientId: string | undefined = 'client') {
   const drive = new FakeDrive();
   const registry = createProviderRegistry([localStorageEntry(new MemoryProvider()), googleDriveEntry(drive, clientId)]);
   const dialog = document.getElementById('accounts-dialog') as HTMLDialogElement;
-  const options = {
-    registry,
-    onConnect: vi.fn(async () => {
-      drive.token = 'live';
-    }),
-    onLogOut: vi.fn(async () => {
-      drive.token = 'none';
-    }),
-    onLogOutAll: vi.fn(async () => {
-      drive.token = 'none';
-      return ['Google Drive'];
-    }),
-  };
+  const runCommand = vi.fn(async (commandId: string) => {
+    if (commandId === 'file.connectDrive') drive.token = 'live';
+    if (commandId === 'file.disconnectDrive') drive.token = 'none';
+  });
+  const options = { registry, runCommand };
   const panel = createAccountsPanel(dialog, options);
   const rowFor = (id: string) => dialog.querySelector<HTMLElement>(`[data-provider="${id}"]`)!;
   const buttons = (id: string) => Array.from(rowFor(id).querySelectorAll('button')).map((button) => button.textContent);
@@ -80,12 +72,12 @@ describe('accounts panel', () => {
     expect(Array.from(rowFor('googleDrive').querySelectorAll('button')).every((button) => button.disabled)).toBe(true);
     expect(logOutAll.disabled).toBe(true);
     await vi.waitFor(() => expect(buttons('googleDrive')).toEqual(['Connect']));
-    expect(options.onLogOut).toHaveBeenCalledWith('googleDrive');
+    expect(options.runCommand).toHaveBeenCalledWith('file.disconnectDrive');
     expect(rowFor('googleDrive').textContent).toContain('Not connected');
     expect(logOutAll.disabled).toBe(true);
     press('googleDrive', 'Connect');
     await vi.waitFor(() => expect(buttons('googleDrive')).toEqual(['Log out']));
-    expect(options.onConnect).toHaveBeenCalledWith('googleDrive');
+    expect(options.runCommand).toHaveBeenCalledWith('file.connectDrive');
   });
 
   it('shows an expired sign-in with both Connect and Log out', () => {
@@ -117,7 +109,8 @@ describe('accounts panel', () => {
     // A second click while the first runs is ignored.
     logOutAll.click();
     await vi.waitFor(() => expect(buttons('googleDrive')).toEqual(['Connect']));
-    expect(options.onLogOutAll).toHaveBeenCalledTimes(1);
+    expect(options.runCommand).toHaveBeenCalledTimes(1);
+    expect(options.runCommand).toHaveBeenCalledWith('file.disconnectDrive');
     drive.token = 'live';
     panel.refresh();
     expect(buttons('googleDrive')).toEqual(['Log out']);
@@ -131,6 +124,34 @@ describe('accounts panel', () => {
     expect(dialog.open).toBe(false);
   });
 
+  it('fills the empty dialog from index.html and points About saving at the docs', () => {
+    mountAppShell();
+    const dialog = document.getElementById('accounts-dialog') as HTMLDialogElement;
+    expect(dialog.childElementCount).toBe(0);
+    createAccountsPanel(dialog, {
+      registry: createProviderRegistry([localStorageEntry(new MemoryProvider())]),
+      docsBase: 'https://docs.example/',
+      runCommand: vi.fn(),
+    });
+    expect(dialog.querySelector('#accounts-dialog-title')?.textContent).toBe('Accounts');
+    expect(dialog.querySelector<HTMLAnchorElement>('a[data-help="saving"]')!.href).toBe('https://docs.example/saving-and-storage/');
+    expect(dialog.querySelector('#accounts-close svg')).not.toBeNull();
+  });
+
+  it("turns off a button whose provider names no command", () => {
+    mountAppShell();
+    const dialog = document.getElementById('accounts-dialog') as HTMLDialogElement;
+    const drive = new FakeDrive();
+    drive.token = 'none';
+    const entry = { ...googleDriveEntry(drive, 'client'), connectCommand: undefined };
+    const runCommand = vi.fn();
+    createAccountsPanel(dialog, { registry: createProviderRegistry([entry]), runCommand }).open();
+    const connect = dialog.querySelector<HTMLButtonElement>('[data-provider="googleDrive"] button')!;
+    expect(connect.disabled).toBe(true);
+    connect.click();
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
   it('says what an account line means for each status', () => {
     const drive = new FakeDrive();
     const entry = googleDriveEntry(drive, 'client');
@@ -139,6 +160,6 @@ describe('accounts panel', () => {
     drive.token = 'expired';
     expect(accountLine(entry)).toMatch(/^The sign-in ran out/);
     drive.token = 'none';
-    expect(accountLine(entry)).toBe(entry.description);
+    expect(accountLine(entry)).toMatch(/^A folder in your Google Drive/);
   });
 });

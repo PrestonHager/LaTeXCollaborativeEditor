@@ -80,7 +80,8 @@ export type CommandContext = {
    */
   templates: { openNew(): Promise<void>; saveAsTemplate(): Promise<void>; editProfile(): Promise<void> };
   zipInput: HTMLInputElement;
-  shareButtonEl: HTMLElement;
+  /** Copy the share link, or open the Share popover to start sharing. */
+  copyShareLink: () => void;
   // These get swapped out or made later, so we read them each time we need them.
   readonly project: ProjectDoc;
   /**
@@ -193,7 +194,7 @@ export function createCommands(app: CommandContext) {
     storageProviders,
     uploadDialog,
     zipInput,
-    shareButtonEl,
+    copyShareLink,
     guestCount,
     projectName,
     setStatus,
@@ -271,33 +272,6 @@ export function createCommands(app: CommandContext) {
     if (isClient) return;
     if (id === 'googleDrive') return openFromDrive(true);
     projectsDialog.open(await localAppProvider.listProjects());
-  }
-
-  /** Run an Accounts panel action like a command: errors go to a notice, and the menus redraw after. */
-  async function accountAction(work: () => Promise<void> | void) {
-    try {
-      await work();
-    } catch (error) {
-      console.error('Account action failed', error);
-      showNotice(describeError(error), true);
-    } finally {
-      refreshCommands();
-    }
-  }
-
-  /** The Accounts panel's Connect. Drive's is File > Connect Google Drive, so saves move there as before. */
-  const connectProvider = (id: ProviderId) =>
-    accountAction(() => (id === 'googleDrive' ? commandRegistry['file.connectDrive']() : undefined));
-
-  /** The Accounts panel's Log out. Saves move to this browser first, so no edit is lost. */
-  const logOutProvider = (id: ProviderId) =>
-    accountAction(() => (id === 'googleDrive' ? commandRegistry['file.disconnectDrive']() : undefined));
-
-  /** Log out of every provider that has an account here, one at a time. Returns the names it logged out of. */
-  async function logOutAll(): Promise<string[]> {
-    const signedIn = storageProviders.list().filter((entry) => entry.needsSignIn && (entry.status() === 'connected' || entry.status() === 'expired'));
-    for (const entry of signedIn) await logOutProvider(entry.id);
-    return signedIn.map((entry) => entry.name);
   }
 
   const commandRegistry: Record<CommandId, CommandHandler> = {
@@ -510,7 +484,7 @@ export function createCommands(app: CommandContext) {
     'view.focusEditor': () => editor.focus(),
     'app.openSettings': () => app.settingsDialog.open(),
     'file.rename': () => renameProject(),
-    'share.copyLink': () => shareButtonEl.click(),
+    'share.copyLink': () => copyShareLink(),
     'view.compileNow': () => compile.compileNow(),
     'view.layoutSplit': () => {
       layout.setMode('split');
@@ -569,9 +543,10 @@ export function createCommands(app: CommandContext) {
 
   /**
    * Run a command and report any error it throws, then refresh the menus.
-   * Every menu, palette, and shortcut path goes through here.
+   * Every menu, palette, and shortcut path goes through here. The promise settles once the
+   * command is done, for callers that wait on it (the Accounts panel).
    */
-  function executeCommand(commandId: CommandId) {
+  function executeCommand(commandId: CommandId): Promise<void> | void {
     const report = (error: unknown) => {
       if (isLoadFailure(error) && app.loadFailed) {
         const label = app.menuBar.entries().find((entry) => entry.commandId === commandId)?.label ?? 'That command';
@@ -592,8 +567,8 @@ export function createCommands(app: CommandContext) {
       refreshCommands();
       return;
     }
-    if (result instanceof Promise) void result.catch(report).finally(refreshCommands);
-    else refreshCommands();
+    if (result instanceof Promise) return result.catch(report).finally(refreshCommands);
+    refreshCommands();
   }
 
   // Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
@@ -725,9 +700,6 @@ export function createCommands(app: CommandContext) {
     executeCommand,
     importZipFromOpenDialog,
     openFromProvider,
-    connectProvider,
-    logOutProvider,
-    logOutAll,
     refreshCommands,
     getCommandState,
     buildPaletteCommands,

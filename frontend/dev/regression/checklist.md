@@ -17,7 +17,9 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Autocompletion: after `\frac`, Tab moves from the first placeholder to the second, and Shift+Tab back.
 - [ ] Autocompletion: typing `\begin{it` offers `itemize`. Enter gives `\begin{itemize}`, an indented `\item` line with the cursor on it, and `\end{itemize}`, with no extra `}` left over.
 - [ ] Autocompletion: Ctrl+Space (⌃Space on a Mac) opens the list, Escape closes it, and nothing shows inside a `%` comment or after `\\`. One Ctrl+Z takes back an accepted completion, and a peer in the room sees the completed text.
-- [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` only the first time the list opens.
+- [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` and `latexPackageData` only the first time the list opens.
+- [ ] Package completion: in `main.tex`, `\cref` and `\includegraphics` show in the list (it loads cleveref and graphicx), but `\dfrac` and `\begin{align` don't. Add `\usepackage{amsmath}` to the preamble, and both show.
+- [ ] Package completion: add `\newcommand{\RR}{\mathbb{R}}` and `\DeclareMathOperator{\Tr}{Tr}` to the preamble, and `\RR` and `\Tr` show, with "\newcommand in main.tex" and the line in the info box. `\begin{theorem` shows the theorem from `\newtheorem`. In a shared room, a command a peer defines shows up in your list too, and deleting a definition takes it out.
 - [ ] Project completion: in `main.tex`, typing `\ref{sec` lists `sec:citations`, `sec:refs`, `sec:packages` and `sec:code`, each with the file and line it's on. `\eqref{`, `\autoref{` and `\cref{` list the same labels, and after `\cref{sec:refs,` it completes a second key.
 - [ ] Project completion: `\cite{` lists the keys in `refs.bib`, like `knuth` with "Knuth, 1984" beside it and "The TeXbook", the author and the year in its info box. `\citep{`, `\parencite[p.~4]{` and `\textcite{` list them too.
 - [ ] Project completion: `\input{` lists `chapters/text.tex` and the other `.tex` files (not `main.tex`), `\include{` the same without `.tex`, `\includegraphics{` the files in `figures/`, and `\bibliography{` lists `refs`.
@@ -45,6 +47,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] References: "This is section 1.5" in the Text section shows 1.5, not `??`.
 - [ ] References: clicking the 4 in "Jump to section 4" scrolls the preview to the Citations section, and clicking the 1.5 there scrolls back up.
 - [ ] References: the missing label shows `??` as plain text, not a link.
+- [ ] Zoom (desktop): the preview bar shows Fit width (↔), Zoom out, the level (100%) and Zoom in. Zoom in and out step through 110%, 125%… and 90%, 80%… down to 50% and up to 300%, where that button greys out. The text grows and shrinks and the page reflows, with no sideways scrollbar. Fit width shows pressed and goes back to 100%. Ctrl + scroll wheel (or a trackpad pinch) over the preview zooms the preview, not the app. Type in the editor: the preview keeps its zoom when it updates.
 - [ ] Scroll the preview halfway down, then type in the editor. After the preview updates it stays at the same place instead of jumping to the top.
 - [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list (the ⓘ button above the preview) doesn't mention `\vspace` or `\addcontentsline`.
 - [ ] Code: in the Code section, each `verbatim`, `lstlisting`, `minted` and `\lstinputlisting` block shows as a monospaced box with the text exactly as typed (indents, tabs, `%`, `<b>`, and `\ { } $ & # ^ _ ~`), in both the light and dark preview themes. Captions, line numbers, `firstline`/`lastline` and `\ref` to listings match the `% Expect:` comments, and the ⓘ list says listings have no syntax highlighting.
@@ -90,6 +93,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] The footer names the error, the file and the line, like `unknown macro: \foo (main.tex line 12)`.
 - [ ] Put the same thing in `chapters/text.tex`. The marker and footer point at that file instead.
 - [ ] Remove it again and the error clears.
+- [ ] Hover an error, warning and info marker (or the underlined text) with the editor theme on Dark, Light and Match system, in OS light and dark mode, and with the app theme set the other way from the OS. The tooltip matches the editor theme, and its text stays readable on its background and on the highlighted row under the pointer.
 
 ## Projects and files
 
@@ -220,14 +224,19 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 
 Use two browser windows, or a normal and a private window, so each has its own storage.
 
-- [ ] Before sharing, the connection badge says Not shared.
-- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
+- [ ] Before sharing, the connection badge says Not sharing. With the Network tab open (WS filter), loading the app, hovering Share and opening the Share popover make no tracker connection.
+- [ ] Share opens a popover that explains sharing, with **Start sharing**. Escape or a click outside closes it, and focus goes back to Share after Escape. No link exists yet.
+- [ ] Start sharing copies a `?room=` link and shows it in the popover with Copy, New link and Stop sharing, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
+- [ ] The palette's **Copy share link** opens the Share popover when not sharing, and copies the link while sharing.
+- [ ] On a phone-width window (390px), the Share popover fits on screen with no sideways scroll.
 - [ ] Opening the link in the second window joins as a guest, and both badges say Connected with 1 other person.
 - [ ] The guest gets the whole file tree, the text and the image.
 - [ ] Edits show up in the other window within a couple of seconds, both ways.
 - [ ] A new file or folder from either side shows up on the other.
 - [ ] An image uploaded on one side shows up in the other's preview, with a progress bar while it transfers.
-- [ ] Reloading the host rejoins the same room, and the guest keeps syncing.
+- [ ] Reloading the host doesn't rejoin: the badge says Not sharing and no tracker connection is made. The Share popover offers **Resume sharing (same link)**, which rejoins the same room, and the guest keeps syncing. Start sharing instead makes a new link.
+- [ ] Stop sharing with a guest connected asks in a **Stop sharing?** dialog (Keep sharing focused, red Stop sharing). Stopping says "Stopped sharing", the host badge says Not sharing, the guest loses the host, and a reload doesn't offer Resume sharing. With nobody connected it stops without asking.
+- [ ] A guest's Share popover shows the room link with Copy only, no New link or Stop sharing.
 - [ ] Text the guest typed while the host was reloading shows up on the host.
 - [ ] New link asks in a **Start a new link?** dialog with Keep current link (focused) and a red Start new link. Start new link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
@@ -325,6 +334,7 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
 - [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
 - [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] Preview zoom on a phone: the preview opens at Fit width (↔ pressed, about 120%), with narrow side margins and body text easy to read at 360px wide, and no sideways scrolling. The zoom buttons are finger-sized. Pinching the preview zooms only the preview (the bars and the toolbar stay the same size) and the level follows; Fit width brings it back. Pinching the toolbar or bars doesn't zoom the preview.
 - [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
 - [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
 

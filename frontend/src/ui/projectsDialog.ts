@@ -1,5 +1,6 @@
 import type { ProjectSummary } from '../storage/providers/types';
-import { statusLabels, type ProviderId, type ProviderRegistry } from '../storage/providers/registry';
+import type { ProviderId, ProviderRegistry } from '../storage/providers/registry';
+import { statusLabels } from '../storage/providers/providerLabels';
 import { icon, renderStaticIcons, storageIcons } from './icons';
 import { returnFocusOnClose } from './focusReturn';
 
@@ -41,7 +42,6 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
   dialog.addEventListener('click', (event) => {
     if (event.target === dialog) close();
   });
-  renderStaticIcons(back);
 
   function show() {
     if (dialog.open) return;
