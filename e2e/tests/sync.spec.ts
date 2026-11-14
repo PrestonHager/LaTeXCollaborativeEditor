@@ -130,6 +130,9 @@ test('host and guest sync files and edits both ways', async ({ browser, guestBro
     await host.locator('#share-stop-btn').click();
     await host.getByRole('alertdialog').getByRole('button', { name: 'Stop sharing' }).click();
     await expect(host.locator('#connection-status')).toHaveText('Not sharing');
+    // A click in the confirm dialog counts as a click outside the Share popover, which may close it
+    // (shareButton.ts). Firefox often does, so open it again to see the new state.
+    if ((await host.locator('#share-btn').getAttribute('aria-expanded')) !== 'true') await host.locator('#share-btn').click();
     await expect(host.locator('#share-start-btn')).toBeVisible();
     await expect(host.locator('#share-resume-btn')).toBeHidden();
     await expect(guest.locator('#connection-status')).not.toHaveText(/Connected|Relayed/);
