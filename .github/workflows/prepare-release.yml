@@ -34,10 +34,10 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     steps:
-      - name: Only from main
-        if: github.ref != 'refs/heads/main'
+      - name: Only from staging
+        if: github.ref != 'refs/heads/staging'
         run: |
-          echo "::error title=Run it on main::Prepare release only runs on main, so the release PR starts from what's on main."
+          echo "::error title=Run it on staging::Prepare release only runs on staging, so the release PR carries what's been tried on the staging site into main."
           exit 1
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -74,7 +74,7 @@ jobs:
           git commit -q -m "Release v$VERSION"
           git push -q origin "$branch"
           {
-            echo "Releases **v$VERSION**. Merging this PR tags \`v$VERSION\` on the merge commit and deploys it to production (\`tag-release.yml\`, then \`release.yml\`)."
+            echo "Releases **v$VERSION** from \`staging\` into \`main\`. Merging this PR tags \`v$VERSION\` on the merge commit and deploys it to production (\`tag-release.yml\`, then \`release.yml\`)."
             echo
             echo "This PR was opened by GitHub Actions, so GitHub doesn't start the usual \`pull_request\` checks for it."
             echo "Prepare release already ran **Test and Coverage** on \`$branch\`. If its checks don't show here, close and reopen this PR."

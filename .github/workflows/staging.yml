@@ -9,13 +9,13 @@ name: Deploy staging
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# Only the newest main matters on staging.
+# Only the newest staging commit matters on the staging site.
 concurrency:
   group: staging
   cancel-in-progress: true
@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "$STAGING_REPO" ] || [ "$HAS_TOKEN" != "true" ]; then
-            echo "::notice title=Staging deploy skipped::Set the STAGING_REPO variable and the STAGING_DEPLOY_TOKEN secret (staging environment) to deploy main to staging. See docs/deployment.md."
+            echo "::notice title=Staging deploy skipped::Set the STAGING_REPO variable and the STAGING_DEPLOY_TOKEN secret (staging environment) to deploy the staging branch to the staging site. See docs/deployment.md."
             echo "ready=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
