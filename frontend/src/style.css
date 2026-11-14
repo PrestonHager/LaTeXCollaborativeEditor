@@ -121,7 +121,8 @@
 /* Page layout. */
 html, body, #app { width: 100%; height: 100%; }
 body { overflow: hidden; font-family: var(--font-sans); }
-#app { min-height: 100dvh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+/* --app-height is the part of the window above the on-screen keyboard where the browser doesn't resize the page for it (iOS). */
+#app { min-height: var(--app-height, 100dvh); height: var(--app-height, 100dvh); display: flex; flex-direction: column; overflow: hidden; }
 body.is-resizing { cursor: col-resize; user-select: none; }
 
 .app-loading { display: none; align-items: center; gap: 0.7rem; padding: 0.4rem 1rem; border-bottom: 1px solid var(--panel-border); background: var(--surface); }
@@ -372,6 +373,13 @@ label.settings-row { justify-content: flex-start; }
 .editor-pane > .editor { flex: 1; min-height: 0; height: auto; }
 .editor-pane.is-viewing > .editor, .editor-pane.is-empty > .editor { display: none; }
 .editor-empty { flex: 1; border: 0; }
+/* LaTeX key bar (#189): touch devices only, pinned above the on-screen keyboard while the editor has focus. */
+:root { --touch-key-bar-height: 3rem; }
+.touch-key-bar { position: fixed; left: 0; right: 0; bottom: var(--keyboard-inset, 0px); z-index: 300; display: flex; gap: 0.25rem; height: var(--touch-key-bar-height); padding: 0.125rem 0.5rem; overflow-x: auto; border-top: 1px solid var(--panel-border); background: var(--bg); }
+.touch-key-bar[hidden] { display: none; }
+.touch-key { flex: 1 0 2.75rem; min-width: 2.75rem; height: 2.75rem; padding: 0; border: 1px solid var(--panel-border); border-radius: var(--radius-md, 0.375rem); background: var(--surface); color: inherit; font-family: var(--font-mono); font-size: 1.125rem; touch-action: manipulation; }
+.touch-key:active { background: var(--surface-3); }
+.has-touch-key-bar #app { padding-bottom: var(--touch-key-bar-height); }
 
 /* Preview pane: a small bar on top, then the preview frame, or an empty state when there's no main file. */
 .preview-pane { position: relative; display: flex; flex-direction: column; }
