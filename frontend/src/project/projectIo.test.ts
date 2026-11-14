@@ -31,6 +31,16 @@ describe('project import and export', () => {
     expect(content.files.find((file) => file.path === 'empty')?.kind).toBe('folder');
   });
 
+  it('loads the TeX engine storage remembers, and drops one it does not know (#199)', async () => {
+    const provider = new MemoryProvider();
+    const { id } = await provider.createProject('E');
+    await provider.writeFile(id, 'main.tex', 'x');
+    await provider.setEngine(id, 'lualatex');
+    expect((await loadProject(provider, id, new BlobStore())).engine).toBe('lualatex');
+    await provider.setEngine(id, 'tectonic');
+    expect((await loadProject(provider, id, new BlobStore())).engine).toBeUndefined();
+  });
+
   it('guesses the main file when storage did not remember one', async () => {
     const provider = new MemoryProvider();
     const { id } = await provider.createProject('S');

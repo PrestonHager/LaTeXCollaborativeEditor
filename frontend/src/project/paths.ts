@@ -1,4 +1,5 @@
 // Path helpers for project files. Paths are relative, use "/" and never start or end with one.
+import { readMagicComments } from './texEngine';
 
 /** Largest file we accept for upload or peer transfer, in bytes. */
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -111,7 +112,30 @@ export function guessMainFile(files: { path: string; text?: string }[]): string 
     return da - db || ma - mb || pa.localeCompare(pb);
   });
   const withClass = sorted.find((file) => file.text !== undefined && /\\documentclass\b/.test(file.text));
-  return (withClass ?? sorted[0])?.path ?? null;
+  const guess = withClass ?? sorted[0];
+  // A `% !TEX root = ../main.tex` comment says the file is part of another one (issue #199).
+  const root = guess?.text === undefined ? undefined : readMagicComments(guess.text).root;
+  if (root) {
+    const target = resolveRelative(dirname(guess.path), root.value);
+    // TeXShop allows the name without `.tex`.
+    const found = target && [target, `${target}.tex`].find((path) => path !== guess.path && tex.some((file) => file.path === path));
+    if (found) return found;
+  }
+  return guess?.path ?? null;
+}
+
+/** A path written relative to `dir`, like `../main.tex`, as a project path. Null when it leaves the project. */
+export function resolveRelative(dir: string, relative: string): string | null {
+  const parts = dir ? dir.split('/') : [];
+  for (const part of relative.replace(/\\/g, '/').split('/')) {
+    const trimmed = part.trim();
+    if (!trimmed || trimmed === '.') continue;
+    if (trimmed === '..') {
+      if (!parts.length) return null;
+      parts.pop();
+    } else parts.push(trimmed);
+  }
+  return parts.length ? normalizePath(parts.join('/')) : null;
 }
 
 /** Make a name unique among taken ones by adding " (2)", " (3)", and so on before the extension. */

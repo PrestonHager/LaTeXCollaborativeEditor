@@ -253,6 +253,25 @@ describe('commands', () => {
       expect(commands.getCommandState('help.about').enabled).toBe(true);
     });
 
+    it('picks the project TeX engine, checks it, and says when a magic comment wins (#199)', async () => {
+      const { commands, app, run, project } = setup({ isClient: true });
+      expect(commands.getCommandState('view.enginePdflatex')).toEqual({ enabled: true, checked: true });
+      await run('view.engineXelatex');
+      expect(project.getEngine()).toBe('xelatex');
+      expect(app.setStatus).toHaveBeenLastCalledWith('TeX engine: XeLaTeX');
+      expect(commands.getCommandState('view.engineXelatex').checked).toBe(true);
+      expect(commands.getCommandState('view.enginePdflatex').checked).toBe(false);
+      const main = project.getMainFileId()!;
+      project.getText(main).insert(0, '% !TEX program = lualatex\n');
+      await run('view.enginePdflatex');
+      expect(project.getEngine()).toBe('pdflatex');
+      expect(app.showNotice).toHaveBeenLastCalledWith(expect.stringContaining('picks LuaLaTeX'));
+      await run('view.engineLualatex');
+      expect(app.setStatus).toHaveBeenLastCalledWith('TeX engine: LuaLaTeX');
+      project.replaceAll({ name: '', files: [] });
+      expect(commands.getCommandState('view.engineLualatex').enabled).toBe(false);
+    });
+
     it('turns on Disconnect Google Drive only while signed in', () => {
       const { commands, drive } = setup();
       expect(commands.getCommandState('file.disconnectDrive').enabled).toBe(true);

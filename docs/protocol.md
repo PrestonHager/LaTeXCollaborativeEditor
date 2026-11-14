@@ -99,6 +99,8 @@ Project sync
   - `files` is a Y.Map from a stable file id to its path and kind (text, binary, or folder). Binary entries carry a SHA-256 content hash and size.
   - Each text file has its own top-level Y.Text named `file:<id>`.
   - `meta` holds the project name and the main file id, and `generation`, a new random id each time a whole project replaces the last one (open, import, new project).
+  - `meta` also holds `engine`, the project's TeX engine (`pdflatex`, `xelatex` or `lualatex`; issue #199). It's missing until someone picks one, which means pdfLaTeX. Any other value from a peer is ignored and reads as missing.
+    It is an ordinary key in an existing map, so it syncs as a normal Yjs update with no new message, and `PROTOCOL_VERSION` stays the same. Older peers keep and pass on the key without reading it; their preview just doesn't show the engine diagnostics.
 - A rename or move writes one key in `files`, so ids (and open editors) survive it.
 - Undoing a file operation (`frontend/src/project/fileHistory.ts`) is a Yjs UndoManager on `files`, plus the text of every file, scoped to the local `project` transaction origin. It sends ordinary Yjs updates, so peers need nothing new and older peers sync as before.
   - It only reverts our own changes. Yjs won't write over a key a peer changed since, so a file a peer renamed or deleted after us stays as they left it.
@@ -164,6 +166,7 @@ Message validation and limits
 - File paths in the shared `files` map have to be clean relative paths: no `..`, no leading `/`, no backslashes, no drive letters like `C:`, and at most 512 characters.
   Entries a peer writes with a bad path or an unknown kind are skipped, so they never show up in the file tree, the preview, or a zip.
 - The project name in `meta` is cut to 200 characters when shown.
+- The TeX engine is never read from a peer as anything but one of the three names above. A `% !TEX program` comment in the main file is document content: it is read locally by each peer and wins over the setting.
 
 LaTeX preview channel
 - Preview rendering is performed locally in the browser using LaTeX.js.

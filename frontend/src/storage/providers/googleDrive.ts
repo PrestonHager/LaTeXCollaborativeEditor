@@ -18,6 +18,7 @@ import {
 } from './driveShared';
 import { forgetAccount, keepsSignedIn, rememberAccount, rememberedAccount, setKeepSignedInChoice, wasConnected } from './accountMemory';
 import { deleteToken, loadToken, saveToken } from './tokenVault';
+import type { TexEngine } from '../../project/texEngine';
 import { isDesktopShell } from '../../app/desktopShell';
 
 // The desktop app signs in through the system browser instead of GIS (#177). Its own small chunk.
@@ -366,7 +367,7 @@ export class GoogleDriveProvider implements StorageProvider {
     this.indexes.set(projectId, index);
     this.indexes.set(id, index);
     this.currentStatus = `Drive: Opened ${folder.name}`;
-    return { id, name: folder.name, mainPath: folder.appProperties?.mainFile ?? null, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
+    return { id, name: folder.name, mainPath: folder.appProperties?.mainFile ?? null, engine: folder.appProperties?.texEngine ?? null, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
   }
 
   async readFile(projectId: string, path: string): Promise<Uint8Array> {
@@ -525,6 +526,13 @@ export class GoogleDriveProvider implements StorageProvider {
     const index = await this.ensureIndex(projectId);
     if (index.legacy) return;
     await this.patchMetadata(index.rootId, { appProperties: { mainFile: path } }, 'set the main file');
+  }
+
+  /** Kept in the folder's appProperties next to the main file, so other devices get it too. */
+  async setEngine(projectId: string, engine: TexEngine | null): Promise<void> {
+    const index = await this.ensureIndex(projectId);
+    if (index.legacy) return;
+    await this.patchMetadata(index.rootId, { appProperties: { texEngine: engine } }, 'set the TeX engine');
   }
 
   /** Move the project folder into another Drive folder. */

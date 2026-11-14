@@ -6,6 +6,8 @@ import type { EpsBox } from './epsBoundingBox';
 import { addKatexFontFallbacks } from './katexFonts';
 import { extractVerbatim, insertVerbatimBlocks, type VerbatimBlock } from './verbatimBlocks';
 import type { EditorDiagnostic } from '../ui/diagnostics';
+import type { TexEngine } from '../project/texEngine';
+import { engineDiagnostics } from './engineDiagnostics';
 
 import { LATEX_JS_ASSET_BASE, latexJsAssetBase } from './latexJsAssets';
 
@@ -137,6 +139,11 @@ export type ProjectPreviewInput = {
   pdfImages?: Map<string, RenderedPdfFigure>;
   /** The %%BoundingBox of each EPS file by path, or null when it has none. Missing: no bytes yet. */
   epsBoxes?: Map<string, EpsBox | null>;
+  /**
+   * The project's engine setting (issue #199). A `% !TEX program` comment in the main file wins
+   * over it. The preview looks the same for every engine; only the diagnostics change.
+   */
+  engine?: TexEngine;
 };
 
 /** A PDF page the document shows as a figure, for the main thread to draw (see figureImages.ts). */
@@ -169,6 +176,7 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
       return { ...error, path: origin.path, line: origin.line };
     }),
     ...expanded.diagnostics,
+    ...engineDiagnostics(input.mainPath, input.texts.get(input.mainPath), input.engine, expanded.source, expanded.lineMap),
   ];
   if (!doc) return { html: null, errors, missing: expanded.missing, changes };
 

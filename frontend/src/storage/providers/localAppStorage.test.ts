@@ -25,6 +25,9 @@ describe('LocalAppStorageProvider', () => {
     const listing = await provider.openProject(id);
     expect(listing.name).toBe('Thesis');
     expect(listing.mainPath).toBe('main.tex');
+    expect(listing.engine).toBeNull();
+    await provider.setEngine(id, 'xelatex');
+    expect((await provider.openProject(id)).engine).toBe('xelatex');
     expect(listing.entries).toEqual([
       { path: 'empty', kind: 'folder' },
       { path: 'figures/plot.png', kind: 'file' },

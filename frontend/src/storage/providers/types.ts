@@ -1,3 +1,5 @@
+import type { TexEngine } from '../../project/texEngine';
+
 export type ProjectSummary = { id: string; name: string; updatedAt?: number };
 
 /** A file or folder as storage sees it. Paths are relative to the project root and use "/". */
@@ -8,6 +10,8 @@ export type ProjectListing = {
   name: string;
   /** The main file, if storage remembers one. */
   mainPath?: string | null;
+  /** The TeX engine picked for the project (issue #199), if storage remembers one. Checked on load. */
+  engine?: string | null;
   entries: StoredEntry[];
 };
 
@@ -57,6 +61,8 @@ export interface StorageProvider {
   restore?(projectId: string, path: string, token: string): Promise<boolean>;
   renameProject(projectId: string, name: string): Promise<void>;
   setMainFile(projectId: string, path: string | null): Promise<void>;
+  /** Remember the project's TeX engine (issue #199). Null clears it. Providers without it lose the setting on reload. */
+  setEngine?(projectId: string, engine: TexEngine | null): Promise<void>;
   /**
    * The id to use from now on. A provider can change a project's id while saving,
    * like Drive turning an old single file into a project folder.

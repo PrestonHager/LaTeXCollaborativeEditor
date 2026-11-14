@@ -26,14 +26,14 @@ For example:
 - Peer messages that crash, take over, or wipe someone else's project.
 - Document content leaking outside the WebRTC connection, or to anyone without the room link.
 - Leaking or misusing Google Drive access tokens.
-- Anything in the build or the GitHub Pages workflow that could ship bad code.
+- Anything in the build or the release workflow that could ship bad code.
 
 ## Out of scope
 
 - Bugs in third-party services, such as Google, public WebTorrent trackers, or TURN providers.
   Please report those to the service.
 - Missing best-practice headers or settings without a working attack.
-  GitHub Pages can't send headers, so the Content Security Policy is a meta tag and can't set `frame-ancestors`.
+  The Content Security Policy is a meta tag (GitHub Pages, our old host, couldn't send headers), so it can't set `frame-ancestors`.
   A way around the CSP that loads or runs something it should block is in scope.
 - The known TURN credential exposure, tracked in [#24](https://github.com/PrestonHager/LaTeXCollaborativeEditor/issues/24).
   The app is static, so any TURN username and credential it's built with are readable by anyone who opens the site.
