@@ -23,7 +23,7 @@ Things to try:
 - Reload the guest tab. The host can reload too, it rejoins the same room.
 - Turn off a VPN, or try another network. Some company, school, and hotel networks block WebRTC.
 - Check that an ad or tracker blocker isn't blocking the tracker sites (`tracker.openwebtorrent.com` and similar).
-- Use an up-to-date browser. Very old browsers and some privacy modes turn WebRTC off.
+- Use an up-to-date browser. Very old browsers and some privacy modes turn WebRTC off. When WebRTC is off, Share and room links say "This window can't make peer-to-peer connections" (see [When a window can't share](collaboration.md#when-a-window-cant-share)).
 - If two people are on very strict networks, they may need a TURN server. That's set up by whoever runs the site, not in the app.
 
 **Relayed** means you're connected, just through a TURN server instead of directly.

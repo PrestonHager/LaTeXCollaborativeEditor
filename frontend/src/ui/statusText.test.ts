@@ -26,6 +26,14 @@ describe('connectionText', () => {
   });
 });
 
+describe('connectionText without WebRTC', () => {
+  it("says this window can't connect, for hosts and guests (issue #205)", () => {
+    expect(connectionText({ isHost: true, inRoom: false, state: 'Not sharing', peers: 0, noWebRtc: true })).toBe("Can't connect in this window");
+    expect(connectionText({ isHost: false, inRoom: false, state: 'Not sharing', peers: 0, noWebRtc: true })).toBe("Can't connect in this window");
+    expect(connectionFailed({ isHost: false, inRoom: false, state: 'Not sharing', peers: 0, noWebRtc: true })).toBe(false);
+  });
+});
+
 describe('saveStatusText', () => {
   it('adds the time to saved statuses only', () => {
     const at = new Date(2026, 0, 5, 15, 41);

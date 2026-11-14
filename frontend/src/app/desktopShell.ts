@@ -11,3 +11,23 @@ export function isDesktopShell(win: object | undefined = globalThis.window): boo
     return false;
   }
 }
+
+type TauriInternals = { invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown> };
+
+/**
+ * Open an https link in the system browser, through the shell's opener plugin (its capability
+ * only allows https URLs, docs/desktop.md). Resolves false outside the desktop app or when the
+ * shell refuses, so the caller can fall back to copying the link.
+ */
+export async function openInSystemBrowser(url: string, win: object | undefined = globalThis.window): Promise<boolean> {
+  if (!/^https:\/\//i.test(url) || !isDesktopShell(win)) return false;
+  try {
+    const internals = (win as { __TAURI_INTERNALS__?: TauriInternals }).__TAURI_INTERNALS__;
+    if (typeof internals?.invoke !== 'function') return false;
+    await internals.invoke('plugin:opener|open_url', { url });
+    return true;
+  } catch (error) {
+    console.warn('Could not open the link in the system browser', error);
+    return false;
+  }
+}
