@@ -531,6 +531,34 @@ describe('commands', () => {
       expect(app.zipInput.click).toHaveBeenCalled();
     });
 
+    it('lists Drive projects instead of opening the Picker in the desktop app (#177)', async () => {
+      const { app, run, commands, drive } = setup({ driveClientId: 'desktop' });
+      await drive.createProject('Thesis');
+      vi.stubGlobal('__TAURI_INTERNALS__', {});
+      try {
+        await run('file.openDrive');
+        expect(app.ensureDrivePickerConfig).not.toHaveBeenCalled();
+        expect(app.pickFromDrive).not.toHaveBeenCalled();
+        expect(app.ensureDriveConnected).toHaveBeenCalled();
+        expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Thesis' })], 'googleDrive');
+        // From the Open dialog's provider step, it doesn't ask about guests again.
+        app.guestCount.mockReturnValue(1);
+        await commands.openFromProvider('googleDrive');
+        expect(app.confirmDialog).not.toHaveBeenCalled();
+        expect(app.projectsDialog.open).toHaveBeenCalledTimes(2);
+        // Not signed in: nothing opens.
+        app.ensureDriveConnected.mockResolvedValueOnce(false);
+        await commands.openFromProvider('googleDrive');
+        expect(app.projectsDialog.open).toHaveBeenCalledTimes(2);
+        // From the menu with a guest in the room, Cancel stops it.
+        app.confirmDialog.mockResolvedValueOnce(false);
+        await run('file.openDrive');
+        expect(app.projectsDialog.open).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it('asks the host before opening or importing while guests are in the room', async () => {
       const { app, run, drive } = setup();
       app.guestCount.mockReturnValue(2);

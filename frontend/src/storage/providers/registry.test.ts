@@ -93,5 +93,15 @@ describe('provider registry', () => {
       await keep.set(true);
       expect(keep.get()).toBe(true);
     });
+
+    it('has no "Keep me signed in" in the desktop app, which keeps the sign-in in the keychain (#177)', () => {
+      const drive = Object.assign(new FakeDrive(), { keepSignedIn: () => false, setKeepSignedIn: async () => {} });
+      vi.stubGlobal('__TAURI_INTERNALS__', {});
+      try {
+        expect(googleDriveEntry(drive, 'desktop').keepSignedIn).toBeUndefined();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
   });
 });

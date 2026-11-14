@@ -1,4 +1,4 @@
-import { driveSessionLostNotice, isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
+import { desktopGoogleClient, driveSessionLostNotice, isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
 
 describe('isDesktopShell', () => {
   it('sees the Tauri globals and nothing else', () => {
@@ -65,5 +65,20 @@ describe('driveSessionLostNotice', () => {
     );
     expect(driveSessionLostNotice({})).toContain('saving in this browser.');
     expect(driveSessionLostNotice()).toContain('saving in this browser.');
+  });
+});
+
+describe('desktopGoogleClient', () => {
+  it('is set only when the shell says it can sign in to Google (#177)', () => {
+    expect(desktopGoogleClient({})).toBeUndefined();
+    expect(desktopGoogleClient(undefined)).toBeUndefined();
+    expect(desktopGoogleClient({ __LCE_DESKTOP__: { googleSignIn: false } })).toBeUndefined();
+    expect(desktopGoogleClient({ __LCE_DESKTOP__: { googleSignIn: true } })).toBe('desktop');
+    const hostile = {
+      get __LCE_DESKTOP__() {
+        throw new Error('nope');
+      },
+    };
+    expect(desktopGoogleClient(hostile)).toBeUndefined();
   });
 });

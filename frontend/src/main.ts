@@ -47,7 +47,7 @@ import { manifestFromProject, saveProject, type SavedManifest } from './storage/
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
-import { driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
+import { desktopGoogleClient, driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -183,7 +183,8 @@ if (driveProvider.isSignedIn() || driveProvider.wasConnected()) driveProvider.pr
 // Every place a project can be saved (#200). The Accounts panel, File > Open Project and the status bar read it.
 const storageProviders = createProviderRegistry([
   localStorageEntry(localAppProvider),
-  googleDriveEntry(driveProvider, import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined),
+  // The desktop app signs in through the system browser with its own client (#177).
+  googleDriveEntry(driveProvider, isDesktopShell() ? desktopGoogleClient() : (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)),
 ]);
 const blobs = new BlobStore();
 const projectState = new ProjectState(localAppProvider, driveProvider);
@@ -993,8 +994,8 @@ const exportDialog = {
 };
 
 const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
-  onPick: (summary) => {
-    if (!isClient) void openStoredProject(localAppProvider, summary.id);
+  onPick: (summary, source) => {
+    if (!isClient) void openStoredProject(source === 'googleDrive' ? driveProvider : localAppProvider, summary.id);
   },
   // The host already OK'd Open to get here, so this doesn't ask again.
   onImportZip: () => commands.importZipFromOpenDialog(),
@@ -1132,6 +1133,11 @@ function showStorageProvider() {
 }
 
 const ensureDrivePickerConfig = () => {
+  // The Picker needs a web origin, which the desktop app doesn't have (#177, docs/desktop.md).
+  if (isDesktopShell()) {
+    showNotice("The Google Drive picker doesn't work in the desktop app. Use the web app for this.", true);
+    return false;
+  }
   if (driveApiKey) return true;
   setStatus('Drive: API key missing');
   showNotice('Google Drive picker is not set up on this site (VITE_GOOGLE_API_KEY is missing).', true);

@@ -1,6 +1,7 @@
 import type { StorageProvider } from './types';
 import type { CommandId } from '../../ui/menuBar';
 import { rememberedAccount, wasConnected } from './accountMemory';
+import { isDesktopShell } from '../../app/desktopShell';
 
 /**
  * The storage provider registry (#200). Every place a project can be saved is listed here once, with
@@ -117,7 +118,10 @@ export type DriveAccountSource = StorageProvider & {
   setKeepSignedIn?(on: boolean): Promise<void>;
 };
 
-/** Google Drive. `clientId` is VITE_GOOGLE_CLIENT_ID; without it the deployment can't sign in. */
+/**
+ * Google Drive. `clientId` is VITE_GOOGLE_CLIENT_ID, or desktopGoogleClient() in the desktop app;
+ * without it the deployment can't sign in.
+ */
 export function googleDriveEntry(provider: DriveAccountSource, clientId: string | undefined): ProviderEntry {
   return {
     id: 'googleDrive',
@@ -142,8 +146,9 @@ export function googleDriveEntry(provider: DriveAccountSource, clientId: string 
       const remembered = rememberedAccount('googleDrive');
       return provider.accountLabel() ?? (remembered?.connected ? remembered.account : null);
     },
+    // The desktop app always keeps the sign-in, in the OS keychain (#177), so it has no such option.
     keepSignedIn:
-      provider.keepSignedIn && provider.setKeepSignedIn
+      provider.keepSignedIn && provider.setKeepSignedIn && !isDesktopShell()
         ? { get: () => provider.keepSignedIn!(), set: (on) => provider.setKeepSignedIn!(on) }
         : undefined,
   };

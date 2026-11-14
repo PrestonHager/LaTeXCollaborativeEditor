@@ -19,6 +19,18 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
+# PKCE verifier, challenge and state for Google sign-in (src/google_auth.rs).
+base64 = "0.22"
+getrandom = "0.3"
+sha2 = "0.10"
+# Google sign-in through the system browser (issue #177, docs/desktop.md "Google sign-in"):
+# the refresh token lives in the OS keychain (Keychain, Credential Manager, Secret Service).
+keyring = "4"
+# Token requests to oauth2.googleapis.com. native-tls uses the OS's TLS (OpenSSL on Linux,
+# which libssl-dev already covers), so no extra build tools on Windows.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "form"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "2.12", features = [] }
 # Folders on this computer as projects (issue #178, docs/desktop.md "Storage: local folders").
 # The dialog picks a folder and adds it to the fs scope; the capability itself allows no path.
@@ -30,10 +42,15 @@ tauri-plugin-fs = { version = "2", features = ["watch"] }
 tauri-plugin-opener = "2"
 # Keeps the folders picked in the dialog in the fs scope across restarts, so the last project reopens.
 tauri-plugin-persisted-scope = "2"
+# The one-shot loopback listener for the sign-in redirect. Tauri already runs on tokio.
+tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros"] }
 
 # Only to turn on WebKitGTK's WebRTC setting (src/lib.rs). The same major version wry uses.
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = { version = "2.0", features = ["v2_38"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "net", "io-util"] }
 
 [profile.release]
 # Smaller installers. The shell is a thin wrapper, so speed of the Rust side barely matters.

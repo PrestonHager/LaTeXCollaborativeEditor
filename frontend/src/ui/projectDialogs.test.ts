@@ -99,7 +99,7 @@ describe('projects dialog', () => {
     expect(items[0].querySelector('p')!.textContent).toContain('Edited');
     expect((document.getElementById('projects-empty') as HTMLElement).hidden).toBe(true);
     items[0].click();
-    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'local');
     expect(dialogEl.open).toBe(false);
 
     dialog.open([]);
@@ -198,6 +198,21 @@ describe('projects dialog provider step (#200)', () => {
     row('localFolder').click();
     expect(dialogEl.open).toBe(false);
     expect(onProvider).toHaveBeenCalledWith('localFolder');
+  });
+
+  it("lists the desktop app's Drive projects and opens the pick from Drive (#177)", () => {
+    mountAppShell();
+    const dialogEl = document.getElementById('projects-dialog') as HTMLDialogElement;
+    const onPick = vi.fn();
+    const dialog = createProjectsDialog(dialogEl, { onPick, onImportZip: vi.fn() });
+    dialog.open([{ id: 'drive-1', name: 'Thesis' }], 'googleDrive');
+    expect(document.getElementById('projects-dialog-description')!.textContent).toBe('Projects this app saved in your Google Drive.');
+    document.querySelector<HTMLButtonElement>('#projects-list button')!.click();
+    expect(onPick).toHaveBeenCalledWith({ id: 'drive-1', name: 'Thesis' }, 'googleDrive');
+    dialog.open([{ id: 'p1', name: 'Paper' }]);
+    expect(document.getElementById('projects-dialog-description')!.textContent).toBe('Projects saved in this browser.');
+    document.querySelector<HTMLButtonElement>('#projects-list button')!.click();
+    expect(onPick).toHaveBeenLastCalledWith({ id: 'p1', name: 'Paper' }, 'local');
   });
 
   it('does nothing without a registry', () => {

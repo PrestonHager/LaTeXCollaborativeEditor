@@ -40,9 +40,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     # Same variables as the production site, so the app's peers meet the website's peers
-    # (VITE_P2P_APP_ID) and use the same STUN server. The Google ones are left out on purpose:
-    # Google blocks its sign-in inside an app's webview, so Drive waits for the desktop sign-in
-    # flow (docs/desktop.md, "Google sign-in").
+    # (VITE_P2P_APP_ID) and use the same STUN server. The web's VITE_GOOGLE_* ones are left out
+    # on purpose: Google blocks its sign-in inside an app's webview, so the app signs in through
+    # the system browser with its own Desktop OAuth client, given to the Rust build below
+    # (docs/desktop.md, "Google sign-in").
     environment: Production
     env:
       VITE_DEPLOY_ENV: production
@@ -103,6 +104,12 @@ jobs:
       - name: Build the app
         working-directory: desktop
         shell: bash
+        # The Google Desktop OAuth client (#177). src-tauri/src/google_auth.rs reads them at build
+        # time; without them the app shows Google Drive as not configured. Google doesn't treat a
+        # Desktop client's secret as confidential, but it still stays out of the repository.
+        env:
+          GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.GOOGLE_DESKTOP_CLIENT_ID }}
+          GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: npm run build -- --bundles "${{ matrix.bundles }}" ${{ matrix.args }}
       - name: Upload the installers
         uses: actions/upload-artifact@v7

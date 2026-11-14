@@ -16,7 +16,8 @@ Issue #122 plans native apps for Windows, macOS and Linux, then tablets and phon
 | Links, wording, offline preview | Done (#181, below): links open in the system browser, the window can't leave the app, text says "this app", and LaTeX.js is bundled |
 | WebRTC | Windows and macOS are expected to work but are **not checked yet**. On Linux, the distro WebKitGTK we checked has **no WebRTC** (below) |
 | Local folders | Done (#178, below): open a folder on this computer as a project, save to one, and outside edits go to the conflict flow. **Not yet checked on real hardware** (#174) |
-| Google sign-in, updater, signing | Follow-ups (below) |
+| Google sign-in | Done (#177, below): through the system browser, loopback and PKCE in Rust, the refresh token in the OS keychain. Needs the maintainer's Desktop OAuth client, and **checking on real hardware** (#174) |
+| Updater, signing | Follow-ups (below) |
 | First numbers (Linux, from the sandbox) | `.deb` 2.4 MB and `.rpm` 2.4 MB. The AppImage is 78 MB because it carries WebKitGTK and GStreamer. After load, the app used about 420 MB PSS across its three processes, under Xvfb with software rendering. That's not a fair desktop number: measure on real hardware against a browser tab |
 
 ## The choice: Tauri 2
@@ -105,23 +106,39 @@ Until then the app says so instead of failing quietly (issue #205). When `RTCPee
 
 ## Google sign-in
 
-The web app signs in with Google Identity Services in the page. Google blocks OAuth in embedded webviews: the sign-in page answers `disallowed_useragent` ("Use secure browsers" policy). So the desktop app must sign in through the system browser, the way RFC 8252 describes for native apps:
+Issue #177. The web app signs in with Google Identity Services in the page. Google blocks OAuth in embedded webviews: the sign-in page answers `disallowed_useragent` ("Use secure browsers" policy). So the desktop app signs in through the **system browser**, the way RFC 8252 describes for native apps, all in Rust (`desktop/src-tauri/src/google_auth.rs`):
 
-1. Rust starts a one-shot HTTP listener on `127.0.0.1` at a random free port. `tauri-plugin-oauth` does this, or the app can run its own small listener.
-2. The app opens `https://accounts.google.com/o/oauth2/v2/auth` in the default browser (`tauri-plugin-opener`). It sends `redirect_uri=http://127.0.0.1:<port>`, `response_type=code`, the same Drive scopes as the web app (`drive.file`), `code_challenge` (S256 PKCE), `state`, and `access_type=offline` so a refresh token comes back.
-3. The listener gets the code and checks `state`. Rust exchanges the code with `code_verifier` at `https://oauth2.googleapis.com/token`. Google's installed-app flow also wants the client's `client_secret`, which for a Desktop client is not treated as secret.
-4. Rust keeps the refresh token in the OS keychain (the `keyring` crate). It hands the page only short-lived access tokens, through a narrow IPC command, so the page never sees the refresh token. The Drive provider uses that token in place of the GIS token client.
+1. **Connect** (File > Connect Google Drive, or Accounts) calls the `google_sign_in` command. Rust binds a one-shot listener on `127.0.0.1` at a free port, makes a PKCE verifier (32 random bytes) with its S256 challenge, and a random `state`.
+2. It opens `https://accounts.google.com/o/oauth2/v2/auth` in the default browser through `tauri-plugin-opener`'s Rust API, with `redirect_uri=http://127.0.0.1:<port>`, `response_type=code`, the web app's only scope (`drive.file`), `code_challenge`, `state`, `access_type=offline` and `prompt=consent` (so Google always returns a refresh token), plus the remembered email as `login_hint`. The client secret is never in that URL.
+3. The listener answers each request with a small static page (its own `default-src 'none'` CSP). It ignores anything but `GET /` with the right `state` (a favicon, a stale or forged redirect), and gives up after 5 minutes. A second Connect click cancels a sign-in still waiting. `error=access_denied` reports "Access was denied".
+4. Rust exchanges the code with the `code_verifier` at `https://oauth2.googleapis.com/token` (with the client secret, which Google's installed-app flow wants), using `reqwest` over the OS's TLS (`native-tls`).
+5. The **refresh token goes into the OS keychain** (the `keyring` crate: Keychain on macOS, Credential Manager on Windows, the Secret Service on Linux, through `zbus` with no system library), under `io.github.prestonhager.latexcollaborativeeditor.google`. The command returns only `{ accessToken, expiresIn }` to the page.
+6. When the access token runs out, or on the next start, the Drive provider calls `google_access_token`: Rust reads the keychain's refresh token and asks Google for a new access token, with no browser. If Google answers `invalid_grant` (revoked, or six months unused), Rust deletes the keychain entry and the app shows Drive as **Expired** with Connect.
+7. **Log out** calls `google_sign_out`: Rust deletes the keychain entry, then revokes the refresh token with Google (best effort, 5 s).
 
-**The Google Picker** (used to pick Drive files and folders) loads in an iframe from `docs.google.com`, keyed to a browser origin. It may not work from `tauri://localhost` or `https://tauri.localhost`. This needs a test. If it fails, the desktop app needs its own Drive file list (the `drive.file` scope allows listing files the app made) or the browser.
+In the page, `frontend/src/storage/providers/desktopGoogleAuth.ts` (a lazy chunk, loaded only in the app) wraps the three commands and turns their short error codes into words. `googleDrive.ts` uses it in place of GIS when `isDesktopShell()`: no GIS script loads, and Drive API calls are the web app's, with the access token. The access token sits in `sessionStorage` like on the web; nothing like a refresh token is ever in the page, IndexedDB or `localStorage`. **Keep me signed in on this browser** doesn't show in the app: the keychain always keeps the sign-in, and Log out clears it.
+
+**Is it set up?** The shell tells the page with one initialization script, `window.__LCE_DESKTOP__ = { googleSignIn: true|false }` (frozen, read by `desktopGoogleClient()` in `desktopShell.ts`), so Accounts can say **Not configured** without an IPC call. The client id and secret stay in Rust.
+
+**The Google Picker.** The Picker loads in an iframe from `docs.google.com` keyed to a web origin and an HTTP-referrer-restricted API key. The app's origin is `tauri://localhost` or `https://tauri.localhost`, which Google can't register as a JavaScript origin, so **the desktop app doesn't use the Picker**:
+
+- **File > Open from Google Drive** lists the Drive projects the app made, in the Open dialog ("Projects this app saved in your Google Drive."). The `drive.file` scope covers every project folder the app made, so this needs no API key and no extra scope.
+- **Add Files from Drive**, **Move Project Folder in Drive**, and **Export to Drive into a picked folder** need the Picker (to grant `drive.file` access to files the app didn't make, or to pick a folder). In the app they say "The Google Drive picker doesn't work in the desktop app. Use the web app for this." Opening a Drive file the app didn't make is a web-only feature for the same reason.
+- If a later check on real hardware shows the Picker works from the app's origin, it can come back behind the same `ensureDrivePickerConfig()`.
+
+**Permissions.** The three commands are the app's own, declared in `build.rs` (`AppManifest::commands`), so each needs its `allow-*` permission in `capabilities/main-window.json`: `allow-google-sign-in`, `allow-google-access-token` and `allow-google-sign-out`. No plugin permission is added; the opener's Rust API opens the consent page without going through the page's `opener:allow-open-url`. The CSP is unchanged: Rust makes the token requests, and the page only calls the Drive API, as on the web.
 
 **What the maintainer sets up in Google Cloud** (same project as the web client):
 
-1. APIs & Services > Credentials > Create credentials > OAuth client ID > Application type **Desktop app**. A Web application client won't accept loopback redirects on any port. A Desktop client allows `http://127.0.0.1:<any port>` with no redirect URIs to register.
-2. Use the same OAuth consent screen. If it's in production with sensitive scopes, the verified scopes are shared. The Desktop client just appears as another client of the same app.
-3. Save the client ID and secret as Actions secrets for the desktop build (planned names: `GOOGLE_DESKTOP_CLIENT_ID`, `GOOGLE_DESKTOP_CLIENT_SECRET`). The Rust side reads them at build time. Leave them out of the web build.
-4. If the Picker stays, the desktop app needs an API key that isn't restricted by HTTP referrer, since the app has no web referrer. Restrict it by API (Picker API) instead.
+1. APIs & Services > Credentials > Create credentials > OAuth client ID > Application type **Desktop app**, named for example "LaTeX Collaborative Editor (desktop)". A Web application client won't accept loopback redirects on any port. A Desktop client allows `http://127.0.0.1:<any port>` with no redirect URIs to register.
+2. It uses the same OAuth consent screen, so the verified `drive.file` scope is shared; the Desktop client is just another client of the same app.
+3. Save its client ID and secret as the repository (or Production environment) **Actions secrets** `GOOGLE_DESKTOP_CLIENT_ID` and `GOOGLE_DESKTOP_CLIENT_SECRET`. `.github/workflows/desktop.yml` passes them to the Rust build, which bakes them in with `option_env!`. Google doesn't treat a Desktop client's secret as confidential (it ships in every copy of the app, and PKCE protects the code), but it still never goes in the repository, and `npm run check` in `desktop/` fails on anything that looks like a client id or secret in the shell's sources.
+4. No API key is needed for the app, since it doesn't load the Picker.
+5. **Local builds:** set the same two variables in the environment before `npm run build` or `npm run dev` in `desktop/` (or `cargo check`). They're also read at run time, which wins over the built-in ones, so `GOOGLE_DESKTOP_CLIENT_ID=… npm run dev` works without a rebuild of the Rust side.
 
-Until this lands, the desktop workflow builds without the Google variables, so Drive shows as not set up in the app.
+Without the variables, the app builds and runs, and Accounts shows Google Drive as **Not configured**.
+
+**To check on real hardware (#174):** the consent page opening in each OS's default browser and the redirect coming back (including with a browser that blocks `127.0.0.1` redirects, like some hardened Firefox setups); the keychain on each OS (macOS asks once to allow access; on Linux the Secret Service needs a running keyring daemon, like GNOME Keyring or KWallet; with none, Connect says it couldn't use the keychain); a restart coming back signed in without the browser; Log out removing the keychain item.
 
 ## Keyboard shortcuts
 
@@ -204,12 +221,12 @@ The builds are unsigned, so people see warnings:
 - **CSP.** The app uses the web CSP unchanged: the `<meta>` tag in the bundled `index.html`. Tauri's own `app.security.csp` stays `null`. If both were set, the browser would enforce both, and the effective policy would be their intersection. A Tauri copy could only drift from the meta tag, for example when the build adds custom `VITE_P2P_RENDEZVOUS` trackers to the meta tag. Desktop builds must not use the `VITE_DISABLE_CSP=1` rollback switch.
 
   When a feature needs Tauri IPC from the page, `connect-src` needs `ipc: http://ipc.localhost`. Add it to the meta policy then (it means nothing on the web) and update `frontend/src/security/cspPolicy.test.ts`.
-- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205), and for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above). Each follow-up adds only what it uses, like `updater:default`.
+- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above); and for Google sign-in (#177) the app's three sign-in commands ("Google sign-in" above). Each follow-up adds only what it uses, like `updater:default`.
 - **IPC in the CSP.** The opener goes through Tauri IPC, so the meta policy's `connect-src` has `ipc: http://ipc.localhost` (it means nothing on the web). `frontend/src/security/cspPolicy.test.ts` allows exactly those.
 - `withGlobalTauri` is off, and the asset protocol is off. The initial load imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads. The folder code uses `@tauri-apps/plugin-fs` and `@tauri-apps/plugin-dialog` from a lazy chunk.
 - `freezePrototype` is off. Freezing `Object.prototype` breaks code that assigns over an inherited property (the "override mistake"), and LaTeX.js, pdf.js and CodeMirror haven't been tested with it.
-- **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview").
-- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
+- **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview"). The only script it adds to the page is the `__LCE_DESKTOP__` flag ("Google sign-in").
+- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, the app commands in `build.rs` and `invoke_handler`, that the page's token type never carries a refresh token, the `drive.file` scope, the one initialization script, no OAuth client in the sources, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
 
 ## Building locally
 
@@ -228,7 +245,7 @@ The builds are unsigned, so people see warnings:
 2. **Desktop beta:**
    - check it on the three OSes against the #122 prototype list (open, edit, preview, join a room with a browser peer; startup time and memory against the browser);
    - Linux WebRTC;
-   - Google sign-in;
+   - Google sign-in (done, #177, needs the Desktop OAuth client and checking on hardware);
    - external links (done, #181);
    - macOS menu keys;
    - signing.
@@ -245,7 +262,7 @@ These are listed in the PR that added this page, to be filed:
 
 - Desktop: check the app on Windows, macOS and Linux, and measure startup and memory.
 - Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), #176. The notice when WebRTC is missing is done (#205).
-- Desktop: Google sign-in through the system browser (loopback and PKCE, a Desktop OAuth client, tokens in the keychain, and the Picker question).
+- Desktop: Google sign-in through the system browser (loopback and PKCE, a Desktop OAuth client, tokens in the keychain, and the Picker question), #177 (done).
 - Desktop: a local folder storage provider, #178 (done).
 - Desktop: auto-updater, and installers attached to releases.
 - Desktop: macOS notarization and Windows code signing (maintainer setup).

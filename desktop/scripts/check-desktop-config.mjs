@@ -6,8 +6,8 @@
 //   index.html still has the CSP <meta> tag (a desktop build must not use VITE_DISABLE_CSP=1);
 // - the window's Tauri permissions are exactly the documented ones (docs/desktop.md, Security): the
 //   https opener, and for local folder projects (#178) the folder dialog and a list of fs commands
-//   with no path scope of their own, so only folders picked in the dialog are reachable. No remote
-//   origin gets any;
+//   with no path scope of their own, so only folders picked in the dialog are reachable, and for
+//   Google sign-in (#177) the app's three sign-in commands. No remote origin gets any;
 // - the build bundles LaTeX.js for an offline preview (build:desktop), and the shell builds the
 //   window itself so navigation away from the app is blocked and https links go to the browser.
 // Run with `npm run check` in desktop/. The desktop workflow runs it before building.
@@ -27,6 +27,32 @@ const check = (ok, message) => {
 };
 
 const conf = json(join(tauriDir, 'tauri.conf.json'));
+
+// Local folder projects (#178): the dialog picks a folder and adds it to the fs scope at runtime.
+// None of these carry a path of their own, and fs:deny-default keeps the app's webview data out
+// even if someone picks a folder that holds it. No fs:default, no scope-* sets, no write-text-file.
+const ALLOWED_PLAIN_PERMISSIONS = [
+  'dialog:allow-open',
+  'fs:deny-default',
+  'fs:allow-exists',
+  'fs:allow-stat',
+  'fs:allow-read-dir',
+  'fs:allow-read-file',
+  'fs:allow-write-file',
+  'fs:allow-mkdir',
+  'fs:allow-rename',
+  'fs:allow-remove',
+  'fs:allow-watch',
+  'fs:allow-unwatch',
+  // Google sign-in through the system browser (#177): the app's own commands in src/google_auth.rs.
+  // They hand the page short-lived access tokens; the refresh token stays in the OS keychain.
+  'allow-google-sign-in',
+  'allow-google-access-token',
+  'allow-google-sign-out',
+];
+// The app commands build.rs may declare, each with its allow-* permission above.
+const APP_COMMANDS = ['google_sign_in', 'google_access_token', 'google_sign_out'];
+
 
 check(conf.version === '../../frontend/package.json', 'tauri.conf.json "version" must be "../../frontend/package.json", the one app version.');
 check(conf.build?.frontendDist === '../../frontend/dist', 'build.frontendDist must be "../../frontend/dist", the bundled web build.');
@@ -63,6 +89,33 @@ check(
   'src/lib.rs must register the dialog, fs and persisted-scope plugins, in that order.',
 );
 
+// Google sign-in (#177, docs/desktop.md "Google sign-in").
+const buildRs = read(join(tauriDir, 'build.rs'));
+const declared = [...(buildRs.match(/\.commands\(&\[([^\]]*)\]/)?.[1] ?? '').matchAll(/"([a-z_]+)"/g)].map((match) => match[1]);
+check(
+  JSON.stringify(declared) === JSON.stringify(APP_COMMANDS),
+  `build.rs must declare exactly the app commands ${APP_COMMANDS.join(', ')} in its AppManifest, so each needs a permission.`,
+);
+const handlers = [...(libRs.match(/generate_handler!\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/google_auth::([a-z_]+)/g)].map((match) => match[1]);
+check(JSON.stringify(handlers) === JSON.stringify(APP_COMMANDS), 'src/lib.rs may only register the Google sign-in commands with invoke_handler.');
+const authRs = read(join(tauriDir, 'src', 'google_auth.rs'));
+const accessTokenStruct = authRs.match(/pub struct AccessToken \{([^}]*)\}/)?.[1] ?? '';
+check(
+  /access_token/.test(accessTokenStruct) && !/refresh/i.test(accessTokenStruct),
+  'src/google_auth.rs: what the page gets (AccessToken) must never carry the refresh token.',
+);
+check(/const SCOPE: &str = "https:\/\/www\.googleapis\.com\/auth\/drive\.file";/.test(authRs), 'src/google_auth.rs must ask for the drive.file scope only, like the web app.');
+// The only script the shell puts in the page says whether sign-in is set up, never the client.
+check(
+  (libRs.match(/initialization_script/g) ?? []).length === 1 && /\.initialization_script\(desktop_info_script\(/.test(libRs),
+  'src/lib.rs may only add the desktop_info_script initialization script.',
+);
+// No OAuth client in the repository: it comes from the build environment (desktop.yml secrets).
+for (const [name, text] of [['tauri.conf.json', JSON.stringify(conf)], ['src/google_auth.rs', authRs], ['src/lib.rs', libRs]]) {
+  check(!/\d{6,}-[a-z0-9]{16,}\.apps\.googleusercontent\.com/.test(text), `${name} must not hold a Google OAuth client id; it comes from GOOGLE_DESKTOP_CLIENT_ID.`);
+  check(!/GOCSPX-/.test(text), `${name} must not hold a Google client secret.`);
+}
+
 const security = conf.app?.security ?? {};
 check(security.csp === null, 'app.security.csp must stay null: the CSP <meta> tag in frontend/index.html is the policy (docs/desktop.md, Security).');
 check(!security.dangerousDisableAssetCspModification, 'dangerousDisableAssetCspModification only matters with a Tauri CSP, which this app does not set.');
@@ -71,24 +124,6 @@ check(conf.app?.withGlobalTauri !== true, 'withGlobalTauri stays off: the fronte
 
 const indexHtml = read(join(repo, 'frontend', 'index.html'));
 check(/<meta\s+http-equiv=["']Content-Security-Policy["']/i.test(indexHtml), 'frontend/index.html must keep its CSP <meta> tag.');
-
-// Local folder projects (#178): the dialog picks a folder and adds it to the fs scope at runtime.
-// None of these carry a path of their own, and fs:deny-default keeps the app's webview data out
-// even if someone picks a folder that holds it. No fs:default, no scope-* sets, no write-text-file.
-const ALLOWED_PLAIN_PERMISSIONS = [
-  'dialog:allow-open',
-  'fs:deny-default',
-  'fs:allow-exists',
-  'fs:allow-stat',
-  'fs:allow-read-dir',
-  'fs:allow-read-file',
-  'fs:allow-write-file',
-  'fs:allow-mkdir',
-  'fs:allow-rename',
-  'fs:allow-remove',
-  'fs:allow-watch',
-  'fs:allow-unwatch',
-];
 
 const capabilitiesDir = join(tauriDir, 'capabilities');
 const capabilityFiles = readdirSync(capabilitiesDir).filter((name) => name.endsWith('.json'));
@@ -117,4 +152,4 @@ if (errors.length) {
   process.exit(1);
 }
 const version = json(join(repo, 'frontend', 'package.json')).version;
-console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, https opener and picked-folder access only, links guarded.`);
+console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, https opener, picked-folder access and Google sign-in commands only, links guarded.`);

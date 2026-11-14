@@ -1,12 +1,18 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "The main window may open https links in the system browser, and read and write only the folders the person picks in the system dialog (local folder projects, #178). Add a permission only with the feature that needs it (docs/desktop.md, Security).",
-  "windows": ["main"],
+  "description": "The main window may open https links in the system browser, read and write only the folders the person picks in the system dialog (local folder projects, #178), and sign in to Google through the system browser, getting only short-lived access tokens (#177). Add a permission only with the feature that needs it (docs/desktop.md, Security).",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     {
       "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "https://*" }]
+      "allow": [
+        {
+          "url": "https://*"
+        }
+      ]
     },
     "dialog:allow-open",
     "fs:deny-default",
@@ -19,6 +25,9 @@
     "fs:allow-rename",
     "fs:allow-remove",
     "fs:allow-watch",
-    "fs:allow-unwatch"
+    "fs:allow-unwatch",
+    "allow-google-sign-in",
+    "allow-google-access-token",
+    "allow-google-sign-out"
   ]
 }

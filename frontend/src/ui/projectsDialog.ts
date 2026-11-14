@@ -5,7 +5,8 @@ import { icon, renderStaticIcons, storageIcons } from './icons';
 import { returnFocusOnClose } from './focusReturn';
 
 type ProjectsDialogOptions = {
-  onPick: (project: ProjectSummary) => void;
+  /** `source` is where the list came from: browser storage, or Drive in the desktop app (#177). */
+  onPick: (project: ProjectSummary, source: ProviderId) => void;
   onImportZip: () => void;
   /** Where File > Open Project's providers come from. Without it the dialog only lists projects. */
   registry?: ProviderRegistry;
@@ -16,6 +17,8 @@ type ProjectsDialogOptions = {
 const DESCRIPTIONS = {
   providers: 'Where is the project saved?',
   projects: 'Projects saved in this browser.',
+  // The desktop app's Drive list, in place of the Picker (#177).
+  googleDrive: 'Projects this app saved in your Google Drive.',
 };
 
 /** Wire up the "Open a project" dialog in index.html. Rows are cloned from its item template. */
@@ -91,12 +94,12 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
   return {
     /** Ask which provider the project is in. Each choice goes to options.onProvider. */
     chooseProvider: showProviders,
-    open(projects: ProjectSummary[]) {
+    open(projects: ProjectSummary[], source: ProviderId = 'local') {
       // Came from the provider step: offer the way back.
       back.hidden = !(dialog.open && !providers.hidden);
       providers.hidden = true;
       list.hidden = false;
-      description.textContent = DESCRIPTIONS.projects;
+      description.textContent = source === 'googleDrive' ? DESCRIPTIONS.googleDrive : DESCRIPTIONS.projects;
       list.replaceChildren(
         ...projects.map((project) => {
           const item = template.content.firstElementChild!.cloneNode(true) as HTMLButtonElement;
@@ -105,7 +108,7 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
           item.querySelector('.project-item-date')!.textContent = project.updatedAt ? `Edited ${dateFormat.format(project.updatedAt)}` : '';
           item.addEventListener('click', () => {
             close();
-            options.onPick(project);
+            options.onPick(project, source);
           });
           return item;
         }),

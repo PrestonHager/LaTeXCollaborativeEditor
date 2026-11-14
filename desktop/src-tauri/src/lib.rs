@@ -1,8 +1,11 @@
 //! The desktop shell. It opens one window on the bundled frontend build (frontend/dist, served
 //! from inside the app, never from a remote URL). The opener lets the page open https links in the
 //! system browser; the dialog, fs and persisted-scope plugins let it open folders the person picks
-//! as projects (issue #178), and nothing else on disk.
+//! as projects (issue #178), and nothing else on disk. Google sign-in runs here too, through the
+//! system browser, with the refresh token in the OS keychain (issue #177, src/google_auth.rs).
 //! See docs/desktop.md for the plan.
+
+mod google_auth;
 
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, Url, WebviewWindowBuilder};
@@ -22,6 +25,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_persisted_scope::init())
+        // Google sign-in (#177). Each command needs its allow-* permission in the capability.
+        .manage(google_auth::GoogleAuth::default())
+        .invoke_handler(tauri::generate_handler![
+            google_auth::google_sign_in,
+            google_auth::google_access_token,
+            google_auth::google_sign_out
+        ])
         .setup(|app| {
             create_main_window(app)?;
             #[cfg(target_os = "linux")]
@@ -49,6 +59,10 @@ fn create_main_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
     let nav_dev_url = dev_url.clone();
 
     WebviewWindowBuilder::from_config(app.handle(), &config)?
+        // Tells the page, before its scripts run, whether this build can sign in to Google (#177),
+        // so Accounts can say "Not configured" without an IPC round trip. Only a boolean: the
+        // client id and secret stay on the Rust side.
+        .initialization_script(desktop_info_script(google_auth::Client::from_env().is_some()))
         // Nothing but the app itself loads in this window. An https link opens in the
         // system browser instead; anything else (http, file, custom schemes) goes nowhere.
         .on_navigation(move |url| {
@@ -77,6 +91,13 @@ fn create_main_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
         })
         .build()?;
     Ok(())
+}
+
+/// The one global the shell sets in the page (frontend/src/app/desktopShell.ts reads it).
+fn desktop_info_script(google_sign_in: bool) -> String {
+    format!(
+        "Object.defineProperty(window,'__LCE_DESKTOP__',{{value:Object.freeze({{googleSignIn:{google_sign_in}}})}});"
+    )
 }
 
 /// The app's own pages: the bundled build (tauri://localhost, or http(s)://tauri.localhost on
@@ -135,6 +156,15 @@ mod tests {
 
     fn url(s: &str) -> Url {
         Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn the_page_only_learns_whether_google_sign_in_is_set_up() {
+        assert_eq!(
+            desktop_info_script(true),
+            "Object.defineProperty(window,'__LCE_DESKTOP__',{value:Object.freeze({googleSignIn:true})});"
+        );
+        assert!(desktop_info_script(false).contains("googleSignIn:false"));
     }
 
     #[test]

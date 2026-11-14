@@ -47,3 +47,16 @@ export function localPlace(win: object | undefined = globalThis.window): 'this b
 export function driveSessionLostNotice(win: object | undefined = globalThis.window): string {
   return `Google Drive sign-in expired, so edits are saving in ${localPlace(win)}. Use File > Connect Google Drive to switch back.`;
 }
+
+/**
+ * In the desktop app, a stand-in for VITE_GOOGLE_CLIENT_ID: set when the shell was built with a
+ * Google Desktop OAuth client, which it says in `__LCE_DESKTOP__` before the page loads (#177,
+ * docs/desktop.md "Google sign-in"). The client id itself stays in the shell.
+ */
+export function desktopGoogleClient(win: object | undefined = globalThis.window): string | undefined {
+  try {
+    return (win as { __LCE_DESKTOP__?: { googleSignIn?: boolean } } | undefined)?.__LCE_DESKTOP__?.googleSignIn ? 'desktop' : undefined;
+  } catch {
+    return undefined;
+  }
+}

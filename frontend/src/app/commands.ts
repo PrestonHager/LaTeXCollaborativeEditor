@@ -1,4 +1,4 @@
-import { localPlace } from './desktopShell';
+import { isDesktopShell, localPlace } from './desktopShell';
 import type { CommandId, CommandState, MenuEntry } from '../ui/menuBar';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { KeybindCommand } from '../ui/keybindSettings';
@@ -74,7 +74,7 @@ export type CommandContext = {
    * The Open a project dialog. With more than one provider set up, chooseProvider asks where the
    * project is first, and the dialog calls back openFromProvider (below) with the choice.
    */
-  projectsDialog: { open(projects: ProjectSummary[]): void; chooseProvider(providers: ProviderId[]): void };
+  projectsDialog: { open(projects: ProjectSummary[], source?: ProviderId): void; chooseProvider(providers: ProviderId[]): void };
   /** Folders on this computer (desktopFolders.ts), in the desktop app only. null on the web. */
   folders?: Promise<FolderCommands | null> | null;
   /** The Accounts panel (ui/accountsPanel.ts), which loads on first use. */
@@ -264,6 +264,13 @@ export function createCommands(app: CommandContext) {
   /** Pick a project folder or .tex file in Drive and open it. Pass alreadyConfirmed when the host just OK'd replacing the project. */
   async function openFromDrive(alreadyConfirmed: boolean) {
     if (isClient) return;
+    // The desktop app has no Picker (it needs a web origin, #177): it lists the Drive projects the app made.
+    if (isDesktopShell()) {
+      if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
+      if (!(await ensureDriveConnected())) return;
+      projectsDialog.open(await driveProvider.listProjects(), 'googleDrive');
+      return;
+    }
     if (!ensureDrivePickerConfig()) return;
     if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
     if (!(await ensureDriveConnected())) return;
