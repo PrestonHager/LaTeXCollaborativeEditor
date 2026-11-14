@@ -2,8 +2,9 @@ import './style.css';
 import * as Y from 'yjs';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
+import { bindPreviewZoomControls, createPreviewZoomState } from './ui/previewZoom';
 import { createMenuBar, type CommandId } from './ui/menuBar';
-import { setupShareButton } from './ui/shareButton';
+import { setupShareButton, type ShareControls } from './ui/shareButton';
 import { renderStaticIcons } from './ui/icons';
 import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
@@ -63,11 +64,12 @@ import {
   decodeYjsState,
   type PersistedYjsState,
 } from './state/appSession';
-import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
+import { clearHostRoomId, readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
 import { BlobStore } from './project/blobStore';
 import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
+import { completionProjectFrom } from './ui/completionProject';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
@@ -79,10 +81,8 @@ renderStaticIcons();
 
 const editorPane = document.getElementById('editor-pane') as HTMLElement;
 const editor = createEditorPane(editorPane);
-const preview = createPreviewPane(document.getElementById('preview-pane')!);
 const previewChanges = createPreviewChanges(previewChangesElements());
 const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
-const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
@@ -117,6 +117,28 @@ const phone = createPhoneLayout({
   onPaneChange: () => editor.getView()?.requestMeasure(),
 });
 phoneMedia?.addEventListener('change', () => phone.viewportChanged());
+// Preview zoom (issue #190): Fit width on phones, 100% elsewhere, until the person picks one.
+let renderZoomControls = () => {};
+const previewZoom = createPreviewZoomState({
+  isPhone,
+  apply: (zoom) => preview.setZoom(zoom),
+  onChange: () => renderZoomControls(),
+});
+const preview = createPreviewPane(document.getElementById('preview-pane')!, 'light', {
+  zoom: previewZoom.zoom,
+  onZoomReport: (scale, fit) => previewZoom.frameReported(scale, fit),
+});
+renderZoomControls = bindPreviewZoomControls(
+  {
+    fitButton: document.getElementById('preview-zoom-fit') as HTMLButtonElement,
+    zoomOutButton: document.getElementById('preview-zoom-out') as HTMLButtonElement,
+    zoomInButton: document.getElementById('preview-zoom-in') as HTMLButtonElement,
+    level: document.getElementById('preview-zoom-level')!,
+  },
+  () => previewZoom,
+);
+renderZoomControls();
+phoneMedia?.addEventListener('change', () => previewZoom.deviceChanged());
 const layout = createLayout({
   splitRoot,
   splitter,
@@ -169,6 +191,8 @@ let lastSavedAt: Date | null = null;
 let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
 let inRoom = isClient;
+/** The Share popover, once the page is set up. The palette's "Copy share link" goes through it. */
+let share: ShareControls | null = null;
 
 /**
  * Show a short message in the header, then clear it after a few seconds unless it's sticky.
@@ -767,6 +791,9 @@ function bindProject() {
     persistAppSession();
   };
   session.getDoc().on('update', onUpdate);
+  // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
+  const completionProject = completionProjectFrom(session.getDoc(), project);
+  editor.setCompletionProject(completionProject);
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
     renderFiles();
@@ -775,6 +802,8 @@ function bindProject() {
   });
   unbindDoc = () => {
     session.getDoc().off('update', onUpdate);
+    completionProject.dispose();
+    editor.setCompletionProject(null);
     stopTree();
   };
   activeFileId = activeFileId && project.get(activeFileId) ? activeFileId : null;
@@ -1118,7 +1147,7 @@ const commands = createCommands({
   uploadDialog,
   templates,
   zipInput,
-  shareButtonEl,
+  copyShareLink: () => share?.copyOrOpen(),
   get project() {
     return project;
   },
@@ -1367,7 +1396,8 @@ if (!isClient) {
   setStatus(hostStorageText);
 }
 
-// Guests join the room in the URL, and a reloaded host rejoins the room this tab already shared.
+// Guests join the room in the URL. A host is never in a room on load (issue #224): a reload only
+// offers to resume the room this tab shared, from the Share popover.
 const hostRoomId = isClient || !p2pAvailable ? null : readHostRoomId();
 /** Say why this window can't share or join, and in the desktop app offer the browser instead. */
 function explainP2pUnavailable(action: P2pAction) {
@@ -1398,8 +1428,7 @@ if (!p2pAvailable) {
   }
 } else {
   if (roomId) session.join(roomId);
-  else if (hostRoomId) session.join(hostRoomId);
-  inRoom = Boolean(roomId || hostRoomId);
+  inRoom = Boolean(roomId);
 }
 if (inRoom) startPresence();
 // Tell peers we're gone, so our cursor doesn't linger until they time us out.
@@ -1414,30 +1443,52 @@ layout.applyLayoutMode();
 hideLoading();
 scheduleCompile();
 
-// The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share.
+// The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share. This only
+// downloads code: nothing connects to the trackers until Start sharing.
 if (p2pAvailable) preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
-setupShareButton({
+const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+/** The host just joined a room: remember it for Resume sharing, and start presence. */
+const hostJoined = (id: string) => {
+  writeHostRoomId(id);
+  inRoom = true;
+  startPresence();
+  renderConnection();
+  return id;
+};
+share = setupShareButton({
+  root: byId('share-menu'),
   button: shareButtonEl,
-  linkEl: shareLinkEl,
-  getRoomId: () => {
-    const id = session.ensureRoom();
-    if (!isClient) writeHostRoomId(id);
-    inRoom = true;
-    startPresence();
-    renderConnection();
-    return id;
-  },
+  popover: byId('share-popover'),
+  title: byId('share-popover-title'),
+  startView: byId('share-start'),
+  startButton: byId('share-start-btn'),
+  resumeButton: byId('share-resume-btn'),
+  activeView: byId('share-active'),
+  linkEl: byId('share-link'),
+  copyButton: byId('share-copy-btn'),
+  newLinkButton: byId('new-link-btn'),
+  stopButton: byId('share-stop-btn'),
   getCurrentUrl: () => location.href,
   onStatus: (message) => showNotice(message),
-  initialRoomId: hostRoomId,
-  newLinkButton: isClient ? undefined : (document.getElementById('new-link-btn') as HTMLButtonElement),
-  getNewRoomId: () => {
+  guestRoomId: roomId,
+  resumeRoomId: hostRoomId,
+  startRoom: (resumeId) => {
+    if (resumeId) session.join(resumeId);
+    return hostJoined(resumeId ?? session.ensureRoom());
+  },
+  newRoom: () => {
     const id = session.newRoom();
-    writeHostRoomId(id);
     // Everyone on the old link is gone now.
     peerCount = 0;
+    return hostJoined(id);
+  },
+  stopSharing: () => {
+    presence.stop();
+    session.leave();
+    clearHostRoomId();
+    inRoom = false;
+    peerCount = 0;
     renderConnection();
-    return id;
   },
   confirmNewLink: () =>
     confirmDialog({
@@ -1445,6 +1496,16 @@ setupShareButton({
       message: 'Anyone using the old link will be disconnected, and the new link replaces it.',
       confirmLabel: 'Start new link',
       cancelLabel: 'Keep current link',
+      destructive: true,
+    }),
+  // Only ask when someone would be cut off.
+  confirmStop: () =>
+    peerCount === 0 ||
+    confirmDialog({
+      title: 'Stop sharing?',
+      message: `${peerCount === 1 ? '1 person is' : `${peerCount} people are`} connected. They'll be disconnected, and the link stops working.`,
+      confirmLabel: 'Stop sharing',
+      cancelLabel: 'Keep sharing',
       destructive: true,
     }),
   unavailable: p2pAvailable ? undefined : () => explainP2pUnavailable('share'),

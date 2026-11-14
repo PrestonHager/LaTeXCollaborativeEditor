@@ -80,7 +80,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     uploadDialog: { open: vi.fn() },
     templates: { openNew: vi.fn(async () => {}), saveAsTemplate: vi.fn(async () => {}), editProfile: vi.fn(async () => {}) },
     zipInput: { click: vi.fn() } as unknown as HTMLInputElement,
-    shareButtonEl: { click: vi.fn() } as unknown as HTMLElement,
+    copyShareLink: vi.fn(),
     project,
     undo,
     activeFileId: project.getMainFileId() as string | null,
@@ -775,7 +775,7 @@ describe('commands', () => {
       await run('view.compileNow');
       expect(app.compile.compileNow).toHaveBeenCalled();
       await run('share.copyLink');
-      expect(app.shareButtonEl.click).toHaveBeenCalled();
+      expect(app.copyShareLink).toHaveBeenCalled();
       await run('app.openSettings');
       expect(app.settingsDialog.open).toHaveBeenCalled();
       await run('file.renameDrive');

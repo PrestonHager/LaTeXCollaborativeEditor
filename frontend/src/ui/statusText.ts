@@ -16,7 +16,7 @@ export type ConnectionInfo = {
  */
 export function connectionText({ isHost, inRoom, state, peers, noWebRtc }: ConnectionInfo): string {
   if (noWebRtc) return "Can't connect in this window";
-  if (!inRoom) return 'Not shared';
+  if (!inRoom) return 'Not sharing';
   if (peers > 0) {
     const who = peers === 1 ? '1 other person' : `${peers} other people`;
     // Relayed still works, it just goes through a TURN server, so we only mention it.

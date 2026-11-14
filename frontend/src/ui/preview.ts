@@ -1,3 +1,5 @@
+import { NARROW_FRAME_PX, READABLE_TEXT_PX, ZOOM_MAX, ZOOM_MIN, clampZoom, previewZoomCss, zoomAttribute, type PreviewZoom } from './previewZoom';
+
 /** Sandbox flags for the preview iframe. No allow-same-origin, so peer content can't reach the app. */
 export const PREVIEW_SANDBOX = 'allow-scripts';
 
@@ -81,6 +83,9 @@ export const PREVIEW_LINK_SCRIPT_ID = 'lc-preview-links';
 /** Message types the preview frame's link script posts to the app. */
 export const PREVIEW_MESSAGE_OPEN_LINK = 'lc-preview-open-link';
 export const PREVIEW_MESSAGE_SCROLL = 'lc-preview-scroll';
+/** Both ways: the app sets the zoom ("fit" or a scale), and the frame reports the scale Fit width or a pinch gave. */
+export const PREVIEW_MESSAGE_ZOOM = 'lc-preview-zoom';
+export const PREVIEW_ZOOM_STYLE_ID = 'lc-preview-zoom';
 
 /** Schemes an external preview link may open with. Everything else is ignored. */
 const EXTERNAL_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
@@ -99,11 +104,17 @@ const MAX_EXTERNAL_URL_LENGTH = 4096;
  *   it and opens it (see parsePreviewMessage). The sandbox has no allow-popups, so the frame
  *   can't open a tab itself.
  * - It reports the scroll position, so the next render starts where the reader was.
+ * - It zooms the page (see previewZoom.ts). The starting zoom comes from the data-zoom attribute and later
+ *   ones from the app's messages. Fit width works out its scale from the frame's width and the document's
+ *   --size, and tells the app. A two-finger pinch, or Ctrl + wheel, zooms around the fingers or the pointer
+ *   and tells the app the new scale. The browser's own pinch is off in the frame (touch-action in
+ *   previewZoomCss, and Safari's gesture events), so the app itself never zooms from a pinch here.
  */
 export const PREVIEW_LINK_SCRIPT =
   '(function(){' +
   'var c=document.currentScript,y=Math.max(0,Math.round(+(c&&c.getAttribute("data-scroll"))||0)),P=parent,' +
-  `O=${JSON.stringify(PREVIEW_MESSAGE_OPEN_LINK)},S=${JSON.stringify(PREVIEW_MESSAGE_SCROLL)};` +
+  `O=${JSON.stringify(PREVIEW_MESSAGE_OPEN_LINK)},S=${JSON.stringify(PREVIEW_MESSAGE_SCROLL)},Z=${JSON.stringify(PREVIEW_MESSAGE_ZOOM)},` +
+  'D=document.documentElement,z=1,f=0,p=null;' +
   'function link(e){var t=e.target;while(t&&t.nodeType!==1)t=t.parentNode;return t&&t.closest?t.closest("a[href]"):null}' +
   'function find(h){var id=h.slice(1);try{id=decodeURIComponent(id)}catch(x){}' +
   'return id?document.getElementById(id)||document.getElementsByName(id)[0]||null:null}' +
@@ -115,7 +126,29 @@ export const PREVIEW_LINK_SCRIPT =
   'var q=0;addEventListener("scroll",function(){if(q)return;q=1;requestAnimationFrame(function(){q=0;' +
   'P.postMessage({type:S,y:scrollY},"*")})});' +
   'function back(){if(y)scrollTo(0,y)}' +
-  'document.addEventListener("DOMContentLoaded",back);addEventListener("load",back)' +
+  'document.addEventListener("DOMContentLoaded",back);addEventListener("load",back);' +
+  // Zoom. cl: a scale in range, to two decimals. put: show a scale. set: "fit" or a scale.
+  `function cl(v){v=+v;return isFinite(v)?Math.round(Math.min(${ZOOM_MAX},Math.max(${ZOOM_MIN},v))*100)/100:1}` +
+  'function put(v){z=v;D.style.setProperty("zoom",v===1?"":String(v))}' +
+  `function fit(){if(innerWidth>${NARROW_FRAME_PX})return 1;var s=parseFloat(getComputedStyle(D).getPropertyValue("--size"))||${READABLE_TEXT_PX};` +
+  `return cl(Math.max(1,${READABLE_TEXT_PX}/s))}` +
+  'function set(v){f=v==="fit";put(f?fit():cl(v));if(f)P.postMessage({type:Z,zoom:z,fit:true},"*")}' +
+  'set(c&&c.getAttribute("data-zoom")||1);' +
+  'addEventListener("resize",function(){if(f)set("fit")});' +
+  'addEventListener("message",function(e){var d=e.data;if(e.source===P&&d&&d.type===Z)set(d.zoom)});' +
+  // Zoom to v around the point at height h in the frame, keeping that point where it is. True when it changed.
+  'function at(v,h){var o=z,t=scrollY;v=cl(v);if(v===o)return false;f=0;put(v);scrollTo(scrollX,Math.max(0,(t+h)*v/o-h));return true}' +
+  'function tell(){P.postMessage({type:Z,zoom:z,fit:false},"*")}' +
+  'function gap(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY)||1}' +
+  'var no={passive:false};' +
+  'addEventListener("touchstart",function(e){if(e.touches.length===2){p={d:gap(e.touches),z:z,m:0};e.preventDefault()}},no);' +
+  'addEventListener("touchmove",function(e){var t=e.touches;if(!p||t.length!==2)return;e.preventDefault();' +
+  'if(at(p.z*gap(t)/p.d,(t[0].clientY+t[1].clientY)/2))p.m=1},no);' +
+  'function end(e){if(p&&e.touches.length<2){if(p.m)tell();p=null}}' +
+  'addEventListener("touchend",end);addEventListener("touchcancel",end);' +
+  'function stop(e){e.preventDefault()}addEventListener("gesturestart",stop,no);addEventListener("gesturechange",stop,no);' +
+  'addEventListener("wheel",function(e){if(!e.ctrlKey)return;e.preventDefault();' +
+  'if(at(z*Math.exp(-Math.max(-50,Math.min(50,e.deltaY))/100),e.clientY))tell()},no)' +
   '})();';
 
 /** A scroll position as a whole, non-negative number, for the script's data-scroll attribute. */
@@ -124,12 +157,13 @@ export function previewScrollPosition(scrollY: number): number {
 }
 
 /**
- * The srcdoc for a LaTeX.js document: the theme style and the link script go at the end of its
- * <head>, after LaTeX.js's own styles.
+ * The srcdoc for a LaTeX.js document: the theme style, the zoom style and the link script go at the
+ * end of its <head>, after LaTeX.js's own styles. The script starts at `zoom` (see previewZoom.ts).
  */
-export function previewDocument(html: string, theme: PreviewDisplayTheme, scrollY = 0): string {
-  const script = `<script id="${PREVIEW_LINK_SCRIPT_ID}" data-scroll="${previewScrollPosition(scrollY)}">${PREVIEW_LINK_SCRIPT}</script>`;
-  return insertAtHeadEnd(withPreviewTheme(html, theme), script);
+export function previewDocument(html: string, theme: PreviewDisplayTheme, scrollY = 0, zoom: PreviewZoom = 1): string {
+  const style = `<style id="${PREVIEW_ZOOM_STYLE_ID}">${previewZoomCss()}</style>`;
+  const script = `<script id="${PREVIEW_LINK_SCRIPT_ID}" data-scroll="${previewScrollPosition(scrollY)}" data-zoom="${zoomAttribute(zoom)}">${PREVIEW_LINK_SCRIPT}</script>`;
+  return insertAtHeadEnd(withPreviewTheme(html, theme), style + script);
 }
 
 /**
@@ -148,7 +182,7 @@ export function safeExternalUrl(raw: unknown): string | null {
   return EXTERNAL_LINK_PROTOCOLS.has(url.protocol) ? url.href : null;
 }
 
-export type PreviewMessage = { kind: 'open'; url: string } | { kind: 'scroll'; y: number };
+export type PreviewMessage = { kind: 'open'; url: string } | { kind: 'scroll'; y: number } | { kind: 'zoom'; scale: number; fit: boolean };
 
 /**
  * Check a message from the preview frame. It must come from our frame's window. The frame shows
@@ -156,7 +190,7 @@ export type PreviewMessage = { kind: 'open'; url: string } | { kind: 'scroll'; y
  */
 export function parsePreviewMessage(event: Pick<MessageEvent, 'source' | 'data'>, frameWindow: Window | null): PreviewMessage | null {
   if (!frameWindow || event.source !== frameWindow) return null;
-  const data = event.data as { type?: unknown; url?: unknown; y?: unknown } | null;
+  const data = event.data as { type?: unknown; url?: unknown; y?: unknown; zoom?: unknown; fit?: unknown } | null;
   if (!data || typeof data !== 'object') return null;
   if (data.type === PREVIEW_MESSAGE_OPEN_LINK) {
     const url = safeExternalUrl(data.url);
@@ -164,6 +198,9 @@ export function parsePreviewMessage(event: Pick<MessageEvent, 'source' | 'data'>
   }
   if (data.type === PREVIEW_MESSAGE_SCROLL && typeof data.y === 'number' && Number.isFinite(data.y) && data.y >= 0) {
     return { kind: 'scroll', y: data.y };
+  }
+  if (data.type === PREVIEW_MESSAGE_ZOOM && typeof data.zoom === 'number' && Number.isFinite(data.zoom) && data.zoom > 0 && typeof data.fit === 'boolean') {
+    return { kind: 'zoom', scale: clampZoom(data.zoom), fit: data.fit };
   }
   return null;
 }
@@ -194,7 +231,14 @@ export function createLinkOpenGate(
   };
 }
 
-export function createPreviewPane(container: HTMLElement, initialTheme: PreviewDisplayTheme = 'light') {
+type PreviewPaneOptions = {
+  /** The zoom the first render starts at. */
+  zoom?: PreviewZoom;
+  /** The frame showed a new scale: the one Fit width worked out to, or one the person pinched to. */
+  onZoomReport?: (scale: number, fit: boolean) => void;
+};
+
+export function createPreviewPane(container: HTMLElement, initialTheme: PreviewDisplayTheme = 'light', options: PreviewPaneOptions = {}) {
   const root = document.createElement('div');
   root.className = 'preview';
 
@@ -217,6 +261,11 @@ export function createPreviewPane(container: HTMLElement, initialTheme: PreviewD
 
   let theme = initialTheme;
   let lastHtml: string | null = null;
+  let zoom: PreviewZoom = options.zoom ?? 1;
+  const sendZoom = () => frame.contentWindow?.postMessage({ type: PREVIEW_MESSAGE_ZOOM, zoom }, '*');
+  // A zoom sent while a new render loads can reach the old document, so say it again once the new one is up.
+  // The script also starts from data-zoom, so this only matters for that race.
+  frame.addEventListener('load', sendZoom);
 
   // The pane's colors come from the same theme as the document's. And when the frame's
   // color-scheme and its document's differ, browsers paint an opaque backdrop behind the
@@ -243,6 +292,10 @@ export function createPreviewPane(container: HTMLElement, initialTheme: PreviewD
     }
     if (message.kind === 'scroll') {
       scrollY = message.y;
+    } else if (message.kind === 'zoom') {
+      // A pinch is the person's zoom now, so the next render starts there too.
+      if (!message.fit) zoom = message.scale;
+      options.onZoomReport?.(message.scale, message.fit);
     } else if (!mayOpenLink()) {
       console.debug('Preview: dropped a link open with no recent click', message.url);
     } else {
@@ -255,7 +308,7 @@ export function createPreviewPane(container: HTMLElement, initialTheme: PreviewD
     /** Full HTML document from LaTeX.js (styles load from CDN inside iframe). Keeps the scroll position. */
     async renderHtml(html: string) {
       lastHtml = html;
-      frame.srcdoc = previewDocument(html, theme, scrollY);
+      frame.srcdoc = previewDocument(html, theme, scrollY, zoom);
     },
     /**
      * Switch the rendered document between light and dark. The frame has no same-origin access,
@@ -265,10 +318,18 @@ export function createPreviewPane(container: HTMLElement, initialTheme: PreviewD
       if (next === theme) return;
       theme = next;
       applyFrameScheme();
-      if (lastHtml !== null) frame.srcdoc = previewDocument(lastHtml, theme, scrollY);
+      if (lastHtml !== null) frame.srcdoc = previewDocument(lastHtml, theme, scrollY, zoom);
     },
     get theme() {
       return theme;
+    },
+    /** Zoom the shown document without rendering it again, and start later renders there. */
+    setZoom(next: PreviewZoom) {
+      zoom = next;
+      sendZoom();
+    },
+    get zoom() {
+      return zoom;
     },
     setLoading(isLoading: boolean) {
       root.classList.toggle('is-loading', isLoading);

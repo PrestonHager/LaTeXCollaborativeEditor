@@ -1,242 +1,284 @@
-import { setupShareButton } from './shareButton';
+import { setupShareButton, type ShareElements } from './shareButton';
+
+const make = <K extends keyof HTMLElementTagNameMap>(tag: K, root: HTMLElement) => root.appendChild(document.createElement(tag));
+
+/** The popover's parts, in a root that's in the document so focus and outside clicks work. */
+function elements(): ShareElements {
+  const root = document.body.appendChild(document.createElement('div'));
+  return {
+    root,
+    button: make('button', root),
+    popover: make('div', root),
+    title: make('h2', root),
+    startView: make('div', root),
+    startButton: make('button', root),
+    resumeButton: make('button', root),
+    activeView: make('div', root),
+    linkEl: make('a', root),
+    copyButton: make('button', root),
+    newLinkButton: make('button', root),
+    stopButton: make('button', root),
+  };
+}
+
+type Options = Partial<Parameters<typeof setupShareButton>[0]>;
+
+function setup(options: Options = {}) {
+  const els = elements();
+  const copyText = vi.fn(async (_value: string) => undefined);
+  const startRoom = vi.fn((resumeId?: string) => resumeId ?? 'room-1');
+  const newRoom = vi.fn(() => 'fresh');
+  const stopSharing = vi.fn();
+  const onStatus = vi.fn();
+  const controls = setupShareButton({
+    ...els,
+    getCurrentUrl: () => 'https://host/?foo=bar',
+    copyText,
+    onStatus,
+    startRoom,
+    newRoom,
+    stopSharing,
+    ...options,
+  });
+  return { els, controls, copyText, startRoom, newRoom, stopSharing, onStatus };
+}
+
+afterEach(() => {
+  document.body.replaceChildren();
+  vi.unstubAllGlobals();
+});
 
 describe('setupShareButton', () => {
-  it('writes generated room URL into clickable link and clipboard', async () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const copyText = vi.fn(async () => undefined);
+  it('opens the popover without starting a room (issue #224)', () => {
+    const { els, controls, startRoom, copyText } = setup();
+    expect(els.popover.getAttribute('aria-hidden')).toBe('true');
+    expect(els.popover.inert).toBe(true);
 
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'room-123',
-      getCurrentUrl: () => 'https://latex.prestonhager.com/?foo=bar',
-      copyText,
-    });
+    els.button.click();
+    expect(controls.isOpen).toBe(true);
+    expect(els.button.getAttribute('aria-expanded')).toBe('true');
+    expect(els.popover.getAttribute('aria-hidden')).toBe('false');
+    expect(els.title.textContent).toBe('Share this project');
+    expect(els.startView.hidden).toBe(false);
+    expect(els.activeView.hidden).toBe(true);
+    expect(els.resumeButton.hidden).toBe(true);
+    expect(document.activeElement).toBe(els.startButton);
+    expect(startRoom).not.toHaveBeenCalled();
+    expect(copyText).not.toHaveBeenCalled();
+    expect(els.linkEl.textContent).toBe('');
+    expect(controls.roomId).toBeNull();
 
-    button.click();
-    await Promise.resolve();
-
-    expect(link.href).toBe('https://latex.prestonhager.com/?foo=bar&room=room-123');
-    expect(link.textContent).toBe('https://latex.prestonhager.com/?foo=bar&room=room-123');
-    expect(copyText).toHaveBeenCalledWith('https://latex.prestonhager.com/?foo=bar&room=room-123');
+    // Clicking Share again closes it.
+    els.button.click();
+    expect(controls.isOpen).toBe(false);
   });
 
-  it('reports copy success and failure through onStatus', async () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const onStatus = vi.fn();
-    let fail = false;
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'r',
-      getCurrentUrl: () => 'https://host/',
-      copyText: async () => {
-        if (fail) throw new Error('denied');
-      },
-      onStatus,
-    });
-
-    button.click();
+  it('Start sharing creates the room, then shows and copies the link', async () => {
+    const { els, controls, startRoom, copyText, onStatus } = setup();
+    els.button.click();
+    els.startButton.click();
+    expect(startRoom).toHaveBeenCalledWith();
+    expect(controls.roomId).toBe('room-1');
+    expect(els.title.textContent).toBe('Sharing is on');
+    expect(els.startView.hidden).toBe(true);
+    expect(els.activeView.hidden).toBe(false);
+    expect(els.linkEl.href).toBe('https://host/?foo=bar&room=room-1');
+    expect(els.linkEl.textContent).toBe('https://host/?foo=bar&room=room-1');
+    expect(els.button.dataset.sharing).toBe('true');
+    expect(document.activeElement).toBe(els.copyButton);
+    expect(copyText).toHaveBeenCalledWith('https://host/?foo=bar&room=room-1');
     await vi.waitFor(() => expect(onStatus).toHaveBeenCalledWith('Share link copied to clipboard'));
-    fail = true;
-    button.click();
+
+    // Opening it again shows the link, and Copy copies it again.
+    els.button.click();
+    els.button.click();
+    expect(document.activeElement).toBe(els.copyButton);
+    els.copyButton.click();
+    expect(copyText).toHaveBeenCalledTimes(2);
+    expect(startRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a failed copy', async () => {
+    const { els, onStatus } = setup({ copyText: async () => Promise.reject(new Error('denied')) });
+    els.startButton.click();
     await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith(expect.stringContaining('Could not copy')));
   });
 
   it('reports when the room cannot be created', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const onStatus = vi.fn();
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => {
+    const { els, controls, onStatus } = setup({
+      startRoom: () => {
         throw new Error('no crypto');
       },
-      getCurrentUrl: () => 'https://host/',
-      onStatus,
     });
-    button.click();
+    els.startButton.click();
     expect(onStatus).toHaveBeenCalledWith(expect.stringContaining('Could not start a share session'));
-    expect(link.textContent).toBe('');
+    expect(controls.roomId).toBeNull();
+    expect(els.startView.hidden).toBe(false);
   });
 
-  it('replaces previous room value when URL already has room param', async () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'next-room',
-      getCurrentUrl: () => 'http://localhost:5173/?room=old-room',
-      copyText: async () => undefined,
-    });
-
-    button.click();
-    await Promise.resolve();
-    expect(link.textContent).toBe('http://localhost:5173/?room=next-room');
+  it('replaces a room already in the URL', () => {
+    const { els } = setup({ getCurrentUrl: () => 'http://localhost:5173/?room=old-room' });
+    els.startButton.click();
+    expect(els.linkEl.textContent).toBe('http://localhost:5173/?room=room-1');
   });
 
-  it('shows the saved room link on load without copying', () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const newLink = document.createElement('button');
-    const copyText = vi.fn(async () => undefined);
-
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'saved',
-      getCurrentUrl: () => 'https://host/',
-      copyText,
-      initialRoomId: 'saved',
-      newLinkButton: newLink,
-      getNewRoomId: () => 'fresh',
-    });
-
-    expect(link.textContent).toBe('https://host/?room=saved');
-    expect(newLink.hidden).toBe(false);
+  it('offers to resume the room from before a reload, without joining it', () => {
+    const { els, controls, startRoom, copyText } = setup({ resumeRoomId: 'saved' });
+    // Nothing joins and nothing is copied until it's picked.
+    expect(startRoom).not.toHaveBeenCalled();
+    expect(controls.roomId).toBeNull();
+    els.button.click();
+    expect(els.resumeButton.hidden).toBe(false);
+    expect(els.startView.hidden).toBe(false);
     expect(copyText).not.toHaveBeenCalled();
+
+    els.resumeButton.click();
+    expect(startRoom).toHaveBeenCalledWith('saved');
+    expect(els.linkEl.textContent).toBe('https://host/?foo=bar&room=saved');
+    expect(copyText).toHaveBeenCalledWith('https://host/?foo=bar&room=saved');
+    // Once it's used, the offer goes away.
+    expect(els.resumeButton.hidden).toBe(true);
   });
 
-  it('keeps New link hidden until there is a link', async () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const newLink = document.createElement('button');
-
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'r',
-      getCurrentUrl: () => 'https://host/',
-      copyText: async () => undefined,
-      newLinkButton: newLink,
-      getNewRoomId: () => 'fresh',
-    });
-
-    expect(newLink.hidden).toBe(true);
-    button.click();
-    expect(newLink.hidden).toBe(false);
+  it('Start sharing ignores the remembered room and makes a new one', () => {
+    const { els, startRoom } = setup({ resumeRoomId: 'saved' });
+    els.startButton.click();
+    expect(startRoom).toHaveBeenCalledWith();
+    expect(els.linkEl.textContent).toBe('https://host/?foo=bar&room=room-1');
   });
 
   it('New link swaps in a fresh room after confirming', async () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const newLink = document.createElement('button');
-    const copyText = vi.fn(async () => undefined);
-    const getNewRoomId = vi.fn(() => 'fresh');
     let confirmed = false;
-
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'old',
-      getCurrentUrl: () => 'https://host/',
-      copyText,
-      initialRoomId: 'old',
-      newLinkButton: newLink,
-      getNewRoomId,
+    const { els, newRoom, copyText } = setup({
       // The real one is the in-app dialog, which answers later.
       confirmNewLink: async () => confirmed,
     });
+    els.startButton.click();
 
-    // First, a declined confirm leaves the old link alone.
-    newLink.click();
+    // A declined confirm leaves the old link alone.
+    els.newLinkButton.click();
     await Promise.resolve();
-    expect(getNewRoomId).not.toHaveBeenCalled();
-    expect(link.textContent).toBe('https://host/?room=old');
+    expect(newRoom).not.toHaveBeenCalled();
+    expect(els.linkEl.textContent).toBe('https://host/?foo=bar&room=room-1');
 
-    // Now confirm and the new link is shown and copied.
     confirmed = true;
-    newLink.click();
-    await vi.waitFor(() => expect(getNewRoomId).toHaveBeenCalled());
-    expect(getNewRoomId).toHaveBeenCalledTimes(1);
-    expect(link.textContent).toBe('https://host/?room=fresh');
-    expect(copyText).toHaveBeenCalledWith('https://host/?room=fresh');
+    els.newLinkButton.click();
+    await vi.waitFor(() => expect(newRoom).toHaveBeenCalled());
+    expect(els.linkEl.textContent).toBe('https://host/?foo=bar&room=fresh');
+    expect(copyText).toHaveBeenLastCalledWith('https://host/?foo=bar&room=fresh');
+  });
+
+  it('Stop sharing leaves the room after confirming, and forgets the link', async () => {
+    let confirmed = false;
+    const { els, controls, stopSharing, onStatus } = setup({ resumeRoomId: 'saved', confirmStop: async () => confirmed });
+    els.button.click();
+    els.resumeButton.click();
+
+    els.stopButton.click();
+    await Promise.resolve();
+    expect(stopSharing).not.toHaveBeenCalled();
+    expect(controls.roomId).toBe('saved');
+
+    confirmed = true;
+    els.stopButton.click();
+    await vi.waitFor(() => expect(stopSharing).toHaveBeenCalledTimes(1));
+    expect(controls.roomId).toBeNull();
+    expect(els.title.textContent).toBe('Share this project');
+    expect(els.startView.hidden).toBe(false);
+    expect(els.activeView.hidden).toBe(true);
+    // There's nothing to resume after a deliberate stop.
+    expect(els.resumeButton.hidden).toBe(true);
+    expect(els.linkEl.hasAttribute('href')).toBe(false);
+    expect(els.linkEl.textContent).toBe('');
+    expect(els.button.dataset.sharing).toBe('false');
+    expect(document.activeElement).toBe(els.startButton);
+    expect(onStatus).toHaveBeenLastCalledWith(expect.stringContaining('Stopped sharing'));
+  });
+
+  it('Stop sharing works without a confirm, and does nothing when not sharing', async () => {
+    const { els, stopSharing } = setup();
+    els.stopButton.click();
+    await Promise.resolve();
+    expect(stopSharing).not.toHaveBeenCalled();
+    els.startButton.click();
+    // Closed popover: the state still updates.
+    els.button.click();
+    els.button.click();
+    els.stopButton.click();
+    await vi.waitFor(() => expect(stopSharing).toHaveBeenCalled());
+  });
+
+  it('guests see their room link with Copy only', () => {
+    const { els, controls, copyText } = setup({ guestRoomId: 'guest-room', startRoom: undefined, newRoom: undefined, stopSharing: undefined });
+    expect(controls.roomId).toBe('guest-room');
+    expect(els.title.textContent).toBe('Invite others');
+    expect(els.activeView.hidden).toBe(false);
+    expect(els.newLinkButton.hidden).toBe(true);
+    expect(els.stopButton.hidden).toBe(true);
+    expect(els.linkEl.textContent).toBe('https://host/?foo=bar&room=guest-room');
+    els.button.click();
+    expect(copyText).not.toHaveBeenCalled();
+    controls.copyOrOpen();
+    expect(copyText).toHaveBeenCalledWith('https://host/?foo=bar&room=guest-room');
+  });
+
+  it('copyOrOpen opens the popover until sharing starts, then copies', () => {
+    const { els, controls, copyText, startRoom } = setup();
+    controls.copyOrOpen();
+    expect(controls.isOpen).toBe(true);
+    expect(startRoom).not.toHaveBeenCalled();
+    els.startButton.click();
+    controls.close();
+    copyText.mockClear();
+    controls.copyOrOpen();
+    expect(controls.isOpen).toBe(false);
+    expect(copyText).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes on Escape and on a click outside', () => {
+    const { els, controls } = setup();
+    els.button.click();
+    els.startButton.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(controls.isOpen).toBe(false);
+    expect(document.activeElement).toBe(els.button);
+    // Escape while closed is left for others.
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    els.button.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+
+    controls.open();
+    els.popover.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(controls.isOpen).toBe(true);
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    expect(controls.isOpen).toBe(false);
   });
 
   it('uses navigator.clipboard when copyText is omitted', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'r1',
-      getCurrentUrl: () => 'https://host/',
-    });
-
-    button.click();
+    const { els } = setup({ copyText: undefined });
+    els.startButton.click();
     await Promise.resolve();
-    expect(writeText).toHaveBeenCalledWith('https://host/?room=r1');
+    expect(writeText).toHaveBeenCalledWith('https://host/?foo=bar&room=room-1');
   });
 
-  it('uses default copy when clipboard API is missing', async () => {
+  it('falls back to the visible link when the clipboard API is missing', async () => {
     vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
-
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'r0',
-      getCurrentUrl: () => 'https://host/',
-    });
-
-    button.click();
-    await Promise.resolve();
-    expect(link.href).toContain('room=r0');
+    const { els, onStatus } = setup({ copyText: undefined });
+    els.startButton.click();
+    expect(els.linkEl.href).toContain('room=room-1');
+    await vi.waitFor(() => expect(onStatus).toHaveBeenCalledWith(expect.stringContaining('Could not copy')));
   });
 
-  it('ignores clipboard rejection from default copy handler', async () => {
-    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
-    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId: () => 'r2',
-      getCurrentUrl: () => 'https://host/',
-    });
-
-    button.click();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(link.href).toContain('room=r2');
-  });
-
-  it("never asks for a room when this window can't share (issue #205)", () => {
-    const button = document.createElement('button');
-    const link = document.createElement('a');
-    const newLinkButton = document.createElement('button');
-    const getRoomId = vi.fn(() => 'room-1');
-    const copyText = vi.fn(async () => undefined);
+  it("never opens or asks for a room when this window can't share (issue #205)", () => {
     const unavailable = vi.fn();
-    setupShareButton({
-      button,
-      linkEl: link,
-      getRoomId,
-      getCurrentUrl: () => 'https://host/',
-      copyText,
-      initialRoomId: 'old-room',
-      newLinkButton,
-      getNewRoomId: () => 'room-2',
-      unavailable,
-    });
-    // A remembered room isn't shown, since it can't be rejoined here.
-    expect(link.textContent).toBe('');
-    expect(newLinkButton.hidden).toBe(true);
-    button.click();
-    expect(unavailable).toHaveBeenCalledTimes(1);
-    expect(getRoomId).not.toHaveBeenCalled();
+    const { els, controls, startRoom, copyText } = setup({ unavailable, resumeRoomId: 'old-room' });
+    els.button.click();
+    controls.copyOrOpen();
+    expect(unavailable).toHaveBeenCalledTimes(2);
+    expect(controls.isOpen).toBe(false);
+    expect(startRoom).not.toHaveBeenCalled();
     expect(copyText).not.toHaveBeenCalled();
   });
 });

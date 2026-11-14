@@ -18,7 +18,7 @@ The app shows messages in a few places:
 
 | Text | What it means |
 | --- | --- |
-| Not shared | You haven't clicked Share and you're not in a room. |
+| Not sharing | You haven't started sharing (or you stopped), so you're not in a room. |
 | Shared, waiting for others | You're the host and nobody else has joined yet. |
 | Looking for the host | You opened a link and the host hasn't shown up yet. |
 | Connected with 2 other people | Peers are connected directly. The number is how many. |

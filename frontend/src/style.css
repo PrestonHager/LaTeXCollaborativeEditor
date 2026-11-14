@@ -66,6 +66,12 @@
   --editor-number: #f4ba6e;
   --editor-comment: #8b949e;
   --editor-operator: #d2d8e0;
+  --editor-tooltip-bg: #252a33;
+  --editor-tooltip-text: #e5e7eb;
+  --editor-tooltip-border: #4b5563;
+  --editor-diag-hover-bg: #323a48;
+  --editor-diag-selected-bg: #1d3d70;
+  --editor-diag-active-bg: #2e260c;
 }
 
 [data-editor-theme="light"] {
@@ -80,6 +86,12 @@
   --editor-gutter-active-bg: #e5e7eb;
   --editor-line-number: #5f6b7d;
   --editor-line-number-active: #1f2a3d;
+  --editor-tooltip-bg: #f8f9fb;
+  --editor-tooltip-text: #1f2a3d;
+  --editor-tooltip-border: #c4c9d2;
+  --editor-diag-hover-bg: #e5e7eb;
+  --editor-diag-selected-bg: #cfe0ff;
+  --editor-diag-active-bg: #fff4d6;
 }
 
 [data-preview-theme="dark"] {
@@ -109,6 +121,12 @@
     --editor-gutter-active-bg: #e5e7eb;
     --editor-line-number: #5f6b7d;
     --editor-line-number-active: #1f2a3d;
+  --editor-tooltip-bg: #f8f9fb;
+  --editor-tooltip-text: #1f2a3d;
+  --editor-tooltip-border: #c4c9d2;
+  --editor-diag-hover-bg: #e5e7eb;
+  --editor-diag-selected-bg: #cfe0ff;
+  --editor-diag-active-bg: #fff4d6;
   }
   :root:not([data-preview-theme="dark"]) {
     --preview-bg: #ffffff;
@@ -147,6 +165,16 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .status-badges .pill { gap: 0.3rem; }
 .muted { color: var(--muted-text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .share-link { color: var(--link-text); text-decoration: underline; }
+/* The Share popover (issue #224): a popover card, like the preview-changes one (docs/ui-sizing.md). */
+.share-menu { display: inline-flex; }
+.share-popover { width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); min-width: 0; margin-top: 0.25rem; padding: 0.75rem 1rem; display: grid; gap: 0.5rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; text-align: left; }
+.share-popover-title { margin: 0; font-size: 1rem; font-weight: 600; }
+.share-popover-view { display: grid; gap: 0.5rem; }
+.share-popover-view[hidden] { display: none; }
+.share-popover-points { margin: 0; padding-left: 1.1rem; list-style: disc; display: grid; gap: 0.2rem; color: var(--muted-text); }
+.share-popover-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.share-popover-actions [hidden] { display: none; }
+.share-popover .share-link { overflow-wrap: anywhere; font-size: 12px; }
 /* Who's in the room (issue #22). Avatars are 32px like Basecoat's sm buttons, 44px on touch screens (docs/ui-sizing.md).
    Every peer colour has 4.5:1 or more against the white initials (collab/presence.ts). */
 .presence-bar { display: inline-flex; align-items: center; gap: 0.25rem; }
@@ -231,6 +259,38 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 /* Footers wrap instead of pushing buttons past the edge when they're wider than the box. */
 @media (min-width: 40rem) {
   .dialog > * > footer { flex-wrap: wrap; }
+}
+/*
+ * Phones (under 40rem, Tailwind's sm, #187): dialog-md and dialog-lg become full-screen sheets.
+ * The box fills the window with no rounded corners. It's already a flex column, so the header
+ * stays at the top, the footer at the bottom, and the <section> scrolls between them.
+ * The padding adds the safe-area insets so notches and home bars don't cover the buttons.
+ * dialog-sm stays a centred card (the rule above).
+ */
+@media (max-width: 39.99rem) {
+  .dialog:is(.dialog-md, .dialog-lg) > * {
+    top: 0;
+    left: 0;
+    translate: none;
+    width: 100%;
+    max-width: none;
+    height: 100vh;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    padding: max(1.5rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left));
+  }
+  /* The body fills the sheet; keep a grid body's rows packed at the top instead of spread out (About, Upload). */
+  .dialog:is(.dialog-md, .dialog-lg) > * > section { align-content: start; }
+  /* Pin the footer to the bottom, also in a dialog with no <section> to push it there (Conflict). */
+  .dialog:is(.dialog-md, .dialog-lg) > * > footer { margin-top: auto; }
+  /* The header's close (X) button sits in the corner; keep it clear of a notch too. */
+  .dialog:is(.dialog-md, .dialog-lg) > * > :is(button, form[method='dialog']) {
+    top: max(1rem, env(safe-area-inset-top));
+    inset-inline-end: max(1rem, env(safe-area-inset-right));
+  }
+  /* The changelog caps its own height for the centred box; in a sheet it fills the space instead. */
+  .dialog.dialog-lg .changelog-body { max-height: none; }
 }
 
 /* Command palette. Basecoat styles the box, we handle the overlay since it isn't a <dialog>. */
@@ -387,6 +447,15 @@ label.settings-row { justify-content: flex-start; }
 .pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 0.5rem 0 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
 .pane-bar-actions { display: inline-flex; align-items: center; gap: 0.125rem; }
 /* Info button for "Preview is approximate": an icon and a small count, then a popover listing the changes. */
+/* Preview zoom (#190): Fit width, Zoom out, the level, Zoom in. Fit width shows pressed while it's on. */
+.preview-zoom { display: inline-flex; align-items: center; gap: 0.125rem; }
+.preview-zoom-fit[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+.preview-zoom-level { min-width: 2.75rem; text-align: center; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--muted-text); }
+@media (pointer: coarse) {
+  .preview-zoom .btn { width: 2.75rem; height: 2.75rem; }
+}
+/* A pinch over the preview zooms the preview (the frame's script does it), not the whole app. */
+.preview { touch-action: pan-x pan-y; }
 .preview-changes[hidden] { display: none; }
 .preview-changes-btn { gap: 0.2rem; color: var(--muted-text); font-variant-numeric: tabular-nums; }
 .preview-changes-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }
@@ -560,6 +629,25 @@ label.settings-row { justify-content: flex-start; }
 .cm-error-line { background: rgba(239, 68, 68, 0.18); }
 .cm-warning-line { background: rgba(234, 179, 8, 0.15); }
 .cm-info-line { background: rgba(59, 130, 246, 0.12); }
+/*
+ * Diagnostic tooltips and the lint panel (#228). @codemirror/lint only has light colors (a #f5f5f5 tooltip, #ddd
+ * selected rows), but the text takes the editor theme, so a dark editor showed light text on light grey. These use
+ * the --editor-* tokens above, so they follow the editor theme, including "system" when the app and the OS disagree.
+ * The selectors are longer than CodeMirror's own so they win whichever stylesheet loads last.
+ */
+.editor .cm-editor .cm-tooltip { background: var(--editor-tooltip-bg); color: var(--editor-tooltip-text); border: 1px solid var(--editor-tooltip-border); }
+.editor .cm-editor .cm-tooltip .cm-diagnostic { color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-tooltip-lint .cm-diagnostic:hover { background: var(--editor-diag-hover-bg); }
+.editor .cm-editor .cm-panel.cm-panel-lint { background: var(--editor-tooltip-bg); color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul li { color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul li:hover,
+.editor .cm-editor .cm-panel.cm-panel-lint ul [aria-selected] { background: var(--editor-diag-hover-bg); color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul:focus [aria-selected],
+.editor .cm-editor .cm-panel.cm-panel-lint ul li:active { background: var(--editor-diag-selected-bg); color: var(--editor-tooltip-text); }
+.editor .cm-editor .cm-panel.cm-panel-lint ul:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.editor .cm-editor .cm-panel.cm-panel-lint button { color: var(--editor-tooltip-text); }
+/* The text under a diagnostic while its tooltip is open. CodeMirror's #ffdd9980 washed out light text. */
+.editor .cm-editor .cm-lintRange-active { background-color: var(--editor-diag-active-bg); }
 
 /* Preview. */
 .preview { position: relative; width: 100%; height: 100%; border: 0; background: var(--preview-bg); overflow: hidden; color: var(--preview-text); }
