@@ -13,6 +13,9 @@ export const themeSwitchCommands: (PaletteOnlyCommand & { theme: ThemeMode })[] 
 
 export const paletteOnlyCommands: PaletteOnlyCommand[] = [
   { id: 'share.copyLink', section: 'Share', label: 'Copy share link', description: 'Copy the link for others to join, or open Share to start sharing.' },
+  { id: 'edit.goToDefinition', section: 'Edit', label: 'Go to definition', description: 'Jump to the \\label, .bib entry or \\newcommand for the key or command at the cursor.' },
+  { id: 'edit.findReferences', section: 'Edit', label: 'Find references', description: 'List every place the label or citation at the cursor is defined and used.' },
+  { id: 'edit.renameLabel', section: 'Edit', label: 'Rename label…', description: 'Rename the label at the cursor and every reference to it, in every file.' },
   { id: 'view.focusEditor', section: 'View', label: 'Focus editor', description: 'Put the cursor back in the editor.' },
 ];
 

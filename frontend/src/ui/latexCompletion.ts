@@ -9,11 +9,14 @@ import {
   type CompletionResult,
   type CompletionSource,
 } from '@codemirror/autocomplete';
-import { keymap, type EditorView } from '@codemirror/view';
+import { EditorView, hoverTooltip, keymap, type Tooltip } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import type { LatexCommand, LatexEnvironment } from './latexCompletionData';
 import type { PackageData } from './latexPackageData';
 import { projectDiagnosticsExtension } from './projectDiagnostics';
+import { labelNavigationExtension } from './labelNavigation';
+
+export { findReferences, goToDefinition, renameLabel } from './labelNavigation';
 import { citationSource, labelSource, pathSource, projectIndex, type Definition, type ProjectGetter } from './projectCompletion';
 
 /**
@@ -246,11 +249,105 @@ export function latexEnvironmentSource(from: LatexOptionSet | LatexCompletionDat
   };
 }
 
+/** The command or `\\begin{environment}` name under `pos`, with its range. Null on anything else. */
+export function hoverTarget(view: EditorView, pos: number): { kind: 'command' | 'environment'; label: string; from: number; to: number } | null {
+  const line = view.state.doc.lineAt(pos);
+  const text = line.text;
+  const at = pos - line.from;
+  // An environment name in \begin{name} or \end{name}.
+  for (const match of text.matchAll(/\\(?:begin|end)\s*\{([a-zA-Z*]+)\}/g)) {
+    const start = match.index + match[0].indexOf('{') + 1;
+    if (at >= start && at <= start + match[1].length) {
+      const lead = text.slice(0, match.index);
+      if (endsWithEscapedBackslash(lead) || isInComment(lead)) return null;
+      return { kind: 'environment', label: match[1], from: line.from + start, to: line.from + start + match[1].length };
+    }
+  }
+  const before = /\\[a-zA-Z]*$/.exec(text.slice(0, at));
+  const after = /^[a-zA-Z]*/.exec(text.slice(at))?.[0] ?? '';
+  // On the backslash itself, the name follows.
+  const onSlash = !before && text[at] === '\\' ? /^\\[a-zA-Z]+/.exec(text.slice(at)) : null;
+  const start = before ? at - before[0].length : onSlash ? at : -1;
+  if (start < 0) return null;
+  const name = before ? before[0] + after : onSlash![0];
+  const lead = text.slice(0, start);
+  if (name.length < 2 || endsWithEscapedBackslash(lead) || isInComment(lead)) return null;
+  return { kind: 'command', label: name, from: line.from + start, to: line.from + start + name.length };
+}
+
+/** The card for a command or environment: its name and arguments, then what it does. */
+export function hoverCard(option: Completion, kind: 'command' | 'environment'): HTMLElement {
+  const dom = document.createElement('div');
+  dom.className = 'cm-latex-hover';
+  const head = document.createElement('div');
+  head.className = 'cm-latex-hover-name';
+  head.textContent = kind === 'environment' ? `\\begin{${option.label}}` : option.label;
+  if (option.detail && option.detail !== '{environment}') {
+    const args = document.createElement('span');
+    args.className = 'cm-latex-hover-args';
+    args.textContent = option.detail;
+    head.append(args);
+  }
+  dom.append(head);
+  if (typeof option.info === 'string' && option.info) {
+    const info = document.createElement('div');
+    info.className = 'cm-latex-hover-info';
+    info.textContent = option.info;
+    dom.append(info);
+  }
+  return dom;
+}
+
+/**
+ * Hover docs (issue #248): resting the mouse on a command, or an environment name after `\\begin{`,
+ * shows what completion knows about it, from LaTeX's own list, the packages the project loads and
+ * its own definitions. Unknown names show nothing.
+ */
+export function latexHoverSource(set: LatexOptionSet): (view: EditorView, pos: number) => Promise<Tooltip | null> {
+  let indexed: { options: LatexOptions; commands: Map<string, Completion>; environments: Map<string, Completion> } | null = null;
+  return async (view, pos) => {
+    const target = hoverTarget(view, pos);
+    if (!target) return null;
+    const options = await set.get();
+    if (!options) return null;
+    if (indexed?.options !== options) {
+      indexed = {
+        options,
+        commands: new Map(options.commands.map((o) => [o.label, o])),
+        environments: new Map(options.environments.map((o) => [o.label, o])),
+      };
+    }
+    const option = (target.kind === 'command' ? indexed.commands : indexed.environments).get(target.label);
+    if (!option) return null;
+    return { pos: target.from, end: target.to, above: true, create: () => ({ dom: hoverCard(option, target.kind) }) };
+  };
+}
+
+/** The hover docs tooltip and its look. The card is as wide as the other hover cards at most (docs/ui-sizing.md). */
+export function latexHoverExtension(set: LatexOptionSet): Extension {
+  return [
+    hoverTooltip(latexHoverSource(set), { hoverTime: 400 }),
+    EditorView.baseTheme({
+      '.cm-tooltip .cm-latex-hover': {
+        maxWidth: 'min(var(--popover-card, 22rem), calc(100vw - var(--viewport-gutter, 2rem)))',
+        padding: '0.375rem 0.5rem',
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '0.8125rem',
+        lineHeight: '1.35',
+      },
+      '.cm-latex-hover-name': { fontFamily: 'ui-monospace, monospace', fontWeight: '600' },
+      '.cm-latex-hover-args': { fontWeight: '400', opacity: '0.8', marginLeft: '0.125rem' },
+      '.cm-latex-hover-info': { marginTop: '0.25rem', whiteSpace: 'pre-line' },
+    }),
+  ];
+}
+
 /**
  * The editor's completion extensions: closing brackets, LaTeX commands and environments from the
  * bundled data, the packages the project loads and its own definitions (issue #194), and labels,
  * citations and paths from the project `getProject` gives (issue #193), and that project's
- * undefined references, duplicate labels and missing citations in the lint gutter (issue #246).
+ * undefined references, duplicate labels and missing citations in the lint gutter (issue #246),
+ * Ctrl+click to a definition and the references panel (issue #247), and hover docs (issue #248).
  * The keys are CodeMirror's: Ctrl+Space opens the list, Enter accepts, Tab and Shift+Tab move
  * between a snippet's fields, and Escape closes the list.
  */
@@ -272,5 +369,7 @@ export function latexCompletionExtensions(
     keymap.of(closeBracketsKeymap),
     autocompletion({ override: sources, icons: false }),
     projectDiagnosticsExtension(getProject),
+    labelNavigationExtension(getProject),
+    latexHoverExtension(options),
   ];
 }

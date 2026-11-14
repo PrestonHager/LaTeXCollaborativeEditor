@@ -68,6 +68,10 @@ export type CommandContext = {
     selectAll(): void;
     /** Put text in place of the selection. False when no file is open for editing. */
     insertText(text: string): boolean;
+    /** Label and citation navigation (issue #247). Each tells the user itself when there's nothing to do. */
+    goToDefinition(): Promise<unknown>;
+    findReferences(): Promise<unknown>;
+    renameLabel(ask: (current: string, check: (name: string) => string | null) => Promise<string | null>): Promise<boolean>;
   };
   /** The resolved keybinds, for labels and key presses. */
   keymap: Keymap;
@@ -186,6 +190,10 @@ export const shortcuts: Shortcut[] = [
   { id: 'view.compileNow', keybind: 'Mod+Enter' },
   // Compile PDF (#242) runs a real TeX engine, so it's Compile Now with Shift. Checked in Chromium on Linux: the page gets it.
   { id: 'view.compilePdf', keybind: 'Mod+Shift+Enter' },
+  // As in VS Code. F12 and Shift+F12 reach the page in Chromium (see reservedKeys.ts), and so does F2.
+  { id: 'edit.goToDefinition', keybind: 'F12' },
+  { id: 'edit.findReferences', keybind: 'Shift+F12' },
+  { id: 'edit.renameLabel', keybind: 'F2' },
 ];
 
 /** The command registry, its menu and palette state, and the keyboard shortcuts. */
@@ -515,6 +523,16 @@ export function createCommands(app: CommandContext) {
     'view.systemTheme': () => setAllThemes('system'),
     'view.togglePauseSaving': () => setSavingPaused(!projectState.savingPaused),
     'view.focusEditor': () => editor.focus(),
+    'edit.goToDefinition': async () => { await editor.goToDefinition(); },
+    'edit.findReferences': async () => { await editor.findReferences(); },
+    'edit.renameLabel': async () => { await editor.renameLabel((current, check) => promptDialog({
+      title: 'Rename label',
+      message: `Renames \\label{${current}} and every reference to it, in every file.`,
+      label: 'New name',
+      initialValue: current,
+      confirmLabel: 'Rename',
+      validate: check,
+    })); },
     'app.openSettings': () => app.settingsDialog.open(),
     'file.rename': () => renameProject(),
     'share.copyLink': () => copyShareLink(),
@@ -659,6 +677,10 @@ export function createCommands(app: CommandContext) {
         // Guests can add files too, once they have the host's project.
         return { enabled: !(isClient && app.project.isEmpty()) };
       case 'file.downloadFile':
+        return { enabled: Boolean(app.activeFileId) };
+      case 'edit.goToDefinition':
+      case 'edit.findReferences':
+      case 'edit.renameLabel':
         return { enabled: Boolean(app.activeFileId) };
       case 'file.saveNow':
         return { enabled: !isClient && !projectState.savingPaused };

@@ -58,6 +58,24 @@ The list follows the project as it changes: a file you add, a label you write, o
 The project is only read when one of these lists opens, and only files that changed since are read again.
 Like the rest of autocompletion, it all happens in your browser and nothing is sent anywhere.
 
+### Hover docs
+
+Rest the mouse on a command, like `\section`, or on an environment name after `\begin{` or `\end{`, and after a moment a card shows its arguments and what it does.
+It knows the same commands as [autocompletion](#autocompletion): LaTeX's own, those of the packages the project loads, and the ones the project defines, which show where they're defined, like `\newcommand in main.tex:3`.
+A command it doesn't know shows nothing. Hover cards are mouse only.
+
+### Labels, citations and commands
+
+With the cursor on a label, a citation key or a command, three commands find your way around the project.
+They're in the command palette, under Edit.
+
+- **Go to definition** (**F12**, or **Ctrl**+click, **⌘**+click on a Mac): from a `\ref{key}` (or `\eqref`, `\cref` and the rest) it jumps to the `\label`, from a `\cite{key}` to the entry in the `.bib` file (or its `\bibitem`), and from a command like `\R` to the `\newcommand` that defines it. If that's in another file, the file opens. On a label defined more than once, pressing it again goes to the next one. If there's no definition in the project, a notice says so: a command may come from LaTeX or a package.
+- **Find references** (**Shift+F12**): lists every place a label or citation key is defined and used, in every file, in a panel under the editor. Definitions are in bold. Click a row (or press Enter on it) to go there; the list stays open until you press Escape or **Close**.
+- **Rename label…** (**F2**): asks for a new name, then changes the `\label` and every reference to it, in every file, including `\cref` lists and a listing's `label=`. It doesn't accept a name another label has, or one with spaces, commas or braces. The rename is one step: the notice that says what changed has **Undo**, and so has **Edit > Undo** right after. Collaborators see it like any edit.
+
+Keys built from macros, and anything in a comment, are left out, as in the [project checks](#project-checks).
+It all happens in your browser.
+
 The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
 - Undo and redo only undo your own typing, not a collaborator's.

@@ -68,7 +68,8 @@ import type { ProjectDiagnostic } from './compile/projectSource';
 import { BlobStore } from './project/blobStore';
 import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
-import { completionProjectFrom } from './ui/completionProject';
+import { completionProjectFrom, type CompletionProject, type TextLocation } from './ui/completionProject';
+import { createOutlineSection } from './app/outlineSection';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
@@ -527,7 +528,7 @@ async function runCompilePdf() {
           const entry = project.findByPath(path);
           if (!entry) return;
           openFile(entry.id);
-          editor.goToLine(line);
+          editor.reveal(line);
         },
         download: (bytes, name) => localDownload.download(name, bytes, 'application/pdf'),
         setStatus,
@@ -844,6 +845,27 @@ async function fetchMissingFiles() {
   }
 }
 
+// The project as completion, the checks and the outline read it. bindProject makes a new one per doc.
+let currentCompletionProject: CompletionProject | null = null;
+
+/** Opens a place in a text file: the outline's rows and go to definition use it. On a phone, it closes the drawer. */
+function openLocation(location: TextLocation) {
+  const entry = project.entries().find((e) => e.path === location.path && e.kind === 'text');
+  if (!entry) return;
+  if (entry.id !== activeFileId) openFile(entry.id);
+  editor.reveal(location.line, location.column, location.length, !isPhone());
+  phone.fileOpened();
+}
+
+// The Outline section under the file tree (issue #248). Its list is a lazy chunk, loaded once it's open.
+const outline = createOutlineSection({
+  section: document.getElementById('outline')!,
+  toggle: document.getElementById('outline-toggle') as HTMLButtonElement,
+  list: document.getElementById('outline-list')!,
+  load: () => whenOnline(() => import('./ui/outline')),
+  host: { project: () => currentCompletionProject, open: openLocation },
+});
+
 /** Hook the UI up to the current project doc. Guests run this again when the host sends a new doc. */
 function bindProject() {
   unbindDoc?.();
@@ -860,8 +882,19 @@ function bindProject() {
   session.getDoc().on('update', onUpdate);
   // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
   // The open file's \ref, \label and \cite problems are checked against it too (issue #246).
-  const completionProject = completionProjectFrom(session.getDoc(), project, () => (activeFileId && project.get(activeFileId)?.path) || null);
+  // Go to definition opens files, and rename edits every file as one step in the file history (issue #247).
+  const completionProject = completionProjectFrom(session.getDoc(), project, {
+    activePath: () => (activeFileId && project.get(activeFileId)?.path) || null,
+    open: ({ path }) => {
+      const entry = project.entries().find((e) => e.path === path && e.kind === 'text');
+      if (entry && entry.id !== activeFileId) openFile(entry.id);
+    },
+    record: (op, label, done) => runFileOp(op, label, done),
+    notify: (message) => showNotice(message),
+  });
   editor.setCompletionProject(completionProject);
+  currentCompletionProject = completionProject;
+  outline.refresh();
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
     renderFiles();
@@ -872,6 +905,7 @@ function bindProject() {
     session.getDoc().off('update', onUpdate);
     completionProject.dispose();
     editor.setCompletionProject(null);
+    currentCompletionProject = null;
     stopTree();
   };
   activeFileId = activeFileId && project.get(activeFileId) ? activeFileId : null;

@@ -44,6 +44,9 @@ import {
   Undo2,
   Unlink,
   UserPen,
+  LocateFixed,
+  ListTree,
+  TextCursor,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
@@ -62,6 +65,9 @@ const commandIcons: Record<CommandId, IconNode> = {
   'view.lightMode': Sun,
   'view.systemTheme': Monitor,
   'view.focusEditor': TextCursorInput,
+  'edit.goToDefinition': LocateFixed,
+  'edit.findReferences': ListTree,
+  'edit.renameLabel': TextCursor,
   'file.openLocal': FolderOpen,
   'file.openDrive': HardDrive,
   'file.openFolder': FolderOpen,

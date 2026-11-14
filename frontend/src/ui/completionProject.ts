@@ -1,5 +1,5 @@
 import type * as Y from 'yjs';
-import type { ProjectDoc } from '../project/projectDoc';
+import { PROJECT_ORIGIN, type ProjectDoc } from '../project/projectDoc';
 
 /**
  * What completion reads from the project (issue #193): its files and the main file, and a version
@@ -23,6 +23,49 @@ export interface CompletionProject {
   activePath?(): string | null;
   /** Calls `listener` after each change to the project. Returns a function that stops it. */
   onChange?(listener: () => void): () => void;
+  /** Opens a file in the editor and selects a range in it, for go to definition (issue #247). */
+  open?(location: TextLocation): void;
+  /**
+   * Makes the edits to the project's files in one Yjs transaction, so peers see them, as one step
+   * the app can undo, named `label`. `done` is what to tell the user after.
+   */
+  applyEdits?(edits: readonly TextEdit[], label: string, done: string): void;
+  /** Tells the user something, like that there's no definition to go to. */
+  notify?(message: string): void;
+}
+
+/** A place in a file. Lines count from 1 and columns from 0. */
+export interface TextLocation {
+  path: string;
+  line: number;
+  column: number;
+  length: number;
+}
+
+/** Puts `insert` in place of a location's text. */
+export interface TextEdit extends TextLocation {
+  insert: string;
+  /** The text the edit replaces. If the file has something else there now, the edit is skipped. */
+  expect?: string;
+}
+
+/** What the app gives a project for navigation and rename. All optional, for tests and guests. */
+export interface CompletionHost {
+  activePath?: () => string | null;
+  open?: (location: TextLocation) => void;
+  /** Runs `op` as one undoable step named `label`, then says `done`. */
+  record?: (op: () => void, label: string, done: string) => void;
+  notify?: (message: string) => void;
+}
+
+/** The offset of a line and column in `text`, or -1 when the line isn't there. */
+export function offsetOf(text: string, line: number, column: number): number {
+  let start = 0;
+  for (let i = 1; i < line; i++) {
+    start = text.indexOf('\n', start) + 1;
+    if (start === 0) return -1;
+  }
+  return start + column;
 }
 
 /**
@@ -32,7 +75,7 @@ export interface CompletionProject {
 export function completionProjectFrom(
   doc: Y.Doc,
   project: ProjectDoc,
-  activePath: () => string | null = () => null,
+  host: CompletionHost = {},
 ): CompletionProject & { dispose(): void } {
   let version = 0;
   const listeners = new Set<() => void>();
@@ -48,7 +91,32 @@ export function completionProjectFrom(
       const id = project.getMainFileId();
       return id ? (project.get(id)?.path ?? null) : null;
     },
-    activePath,
+    activePath: () => host.activePath?.() ?? null,
+    open: host.open,
+    notify: host.notify,
+    applyEdits: (edits, label, done) => {
+      const byPath = new Map<string, TextEdit[]>();
+      for (const edit of edits) byPath.set(edit.path, [...(byPath.get(edit.path) ?? []), edit]);
+      const op = () => doc.transact(() => {
+        for (const [path, list] of byPath) {
+          const entry = project.entries().find((e) => e.path === path && e.kind === 'text');
+          if (!entry) continue;
+          const text = project.getText(entry.id);
+          const source = text.toString();
+          // From the end back, so earlier offsets stay right. An edit whose text moved on is skipped.
+          const placed = list
+            .map((edit) => ({ edit, at: offsetOf(source, edit.line, edit.column) }))
+            .filter(({ edit, at }) => at >= 0 && (edit.expect === undefined || source.slice(at, at + edit.length) === edit.expect))
+            .sort((a, b) => b.at - a.at);
+          for (const { edit, at } of placed) {
+            text.delete(at, edit.length);
+            text.insert(at, edit.insert);
+          }
+        }
+      }, PROJECT_ORIGIN);
+      if (host.record) host.record(op, label, done);
+      else op();
+    },
     onChange: (listener) => {
       listeners.add(listener);
       return () => { listeners.delete(listener); };

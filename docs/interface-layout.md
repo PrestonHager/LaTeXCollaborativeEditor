@@ -191,7 +191,7 @@ The layout and the splitter position are remembered in this browser, like your o
 When the window is narrower than 640px, like on most phones, the app shows one pane at a time instead of the split:
 
 - A bar under the toolbar has **Files**, then **Editor** and **Preview**. Tap Editor or Preview to switch. The pane you picked stays picked when you reload, until you close the tab.
-- **Files** opens the file list as a drawer over the editor. Picking a file closes the drawer and shows that file in the editor. Tap outside the drawer, tap Files again, or press **Esc** to close it without picking.
+- **Files** opens the file list as a drawer over the editor, with the [Outline](projects.md#outline) under it. Picking a file or an outline row closes the drawer and shows that place in the editor. Tap outside the drawer, tap Files again, or press **Esc** to close it without picking.
 - **View > Editor Only** and **Preview Only** pick the pane too. The Split View, Editor Only and Preview Only toolbar buttons are hidden, since the bar does their job.
 - The buttons in the bar are 44px tall, so they're easy to tap.
 - **File**, **Edit**, **View** and **Help** become one **Menu** button. Its menu fills the width of the window and has every item from the four menus, in the same order, under a **File**, **Edit**, **View** or **Help** heading. It scrolls if it's taller than the window.

@@ -13,6 +13,9 @@ import {
   latexCommandSource,
   latexCompletionExtensions,
   latexEnvironmentSource,
+  hoverCard,
+  hoverTarget,
+  latexHoverSource,
   type LatexCompletionData,
 } from './latexCompletion';
 import { LATEX_COMMANDS, LATEX_ENVIRONMENTS } from './latexCompletionData';
@@ -372,5 +375,65 @@ describe('latexCompletionExtensions', () => {
     const handled = view.state.facet(EditorView.inputHandler).some((handler) => handler(view, 0, 0, '{', () => view.state.update({ changes: { from: 0, insert: '{' } })));
     expect(handled).toBe(true);
     expect(view.state.doc.toString()).toBe('{}');
+  });
+});
+
+describe('hover docs', () => {
+  const viewOf = (doc: string) => new EditorView({ state: EditorState.create({ doc }), parent: document.createElement('div') });
+  const at = (input: string) => {
+    const pos = input.indexOf('|');
+    return { view: viewOf(input.slice(0, pos) + input.slice(pos + 1)), pos };
+  };
+
+  it('finds the command or environment name under the mouse', () => {
+    const cases: [string, unknown][] = [
+      ['\\sec|tion{A}', { kind: 'command', label: '\\section', from: 0, to: 8 }],
+      ['x |\\frac{a}{b}', { kind: 'command', label: '\\frac', from: 2, to: 7 }],
+      ['x \\frac|{a}{b}', { kind: 'command', label: '\\frac', from: 2, to: 7 }],
+      ['\\begin{item|ize}', { kind: 'environment', label: 'itemize', from: 7, to: 14 }],
+      ['\\end{|itemize}', { kind: 'environment', label: 'itemize', from: 5, to: 12 }],
+      ['plain te|xt', null],
+      ['% \\sec|tion', null],
+      ['\\\\sec|tion', null],
+      ['% \\begin{item|ize}', null],
+      ['a \\| b', null],
+    ];
+    for (const [input, expected] of cases) {
+      const { view, pos } = at(input);
+      expect(hoverTarget(view, pos), input).toEqual(expected);
+      view.destroy();
+    }
+  });
+
+  it('shows the arguments and description from completion, and nothing for unknown names', async () => {
+    const project = { version: () => 0, files: () => [{ path: 'main.tex', kind: 'text' as const, text: () => '\\usepackage{amsmath}\n\\newcommand{\\R}{\\mathbb{R}}' }], mainPath: () => 'main.tex' };
+    const source = latexHoverSource(new LatexOptionSet(bundled, () => project, () => Promise.resolve(PACKAGE_DATA)));
+    const card = async (input: string) => {
+      const { view, pos } = at(input);
+      const tooltip = await source(view, pos);
+      const dom = tooltip ? (tooltip.create(view) as { dom: HTMLElement }).dom : null;
+      view.destroy();
+      return dom && [dom.querySelector('.cm-latex-hover-name')?.textContent, dom.querySelector('.cm-latex-hover-info')?.textContent ?? null];
+    };
+    const section = await card('\\sec|tion{A}');
+    expect(section?.[0]).toBe('\\section{title}');
+    expect(section?.[1]).toBeTruthy();
+    expect((await card('\\begin{ali|gn}'))?.[0]).toMatch(/^\\begin\{align\}/);
+    expect((await card('$\\|R$'))).toEqual(['\\R', '\\newcommand in main.tex:2']);
+    expect(await card('\\notacommand|x')).toBeNull();
+    expect(await card('plain|')).toBeNull();
+    // Without completion data there's nothing to show.
+    const empty = latexHoverSource(new LatexOptionSet(() => Promise.reject(new Error('offline'))));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { view, pos } = at('\\sec|tion');
+    expect(await empty(view, pos)).toBeNull();
+    warn.mockRestore();
+    view.destroy();
+  });
+
+  it('builds a card without arguments or a description', () => {
+    const dom = hoverCard({ label: '\\relax' }, 'command');
+    expect(dom.textContent).toBe('\\relax');
+    expect(hoverCard({ label: 'x', detail: '{environment}', info: 'Info' }, 'environment').textContent).toBe('\\begin{x}Info');
   });
 });

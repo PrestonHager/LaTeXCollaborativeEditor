@@ -77,14 +77,16 @@ describe('extractBibEntries', () => {
   it('reads keys, types, titles, authors and years, and skips @string and @comment', () => {
     const entries = extractBibEntries(BIB, 'refs.bib');
     expect(entries.map((e) => e.key)).toEqual(['knuth84', 'lamport94', 'paren']);
-    expect(entries[0]).toEqual({ key: 'knuth84', type: 'article', path: 'refs.bib', title: 'Literate Programming', author: 'Donald E. Knuth', year: '1984' });
+    expect(entries[0]).toEqual({ key: 'knuth84', type: 'article', path: 'refs.bib', title: 'Literate Programming', author: 'Donald E. Knuth', year: '1984', line: 4, column: 9 });
     expect(entries[1]).toMatchObject({ type: 'book', title: 'LaTeX: A Document Preparation System', year: '1994' });
+    expect(entries[1]).toMatchObject({ line: 10, column: 6 });
+    expect(entries[2]).toMatchObject({ line: 12, column: 6 });
     expect(entries[2]).toMatchObject({ key: 'paren', type: 'misc', title: 'In (parens)', author: 'Ana Ozturk and Bo Li', year: undefined });
   });
 
   it('copes with an entry that never closes or has no fields', () => {
     expect(extractBibEntries('@article{open,\n title = {Never closed', 'x.bib')).toEqual([
-      { key: 'open', type: 'article', path: 'x.bib', title: 'Never closed', author: undefined, year: undefined },
+      { key: 'open', type: 'article', path: 'x.bib', title: 'Never closed', author: undefined, year: undefined, line: 1, column: 9 },
     ]);
     expect(extractBibEntries('@misc{a,}', 'x.bib')[0]).toMatchObject({ key: 'a', title: undefined });
   });
