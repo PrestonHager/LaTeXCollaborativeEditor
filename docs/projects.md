@@ -111,6 +111,19 @@ It's the `.tex` file with `\documentclass` unless you pick another one.
 The preview follows `\input` and `\include` from the main file, so you only need one main file even for a big project.
 See [Editing and preview](editing-and-preview.md#live-preview) for what the preview can read.
 
+If no main file was picked and the guess is a file that starts with `% !TEX root = ../thesis.tex`, the main file is the one that comment names, the way TeXShop and TeXstudio read it.
+
+## TeX engine
+
+Each project compiles with one TeX engine: **pdfLaTeX** (the default), **XeLaTeX** or **LuaLaTeX**, the same choice as Overleaf's Compiler setting.
+
+- Pick it in the **View** menu (or the command palette, "Engine"). The checked one is the project's engine.
+- It's saved with the project, in this browser or in Google Drive, and everyone in the room gets it.
+- A `% !TEX program = xelatex` comment in the first 20 lines of the main file wins over the setting. `lualatex`, `pdflatex`, `xetex`, `luatex` and `latex` work too.
+
+The live preview looks the same for every engine. For now the engine only changes which notes show:
+packages that need XeLaTeX or LuaLaTeX, like `fontspec`, `unicode-math` and `polyglossia`, get a warning under pdfLaTeX, and LuaLaTeX-only ones, like `luacode`, under the others.
+
 ## Viewing images and PDFs
 
 Clicking a binary file opens it in the viewer instead of the editor.

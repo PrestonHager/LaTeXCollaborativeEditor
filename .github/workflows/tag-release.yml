@@ -4,7 +4,8 @@
 # A push is a release when frontend/package.json's version went up, or the commit message names
 # a release/vX.Y.Z branch for the current version (frontend/scripts/release-tag.mjs).
 # A tag pushed with GITHUB_TOKEN doesn't start other workflows, so this calls release.yml itself.
-# That run is on main, so the github-pages environment's "main only" rule lets it deploy.
+# That run is on main, so the github-pages environment's "main only" rule lets it deploy, and on
+# Coolify main's head is still the tagged commit.
 name: Tag release
 
 on:

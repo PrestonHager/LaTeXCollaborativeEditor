@@ -23,6 +23,10 @@ import type { PreviewCompile } from './previewCompile';
 import type { Keymap, Shortcut } from './keymap';
 import { formatKeybind, keybindFromEvent } from '../ui/modifierShortcutLabels';
 import { isLoadFailure } from './lazy';
+import { DEFAULT_TEX_ENGINE, ENGINE_LABELS, resolveEngine, type TexEngine } from '../project/texEngine';
+
+/** The engine each View menu engine command picks (issue #199). */
+const ENGINE_COMMANDS = { 'view.enginePdflatex': 'pdflatex', 'view.engineXelatex': 'xelatex', 'view.engineLualatex': 'lualatex' } as const satisfies Partial<Record<CommandId, TexEngine>>;
 
 export type CommandHandler = () => Promise<void> | void;
 
@@ -512,6 +516,9 @@ export function createCommands(app: CommandContext) {
     'file.rename': () => renameProject(),
     'share.copyLink': () => copyShareLink(),
     'view.compileNow': () => compile.compileNow(),
+    'view.enginePdflatex': () => pickEngine('pdflatex'),
+    'view.engineXelatex': () => pickEngine('xelatex'),
+    'view.engineLualatex': () => pickEngine('lualatex'),
     'view.layoutSplit': () => {
       layout.setMode('split');
       app.menuBar.refresh();
@@ -597,6 +604,22 @@ export function createCommands(app: CommandContext) {
     refreshCommands();
   }
 
+  /**
+   * Set the project's TeX engine (issue #199). It goes to peers with the project and is saved with
+   * it. A `% !TEX program` comment in the main file still wins, so say so when it does.
+   */
+  function pickEngine(engine: TexEngine) {
+    const { project } = app;
+    project.setEngine(engine);
+    const mainId = project.getMainFileId();
+    const resolved = resolveEngine(engine, mainId ? project.getText(mainId).toString() : undefined);
+    if (resolved.source === 'magic' && resolved.engine !== engine) {
+      showNotice(`The main file's "% !TEX program" comment picks ${ENGINE_LABELS[resolved.engine]}, so the project uses that instead of ${ENGINE_LABELS[engine]}.`);
+    } else {
+      setStatus(`TeX engine: ${ENGINE_LABELS[engine]}`);
+    }
+  }
+
   // Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
   function refreshCommands() {
     app.menuBar.refresh();
@@ -647,6 +670,11 @@ export function createCommands(app: CommandContext) {
       }
       case 'view.togglePauseSaving':
         return { enabled: !isClient, checked: projectState.savingPaused };
+      case 'view.enginePdflatex':
+      case 'view.engineXelatex':
+      case 'view.engineLualatex':
+        // Guests can pick it too, like the main file: it's part of the shared project.
+        return { enabled: !app.project.isEmpty(), checked: (app.project.getEngine() ?? DEFAULT_TEX_ENGINE) === ENGINE_COMMANDS[commandId] };
       case 'view.layoutSplit':
         return { enabled: true, checked: layout.mode === 'split' };
       case 'view.layoutEditorOnly':

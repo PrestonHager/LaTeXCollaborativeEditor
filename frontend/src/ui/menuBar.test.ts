@@ -459,6 +459,18 @@ describe('createMenuBar', () => {
     menuBar.destroy();
   });
 
+  it('flips aria-checked on radio items too (#199)', () => {
+    const container = document.createElement('div');
+    container.innerHTML =
+      '<div class="menu-root dropdown-menu" data-menu-label="View"><button type="button" class="menu-trigger btn" aria-haspopup="menu" aria-controls="m" aria-expanded="false">View</button>' +
+      '<div id="m" class="menu-popover" data-popover aria-hidden="true"><div class="menu-list" role="menu">' +
+      '<button type="button" class="menu-item" role="menuitemradio" aria-checked="false" data-command="view.engineXelatex"><span class="menu-item-label">XeLaTeX Engine</span></button>' +
+      '</div></div></div>';
+    const menuBar = createMenuBar(container, { getCommandState: () => ({ enabled: true, checked: true }), onCommand: () => {} });
+    expect(container.querySelector('[role="menuitemradio"]')!.getAttribute('aria-checked')).toBe('true');
+    menuBar.destroy();
+  });
+
   it('flips aria-checked on checkbox items only', () => {
     const container = document.createElement('div');
     let checked = false;

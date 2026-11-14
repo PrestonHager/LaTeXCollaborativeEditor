@@ -80,13 +80,25 @@ describe('Content-Security-Policy in index.html', () => {
   it('never allows eval or inline scripts', () => {
     for (const [directive, list] of Object.entries(csp)) {
       expect(list, directive).not.toContain("'unsafe-eval'");
-      expect(list, directive).not.toContain("'wasm-unsafe-eval'");
       expect(list, directive).not.toContain('*');
+      // WebAssembly compilation is for the TeX engine's scripts only (#240), never another directive.
+      if (directive !== 'script-src') expect(list, directive).not.toContain("'wasm-unsafe-eval'");
     }
     expect(csp['script-src']).not.toContain("'unsafe-inline'");
     expect(csp['script-src']).not.toContain('data:');
     expect(csp['script-src']).not.toContain('blob:');
     expect(csp['script-src']).not.toContain('https:');
+  });
+
+  it('allows WebAssembly compilation for Compile PDF, but not JavaScript eval (#240)', () => {
+    expect(csp['script-src']).toContain("'wasm-unsafe-eval'");
+    expect(csp['script-src']).not.toContain("'unsafe-eval'");
+    // No default-src fallback can stand in for it: script-src is set, so it alone decides.
+    expect(csp['default-src']).toEqual(["'self'"]);
+    // The engine and its package files are fetched from our own origin only (docs/wasm-tex-engine.md).
+    expect(cspAllows(csp, 'connect-src', `${APP_ORIGIN}/tex/abc123/pdftex.wasm`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'worker-src', `${APP_ORIGIN}/assets/texEngine.worker-abc.js`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'worker-src', 'https://texlive.example/engine.js', APP_ORIGIN)).toBe(false);
   });
 
   it('leaves out directives a meta tag ignores', () => {

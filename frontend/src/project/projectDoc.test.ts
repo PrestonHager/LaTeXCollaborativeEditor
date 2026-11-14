@@ -220,4 +220,32 @@ describe('ProjectDoc', () => {
     await Promise.resolve();
     expect(listener).toHaveBeenCalledTimes(2);
   });
+
+  it('keeps the TeX engine in meta, syncs it, and ignores a bad value from a peer (#199)', () => {
+    const doc = new Y.Doc();
+    const project = new ProjectDoc(doc);
+    expect(project.getEngine()).toBeNull();
+    project.setEngine('xelatex');
+    expect(project.getEngine()).toBe('xelatex');
+    const peer = new Y.Doc();
+    Y.applyUpdate(peer, Y.encodeStateAsUpdate(doc));
+    expect(new ProjectDoc(peer).getEngine()).toBe('xelatex');
+    const updates: Uint8Array[] = [];
+    doc.on('update', (update: Uint8Array) => updates.push(update));
+    project.setEngine('xelatex');
+    expect(updates).toHaveLength(0);
+    project.setEngine(null);
+    expect(project.getEngine()).toBeNull();
+    doc.getMap<string>('meta').set('engine', 'tectonic');
+    expect(project.getEngine()).toBeNull();
+  });
+
+  it('sets the engine from loaded content, and drops it with the old project', () => {
+    const project = new ProjectDoc(new Y.Doc());
+    project.setEngine('lualatex');
+    project.replaceAll({ name: 'P', files: [{ path: 'main.tex', kind: 'text', text: 'x' }] });
+    expect(project.getEngine()).toBeNull();
+    project.replaceAll({ name: 'P', engine: 'xelatex', files: [] });
+    expect(project.getEngine()).toBe('xelatex');
+  });
 });
