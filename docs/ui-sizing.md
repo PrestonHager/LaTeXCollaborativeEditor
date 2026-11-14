@@ -2,7 +2,7 @@
 
 How wide and tall dialogs, popovers and floating cards are, and how to pick a size for a new one.
 This is a contributor reference. It isn't in the published user site (see `exclude_docs` in `mkdocs.yml`).
-It came from issue #141, and it sets the rules the mobile work in issue #123 builds on.
+It came from issue #141, and it sets the rules the mobile work in issue #123 builds on. Phone sheets for `dialog-md` and `dialog-lg` came in #187.
 
 The tokens and classes live at the top of the "Dialog and popover size scale" block in `frontend/src/style.css`.
 
@@ -21,7 +21,7 @@ Floating UI that isn't a dialog uses two more tokens:
 
 | Token | Width | Used by |
 |-------|-------|---------|
-| `--popover-card` | 22rem (352px) | The tour card, the update prompt and the preview-changes popover. |
+| `--popover-card` | 22rem (352px) | The tour card, the update prompt, the preview-changes popover and the hover preview card (#89). |
 | `--popover-menu` | 15rem minimum | The menu bar's dropdowns. They grow to fit their longest item. |
 
 Every size is capped at `calc(100vw - var(--viewport-gutter))`. `--viewport-gutter` is 2rem, so there's 1rem on each side and nothing scrolls sideways.
@@ -73,7 +73,7 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 
 | Name | Width | Today | Planned in #123 |
 |------|-------|-------|-----------------|
-| Phone | under 640px (`sm`) | Every dialog is the window width minus 2rem. Footer buttons stack. | Dialogs become full-screen sheets (below). |
+| Phone | under 640px (`sm`) | `dialog-md` and `dialog-lg` are full-screen sheets (#187). `dialog-sm` is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | The palette, popover cards and menus (below). |
 | Tablet | 640px to 1023px | Dialogs use the scale. `dialog-lg` is capped by the window, so Settings is one column. | Same as today. |
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
@@ -81,10 +81,10 @@ The smallest supported window is **360 x 640** (the smallest size in #123). At 7
 
 ### What each size does on phones (#123)
 
-This PR doesn't build it, but this is the plan, so new dialogs shouldn't fight it:
+The dialog sizes are built (#187). The palette, popover cards and menus are still the plan, so new UI shouldn't fight it:
 
 - `dialog-sm`: stays a centered box, the window width minus 2rem. Confirm and prompt dialogs are short, so a sheet would be too much.
-- `dialog-md`, `dialog-lg`: full-screen sheets below 640px. The box fills the window (`100dvw` by `100dvh`, no rounded corners), the header sticks to the top and the footer to the bottom, and the body scrolls. The rules above for header, body and footer already give this shape, so a sheet only changes the box size.
+- `dialog-md`, `dialog-lg` (built in #187): full-screen sheets below 640px, in the `@media (max-width: 39.99rem)` block after the scale in `style.css`. The box fills the window (`100%` by `100dvh`, with a `100vh` fallback, no rounded corners) and its padding grows to the safe-area insets so a notch or home bar doesn't cover it. The header stays at the top, the footer is pushed to the bottom (`margin-top: auto`, so a dialog with no `<section>`, like Conflict, works too), and the body scrolls between them with its rows packed at the top (`align-content: start`). The changelog drops its own `max-height` and fills the sheet. Settings is already one column below 1024px. Nothing else changes, so a new `dialog-md` or `dialog-lg` gets the sheet for free: keep the `header`, `section`, `footer` shape and don't give the box its own width or height.
 - `dialog-palette`: full width, pinned to the top, so the soft keyboard doesn't cover the list.
 - Popover cards (`--popover-card`): full width minus the gutter, pinned to the bottom of the window. The tour card already shrinks to the window, but still covers part of each pane (#123).
 - Menus (`--popover-menu`): today a dropdown can run past the right edge of a phone-width window, because it opens under its menu button. On phones the menu bar becomes one menu button (#123), and its menu should be a sheet or a full-width list.
@@ -100,7 +100,7 @@ Screenshot every dialog and popover you touched, at deviceScaleFactor 1, in thes
 - 1920 x 1080 and 1280 x 800 (desktop)
 - 1024 x 768 (the two-column Settings breakpoint)
 - 768 x 1024 (tablet: nothing may scroll sideways)
-- 390 x 844 (phone: must still fit, even before #123)
+- 390 x 844 and 360 x 640 (phone: `dialog-md` and `dialog-lg` are sheets, `dialog-sm` is a card)
 
 Build and serve the app (`npm run build && npx vite preview --port <port>` in `frontend/`) and drive it with Playwright. For each one, check:
 
@@ -118,3 +118,15 @@ These screenshots are from #141, at 1280 x 800:
 | ![Open a project before: the Close button runs past the edge](assets/ui-sizing/projects-before-1280x800.png) | ![Open a project after: the footer fits](assets/ui-sizing/projects-after-1280x800.png) |
 
 Settings at 768 x 1024 is one column at the full `dialog-lg` cap: ![Settings at 768px](assets/ui-sizing/settings-after-768x1024.png)
+
+These are from #187, at 360 x 640: Upload, About, Open a project, Conflict, Export, Settings, and New File (`dialog-sm`, still a card).
+
+| Before | After |
+|--------|-------|
+| ![Phone dialogs before: cards with a 1rem gutter](assets/ui-sizing/phone-dialogs-before-360x640.png) | ![Phone dialogs after: full-screen sheets, New File still a card](assets/ui-sizing/phone-dialogs-after-360x640.png) |
+
+The hover preview card (#89) is `--popover-card` wide. It sits beside a menu (flipping to the left side at the window edge) or under a toolbar button, and stays 12px inside the window:
+
+| Toolbar, 1280 x 800 | Menu, 1280 x 800 | 390 x 844 |
+|---------------------|------------------|-----------|
+| ![Share's preview card under the toolbar](assets/hover-preview/toolbar-share.png) | ![New File's preview card beside the File menu](assets/hover-preview/menu-new-file.png) | ![The card at phone width, inside the window](assets/hover-preview/narrow-390.png) |

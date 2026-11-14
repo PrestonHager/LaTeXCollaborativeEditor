@@ -1,7 +1,8 @@
 /**
- * Adapt real-world LaTeX for LaTeX.js in the browser. LaTeX.js tries to load many
- * \usepackage{} modules via Node require(), which fails under Vite/ESM; we strip
- * unsupported packages and inject minimal shims so common academic documents still preview.
+ * Adapt real-world LaTeX for LaTeX.js in the browser. LaTeX.js tries to load most
+ * \usepackage{} modules via Node require(), which fails under Vite/ESM; we strip the
+ * packages it can't load (and report each as a diagnostic, see previewPackages.ts) and
+ * inject minimal shims so common academic documents still preview.
  *
  * Every step keeps the line breaks of whatever it removes, so line N of the adapted source
  * is still line N of the editor. LaTeX.js error locations can then be used as-is.
@@ -18,18 +19,8 @@ import {
   rewriteTheorems,
   stripSetupCommands,
 } from './packageShims';
-
-const UNSUPPORTED_USEPACKAGES = new Set([
-  'geometry',
-  'indentfirst',
-  'gensymb',
-  'fontspec',
-  'fancyhdr',
-  'nomencl',
-  'authblk',
-  'textcomp',
-  'float',
-]);
+import { LATEX_JS_PACKAGES, packageDiagnostic } from './previewPackages';
+import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** Find index of closing `}` matching `{` at openIdx (brace depth, ignore escaped braces loosely). */
 function findClosingBrace(source: string, openIdx: number): number {
@@ -74,14 +65,46 @@ function stripAllMacroGroups(source: string, name: string): string {
   return s;
 }
 
-/** Remove lines that are only \usepackage{unsupported} (optional [...] args), and note which ones went. */
-function stripUnsupportedUsePackages(source: string, removed: Set<string>): string {
-  const re = /^\s*\\usepackage(?:\[[^\]]*])?\s*\{\s*([^}\s]+)\s*\}\s*(?:%[^\n]*)?\s*$/gm;
-  return source.replace(re, (line, pkg: string) => {
-    if (!UNSUPPORTED_USEPACKAGES.has(pkg.trim())) return line;
-    removed.add(pkg.trim());
-    return keepLineBreaks(line);
-  });
+/** A package the preview can't load, and the line of the source that asks for it. */
+export type RemovedPackage = { name: string; line: number };
+
+// \usepackage[options]{a,b}[date], or \RequirePackage. The date can't run onto the next line.
+const PACKAGE_COMMAND = /(\\(usepackage|RequirePackage)(?![a-zA-Z@])\s*(?:\[([^\]]*)]\s*)?\{)([^{}]*)\}(?:[ \t]*\[[^\]\n]*])?/g;
+
+/** A package name from a list entry. A comment in the list was masked down to its %, so drop from there to the end of the line. */
+const packageName = (entry: string) => entry.replace(/%[^\n]*/g, '').trim();
+
+/**
+ * Remove every package LaTeX.js can't load from \usepackage and \RequirePackage, and note each
+ * one with its line. Packages it can load stay, and \RequirePackage becomes \usepackage, which
+ * is the only one LaTeX.js knows.
+ */
+function stripUnsupportedPackages(source: string, removed: RemovedPackage[]): string {
+  // Count lines as we go, since matches come in order.
+  let counted = 0;
+  let line = 1;
+  const lineAt = (index: number) => {
+    for (; counted < index; counted += 1) if (source[counted] === '\n') line += 1;
+    return line;
+  };
+  return source.replace(
+    PACKAGE_COMMAND,
+    (whole, head: string, command: string, options: string | undefined, list: string, offset: number) => {
+      const kept: string[] = [];
+      let at = offset + head.length;
+      for (const entry of list.split(',')) {
+        const name = packageName(entry);
+        if (LATEX_JS_PACKAGES.has(name)) kept.push(name);
+        else if (name) removed.push({ name, line: lineAt(at + entry.indexOf(name)) });
+        at += entry.length + 1;
+      }
+      const names = list.split(',').map(packageName).filter(Boolean);
+      if (command === 'usepackage' && kept.length === names.length) return whole;
+      if (!kept.length) return keepLineBreaks(whole);
+      const opts = options === undefined ? '' : `[${packageName(options).replace(/\s+/g, ' ')}]`;
+      return `\\usepackage${opts}{${kept.join(',')}}${keepLineBreaks(whole)}`;
+    },
+  );
 }
 
 /** Blank out single-line preamble commands that break or duplicate stubs. */
@@ -450,6 +473,8 @@ export type AdaptedSource = {
   source: string;
   /** Short notes on what was removed or rewritten, for showing with the preview. */
   changes: string[];
+  /** One for each package the preview couldn't load, on the line that loads it. */
+  diagnostics: EditorDiagnostic[];
 };
 
 /**
@@ -461,9 +486,11 @@ export function adaptLatexSource(source: string): AdaptedSource {
   const changes: string[] = [];
 
   // First, drop the packages LaTeX.js can't load.
-  const packages = new Set<string>();
-  let s = stripUnsupportedUsePackages(masked, packages);
-  if (packages.size) changes.push(`Removed packages the preview can't load: ${[...packages].join(', ')}.`);
+  const packages: RemovedPackage[] = [];
+  let s = stripUnsupportedPackages(masked, packages);
+  const names = [...new Set(packages.map((p) => p.name))];
+  if (names.length) changes.push(`Removed packages the preview can't load: ${names.join(', ')}.`);
+  const diagnostics: EditorDiagnostic[] = packages.map(({ name, line }) => ({ line, ...packageDiagnostic(name) }));
 
   // Then run each rewrite and note the ones that did something.
   for (const rewrite of REWRITES) {
@@ -478,7 +505,7 @@ export function adaptLatexSource(source: string): AdaptedSource {
   if (dropped.size) changes.push(`Ignored commands the preview has no use for: ${[...dropped].join(', ')}.`);
 
   // Finally, put the hidden text back.
-  return { source: unmask(s), changes };
+  return { source: unmask(s), changes, diagnostics };
 }
 
 export function adaptLatexSourceForLatexJs(source: string): string {

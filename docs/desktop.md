@@ -12,7 +12,7 @@ Issue #122 plans native apps for Windows, macOS and Linux, then tablets and phon
 | Framework | Tauri 2 (below) |
 | `desktop/` scaffold | Builds on Linux. `cargo check`, `cargo clippy` and `tauri build` (deb, rpm, AppImage) passed on Ubuntu 24.04 |
 | CI | `.github/workflows/desktop.yml` builds unsigned Linux, Windows and macOS installers as workflow artifacts |
-| Desktop detection in the frontend | `frontend/src/app/desktopShell.ts`. The keymap uses it |
+| Desktop detection in the frontend | `frontend/src/app/desktopShell.ts`. The keymap uses it, and Share uses it to offer the system browser when WebRTC is missing |
 | WebRTC | Windows and macOS are expected to work but are **not checked yet**. On Linux, the distro WebKitGTK we checked has **no WebRTC** (below) |
 | Google sign-in, local folders, updater, signing | Follow-ups (below) |
 | First numbers (Linux, from the sandbox) | `.deb` 2.4 MB and `.rpm` 2.4 MB. The AppImage is 78 MB because it carries WebKitGTK and GStreamer. After load, the app used about 420 MB PSS across its three processes, under Xvfb with software rendering. That's not a fair desktop number: measure on real hardware against a browser tab |
@@ -72,7 +72,10 @@ So **on most Linux installs today, the desktop app can edit, preview and save, b
 3. **Bundle our own WebKitGTK built with WebRTC** in the AppImage. That's large and means tracking WebKit security updates ourselves.
 4. **Tauri's Chromium (CEF) runtime** once it's stable. It's heavier, close to what #122 wants to avoid.
 
-Until then the app should say so instead of failing quietly. That's a small frontend follow-up: when `RTCPeerConnection` is missing, Share explains that live collaboration needs the web app on this system and offers to open the room in the browser.
+Until then the app says so instead of failing quietly (issue #205). When `RTCPeerConnection` is missing, Share and `?room=` links say "This window can't make peer-to-peer connections, so it can't share or join a room.", the P2P code never loads, and the app offers to open the room (or, for Share, the web app) in the system browser:
+
+- The web app's address comes from `VITE_DOCS_BASE_URL`: the site serves the docs under `/docs/`, so the app is the folder above (`webAppUrl()` in `frontend/src/app/p2pSupport.ts`). The page's own origin, `tauri://localhost`, means nothing to a browser. Without an https docs base, the app only explains.
+- The link opens through `tauri-plugin-opener` (`openInSystemBrowser()` in `frontend/src/app/desktopShell.ts`, which calls `__TAURI_INTERNALS__.invoke('plugin:opener|open_url')`). If that fails, the link is copied instead.
 
 ## Google sign-in
 
@@ -156,11 +159,12 @@ The builds are unsigned, so people see warnings:
 - **CSP.** The app uses the web CSP unchanged: the `<meta>` tag in the bundled `index.html`. Tauri's own `app.security.csp` stays `null`. If both were set, the browser would enforce both, and the effective policy would be their intersection. A Tauri copy could only drift from the meta tag, for example when the build adds custom `VITE_P2P_RENDEZVOUS` trackers to the meta tag. Desktop builds must not use the `VITE_DISABLE_CSP=1` rollback switch.
 
   When a feature needs Tauri IPC from the page, `connect-src` needs `ipc: http://ipc.localhost`. Add it to the meta policy then (it means nothing on the web) and update `frontend/src/security/cspPolicy.test.ts`.
-- **Capabilities.** There's one capability, `main-window`, with **no permissions**, not even `core:default`. Each follow-up adds only what it uses: `updater:default`, `dialog:allow-open`, `fs` scoped to the picked folders, `opener:allow-open-url` for `https:` links.
-- `withGlobalTauri` is off, and the asset protocol is off.
+- **Capabilities.** There's one capability, `main-window`. Its only permission is `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); not even `core:default`. Each follow-up adds only what it uses: `updater:default`, `dialog:allow-open`, `fs` scoped to the picked folders.
+- **IPC in the CSP.** The opener goes through Tauri IPC, so the meta policy's `connect-src` has `ipc: http://ipc.localhost` (it means nothing on the web). `frontend/src/security/cspPolicy.test.ts` allows exactly those.
+- `withGlobalTauri` is off, and the asset protocol is off. The frontend imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads.
 - `freezePrototype` is off. Freezing `Object.prototype` breaks code that assigns over an inherited property (the "override mistake"), and LaTeX.js, pdf.js and CodeMirror haven't been tested with it.
 - `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts.
-- **Links (follow-up):** open external links (docs, GitHub, Drive) in the system browser with `tauri-plugin-opener`, and block navigation away from the app inside the window.
+- **Links (follow-up):** open the other external links (docs, GitHub, Drive) in the system browser with the opener, which the app already has for room links, and block navigation away from the app inside the window.
 
 ## Building locally
 
@@ -195,7 +199,7 @@ The builds are unsigned, so people see warnings:
 These are listed in the PR that added this page, to be filed:
 
 - Desktop: check the app on Windows, macOS and Linux, and measure startup and memory.
-- Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), and a notice when WebRTC is missing.
+- Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), #176. The notice when WebRTC is missing is done (#205).
 - Desktop: Google sign-in through the system browser (loopback and PKCE, a Desktop OAuth client, tokens in the keychain, and the Picker question).
 - Desktop: a local folder storage provider.
 - Desktop: auto-updater, and installers attached to releases.

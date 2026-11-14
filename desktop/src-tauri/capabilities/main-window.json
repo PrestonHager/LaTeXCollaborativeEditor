@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "The main window gets no Tauri APIs yet. Add a permission only with the feature that needs it (docs/desktop.md, Security).",
+  "description": "The main window may only open https links in the system browser. Add a permission only with the feature that needs it (docs/desktop.md, Security).",
   "windows": ["main"],
-  "permissions": []
+  "permissions": [
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://*" }]
+    }
+  ]
 }

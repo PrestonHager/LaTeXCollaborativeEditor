@@ -13,6 +13,11 @@ type ShareButtonConfig = {
   getNewRoomId?: () => string;
   /** Ask before dropping the old link. Resolve false to keep it. */
   confirmNewLink?: () => boolean | Promise<boolean>;
+  /**
+   * Set when this window can't share (no WebRTC, issue #205). Share and New link call it instead,
+   * and never ask for a room, so the P2P code never starts.
+   */
+  unavailable?: () => void;
 };
 
 export function setupShareButton(config: ShareButtonConfig) {
@@ -42,6 +47,10 @@ export function setupShareButton(config: ShareButtonConfig) {
   };
 
   const shareWith = (getRoomId: () => string) => {
+    if (config.unavailable) {
+      config.unavailable();
+      return;
+    }
     let roomId: string;
     try {
       roomId = getRoomId();
@@ -54,7 +63,7 @@ export function setupShareButton(config: ShareButtonConfig) {
   };
 
   if (config.newLinkButton) config.newLinkButton.hidden = true;
-  if (config.initialRoomId) showLink(config.initialRoomId);
+  if (config.initialRoomId && !config.unavailable) showLink(config.initialRoomId);
 
   config.button.addEventListener('click', () => shareWith(config.getRoomId));
 

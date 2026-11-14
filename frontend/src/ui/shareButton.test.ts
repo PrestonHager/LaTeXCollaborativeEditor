@@ -212,4 +212,31 @@ describe('setupShareButton', () => {
     await Promise.resolve();
     expect(link.href).toContain('room=r2');
   });
+
+  it("never asks for a room when this window can't share (issue #205)", () => {
+    const button = document.createElement('button');
+    const link = document.createElement('a');
+    const newLinkButton = document.createElement('button');
+    const getRoomId = vi.fn(() => 'room-1');
+    const copyText = vi.fn(async () => undefined);
+    const unavailable = vi.fn();
+    setupShareButton({
+      button,
+      linkEl: link,
+      getRoomId,
+      getCurrentUrl: () => 'https://host/',
+      copyText,
+      initialRoomId: 'old-room',
+      newLinkButton,
+      getNewRoomId: () => 'room-2',
+      unavailable,
+    });
+    // A remembered room isn't shown, since it can't be rejoined here.
+    expect(link.textContent).toBe('');
+    expect(newLinkButton.hidden).toBe(true);
+    button.click();
+    expect(unavailable).toHaveBeenCalledTimes(1);
+    expect(getRoomId).not.toHaveBeenCalled();
+    expect(copyText).not.toHaveBeenCalled();
+  });
 });

@@ -13,8 +13,19 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Switching Settings > App and editor theme between Light and Dark recolors the syntax right away, and both stay readable.
 - [ ] The line number gutter matches the editor theme: light gutter with dark numbers on Light, dark gutter with light numbers on Dark. With Match system, it follows the OS (light or dark mode) and looks the same as picking that theme directly. The current line's number stays readable in all of them.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
+- [ ] Autocompletion: typing `\sec` on a new line shows a list with `\section` (with `{title}` and "Section heading") under the cursor. Enter puts in `\section{title}` with "title" selected, and typing replaces it.
+- [ ] Autocompletion: after `\frac`, Tab moves from the first placeholder to the second, and Shift+Tab back.
+- [ ] Autocompletion: typing `\begin{it` offers `itemize`. Enter gives `\begin{itemize}`, an indented `\item` line with the cursor on it, and `\end{itemize}`, with no extra `}` left over.
+- [ ] Autocompletion: Ctrl+Space (⌃Space on a Mac) opens the list, Escape closes it, and nothing shows inside a `%` comment or after `\\`. One Ctrl+Z takes back an accepted completion, and a peer in the room sees the completed text.
+- [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` only the first time the list opens.
+- [ ] Project completion: in `main.tex`, typing `\ref{sec` lists `sec:citations`, `sec:refs`, `sec:packages` and `sec:code`, each with the file and line it's on. `\eqref{`, `\autoref{` and `\cref{` list the same labels, and after `\cref{sec:refs,` it completes a second key.
+- [ ] Project completion: `\cite{` lists the keys in `refs.bib`, like `knuth` with "Knuth, 1984" beside it and "The TeXbook", the author and the year in its info box. `\citep{`, `\parencite[p.~4]{` and `\textcite{` list them too.
+- [ ] Project completion: `\input{` lists `chapters/text.tex` and the other `.tex` files (not `main.tex`), `\include{` the same without `.tex`, `\includegraphics{` the files in `figures/`, and `\bibliography{` lists `refs`.
+- [ ] Project completion: add `\label{sec:new}` to `chapters/math.tex`, then `\ref{` in `main.tex` lists `sec:new`. In a shared room, a label or `.bib` entry a peer adds shows up in your list too.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
+- [ ] Soft keyboard (a phone, or dev tools device mode with touch): tapping a line near the bottom of `main.tex` opens the keyboard, and the cursor line stays visible above it and the key bar.
+- [ ] Key bar: while the editor has focus on a touch screen, a bar with `\` `{` `}` `$` `%` `[` `]` `&` shows just above the keyboard. Each key types its character at the cursor without closing the keyboard, `\` opens autocompletion, one undo takes a key back, and a peer in the room sees it. The bar hides when the editor loses focus, and never shows with a mouse.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
 - [ ] The main file shows a "main" marker in the header and in the Files panel.
 
@@ -55,9 +66,11 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Citations (plain): the References list has five entries in the `% Expect:` order, including the `\nocite` one. "Literate programming" is lowercased after its first word, and the TeX and LaTeX logos render in the book titles.
 - [ ] Bibliography styles: set each file in `styles/` as the main file (`unsrt`, `alpha`, `abbrv`, `ieeetr`, `apalike`, `natbib`, `biblatex`) and check the labels, order and names against its `% Expect:` comments. Set `main.tex` back as the main file after.
 - [ ] Bibliography styles: with `styles/unknown.tex` as the main file, the footer shows 2 diagnostics, the cite shows [?] with a warning on its line, and the `\bibliographystyle{nature}` line has an info note saying it uses plain.
+- [ ] Packages: with `unsupported-packages.tex` as the main file, the `geometry` line has an info marker, the `tikz` line a warning that says a `tikzpicture` stops the preview, and only the `amssymb` half of the two-line `\usepackage{xcolor, amssymb}` has one. `\RequirePackage{hyperref}` gets no marker and no error. The footer leads with the tikz warning (`3 diagnostic(s)`), the text shows with "blue" in blue, and the ⓘ list says which packages were removed. Set `main.tex` back as the main file after.
+- [ ] Packages: add `\begin{tikzpicture}\end{tikzpicture}` to its body. The footer shows the `unknown environment` error first, and the tikz warning is still on its line.
 - [ ] Compile Now (Ctrl+Enter, ⌘↩ on a Mac) refreshes the preview, from the editor too. Ctrl+Shift+C does nothing in the app, so the browser keeps it for the inspector.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
-- [ ] The footer says Compiled, with no diagnostics.
+- [ ] The footer says Compiled. Its only diagnostics are the 7 info notes on `main.tex`'s `\usepackage` lines, from listings to cleveref, and hovering one says what the stand-in does.
 - [ ] The rendered document has no "Preview is approximate" note at the top.
 - [ ] The preview bar has a small ⓘ button with a count, next to the `?` help link. Hovering it shows "Preview is approximate: N changes", and a screen reader reads the same name.
 - [ ] Clicking it opens a popover that lists the changes, including showing figures in place and footnotes inline, with a "What's supported" link that opens the docs page in a new tab.
@@ -210,6 +223,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] New link asks in a **Start a new link?** dialog with Keep current link (focused) and a red Start new link. Start new link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
+- [ ] No WebRTC (issue #205): in a window where `RTCPeerConnection` is missing (Firefox with `media.peerconnection.enabled` off in `about:config`, or the Linux desktop app), the badge says Can't connect in this window. Share opens **Can't share from this window** with "This window can't make peer-to-peer connections, so it can't share or join a room." and a supported-browser suggestion, and no link shows. Opening a `?room=` link shows **Can't join from this window**, and the Files panel says so instead of Waiting for the host. The Network tab shows no `p2pTransport` chunk and no tracker connection, even after hovering Share.
 - [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
 - [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
@@ -243,6 +257,10 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Arrow keys move through menu items and between menus, and Escape closes them.
 - [ ] With one menu open, moving the mouse over another menu (File, Edit, View, Help) switches to it without clicking. Hovering never runs a command, and with no menu open hovering does nothing.
 - [ ] After switching menus by hover, arrow keys still move between menus and Escape closes the menu.
+- [ ] Resting the mouse on a menu item for about a second opens a preview card beside the menu (never on top of its items), with the item's name, its shortcut, and what it does. View > Split View, Editor Only and Preview Only show the pane layout; New File, New Folder, Upload, Save Now, Export, Compile Now, Command Palette and the theme toggles show a small picture too; Help > Documentation shows only text. Moving to the next item swaps the card after a short wait. Moving off the menu closes it at once, and hovering never runs the command.
+- [ ] Opening a menu with Enter or the arrow keys and resting on an item shows the same card, and arrowing on moves it. Enter hides the card and runs the item. Opening a menu with a click doesn't show a card until you hover an item.
+- [ ] Toolbar buttons show their tooltip at once, then after about a second the preview card replaces it, under the button. Share shows the link being copied. Tabbing into the toolbar shows it too. Near the right edge of a narrow window the card stays on screen, and it reads well in the light and dark app themes.
+- [ ] On a phone or tablet (touch), tapping a menu item or toolbar button never shows the preview card.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
@@ -264,6 +282,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] With site data blocked for the page, Settings shows the note that settings only last for this tab, and changing them still works.
 - [ ] The Settings dialog scrolls inside when the window is short, so Done and the footer stay on screen, also at phone width.
 - [ ] Dialog sizes follow `docs/ui-sizing.md`: confirm and name dialogs (delete a file, New File) are small, Upload, Export, About, Open a project and the conflict dialog are medium, and Settings is large. At 1024px and wider, Settings shows two columns with Keyboard shortcuts on the right. At 1280, 1024 and 768 wide, no dialog, popover or card runs past the window edge or scrolls sideways, and every footer's buttons fit (Open a project's Close button included).
+- [ ] At phone width (DevTools at 360 x 640), Upload, Export, About, Open a project, the conflict dialog and Settings fill the whole screen with square corners: the title and X at the top, the buttons at the bottom, and only the middle scrolls. Nothing scrolls sideways, and Settings is one column. Confirm and name dialogs (New File, delete a file) stay a small centred card. At 640px and wider they all look as before.
 - [ ] On Windows and Linux every shortcut label (menus, toolbar tooltips, palette, first tour step) says Ctrl, and the Windows key plus P does not open the palette.
 - [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
@@ -286,6 +305,19 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] In a fresh private window, the first-run tour shows once. Skip tour and Esc close it, and Help > Show Tour runs it again.
 - [ ] Each tour card sits next to what it points at without covering it: beside the file list, editor and preview, below the menus and toolbar. In a small window the card stays fully on screen and covers as little of the highlighted part as it can.
 - [ ] The page works at phone width without scrolling sideways.
+
+### Phone pass (under 640px)
+
+Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
+
+- [ ] The editor and preview never show side by side. A bar under the toolbar has Files, Editor and Preview, each at least 44px tall, and the Split, Editor only and Preview only toolbar buttons are hidden.
+- [ ] Tapping Preview shows only the preview, and Editor shows only the editor. The pressed one is highlighted. Reloading the tab keeps the choice, and a new tab starts on the editor.
+- [ ] Files opens the file list as a drawer over the editor, with a dimmed backdrop. Picking a file closes the drawer and opens that file in the editor, even if the preview was showing.
+- [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
+- [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
+- [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
+- [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
 
 ## Build
 
@@ -320,4 +352,4 @@ Needs the desktop build (`npm run build` in `desktop/`, or an artifact from the 
 - [ ] The File menu shows Ctrl+N for New File and Ctrl+Shift+N for New Project (⌘N and ⇧⌘N on a Mac), and both work. Settings > Keyboard shortcuts says "Keys shown are for the desktop app".
 - [ ] Ctrl+W (⌘W on a Mac) doesn't close the window when it's bound to a command. On a Mac, ⌘Q still quits and ⌘C, ⌘V and ⌘Z work in the editor.
 - [ ] Projects made in the app are still there after quitting and opening it again, and are separate from the browser's.
-- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, check what Share does when the system WebKitGTK has no WebRTC.
+- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, where the system WebKitGTK has no WebRTC, Share opens **Can't share from this window** with **Open in browser** and **Not now**. Open in browser opens the web app in the system browser. A build without an https `VITE_DOCS_BASE_URL` only explains, with a Close button.

@@ -9,12 +9,13 @@ import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
+import { createHoverPreview } from './ui/hoverPreview';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
-import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle } from './app/lazy';
+import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
 import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
@@ -31,6 +32,7 @@ import type { StorageProvider } from './storage/providers/types';
 import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
+import { createPhoneLayout, PHONE_QUERY } from './app/phoneLayout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
@@ -44,7 +46,9 @@ import { createPreviewChanges, previewChangesElements } from './ui/previewChange
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
-import { confirmDialog, promptDialog } from './ui/dialogs';
+import { confirmDialog, noticeDialog, promptDialog } from './ui/dialogs';
+import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
+import { isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -63,6 +67,7 @@ import { describeError } from './storage/errors';
 import { BlobStore } from './project/blobStore';
 import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
+import { completionProjectFrom } from './ui/completionProject';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
@@ -96,11 +101,39 @@ const activeFileMainEl = document.getElementById('active-file-main') as HTMLElem
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
 // The person's own settings (themes, layout, keybinds). Kept apart from the session, never sent to peers.
 const settings = createSettingsStore();
-const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange: ({ mode, splitRatio }) => settings.update({ layoutMode: mode, splitRatio }) });
+const phoneMedia = typeof window.matchMedia === 'function' ? window.matchMedia(PHONE_QUERY) : null;
+const isPhone = () => Boolean(phoneMedia?.matches);
+// Phones show one pane at a time and the file tree as a drawer (issue #185). It does nothing at 640px and up.
+const phone = createPhoneLayout({
+  root: document.getElementById('app')!,
+  editorButton: document.getElementById('phone-show-editor') as HTMLButtonElement,
+  previewButton: document.getElementById('phone-show-preview') as HTMLButtonElement,
+  filesButton: document.getElementById('phone-files') as HTMLButtonElement,
+  filePane: document.getElementById('file-pane')!,
+  backdrop: document.getElementById('file-drawer-backdrop')!,
+  content: splitRoot,
+  editorPane,
+  isPhone,
+  onPaneChange: () => editor.getView()?.requestMeasure(),
+});
+phoneMedia?.addEventListener('change', () => phone.viewportChanged());
+const layout = createLayout({
+  splitRoot,
+  splitter,
+  editorPane,
+  previewPane,
+  onChange: ({ mode, splitRatio }) => {
+    settings.update({ layoutMode: mode, splitRatio });
+    // On a phone, View > Editor only and Preview only pick the pane to show.
+    if (isPhone() && mode !== 'split') phone.showPane(mode === 'editor-only' ? 'editor' : 'preview');
+  },
+});
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
+// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205).
+const p2pAvailable = hasWebRtc();
 
 // Now point every [data-help] link in the page at its docs section.
 wireHelpLinks(document, docsBase);
@@ -165,7 +198,7 @@ const setStatus = (message: string) => {
 
 /** Update the connection pill, and tell guests where to look when they can't reach the host. */
 function renderConnection() {
-  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount };
+  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount, noWebRtc: !p2pAvailable };
   connectionStatusEl.textContent = connectionText(info);
   if (connectionFailed(info)) {
     if (noticeKind === 'connection') return;
@@ -514,7 +547,10 @@ const compile = createPreviewCompile({
 const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
-  onOpen: (entry) => openFile(entry.id),
+  onOpen: (entry) => {
+    openFile(entry.id);
+    if (entry.kind !== 'folder') phone.fileOpened();
+  },
   onRename: async (path) => {
     const isFolder = project.folderPaths().includes(path);
     const next = await promptDialog({
@@ -731,6 +767,9 @@ function bindProject() {
     persistAppSession();
   };
   session.getDoc().on('update', onUpdate);
+  // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
+  const completionProject = completionProjectFrom(session.getDoc(), project);
+  editor.setCompletionProject(completionProject);
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
     renderFiles();
@@ -739,6 +778,8 @@ function bindProject() {
   });
   unbindDoc = () => {
     session.getDoc().off('update', onUpdate);
+    completionProject.dispose();
+    editor.setCompletionProject(null);
     stopTree();
   };
   activeFileId = activeFileId && project.get(activeFileId) ? activeFileId : null;
@@ -1112,7 +1153,11 @@ const commands = createCommands({
   loadFailed: (feature, error) => lazyLoadFailed(feature, error),
   persistAppSession,
   runFileOp,
-  openFile,
+  // A new file opens in the editor, so on a phone close the file drawer too.
+  openFile: (id: string | null) => {
+    openFile(id);
+    if (id) phone.fileOpened();
+  },
   downloadFile,
   switchProject,
   openStoredProject,
@@ -1239,6 +1284,17 @@ const toolbar = createToolbar(document.getElementById('toolbar')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
+// After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).
+// The pictures are a lazy chunk; until they load the card shows the palette description.
+const menuDescriptions = new Map(menuBar.entries().map((entry) => [entry.commandId, entry.description]));
+const hoverPreview = createHoverPreview(document.getElementById('hover-preview')!, {
+  description: (commandId) => menuDescriptions.get(commandId),
+  shortcutLabel,
+  loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
+});
+hoverPreview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
+hoverPreview.attach(document.getElementById('toolbar')!, 'button[data-command]', 'bottom');
+
 const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, {
   version: BUILD_INFO.version,
   // The build copies CHANGELOG.md next to index.html, so the update prompt can show the new deploy's.
@@ -1315,10 +1371,39 @@ if (!isClient) {
 }
 
 // Guests join the room in the URL, and a reloaded host rejoins the room this tab already shared.
-const hostRoomId = isClient ? null : readHostRoomId();
-if (roomId) session.join(roomId);
-else if (hostRoomId) session.join(hostRoomId);
-inRoom = Boolean(roomId || hostRoomId);
+const hostRoomId = isClient || !p2pAvailable ? null : readHostRoomId();
+/** Say why this window can't share or join, and in the desktop app offer the browser instead. */
+function explainP2pUnavailable(action: P2pAction) {
+  const desktop = isDesktopShell();
+  const appUrl = desktop ? webAppUrl(docsBase) : null;
+  const link = appUrl && (action === 'join' && roomId ? webRoomLink(appUrl, roomId) : appUrl);
+  void explainNoWebRtc({
+    action,
+    desktop,
+    link,
+    confirm: confirmDialog,
+    notice: noticeDialog,
+    openExternal: (url) => openInSystemBrowser(url),
+    copyText: (value) => navigator.clipboard.writeText(value),
+    notify: (message) => showNotice(message, true, true),
+  });
+}
+if (!p2pAvailable) {
+  inRoom = false;
+  if (roomId) {
+    // The Files panel would say "Waiting for the host" forever, so say why instead.
+    const waiting = document.getElementById('file-tree-waiting');
+    const heading = waiting?.querySelector('h3');
+    const text = waiting?.querySelector('p');
+    if (heading) heading.textContent = noWebRtcTitle('join');
+    if (text) text.textContent = noWebRtcAdvice('join', isDesktopShell(), Boolean(webAppUrl(docsBase)));
+    explainP2pUnavailable('join');
+  }
+} else {
+  if (roomId) session.join(roomId);
+  else if (hostRoomId) session.join(hostRoomId);
+  inRoom = Boolean(roomId || hostRoomId);
+}
 if (inRoom) startPresence();
 // Tell peers we're gone, so our cursor doesn't linger until they time us out.
 window.addEventListener('pagehide', () => presence.stop());
@@ -1333,7 +1418,7 @@ hideLoading();
 scheduleCompile();
 
 // The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share.
-preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
+if (p2pAvailable) preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
 setupShareButton({
   button: shareButtonEl,
   linkEl: shareLinkEl,
@@ -1365,6 +1450,7 @@ setupShareButton({
       cancelLabel: 'Keep current link',
       destructive: true,
     }),
+  unavailable: p2pAvailable ? undefined : () => explainP2pUnavailable('share'),
 });
 
 // Guests can't rename the host's project, so the title is just a label for them.

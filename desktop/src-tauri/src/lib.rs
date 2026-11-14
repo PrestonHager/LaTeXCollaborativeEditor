@@ -1,10 +1,12 @@
 //! The desktop shell. It opens one window on the bundled frontend build (frontend/dist, served
-//! from inside the app, never from a remote URL) and adds no commands or plugins yet.
+//! from inside the app, never from a remote URL). Its only plugin is the opener, which the page
+//! uses to open https links in the system browser.
 //! See docs/desktop.md for the plan.
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             #[cfg(target_os = "linux")]
             enable_webrtc(app)?;

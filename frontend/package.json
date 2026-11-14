@@ -21,7 +21,7 @@
     "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.5",
     "typescript": "~7.0.2",
-    "vite": "^8.3.7",
+    "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
   "dependencies": {
@@ -36,7 +36,7 @@
     "@trystero-p2p/torrent": "^0.26.0",
     "basecoat-css": "^1.1.0",
     "latex.js": "^0.12.6",
-    "lucide": "^1.71.0",
+    "lucide": "^1.72.0",
     "pdfjs-dist": "^6.5.438",
     "y-codemirror.next": "^0.3.6",
     "yjs": "^13.6.33"
