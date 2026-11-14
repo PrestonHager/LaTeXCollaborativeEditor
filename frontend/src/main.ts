@@ -50,7 +50,7 @@ import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
 import { confirmDialog, noticeDialog, promptDialog } from './ui/dialogs';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
-import { isDesktopShell, localPlace, openInSystemBrowser } from './app/desktopShell';
+import { isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -164,25 +164,13 @@ wireHelpLinks(document, docsBase);
 const makeBugUrl = (area?: IssueArea, summary?: string) =>
   bugReportUrl({ appVersion: formatVersion(BUILD_INFO), userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
 
-// In the desktop app, https links go to the system browser (issue #181, docs/desktop.md).
-const openExternal = (url: string) => {
-  if (isDesktopShell()) {
-    void openInSystemBrowser(url).then((opened) => {
-      if (!opened) showNotice(`Couldn't open ${url} in your browser.`, true, true);
-    });
-    return;
-  }
-  window.open(url, '_blank', 'noreferrer');
-};
+const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
+// The desktop app's links and wording (issue #181). Its shell sends window.open's https URLs to
+// the system browser too, so openExternal needs no desktop branch.
 if (isDesktopShell()) {
   void import('./app/desktopUi')
-    .then(({ setUpDesktopUi }) =>
-      setUpDesktopUi(document, {
-        webApp: webAppUrl(docsBase),
-        onFail: (url) => showNotice(`Couldn't open ${url} in your browser.`, true, true),
-      }),
-    )
-    .catch((error: unknown) => console.warn('Desktop app setup failed', error));
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase) }))
+    .catch(console.warn);
 }
 
 const localDownload = new LocalDownloadStorage();
@@ -485,7 +473,7 @@ driveProvider.onSessionLost(() => {
   showDriveAccount();
   if (!projectState.isDrive()) return;
   useProvider(localAppProvider, null);
-  showNotice(`Google Drive sign-in expired, so edits are saving in ${localPlace()}. Use File > Connect Google Drive to switch back.`, true, true, {
+  showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true, {
     topic: 'driveSignIn',
   });
   if (!projectState.savingPaused) void autosave.saveNow();

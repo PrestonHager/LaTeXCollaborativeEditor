@@ -23,9 +23,9 @@ describe('latexjs-assets', () => {
   beforeEach(() => ({ root, dist } = fakeRoot()));
   afterEach(() => rmSync(root, { recursive: true, force: true }));
 
-  it('is on only with VITE_LATEXJS_ASSETS=bundled', () => {
-    expect(assetsBundled({ VITE_LATEXJS_ASSETS: 'bundled' })).toBe(true);
-    expect(assetsBundled({ VITE_LATEXJS_ASSETS: 'cdn' })).toBe(false);
+  it('is on only with LATEXJS_ASSETS=bundled', () => {
+    expect(assetsBundled({ LATEXJS_ASSETS: 'bundled' })).toBe(true);
+    expect(assetsBundled({ LATEXJS_ASSETS: 'cdn' })).toBe(false);
     expect(assetsBundled(undefined)).toBe(false);
   });
 
@@ -50,29 +50,31 @@ describe('latexjs-assets', () => {
     expect(resolveAssetPath(dist, '/src/main.ts')).toBeNull();
   });
 
-  const resolved = (env, outDir = 'dist') => ({ env, root, build: { outDir } });
+  const resolved = (outDir = 'dist') => ({ root, build: { outDir } });
 
   it('copies on build only when bundling is on', () => {
-    const off = bundledLatexJsPlugin(root);
-    off.configResolved(resolved({}, 'off'));
+    const off = bundledLatexJsPlugin(root, {});
+    expect(off.config()).toEqual({ define: { __LATEXJS_BUNDLED__: 'false' } });
+    off.configResolved(resolved('off'));
     off.closeBundle();
     expect(existsSync(join(root, 'off'))).toBe(false);
 
-    const on = bundledLatexJsPlugin(root);
-    on.configResolved(resolved({ VITE_LATEXJS_ASSETS: 'bundled' }, 'on'));
+    const on = bundledLatexJsPlugin(root, { LATEXJS_ASSETS: 'bundled' });
+    expect(on.config()).toEqual({ define: { __LATEXJS_BUNDLED__: 'true' } });
+    on.configResolved(resolved('on'));
     on.closeBundle();
     expect(existsSync(join(root, 'on', 'latexjs', 'css', 'katex.css'))).toBe(true);
   });
 
   it('serves the assets in dev with CORS for the preview frame', async () => {
     const use = vi.fn();
-    const off = bundledLatexJsPlugin(root);
-    off.configResolved(resolved({}));
+    const off = bundledLatexJsPlugin(root, {});
+    off.configResolved(resolved());
     off.configureServer({ middlewares: { use } });
     expect(use).not.toHaveBeenCalled();
 
-    const plugin = bundledLatexJsPlugin(root);
-    plugin.configResolved(resolved({ VITE_LATEXJS_ASSETS: 'bundled' }));
+    const plugin = bundledLatexJsPlugin(root, { LATEXJS_ASSETS: 'bundled' });
+    plugin.configResolved(resolved());
     plugin.configureServer({ middlewares: { use } });
     const middleware = use.mock.calls[0][0];
 

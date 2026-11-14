@@ -5,15 +5,23 @@ export const LATEX_JS_ASSET_BASE = 'https://cdn.jsdelivr.net/npm/latex.js@0.12.6
 
 /**
  * Where a build with bundled LaTeX.js assets serves them (issue #181). Only the desktop app's build
- * bundles them (`npm run build:desktop`, which sets VITE_LATEXJS_ASSETS=bundled and copies
+ * bundles them (`npm run build:desktop`, which sets LATEXJS_ASSETS=bundled and copies
  * latex.js/dist/{css,fonts,js} here), so its preview works offline. The desktop page always sits
  * at the root of its origin (tauri://localhost/, tauri.localhost on Windows, or the dev server), so a
  * root path is right from the page and from the compile worker alike.
  */
 export const LATEX_JS_BUNDLED_PATH = '/latexjs/';
 
+/**
+ * Set by scripts/latexjs-assets.mjs through Vite's `define`: true in the desktop build. It's a
+ * lone constant rather than a VITE_ variable, so it doesn't grow the import.meta.env object that
+ * the initial bundle carries. Undefined where Vite didn't define it (tests).
+ */
+declare const __LATEXJS_BUNDLED__: boolean | undefined;
+
 /** True in a build that ships the LaTeX.js assets itself (the desktop build). */
-export const latexJsAssetsBundled = (env: Record<string, unknown> = import.meta.env): boolean => env.VITE_LATEXJS_ASSETS === 'bundled';
+export const latexJsAssetsBundled = (flag: unknown = typeof __LATEXJS_BUNDLED__ === 'undefined' ? false : __LATEXJS_BUNDLED__): boolean =>
+  flag === true;
 
 /**
  * The base URL the preview loads LaTeX.js styles and fonts from: the bundled copy in the desktop

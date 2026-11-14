@@ -1,5 +1,5 @@
 // Ships LaTeX.js's styles, fonts and script inside the build, for the desktop app (issue #181).
-// Only when VITE_LATEXJS_ASSETS=bundled (`npm run build:desktop` / `npm run dev:desktop`): the web
+// Only when LATEXJS_ASSETS=bundled (`npm run build:desktop` / `npm run dev:desktop`): the web
 // build keeps loading them from jsDelivr (src/compile/latexJsAssets.ts, docs/desktop.md).
 import { cpSync, createReadStream, existsSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ const TYPES = {
 
 export const latexJsDist = (root) => join(root, 'node_modules', 'latex.js', 'dist');
 
-export const assetsBundled = (env) => String(env?.VITE_LATEXJS_ASSETS ?? '') === 'bundled';
+export const assetsBundled = (env) => String(env?.LATEXJS_ASSETS ?? '') === 'bundled';
 
 /** Copy the asset folders into `<outDir>/latexjs/`. Returns the folders copied. */
 export function copyLatexJsAssets(distDir, outDir) {
@@ -51,15 +51,18 @@ export function resolveAssetPath(distDir, urlPath) {
   return allowed ? file : null;
 }
 
-/** The Vite plugin: copies the assets on build and serves them in dev, only when bundling is on. */
-export function bundledLatexJsPlugin(root = fileURLToPath(new URL('..', import.meta.url))) {
-  let enabled = false;
+/**
+ * The Vite plugin: defines __LATEXJS_BUNDLED__ for src/compile/latexJsAssets.ts, and copies the
+ * assets on build and serves them in dev, only when bundling is on. `env` is for tests.
+ */
+export function bundledLatexJsPlugin(root = fileURLToPath(new URL('..', import.meta.url)), env = process.env) {
+  const enabled = assetsBundled(env);
   let outDir = '';
   const distDir = latexJsDist(root);
   return {
     name: 'bundled-latexjs',
+    config: () => ({ define: { __LATEXJS_BUNDLED__: JSON.stringify(enabled) } }),
     configResolved(config) {
-      enabled = assetsBundled(config.env) || assetsBundled(process.env);
       outDir = resolve(config.root, config.build.outDir);
     },
     configureServer(server) {

@@ -70,7 +70,7 @@ type LinkOptions = {
   webApp: string | null;
   /** Opens a link in the system browser. Resolves false when it couldn't. */
   open?: (url: string) => Promise<boolean>;
-  /** Called when a link couldn't be opened, with the link. */
+  /** Called when a link couldn't be opened, with the link. Without it, openInSystemBrowser's console warning is all. */
   onFail?: (url: string) => void;
 };
 

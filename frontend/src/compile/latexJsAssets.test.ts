@@ -2,8 +2,9 @@ import { LATEX_JS_ASSET_BASE, latexJsAssetBase, latexJsAssetsBundled, publicLate
 
 describe('latexJsAssetBase', () => {
   it('uses the CDN unless the build bundles the assets', () => {
-    expect(latexJsAssetsBundled({})).toBe(false);
-    expect(latexJsAssetsBundled({ VITE_LATEXJS_ASSETS: 'bundled' })).toBe(true);
+    expect(latexJsAssetsBundled()).toBe(false);
+    expect(latexJsAssetsBundled(false)).toBe(false);
+    expect(latexJsAssetsBundled(true)).toBe(true);
     expect(latexJsAssetBase()).toBe(LATEX_JS_ASSET_BASE);
     expect(latexJsAssetBase(false, 'tauri://localhost/index.html')).toBe(LATEX_JS_ASSET_BASE);
   });
