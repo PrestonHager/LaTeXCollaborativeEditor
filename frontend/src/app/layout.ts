@@ -10,6 +10,11 @@ type LayoutElements = {
 };
 
 /** Show the editor, the preview, or both with a draggable splitter between them. */
+/** The split's grid columns with the editor at `left` percent: editor, 8px splitter, preview. */
+export function splitColumns(left: number) {
+  return `minmax(0px, ${left}fr) 8px minmax(0px, ${100 - left}fr)`;
+}
+
 export function createLayout({ splitRoot, splitter, editorPane, previewPane, onChange }: LayoutElements) {
   let layoutMode: LayoutMode = 'split';
   let splitRatio = 0.5;
@@ -23,7 +28,9 @@ export function createLayout({ splitRoot, splitter, editorPane, previewPane, onC
     previewPane.style.display = layoutMode === 'editor-only' ? 'none' : '';
     if (layoutMode === 'split') {
       const left = Math.max(20, Math.min(80, Math.round(splitRatio * 100)));
-      splitRoot.style.gridTemplateColumns = `${left}% 8px ${100 - left}%`;
+      // fr, not %, so the 8px splitter comes out of the two panes. `50% 8px 50%` was 8px wider than the
+      // window and cut off the preview's right edge (found by the layout check in #191).
+      splitRoot.style.gridTemplateColumns = splitColumns(left);
       splitter.setAttribute('aria-valuenow', String(left));
     } else {
       splitRoot.style.gridTemplateColumns = '1fr';

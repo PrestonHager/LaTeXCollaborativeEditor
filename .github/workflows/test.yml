@@ -88,3 +88,38 @@ jobs:
           path: |
             e2e/playwright-report
             e2e/test-results
+
+  e2e-mobile-layout:
+    name: e2e-mobile-layout
+    runs-on: ubuntu-latest
+    # Phone and tablet layout check (issue #191): no sideways scrolling, panes reachable,
+    # dialogs and popovers on screen at 360x640, 390x844, 768x1024 and 1024x768.
+    # Non-blocking at first, like e2e-sync, until it has a track record.
+    continue-on-error: true
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Install Playwright
+        run: npm ci && npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Run phone and tablet layout check
+        run: npx playwright test --project=mobile-layout
+        working-directory: e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report-mobile-layout
+          path: |
+            e2e/playwright-report
+            e2e/test-results

@@ -29,6 +29,7 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Fixed
 
+- **Phone and tablet layout fixes.** On a touch tablet, the File, Edit, View and Help menus run past the bottom of the window no more: they stop above it and scroll. In split view the preview's right edge is no longer cut off by 8px. On a phone, opening More actions right after Menu no longer slides the whole page sideways. A new automated check covers phones and tablets at 360×640, 390×844, 768×1024 and 1024×768.
 - **Diagnostic tooltips are readable in a dark editor.** Hovering an error, warning or info marker showed light text on a light grey box. The tooltip, its hovered and selected rows, and the highlighted text under it now follow the editor theme, including Match system when the app and the OS disagree.
 
 ## [0.1.1] - 2026-11-13

@@ -163,7 +163,9 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
   const focusFirstEnabledItem = (menuLabel: string) => {
     const items = menuItemByLabel.get(menuLabel) ?? [];
     const target = items.find((item) => !item.disabled);
-    target?.focus();
+    // placeMenu has already put the menu on screen, so don't let focus scroll anything to reach the item.
+    // Without this, opening More right after Menu scrolled #app sideways on a phone (#191).
+    target?.focus({ preventScroll: true });
   };
 
   /** The triggers on screen: the one Menu button on a phone, File to Help everywhere else. */

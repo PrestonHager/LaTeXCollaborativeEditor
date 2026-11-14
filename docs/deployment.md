@@ -230,6 +230,10 @@ Domain and security
 - File > Export… needs no server. Under the CSP, HTML export with Work offline fetches the LaTeX.js styles and fonts from `https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/` (`connect-src`), downloads use `blob:` URLs, and the PDF export prints from a `srcdoc` frame with no scripts. Saving an export to Google Drive uses `https://www.googleapis.com/upload/drive/v3/files`, which `connect-src` already allows (`src/security/cspPolicy.test.ts` checks it).
 - The Export dialog, the exporters and the Drive upload are lazy chunks (`exportDialog`, `registry`, `destinations`, `driveUpload` in the build report), loaded the first time someone opens Export.
 
+Phone and tablet layout check
+- `.github/workflows/test.yml` has an `e2e-mobile-layout` job next to `e2e-sync`. It runs the `mobile-layout` Playwright project (`e2e/tests/mobile-layout.spec.ts`, issue #191) in Chromium with touch at 360x640, 390x844, 768x1024 and 1024x768, and checks for sideways scrolling, that the panes can be reached, that each `dialog-md` and `dialog-lg` dialog fits, and that the Menu, More and Share popovers stay on screen.
+- It installs only Chromium, uses the same `dist-e2e` build and local tracker setup as `e2e-sync`, and uploads `e2e-report-mobile-layout`. It's non-blocking (`continue-on-error`) until it has a track record. See `docs/qa-runbook.md`.
+
 Documentation
 - The user docs are MkDocs Material, built from `docs/` by `mkdocs.yml`. Run `mkdocs build --strict` before a PR, it fails on broken links and missing images.
 - Diagrams are Mermaid, in ```` ```mermaid ```` fences. `pymdownx.superfences` has a `mermaid` custom fence, and Material loads Mermaid from a CDN in the browser. There's no build step for them.
@@ -244,6 +248,7 @@ Screenshots
 - Set `SCREENSHOT_PORT` if 4183 is taken (pick a port browsers allow, 4190 is on their blocked list), `SCREENSHOT_THEMES=light` to do one theme, `SCREENSHOT_CHANNEL=msedge` (or `chrome`) to use an installed browser instead of downloading Chromium, or `SCREENSHOT_CHROMIUM=/path/to/chrome` to use a Chromium binary already on the machine (for when the download is blocked).
 - The script builds a small sample project, opens each dialog, and draws numbered callouts over the buttons each docs page talks about. The PNGs are palette-compressed with `sharp` to keep them small.
 - The Share shot joins a real room through the public trackers, so it needs a network connection. The room id is blanked out of the picture.
+- `SCREENSHOT_VIEWPORTS` picks the window sizes, comma-separated. `desktop` (1280x800, the full set above) is the default. `phone` (390x844), `small-phone` (360x640) and `tablet` (768x1024) take the mobile set at 2x with touch turned on, as `<size>-<shot>-<theme>.png`: the editor, preview, Files drawer, Menu and More actions on a phone (the main screen on a tablet), Settings, and Share before it starts. The docs use `phone` and `tablet` in the "On a phone" and "On a tablet" sections of `interface-layout.md`, so run `SCREENSHOT_VIEWPORTS=desktop,phone,tablet npm run screenshots` to redo them all.
 - Rerun it when the UI changes, and before a release. It's not in CI yet.
 
 Security

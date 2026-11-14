@@ -336,6 +336,8 @@ Use a real phone or tablet, or DevTools device mode with touch (a tablet like iP
 - [ ] At tablet width, a finger drags the splitter between editor and preview, also when it lands a little to either side of the thin bar. The page doesn't scroll while dragging, and the new split survives a reload. A second finger on the screen doesn't move it.
 - [ ] Tapping a toolbar button runs it and leaves no tooltip behind. Holding a finger on one shows its name and shortcut for a moment, without running it.
 - [ ] No preview card ever shows for a tap or a hold, on menu items or toolbar buttons.
+- [ ] At tablet sizes (768 x 1024 and 1024 x 768) with touch, File, Edit, View and Help each stop above the bottom of the window and scroll to their last item. In split view the preview's right edge (its scrollbar and zoom buttons) isn't cut off.
+- [ ] The `mobile-layout` Playwright check passes (`cd e2e && npx playwright test --project=mobile-layout`), or its CI job `e2e-mobile-layout` is green. For real mobile Safari and Chrome, do "Mobile browsers" in `docs/qa-runbook.md`.
 
 ### Phone pass (under 640px)
 
@@ -356,6 +358,7 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] Widening the window past 640px with Menu or More actions open closes it and brings back File, Edit, View and Help and the full toolbar. Tab still lands on a toolbar button that shows.
 - [ ] Preview zoom on a phone: the preview opens at Fit width (↔ pressed, about 120%), with narrow side margins and body text easy to read at 360px wide, and no sideways scrolling. The zoom buttons are finger-sized. Pinching the preview zooms only the preview (the bars and the toolbar stay the same size) and the level follows; Fit width brings it back. Pinching the toolbar or bars doesn't zoom the preview.
 - [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
+- [ ] Open Menu, close it with Esc, then open More actions: the page stays put and More actions opens fully on screen under its button.
 - [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
 
 ## Build

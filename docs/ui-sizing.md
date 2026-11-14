@@ -78,6 +78,7 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
 The smallest supported window is **360 x 640** (the smallest size in #123). At 768px wide nothing may scroll sideways.
+`e2e/tests/mobile-layout.spec.ts` (the `mobile-layout` Playwright project, #191) checks this at 360 x 640, 390 x 844, 768 x 1024 and 1024 x 768 with touch: no sideways scrolling, every `dialog-md` and `dialog-lg` inside the window, and the menus and Share popover on screen. Menus get `--popover-room` from `keepOnScreen` as their max-height, so a long menu with 44px touch rows scrolls instead of running off the bottom.
 
 ### What each size does on phones (#123)
 
