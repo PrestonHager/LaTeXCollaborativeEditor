@@ -57,38 +57,39 @@ Staging and production
 - **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site on Coolify. A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
 - **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the tests. Coolify picks up that push like any other. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
 - **Staging is on its own origin.** If it were a path on the production site, it would share localStorage and IndexedDB with production, so a staging build's migration could damage real users' projects, and Google OAuth only allows exact origins anyway.
-  Staging is served at `https://staging.latex.prestonhager.com/` from Coolify (https://coolify.prestonhager.com/). Production stays on GitHub Pages and shares nothing with it.
+  Staging is served at `https://staging.latex.apps.prestonhager.com/` from Coolify (https://coolify.prestonhager.com/). Production stays on GitHub Pages and shares nothing with it.
 - **Its own peers.** Peers only meet peers with the same `VITE_P2P_APP_ID`. A staging build always uses an app id with `staging` in it: the staging value as is if it already has one, else that value (or the default) plus `-staging`. So staging peers never meet production peers, even if staging inherits production's app id from a repository variable.
 - **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. `release.yml` and the staging `Dockerfile` set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
   It goes in `dist/version.json` as `env`. A staging build also shows a small **Staging** badge next to the project name, adds `<meta name="robots" content="noindex">` to every page, and ships a `robots.txt` that blocks every crawler (that covers the docs too). Production and dev builds have none of these.
   It's all done at build time by `deployEnvPlugin` in `frontend/scripts/build-info.mjs`, which replaces the `<!-- deploy-env-badge -->` comment in `index.html`. No app code reads it.
 
 Staging on Coolify
-- Everything staging lives in its own Coolify project, **LaTeX Collaborative Editor (staging)**, in its `staging` environment.
-  Our own tooling for testing (WebTorrent trackers, TURN or forwarding servers, and so on) goes in that project too, as separate resources.
-  Never point production at anything in it.
-- The site itself is an Application resource built from this repo's `staging` branch with the **Dockerfile** build pack.
+- Everything staging lives in the Coolify project **LaTeX Collaborative Editor**, in its `staging` environment, on the `mars` server.
+  Our own tooling for testing (WebTorrent trackers, TURN or forwarding servers, and so on) goes in that environment too, as separate resources.
+  Never point production at anything in it. The project's `production` environment is empty, since production is on GitHub Pages.
+- The site itself is the `staging-latex` application, built from this repo's `staging` branch (as a public repository) with the **Dockerfile** build pack.
   The `Dockerfile` builds the app (with `VITE_DEPLOY_ENV=staging`), builds the docs with MkDocs, and serves both from nginx on port 80 (`deploy/nginx.conf`).
-  Coolify deploys on every push to `staging` through its GitHub App webhook, so there's no deploy workflow for staging.
-- There's no `.git` in the build, so the commit in `version.json` comes from Coolify's `SOURCE_COMMIT` build arg. Leave **Include Source Commit in Build** on, or the version shows `dev`.
-- Build variables (Application > Environment Variables, each with **Build Variable** ticked):
+  A GitHub webhook on this repo (Coolify's **Webhooks > Manual Git webhooks > GitHub** URL and secret, push events only) tells Coolify about each push, so there's no deploy workflow for staging.
+- Like the other apps on `mars`, its domain is `http://` in Coolify, and the Caddy proxy in front of it serves HTTPS for `*.apps.prestonhager.com`.
+- There's no `.git` in the build, so the commit in `version.json` comes from Coolify's `SOURCE_COMMIT` build arg. Keep **Advanced > Source commit availability** on **Available during build**, or the version shows `dev`.
+- Build variables (Application > Environment Variables, **Buildtime** on, **Runtime** off):
 
   | Name | Value |
   | --- | --- |
   | `VITE_P2P_APP_ID` | Something with `staging` in it, like `latex-collaborative-editor-staging` (the build adds `-staging` if it's missing) |
   | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY`, `VITE_GOOGLE_APP_ID` | The same as production |
-  | `DOCS_SITE_URL` | `https://staging.latex.prestonhager.com/docs/` |
+  | `DOCS_SITE_URL` | `https://staging.latex.apps.prestonhager.com/docs/` |
   | `VITE_P2P_RENDEZVOUS` | Optional. Our own trackers in the staging project, comma separated |
   | `VITE_STUN_URL`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` | Optional. Our own STUN/TURN in the staging project |
   | `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP` | Optional, as in production |
 
   Empty values are dropped before the build, so the defaults in `bootstrapConfig.ts` still apply.
 - **One-time setup** (a maintainer, once):
-  1. In Coolify, make the project **LaTeX Collaborative Editor (staging)** with a `staging` environment.
-  2. Add an Application from the GitHub App source, this repo, branch `staging`, build pack **Dockerfile**, port `80`, domain `https://staging.latex.prestonhager.com`.
-  3. Add the build variables above, then deploy.
-  4. DNS: point `staging.latex.prestonhager.com` at the Coolify server (an `A` record, or a `CNAME` to its host name). Coolify gets the certificate once it resolves.
-  5. Google Cloud console, the production OAuth client: add `https://staging.latex.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
+  1. In Coolify, make the project **LaTeX Collaborative Editor** with a `staging` environment.
+  2. Add a **Public Git Repository** application on `mars`: `https://github.com/PrestonHager/LaTeXCollaborativeEditor/tree/staging`, build pack **Dockerfile**, ports exposes `80`, domain `http://staging.latex.apps.prestonhager.com` (Noindex). The `*.apps` wildcard DNS already points at the proxy, so there's no DNS to add.
+  3. Add the build variables above, and set **Source commit availability** to **Available during build**.
+  4. In Coolify's **Webhooks**, generate the GitHub webhook secret. In this repo, **Settings > Webhooks > Add webhook** with that URL and secret, content type `application/json`, push events only. Then deploy once by hand.
+  5. Google Cloud console, the production OAuth client: add `https://staging.latex.apps.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.apps.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
   6. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
   7. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
   8. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
