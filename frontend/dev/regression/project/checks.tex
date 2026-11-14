@@ -1,0 +1,16 @@
+% Project checks test (issue #246). This file isn't part of the main document, so the preview
+% doesn't show it: the warnings here come from the editor's own checks of the whole project.
+% Open it in the editor and hover the yellow markers in the lint gutter.
+\section{Checks}
+% Expect: a warning under "sec:refs" on the next line: Label "sec:refs" is defined 2 times. Also at chapters/text.tex:47.
+\label{sec:refs}
+% Expect: no marker, since chapters/packages.tex and chapters/code.tex define these labels (one as a listing option).
+See~\eqref{eq:energy} and Listing~\ref{lst:loop}.
+% Expect: a warning under "sec:nowhere" only: Undefined reference: no file in the project has \label{sec:nowhere}.
+\cref{sec:code,sec:nowhere}
+% Expect: a warning under "ghost" only: Missing citation: "ghost" isn't in any .bib file in the project.
+\cite{knuth,ghost}
+% Expect: no marker on keys built from macros, or on \nocite{*}.
+\newcommand{\chapref}[1]{\ref{chap:#1}\label{dup:#1}}
+\ref{\jobname} \nocite{*}
+% Expect: no marker for a commented-out reference: % \ref{commented}

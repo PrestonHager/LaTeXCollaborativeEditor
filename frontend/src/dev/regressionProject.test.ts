@@ -2,6 +2,8 @@ import { BlobStore } from '../project/blobStore';
 import { REGRESSION_PROJECT_NAME, dataUrlBytes, regressionProject } from './regressionProject';
 import { projectToPreviewHtml } from '../compile/latexJsPreview';
 import { parseEpsBoundingBox } from '../compile/epsBoundingBox';
+import { ProjectIndex } from '../ui/projectCompletion';
+import { projectDiagnostics } from '../ui/projectDiagnostics';
 
 describe('regressionProject', () => {
   it('loads every file in dev/regression/project with main.tex as the main file', async () => {
@@ -17,6 +19,7 @@ describe('regressionProject', () => {
       'chapters/math.tex',
       'chapters/packages.tex',
       'chapters/text.tex',
+      'checks.tex',
       'engine-fontspec.tex',
       'figures/chart.pdf',
       'figures/quadrants.png',
@@ -50,6 +53,20 @@ describe('regressionProject', () => {
         expect(paths.has(name.endsWith('.tex') ? name : `${name}.tex`)).toBe(true);
       }
     }
+  });
+
+  it('has just the project check warnings its % Expect: comments describe', async () => {
+    const content = await regressionProject(new BlobStore());
+    const files = content.files.map((file) => ({ path: file.path, kind: file.kind, text: () => file.text ?? '' }));
+    const index = new ProjectIndex({ version: () => 0, files: () => files, mainPath: () => 'main.tex' });
+    expect(projectDiagnostics(index).map((d) => `${d.path}:${d.line} ${d.message}`).sort()).toEqual([
+      'chapters/text.tex:47 Label “sec:refs” is defined 2 times. Also at checks.tex:6.',
+      'chapters/text.tex:52 Undefined reference: no file in the project has \\label{sec:does-not-exist}.',
+      'checks.tex:10 Undefined reference: no file in the project has \\label{sec:nowhere}.',
+      'checks.tex:12 Missing citation: “ghost” isn\'t in any .bib file in the project.',
+      'checks.tex:6 Label “sec:refs” is defined 2 times. Also at chapters/text.tex:47.',
+      'styles/unknown.tex:9 Missing citation: “nosuchkey” isn\'t in any .bib file in the project.',
+    ]);
   });
 
   it('compiles the code listings chapter with nothing missing', async () => {

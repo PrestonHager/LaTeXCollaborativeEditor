@@ -61,10 +61,10 @@ describe('extractLabels', () => {
   it('finds every \\label with its line, and skips commented-out ones', () => {
     const text = 'a \\label{sec:intro}\n% \\label{gone}\n\\label{ eq:1 } x \\label{fig:a} 50\\% \\label{kept}\n\\label{}';
     expect(extractLabels(text, 'a.tex')).toEqual([
-      { key: 'sec:intro', path: 'a.tex', line: 1 },
-      { key: 'eq:1', path: 'a.tex', line: 3 },
-      { key: 'fig:a', path: 'a.tex', line: 3 },
-      { key: 'kept', path: 'a.tex', line: 3 },
+      { key: 'sec:intro', path: 'a.tex', line: 1, column: 9 },
+      { key: 'eq:1', path: 'a.tex', line: 3, column: 8 },
+      { key: 'fig:a', path: 'a.tex', line: 3, column: 24 },
+      { key: 'kept', path: 'a.tex', line: 3, column: 43 },
     ]);
   });
 

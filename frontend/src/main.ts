@@ -817,7 +817,8 @@ function bindProject() {
   };
   session.getDoc().on('update', onUpdate);
   // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
-  const completionProject = completionProjectFrom(session.getDoc(), project);
+  // The open file's \ref, \label and \cite problems are checked against it too (issue #246).
+  const completionProject = completionProjectFrom(session.getDoc(), project, () => (activeFileId && project.get(activeFileId)?.path) || null);
   editor.setCompletionProject(completionProject);
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
