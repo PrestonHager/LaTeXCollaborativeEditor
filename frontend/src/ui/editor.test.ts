@@ -1,5 +1,6 @@
 import { EditorView } from '@codemirror/view';
-import { createEditorPane, editorKeybinds, editorKeymap } from './editor';
+import { acceptCompletion, completionKeymap, completionStatus, startCompletion } from '@codemirror/autocomplete';
+import { completionOpenKeys, createEditorPane, editorKeybinds, editorKeymap, loadCompletionExtensions } from './editor';
 
 // Scrolling the cursor into view measures text, which jsdom can't do, so give it empty boxes.
 beforeAll(() => {
@@ -149,5 +150,38 @@ describe('createEditorPane', () => {
     editor.setEditable(false);
     expect(editor.insertText('!')).toBe(false);
     expect(editor.getText()).toBe('Hello there');
+  });
+
+  describe('autocompletion', () => {
+    it('loads after the editor and completes \\sec to \\section{title}', async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = createEditorPane(container);
+      await editor.completionReady();
+      const view = editor.getView();
+      editor.setText('');
+      view.dispatch({ changes: { from: 0, insert: '\\sec' }, selection: { anchor: 4 }, userEvent: 'input.type' });
+      startCompletion(view);
+      await vi.waitFor(() => expect(completionStatus(view.state)).toBe('active'));
+      // Accepting waits a moment after the list opens, so a quick Enter isn't taken by accident.
+      await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+      expect(editor.getText()).toBe('\\section{title}');
+      view.destroy();
+      container.remove();
+    });
+
+    it('keeps the editor working if it fails to load', async () => {
+      await expect(loadCompletionExtensions(() => Promise.reject(new Error('offline')))).rejects.toThrow('offline');
+      const extension = [] as const;
+      await expect(loadCompletionExtensions(() => Promise.resolve({ latexCompletionExtensions: () => extension }))).resolves.toBe(extension);
+    });
+
+    it('lists the keys that open completions, matching @codemirror/autocomplete', () => {
+      const opening = completionKeymap
+        .filter((binding) => binding.run === startCompletion)
+        .map(({ key, mac }) => ({ key, mac }));
+      expect(completionOpenKeys.map(({ key, mac }) => ({ key, mac }))).toEqual(opening);
+      expect(editorKeybinds('other')).toContain('Mod+Space');
+    });
   });
 });

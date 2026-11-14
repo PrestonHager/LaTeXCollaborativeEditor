@@ -3,8 +3,27 @@
 ## Editor
 
 The editor is made for LaTeX source.
-It has syntax highlighting, line numbers, bracket matching, and auto-closing brackets.
+It has syntax highlighting, line numbers, bracket matching, auto-closing brackets, and autocompletion.
 **Tab** indents the line.
+
+### Autocompletion
+
+Type `\` and the start of a command, and a list of matching commands shows under the cursor, each with its arguments and what it does.
+Type `\begin{` and the start of an environment name, and the list shows environments.
+
+- **Enter** accepts the highlighted one, the arrow keys move through the list, and **Escape** closes it.
+  **Ctrl+Space** opens the list whenever you want it (**⌃Space**, **⌥`** or **⌥I** on a Mac).
+- A command with arguments goes in with a placeholder in each one, like `\section{title}` with "title" selected, so you can type over it.
+  **Tab** goes to the next placeholder and **Shift+Tab** to the one before.
+  Moving the cursor out of them, or pressing **Escape**, leaves the placeholders.
+- An environment goes in with its matching `\end{...}` and the cursor on the line between them, like `\begin{itemize}`, `\item` and `\end{itemize}`.
+  If closing brackets already put a `}` after the cursor, it's used rather than doubled.
+- Accepting a `\begin` completion puts in `\begin{}` and opens the environment list.
+- It doesn't show in `%` comments or after `\\`.
+
+The list covers about 250 common commands (structure, references and citations, text, math, siunitx and Beamer) and about 50 environments.
+It comes with the app and loads just after the editor shows, so nothing you type is sent anywhere to complete it.
+Undo takes back an accepted completion like any other typing, and collaborators see the text it puts in.
 
 The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
@@ -133,7 +152,7 @@ When nothing needed changing, the button isn't there.
 
 Stripped:
 
-- These packages: `geometry`, `indentfirst`, `gensymb`, `fontspec`, `fancyhdr`, `nomencl`, `authblk`, `textcomp`, `float`.
+- Every package LaTeX.js can't load, from `\usepackage` and `\RequirePackage`. Each one gets a [diagnostic](#diagnostics) on its line. See [Packages](#packages).
 - `\hypersetup{...}`, `\geometry{...}`, and `\setmainfont{...}`.
 - fancyhdr setup: `\pagestyle{fancy}`, `\fancyhf{}`, `\fancyhead[...]{...}`, and `\renewcommand{\headrulewidth}{...}`.
 - nomencl setup: `\makenomenclature`, `\printnomenclature`, and `\renewcommand{\nomname}{...}`.
@@ -149,6 +168,53 @@ Rewritten:
 - authblk's `\author[...]{...}` drops the option, and `\affil{...}` becomes a small line of text.
 - `\textcopyright` becomes ©.
 - `\newpage`, `\clearpage`, `\cleardoublepage` and `\pagebreak` on a line of their own become a page break when you [export a PDF](#pdf-export) or print the HTML export. On screen, in the preview and the HTML export, they show as a dashed line labeled "page break". The line is never printed. One in the middle of a line is ignored.
+
+### Packages
+
+LaTeX.js only has a few packages built in. The preview loads these as they are:
+`color`, `xcolor`, `graphics`, `graphicx`, `hyperref`, `multicol`, `latexsym`, `gensymb`, `textcomp`, `textgreek`, `stix` and `echo`.
+LaTeX.js also accepts `calc`, `keyval`, `picture`, `pspicture`, `pict2e` and `comment`, and needs nothing from them.
+
+Every other package is taken out of the copy sent to the preview, and its `\usepackage` (or `\RequirePackage`) line gets a diagnostic that says what will look different.
+In a list like `\usepackage{xcolor,tikz}`, only `tikz` is taken out, and the note goes on the line with its name.
+`\RequirePackage{xcolor}` becomes `\usepackage{xcolor}`, since LaTeX.js only knows `\usepackage`.
+
+An **info** note means the preview leaves the package out on purpose, or has a stand-in for it, and the document still previews:
+
+| Packages | In the preview |
+| --- | --- |
+| `geometry`, `fullpage`, `a4wide`, `vmargin`, `typearea` | The preview uses its own page size and margins. |
+| `fancyhdr` | Headers and footers don't show. |
+| `setspace`, `parskip`, `indentfirst` | Line spacing and indents use the preview defaults. |
+| `microtype` | No visible difference. |
+| `float` | Figures show where they are in the source. |
+| `titlesec`, `titling`, `sectsty`, `caption` | Headings and captions use the preview style. |
+| `inputenc`, `fontenc` | The preview reads Unicode already. |
+| `fontspec`, `lmodern`, `times`, `mathptmx`, `helvet`, `courier`, `palatino`, `mathpazo`, `newtxtext`, `newtxmath`, `libertine`, `charter`, `kpfonts` | The preview uses its own fonts. |
+| `babel`, `polyglossia` | Hyphenation and names like "Contents" stay in English. |
+| `amssymb`, `amsfonts`, `mathtools`, `bm` | KaTeX draws the math, and has most of their commands. |
+| `amsmath` (stand-in) | KaTeX draws the math. Numbered equations show without their numbers. |
+| `amsthm` (stand-in) | Theorems and proofs show without numbers. |
+| `cleveref` (stand-in) | `\cref` shows as a plain reference. |
+| `csquotes` (stand-in) | `\enquote` shows plain quotation marks. |
+| `siunitx` (stand-in) | Numbers and units show as plain text. |
+| `booktabs` (stand-in) | Tables the preview can't draw show as a note. |
+| `appendix` (stand-in) | The `appendices` environment works like `\appendix`. |
+| `authblk` (stand-in) | Authors and affiliations show as plain text. |
+| `nomencl` (stand-in) | Entries show as plain text, and the list itself is left out. |
+| `natbib`, `biblatex`, `cite` (stand-in) | The preview builds the [bibliography](#bibliography) itself. |
+| `listings`, `minted`, `fancyvrb`, `alltt`, `verbatim` (stand-in) | Code shows in plain code blocks. |
+
+A **warning** means part of the document won't show, and using it stops the preview with an error:
+
+| Packages | In the preview |
+| --- | --- |
+| `tikz`, `pgf`, `pgfplots`, `tikz-cd`, `circuitikz`, `tkz-euclide`, `forest` | No TikZ pictures. The first `tikzpicture` stops the preview. |
+| `pstricks`, `xy`, `chemfig` | No pictures. The first one stops the preview. |
+| `algorithm`, `algorithmic`, `algpseudocode`, `algorithm2e` | No algorithms. The first one stops the preview. |
+| Any other package | What it adds is missing, and a command or environment the preview doesn't know stops it. |
+
+The list lives in `frontend/src/compile/previewPackages.ts`.
 
 Comments, `\verb`, and the `verbatim`, `verbatim*`, `Verbatim`, `lstlisting`, `minted`, and `comment` environments are left alone.
 Anything not listed here goes to LaTeX.js as is, and if it doesn't know a command, the error shows up in the diagnostics.
@@ -193,7 +259,10 @@ A key that isn't in any `.bib` file shows as `[?]`, with a warning on that line.
 When the preview hits a problem, you see it in two places:
 
 - The **footer** says how many problems there are and shows the first one, with its file and line, like `1 diagnostic(s). ... (chapters/intro.tex line 4)`.
-- The **editor** puts a red mark on that line, if that file is open. Warnings, like a cite key that isn't in the bibliography, and notes, like an unsupported bibliography style, get their own colors.
+- The **editor** puts a red mark on that line, if that file is open. Warnings, like a cite key that isn't in the bibliography or a package the preview can't load, and notes, like an unsupported bibliography style or a package the preview leaves out, get their own colors.
+
+The footer leads with the worst one: an error, then a warning, then a note.
+If the only diagnostics are notes and a file is missing, it shows the missing file instead. The notes are still in the editor.
 
 If a file named in `\input`, `\includegraphics`, or `\bibliography` isn't in the project, the footer says **Not found in the project:** and lists it.
 

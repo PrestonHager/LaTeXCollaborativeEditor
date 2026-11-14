@@ -13,6 +13,11 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Switching Settings > App and editor theme between Light and Dark recolors the syntax right away, and both stay readable.
 - [ ] The line number gutter matches the editor theme: light gutter with dark numbers on Light, dark gutter with light numbers on Dark. With Match system, it follows the OS (light or dark mode) and looks the same as picking that theme directly. The current line's number stays readable in all of them.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
+- [ ] Autocompletion: typing `\sec` on a new line shows a list with `\section` (with `{title}` and "Section heading") under the cursor. Enter puts in `\section{title}` with "title" selected, and typing replaces it.
+- [ ] Autocompletion: after `\frac`, Tab moves from the first placeholder to the second, and Shift+Tab back.
+- [ ] Autocompletion: typing `\begin{it` offers `itemize`. Enter gives `\begin{itemize}`, an indented `\item` line with the cursor on it, and `\end{itemize}`, with no extra `}` left over.
+- [ ] Autocompletion: Ctrl+Space (⌃Space on a Mac) opens the list, Escape closes it, and nothing shows inside a `%` comment or after `\\`. One Ctrl+Z takes back an accepted completion, and a peer in the room sees the completed text.
+- [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` only the first time the list opens.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
@@ -55,9 +60,11 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Citations (plain): the References list has five entries in the `% Expect:` order, including the `\nocite` one. "Literate programming" is lowercased after its first word, and the TeX and LaTeX logos render in the book titles.
 - [ ] Bibliography styles: set each file in `styles/` as the main file (`unsrt`, `alpha`, `abbrv`, `ieeetr`, `apalike`, `natbib`, `biblatex`) and check the labels, order and names against its `% Expect:` comments. Set `main.tex` back as the main file after.
 - [ ] Bibliography styles: with `styles/unknown.tex` as the main file, the footer shows 2 diagnostics, the cite shows [?] with a warning on its line, and the `\bibliographystyle{nature}` line has an info note saying it uses plain.
+- [ ] Packages: with `unsupported-packages.tex` as the main file, the `geometry` line has an info marker, the `tikz` line a warning that says a `tikzpicture` stops the preview, and only the `amssymb` half of the two-line `\usepackage{xcolor, amssymb}` has one. `\RequirePackage{hyperref}` gets no marker and no error. The footer leads with the tikz warning (`3 diagnostic(s)`), the text shows with "blue" in blue, and the ⓘ list says which packages were removed. Set `main.tex` back as the main file after.
+- [ ] Packages: add `\begin{tikzpicture}\end{tikzpicture}` to its body. The footer shows the `unknown environment` error first, and the tikz warning is still on its line.
 - [ ] Compile Now (Ctrl+Enter, ⌘↩ on a Mac) refreshes the preview, from the editor too. Ctrl+Shift+C does nothing in the app, so the browser keeps it for the inspector.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
-- [ ] The footer says Compiled, with no diagnostics.
+- [ ] The footer says Compiled. Its only diagnostics are the 7 info notes on `main.tex`'s `\usepackage` lines, from listings to cleveref, and hovering one says what the stand-in does.
 - [ ] The rendered document has no "Preview is approximate" note at the top.
 - [ ] The preview bar has a small ⓘ button with a count, next to the `?` help link. Hovering it shows "Preview is approximate: N changes", and a screen reader reads the same name.
 - [ ] Clicking it opens a popover that lists the changes, including showing figures in place and footnotes inline, with a "What's supported" link that opens the docs page in a new tab.
@@ -209,6 +216,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] New link asks in a **Start a new link?** dialog with Keep current link (focused) and a red Start new link. Start new link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
+- [ ] No WebRTC (issue #205): in a window where `RTCPeerConnection` is missing (Firefox with `media.peerconnection.enabled` off in `about:config`, or the Linux desktop app), the badge says Can't connect in this window. Share opens **Can't share from this window** with "This window can't make peer-to-peer connections, so it can't share or join a room." and a supported-browser suggestion, and no link shows. Opening a `?room=` link shows **Can't join from this window**, and the Files panel says so instead of Waiting for the host. The Network tab shows no `p2pTransport` chunk and no tracker connection, even after hovering Share.
 - [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
 - [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
@@ -323,4 +331,4 @@ Needs the desktop build (`npm run build` in `desktop/`, or an artifact from the 
 - [ ] The File menu shows Ctrl+N for New File and Ctrl+Shift+N for New Project (⌘N and ⇧⌘N on a Mac), and both work. Settings > Keyboard shortcuts says "Keys shown are for the desktop app".
 - [ ] Ctrl+W (⌘W on a Mac) doesn't close the window when it's bound to a command. On a Mac, ⌘Q still quits and ⌘C, ⌘V and ⌘Z work in the editor.
 - [ ] Projects made in the app are still there after quitting and opening it again, and are separate from the browser's.
-- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, check what Share does when the system WebKitGTK has no WebRTC.
+- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, where the system WebKitGTK has no WebRTC, Share opens **Can't share from this window** with **Open in browser** and **Not now**. Open in browser opens the web app in the system browser. A build without an https `VITE_DOCS_BASE_URL` only explains, with a Close button.

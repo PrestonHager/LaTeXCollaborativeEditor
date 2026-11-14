@@ -45,7 +45,9 @@ import { createPreviewChanges, previewChangesElements } from './ui/previewChange
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
-import { confirmDialog, promptDialog } from './ui/dialogs';
+import { confirmDialog, noticeDialog, promptDialog } from './ui/dialogs';
+import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
+import { isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -102,6 +104,8 @@ const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
+// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205).
+const p2pAvailable = hasWebRtc();
 
 // Now point every [data-help] link in the page at its docs section.
 wireHelpLinks(document, docsBase);
@@ -166,7 +170,7 @@ const setStatus = (message: string) => {
 
 /** Update the connection pill, and tell guests where to look when they can't reach the host. */
 function renderConnection() {
-  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount };
+  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount, noWebRtc: !p2pAvailable };
   connectionStatusEl.textContent = connectionText(info);
   if (connectionFailed(info)) {
     if (noticeKind === 'connection') return;
@@ -1327,10 +1331,39 @@ if (!isClient) {
 }
 
 // Guests join the room in the URL, and a reloaded host rejoins the room this tab already shared.
-const hostRoomId = isClient ? null : readHostRoomId();
-if (roomId) session.join(roomId);
-else if (hostRoomId) session.join(hostRoomId);
-inRoom = Boolean(roomId || hostRoomId);
+const hostRoomId = isClient || !p2pAvailable ? null : readHostRoomId();
+/** Say why this window can't share or join, and in the desktop app offer the browser instead. */
+function explainP2pUnavailable(action: P2pAction) {
+  const desktop = isDesktopShell();
+  const appUrl = desktop ? webAppUrl(docsBase) : null;
+  const link = appUrl && (action === 'join' && roomId ? webRoomLink(appUrl, roomId) : appUrl);
+  void explainNoWebRtc({
+    action,
+    desktop,
+    link,
+    confirm: confirmDialog,
+    notice: noticeDialog,
+    openExternal: (url) => openInSystemBrowser(url),
+    copyText: (value) => navigator.clipboard.writeText(value),
+    notify: (message) => showNotice(message, true, true),
+  });
+}
+if (!p2pAvailable) {
+  inRoom = false;
+  if (roomId) {
+    // The Files panel would say "Waiting for the host" forever, so say why instead.
+    const waiting = document.getElementById('file-tree-waiting');
+    const heading = waiting?.querySelector('h3');
+    const text = waiting?.querySelector('p');
+    if (heading) heading.textContent = noWebRtcTitle('join');
+    if (text) text.textContent = noWebRtcAdvice('join', isDesktopShell(), Boolean(webAppUrl(docsBase)));
+    explainP2pUnavailable('join');
+  }
+} else {
+  if (roomId) session.join(roomId);
+  else if (hostRoomId) session.join(hostRoomId);
+  inRoom = Boolean(roomId || hostRoomId);
+}
 if (inRoom) startPresence();
 // Tell peers we're gone, so our cursor doesn't linger until they time us out.
 window.addEventListener('pagehide', () => presence.stop());
@@ -1345,7 +1378,7 @@ hideLoading();
 scheduleCompile();
 
 // The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share.
-preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
+if (p2pAvailable) preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
 setupShareButton({
   button: shareButtonEl,
   linkEl: shareLinkEl,
@@ -1377,6 +1410,7 @@ setupShareButton({
       cancelLabel: 'Keep current link',
       destructive: true,
     }),
+  unavailable: p2pAvailable ? undefined : () => explainP2pUnavailable('share'),
 });
 
 // Guests can't rename the host's project, so the title is just a label for them.

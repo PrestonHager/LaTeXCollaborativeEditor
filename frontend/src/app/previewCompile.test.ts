@@ -127,6 +127,32 @@ describe('preview compile', () => {
     expect(editor.setDiagnostics).toHaveBeenCalledWith([expect.objectContaining({ message: 'Worse' })]);
   });
 
+  it('leads with the worst diagnostic, so a warning beats an info note listed first', async () => {
+    const { compile, compiler, diagnosticsEl } = setup();
+    compiler.compile.mockResolvedValue(
+      ok({
+        errors: [
+          { path: 'main.tex', line: 2, severity: 'info', message: 'Left out geometry.' },
+          { path: 'main.tex', line: 3, severity: 'warning', message: 'No tikz.' },
+        ],
+      }),
+    );
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('2 diagnostic(s). No tikz. (main.tex line 3)');
+  });
+
+  it('shows missing files instead of info notes, and the notes when nothing is missing', async () => {
+    const { compile, compiler, diagnosticsEl } = setup();
+    const info = { path: 'main.tex', line: 2, severity: 'info' as const, message: 'Left out geometry.' };
+    compiler.compile.mockResolvedValue(ok({ errors: [info], missing: ['fig.png'] }));
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png');
+    compiler.compile.mockResolvedValue(ok({ errors: [info] }));
+    compile.invalidate();
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('1 diagnostic(s). Left out geometry. (main.tex line 2)');
+  });
+
   it('lists files the document asked for that are not in the project', async () => {
     const { compile, compiler, diagnosticsEl } = setup();
     compiler.compile.mockResolvedValue(ok({ missing: ['fig.png'] }));

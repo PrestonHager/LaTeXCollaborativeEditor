@@ -28,8 +28,8 @@ If P2P protocol, bootstrap/build steps, or storage provider behavior changes, up
 - The version is `frontend/package.json` `version` (SemVer). The root `package.json` follows it.
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes. Don't bump the version in a normal PR.
 - Bump `PROTOCOL_VERSION` in `frontend/src/collab/messages.ts` only for a P2P change older peers can't handle.
-- `main` deploys to staging (`staging.yml`, its own origin). Production only deploys releases.
-- A maintainer cuts a release with the **Prepare release** workflow (patch, minor, major or an exact version). It bumps the version, dates the changelog and opens a `release/vX.Y.Z` PR. Merging it tags `vX.Y.Z` (`tag-release.yml`), and `release.yml` tests it, deploys it to production and makes the GitHub release. Agents don't run it or tag.
+- Open PRs against the `staging` branch, not `main`. `staging` deploys to the staging site (`staging.yml`, its own origin). `main` only gets `staging` through a release PR (or a hotfix PR), and `sync-staging.yml` merges `main` back into `staging` after every push to `main`. Never delete `staging`. Production only deploys releases.
+- A maintainer cuts a release with the **Prepare release** workflow, run on `staging` (patch, minor, major or an exact version). It bumps the version, dates the changelog and opens a `release/vX.Y.Z` PR. Merging it tags `vX.Y.Z` (`tag-release.yml`), and `release.yml` tests it, deploys it to production and makes the GitHub release. Agents don't run it or tag.
 - Details: `docs/versioning.md`.
 
 ## Regression checklist

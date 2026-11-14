@@ -138,6 +138,7 @@ describe('package stand-ins for the preview', () => {
     const adapted = adaptLatexSource(source);
     expect(lines(adapted.source)).toBe(lines(source));
     expect(adapted.changes).toEqual([
+      "Removed packages the preview can't load: siunitx.",
       'Showed theorems and proofs without numbers.',
       'Showed numbered equations without their numbers.',
       'Showed \\cref as a plain reference.',
@@ -146,7 +147,7 @@ describe('package stand-ins for the preview', () => {
       'Ignored commands the preview has no use for: \\newtheorem, \\sisetup.',
     ]);
     const { html, errors } = latexSourceToPreviewHtml(source);
-    expect(errors).toEqual([]);
+    expect(errors.map((e) => [e.line, e.severity])).toEqual([[2, 'info']]);
     const doc = new DOMParser().parseFromString(html!, 'text/html');
     // ~ is a no-break space.
     expect(doc.body.textContent).toMatch(/“Hi”, see section\s1\. 2\sm\./);

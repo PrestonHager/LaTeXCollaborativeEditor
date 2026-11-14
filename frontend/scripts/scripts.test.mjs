@@ -661,8 +661,22 @@ describe('prepare release script', () => {
       const json = JSON.parse(result.files[path]);
       expect(json.version).toBe(result.version);
       if (path.endsWith('lock.json')) expect(json.packages[''].version).toBe(result.version);
-      // Only the version lines change, so the diff stays small.
-      expect(result.files[path]).toBe(files[path].split(`"version": "${current}"`).join(`"version": "${result.version}"`));
+      // Only the project's own version lines change, so the diff stays small. A dependency that
+      // happens to share the version (like @one-ini/wasm 0.1.1) must be left alone.
+      const before = files[path].split('\n');
+      const after = result.files[path].split('\n');
+      expect(after).toHaveLength(before.length);
+      const changed = before.flatMap((line, i) => (line === after[i] ? [] : [[line.trim(), after[i].trim()]]));
+      const versionLine = (v) => [`"version": "${v}",`, `"version": "${v}"`];
+      expect(changed.length).toBe(path.endsWith('lock.json') ? 2 : 1);
+      for (const [was, now] of changed) {
+        expect(versionLine(current)).toContain(was);
+        expect(versionLine(result.version)).toContain(now);
+      }
+      const expected = JSON.parse(files[path]);
+      expected.version = result.version;
+      if (path.endsWith('lock.json')) expected.packages[''].version = result.version;
+      expect(json).toEqual(expected);
     }
   });
 

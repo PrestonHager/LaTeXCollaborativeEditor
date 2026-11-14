@@ -23,7 +23,7 @@ Things to try:
 - Reload the guest tab. The host can reload too, it rejoins the same room.
 - Turn off a VPN, or try another network. Some company, school, and hotel networks block WebRTC.
 - Check that an ad or tracker blocker isn't blocking the tracker sites (`tracker.openwebtorrent.com` and similar).
-- Use an up-to-date browser. Very old browsers and some privacy modes turn WebRTC off.
+- Use an up-to-date browser. Very old browsers and some privacy modes turn WebRTC off. When WebRTC is off, Share and room links say "This window can't make peer-to-peer connections" (see [When a window can't share](collaboration.md#when-a-window-cant-share)).
 - If two people are on very strict networks, they may need a TURN server. That's set up by whoever runs the site, not in the app.
 
 **Relayed** means you're connected, just through a TURN server instead of directly.
@@ -109,7 +109,7 @@ Things to try:
 - If the error is in another file, open that file from the Files panel.
 - If the footer says **Not found in the project**, check the path in `\input`, `\includegraphics`, or `\bibliography`. Paths are relative to the project root, and folders use `/`.
 - If an image file is there but the preview shows a note instead, it might be a PDF or EPS. The preview can't show those yet. Use PNG, JPG, or SVG.
-- If a package isn't supported, try the preview without it, or wrap package-specific code so it only runs in real LaTeX.
+- If a package isn't supported, its `\usepackage` line has a warning that says what's missing. Try the preview without it, or wrap package-specific code so it only runs in real LaTeX. See [Packages](editing-and-preview.md#packages).
 - If the compile pill says **No main file**, click the star next to the `.tex` file that has `\documentclass`.
 - Use **View > Compile Now** (**Ctrl+Enter**) to force a fresh preview.
 

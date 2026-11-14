@@ -141,7 +141,10 @@ describe('renderUpdateChangelog', () => {
 
   it("doesn't mark an Unreleased section this build already has", async () => {
     const el = document.createElement('div');
-    await renderUpdateChangelog(el, '0.1.0', 'x', respond(CHANGELOG_TEXT));
+    // Run as the newest release in the real changelog, so nothing in it is newer than this build.
+    // A hard-coded version breaks as soon as a release adds a newer section (release/v0.1.1, PR #175).
+    const newest = /^## \[(\d+\.\d+\.\d+[^\]]*)\]/m.exec(CHANGELOG_TEXT)![1];
+    await renderUpdateChangelog(el, newest, 'x', respond(CHANGELOG_TEXT));
     expect(el.querySelector('.is-new')).toBeNull();
     expect(el.querySelector('h3')!.textContent).toBe('Unreleased (in the update)');
   });
