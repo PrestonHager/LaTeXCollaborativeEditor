@@ -1,6 +1,8 @@
 import { mountAppShell } from '../test/appShell';
 import { createFileTree, type FileTreeState } from './fileTree';
 import type { ProjectEntry } from '../project/projectDoc';
+import { LONG_PRESS_MS } from './longPress';
+import * as contextMenuModule from './contextMenu';
 
 const entries: ProjectEntry[] = [
   { id: 'f', path: 'figures', kind: 'folder' },
@@ -20,9 +22,10 @@ const state = (overrides: Partial<FileTreeState> = {}): FileTreeState => ({
   ...overrides,
 });
 
-function setup() {
+function setup(loadContextMenu: () => Promise<typeof contextMenuModule> = () => Promise.resolve(contextMenuModule)) {
   mountAppShell();
   const options = {
+    loadContextMenu,
     onOpen: vi.fn(),
     onRename: vi.fn(),
     onDelete: vi.fn(),
@@ -153,5 +156,94 @@ describe('file tree', () => {
     expect(dots[0].style.backgroundColor).toBe('rgb(220, 38, 38)');
     expect(t.row('chapters/intro.tex').querySelector('.file-row-peers')).toBeNull();
     expect(t.row('chapters').querySelector('.file-row-peers')).toBeNull();
+  });
+
+  describe('row menu (#188)', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+      document.querySelectorAll('.context-menu').forEach((menu) => menu.remove());
+    });
+
+    /** The menu is a lazy chunk, so let its promise settle. */
+    const settle = async () => {
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    };
+    const menuItems = () => Array.from(document.querySelectorAll<HTMLButtonElement>('.context-menu:not([hidden]) [role="menuitem"]'));
+
+    it("opens on right-click with the row's actions, and runs them", async () => {
+      const t = setup();
+      t.tree.render(state());
+      const main = t.row('chapters/intro.tex').querySelector<HTMLElement>('.file-row-main')!;
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 50, clientY: 60 });
+      main.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+      await settle();
+      expect(menuItems().map((item) => item.textContent)).toEqual(['Set as main file', 'Rename or move', 'Delete']);
+      expect(document.querySelector('.context-menu')!.getAttribute('aria-label')).toBe('Actions for chapters/intro.tex');
+      menuItems()[0].click();
+      expect(t.options.onSetMain).toHaveBeenCalledWith(entries[2]);
+      expect(menuItems()).toHaveLength(0);
+    });
+
+    it('leaves out Set as main where it does not apply, and opens under the row for the Menu key', async () => {
+      const t = setup();
+      t.tree.render(state());
+      const li = t.row('main.tex');
+      li.getBoundingClientRect = () => ({ left: 10, bottom: 100 }) as DOMRect;
+      li.querySelector('.file-row-main')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      await settle();
+      expect(menuItems().map((item) => item.textContent)).toEqual(['Rename or move', 'Delete']);
+      const menu = document.querySelector<HTMLElement>('.context-menu')!;
+      expect(menu.style.left).toBe('26px');
+      expect(menu.style.top).toBe('100px');
+      menuItems()[1].click();
+      expect(t.options.onDelete).toHaveBeenCalledWith('main.tex');
+    });
+
+    it('ignores right-clicks that are not on a row', () => {
+      const t = setup();
+      t.tree.render(state());
+      const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+      document.getElementById('file-tree')!.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(menuItems()).toHaveLength(0);
+    });
+
+    it('opens on a long-press without opening the file', async () => {
+      vi.useFakeTimers();
+      const t = setup();
+      t.tree.render(state());
+      const main = t.row('data.bin').querySelector<HTMLElement>('.file-row-main')!;
+      const down = new Event('pointerdown', { bubbles: true });
+      Object.assign(down, { pointerType: 'touch', pointerId: 3, clientX: 20, clientY: 30, isPrimary: true });
+      main.dispatchEvent(down);
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+      await settle();
+      expect(menuItems().map((item) => item.textContent)).toEqual(['Rename or move', 'Delete']);
+      // The finger lifting clicks the row, which must not open the file.
+      main.click();
+      expect(t.options.onOpen).not.toHaveBeenCalled();
+      menuItems()[0].click();
+      expect(t.options.onRename).toHaveBeenCalledWith('data.bin');
+    });
+
+    it("preloads the menu when the panel is first reached, and doesn't open one if it can't load or the row is gone", async () => {
+      const load = vi.fn(() => Promise.reject(new Error('offline')));
+      const t = setup(load);
+      t.tree.render(state());
+      document.getElementById('file-pane')!.dispatchEvent(new Event('pointerenter'));
+      expect(load).toHaveBeenCalledTimes(1);
+      t.row('main.tex').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      await settle();
+      expect(menuItems()).toHaveLength(0);
+
+      const ok = setup();
+      ok.tree.render(state());
+      const li = ok.row('main.tex');
+      li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      li.remove();
+      await settle();
+      expect(menuItems()).toHaveLength(0);
+    });
   });
 });

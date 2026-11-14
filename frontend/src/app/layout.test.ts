@@ -17,6 +17,14 @@ function setup(onChange?: Parameters<typeof createLayout>[0]['onChange']) {
 // jsdom has no PointerEvent, so a MouseEvent with the same name carries clientX for us.
 const pointer = (type: string, clientX = 0) => new MouseEvent(type, { clientX, bubbles: true }) as PointerEvent;
 
+/** A pointer event with the fields a touch drag has. */
+function touch(type: string, clientX: number, pointerId = 7, button = 0) {
+  const event = new MouseEvent(type, { clientX, button, bubbles: true, cancelable: true }) as PointerEvent;
+  Object.defineProperty(event, 'pointerId', { value: pointerId });
+  Object.defineProperty(event, 'pointerType', { value: 'touch' });
+  return event;
+}
+
 describe('layout', () => {
   afterEach(() => {
     document.body.innerHTML = '';
@@ -90,5 +98,70 @@ describe('layout', () => {
     expect(onChange).toHaveBeenLastCalledWith({ mode: 'preview-only', splitRatio: 0.4 });
     layout.setMode('preview-only');
     expect(onChange).toHaveBeenCalledTimes(3);
+  });
+
+  describe('touch dragging (#188)', () => {
+    it('follows one finger, captures it, and saves where it lifts', () => {
+      const onChange = vi.fn();
+      const { layout, splitRoot, splitter } = setup(onChange);
+      const capture = vi.fn();
+      splitter.setPointerCapture = capture;
+      layout.installSplitter();
+      layout.applyLayoutMode();
+      const down = touch('pointerdown', 500);
+      splitter.dispatchEvent(down);
+      expect(down.defaultPrevented).toBe(true);
+      expect(capture).toHaveBeenCalledWith(7);
+      window.dispatchEvent(touch('pointermove', 400));
+      expect(splitRoot.style.gridTemplateColumns).toBe('40% 8px 60%');
+      // A second finger on the screen doesn't move it, or end the drag.
+      window.dispatchEvent(touch('pointermove', 700, 8));
+      window.dispatchEvent(touch('pointerup', 700, 8));
+      expect(splitRoot.style.gridTemplateColumns).toBe('40% 8px 60%');
+      expect(onChange).not.toHaveBeenCalled();
+      window.dispatchEvent(touch('pointerup', 400));
+      expect(onChange).toHaveBeenCalledWith({ mode: 'split', splitRatio: 0.4 });
+      expect(document.body.classList.contains('is-resizing')).toBe(false);
+    });
+
+    it('keeps the new size when the browser cancels the touch', () => {
+      const onChange = vi.fn();
+      const { layout, splitter } = setup(onChange);
+      layout.installSplitter();
+      layout.applyLayoutMode();
+      splitter.dispatchEvent(touch('pointerdown', 500));
+      window.dispatchEvent(touch('pointermove', 650));
+      window.dispatchEvent(touch('pointercancel', 650));
+      expect(onChange).toHaveBeenCalledWith({ mode: 'split', splitRatio: 0.65 });
+      expect(document.body.classList.contains('is-resizing')).toBe(false);
+      window.dispatchEvent(touch('pointermove', 300));
+      expect(layout.splitRatio).toBe(0.65);
+    });
+
+    it("doesn't start a second drag, or one from a mouse's other buttons", () => {
+      const { layout, splitter } = setup();
+      layout.installSplitter();
+      layout.applyLayoutMode();
+      const right = touch('pointerdown', 300, 1, 2);
+      splitter.dispatchEvent(right);
+      expect(right.defaultPrevented).toBe(false);
+      expect(document.body.classList.contains('is-resizing')).toBe(false);
+      splitter.dispatchEvent(touch('pointerdown', 300, 1));
+      const second = touch('pointerdown', 300, 2);
+      splitter.dispatchEvent(second);
+      expect(second.defaultPrevented).toBe(false);
+      window.dispatchEvent(touch('pointermove', 300, 2));
+      expect(layout.splitRatio).toBe(0.5);
+    });
+
+    it('keeps the ratio while the split has no width yet', () => {
+      const { layout, splitRoot, splitter } = setup();
+      splitRoot.getBoundingClientRect = () => ({ left: 0, width: 0 }) as DOMRect;
+      layout.installSplitter();
+      layout.applyLayoutMode();
+      splitter.dispatchEvent(touch('pointerdown', 0));
+      window.dispatchEvent(touch('pointermove', 100));
+      expect(layout.splitRatio).toBe(0.5);
+    });
   });
 });

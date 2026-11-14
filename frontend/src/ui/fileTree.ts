@@ -2,6 +2,9 @@ import type { ProjectEntry } from '../project/projectDoc';
 import { basename, dirname, isInside, isPreviewableImage, isPdf } from '../project/paths';
 import { fileIcons, icon, renderStaticIcons } from './icons';
 import type { CommandId } from './menuBar';
+import type { ContextMenu, ContextMenuItem } from './contextMenu';
+import { lazyModule, preloadOnIntent } from '../app/lazy';
+import { onLongPress } from './longPress';
 
 export type FileTreeState = {
   entries: ProjectEntry[];
@@ -45,6 +48,8 @@ type FileTreeOptions = {
   onMove: (path: string, folder: string) => void;
   onUpload: (files: File[], folder: string) => void;
   onCommand: (commandId: CommandId) => void;
+  /** Loads the row menu, a lazy chunk. Tests pass their own. */
+  loadContextMenu?: () => Promise<typeof import('./contextMenu')>;
 };
 
 type Row = { path: string; depth: number; folder: boolean; entry?: ProjectEntry };
@@ -66,6 +71,55 @@ export function createFileTree(pane: HTMLElement, options: FileTreeOptions) {
   // New files and uploads go into the folder picked last.
   let currentFolder = '';
   let dragDepth = 0;
+
+  // The row menu is a lazy chunk. It starts loading when the pointer, a finger or focus first reaches the
+  // panel, so it's there by the time a right-click or a 500ms long-press asks for it.
+  const menuModule = lazyModule(options.loadContextMenu ?? (() => import('./contextMenu')));
+  preloadOnIntent(pane, menuModule.preload);
+  let contextMenu: ContextMenu | null = null;
+
+  /**
+   * A row's menu has the same actions as its hover buttons (star, pencil, trash), so it opens on
+   * right-click, long-press on touch screens (#188), and the Menu key or Shift+F10.
+   */
+  const openRowMenu = (li: HTMLElement, point: { clientX: number; clientY: number }) => {
+    const entries: ContextMenuItem[] = Array.from(li.querySelectorAll<HTMLButtonElement>('.file-row-actions [data-action]'))
+      .filter((button) => !button.hidden)
+      .map((button) => ({
+        label: button.getAttribute('aria-label') ?? '',
+        icon: button.querySelector('svg')?.cloneNode(true) as Element | undefined,
+        destructive: button.dataset.action === 'delete',
+        run: () => button.click(),
+      }));
+    const main = li.querySelector<HTMLElement>('.file-row-main');
+    const at = { clientX: point.clientX, clientY: point.clientY };
+    // If it can't load (offline before it was fetched), the row's buttons still do the same with the keyboard.
+    void menuModule.get().then(
+      (module) => {
+        contextMenu ??= module.createContextMenu(pane.ownerDocument);
+        if (li.isConnected) contextMenu.open(entries, at, `Actions for ${li.dataset.path ?? ''}`, main);
+      },
+      () => undefined,
+    );
+  };
+
+  list.addEventListener('contextmenu', (event) => {
+    const li = (event.target as Element | null)?.closest?.<HTMLElement>('.file-row');
+    if (!li) return;
+    event.preventDefault();
+    // The Menu key and Shift+F10 fire this with no pointer position, so open under the row instead.
+    const fromKeyboard = event.clientX === 0 && event.clientY === 0;
+    const rect = li.getBoundingClientRect();
+    openRowMenu(li, fromKeyboard ? { clientX: rect.left + 16, clientY: rect.bottom } : event);
+  });
+  onLongPress(
+    list,
+    (main, point) => {
+      const li = main.closest<HTMLElement>('.file-row');
+      if (li) openRowMenu(li, point);
+    },
+    { selector: '.file-row-main' },
+  );
 
   pane.querySelectorAll<HTMLButtonElement>('[data-command]').forEach((button) => {
     button.addEventListener('click', () => options.onCommand(button.dataset.command as CommandId));

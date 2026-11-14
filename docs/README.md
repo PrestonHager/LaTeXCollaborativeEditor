@@ -15,6 +15,7 @@ The **built documentation** is the **user guide**: getting started, editing, col
 | `dod-checklist.md` | v1 definition of done. |
 | `site-plan.md` | Internal planning notes. |
 | `ui-sizing.md` | Dialog and popover size scale (`dialog-sm`, `dialog-md`, `dialog-lg`, `dialog-palette`), height and scroll rules, breakpoints, and the mobile plan for #123. Read it before adding a dialog. |
+| `compatibility-baseline.md` | How the preview copes with the Overleaf-style corpus in `frontend/dev/corpus/` (#197). Rerun with `npm run test:corpus` in `frontend/`; update with `npm run corpus:update` when engine work moves a result. |
 
 ## Local preview
 

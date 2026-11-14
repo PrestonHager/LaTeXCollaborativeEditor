@@ -22,6 +22,9 @@ Hover a row to see its buttons:
 - **Pencil**: rename or move it.
 - **Trash**: delete it.
 
+The same actions are in a menu: right-click a row, or focus it and press the Menu key or **Shift+F10**.
+On a phone or tablet, hold your finger on a row for half a second to open it.
+
 The three buttons at the top of the panel are **New file**, **New folder**, and **Upload files**.
 They're also in the **File** menu.
 

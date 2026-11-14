@@ -1,4 +1,5 @@
 import type { CommandId } from './menuBar';
+import './hoverPreview.css';
 
 /** Draws a small picture of what a command does, or null when a picture wouldn't help. */
 export type MockRenderer = (commandId: CommandId) => HTMLElement | null;
@@ -34,8 +35,10 @@ const GAP = 6;
  * anything is pressed, and follows its button if the page scrolls. It never runs a command: only a click does, and that goes to the button's
  * own handler.
  *
- * Touch has no hover, so a tap never shows it (#188 covers touch). The card ignores the pointer,
- * so it can't catch a hover or a click meant for what's underneath.
+ * Touch has no hover, so a tap never shows it, and neither does the focus a tap moves (#188). On touch
+ * screens the command palette has the same descriptions, and a long-press on a toolbar button shows
+ * its name (attachTouchTooltips in longPress.ts). The card ignores the pointer, so it can't catch a
+ * hover or a click meant for what's underneath.
  */
 export function createHoverPreview(card: HTMLElement, options: HoverPreviewOptions) {
   const delayMs = options.delayMs ?? HOVER_PREVIEW_DELAY_MS;
@@ -247,4 +250,20 @@ export function createHoverPreview(card: HTMLElement, options: HoverPreviewOptio
       window.removeEventListener('blur', hide);
     },
   };
+}
+
+/**
+ * main.ts loads this module when the pointer reaches the menus or toolbar, so the pointer can already
+ * be resting on a button by the time attach() runs, and that button's pointerenter has gone by.
+ * Send it again for the button under a mouse or pen, so its card shows as if the code was always here.
+ */
+export function replayHover(root: ParentNode, selector: string) {
+  let hovered: HTMLElement | null = null;
+  try {
+    hovered = root.querySelector<HTMLElement>(`${selector}:hover`);
+  } catch {
+    // A browser without :hover in querySelector just waits for the next pointerenter.
+  }
+  if (!hovered || typeof PointerEvent !== 'function') return;
+  hovered.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
 }

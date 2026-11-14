@@ -91,7 +91,13 @@ The dialog sizes are built (#187). The palette, popover cards and menus are stil
 
 ### Touch targets
 
-On touch screens (`@media (pointer: coarse)`), anything you can tap should be at least **44 x 44px**, including the space around it. Today's buttons are smaller (Basecoat's `sm` buttons are 32px, `icon-xs` 24px), which is fine with a mouse. #123 will raise them for coarse pointers. Don't make new controls smaller than the existing ones.
+On touch screens (`@media (pointer: coarse)`), anything you can tap should be at least **44 x 44px**, including the space around it. With a mouse, buttons stay smaller (Basecoat's `sm` buttons are 32px, `icon-xs` 24px).
+
+The coarse-pointer block next to the splitter rules in `style.css` (#188) raises `.btn` (and icon buttons' width), menu items, palette entries, file rows, the context menu, form fields and footer links to 2.75rem. A new control that isn't one of those needs its own coarse rule. Don't make new controls smaller than the existing ones.
+
+- The splitter keeps its 8px bar, but on coarse pointers a transparent `::before` makes it 44px wide to grab. With a mouse the bar alone is the target, so the extra area doesn't cover the editor's scrollbar.
+- Touch has no hover or right-click. Hover-only UI needs another way in: the file tree's row buttons are in a menu that a long-press opens (`ui/longPress.ts`, `ui/contextMenu.ts`). CSS tooltips are hidden under `(hover: none)`, because a tap leaves them stuck on, and a long-press shows them instead. The hover preview cards (#89) never show for touch.
+- The file row menu (`.context-menu`) is `--popover-menu` wide beside the pointer, and on phones a full-width list pinned to the bottom of the window, as planned for menus above.
 
 ## How to check a change
 
