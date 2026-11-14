@@ -66,7 +66,11 @@ const DEFAULT_DOC = '\\documentclass{article}\n\\begin{document}\nHello, collabo
 /** Only phones and tablets get the touch key bar, so its code loads only there (issue #231). */
 export const COARSE_POINTER = '(pointer: coarse)';
 
+type Navigation = Pick<typeof import('./latexCompletion'), 'goToDefinition' | 'findReferences' | 'renameLabel'>;
+
 type EditorPaneOptions = {
+  /** Where go to definition, find references and rename come from (the completion chunk). Tests pass their own. */
+  loadNavigation?: () => Promise<Navigation>;
   /** Where the touch key bar's code comes from. Tests pass their own. */
   loadTouchKeyBar?: () => Promise<typeof import('./touchKeyBar')>;
   /** Whether this device has a coarse pointer now, and tells of changes. Defaults to matchMedia. */
@@ -159,8 +163,28 @@ export function createEditorPane(container: HTMLElement, options: EditorPaneOpti
     (error: unknown) => console.warn('Autocompletion failed to load', error),
   );
 
+  const loadNavigation = options.loadNavigation ?? (() => import('./latexCompletion'));
+  const getProject = () => completionProject;
+  /** Runs a navigation command once its code is in. False when it couldn't load. */
+  const navigate = async <T>(run: (nav: Navigation) => T | Promise<T>): Promise<T | false> => {
+    try {
+      return await run(await loadNavigation());
+    } catch (error) {
+      console.warn('Label navigation failed to load', error);
+      return false;
+    }
+  };
+
   return {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
+    /** Jumps to the definition of the label, citation or command at the cursor (issue #247). */
+    goToDefinition() { return navigate((nav) => nav.goToDefinition(view, getProject)); },
+    /** Lists where the label or citation at the cursor is defined and used, under the editor. */
+    findReferences() { return navigate((nav) => nav.findReferences(view, getProject)); },
+    /** Renames the label at the cursor everywhere, after `ask` gets the new name. */
+    renameLabel(ask: (current: string, check: (name: string) => string | null) => Promise<string | null>) {
+      return navigate((nav) => nav.renameLabel(view, getProject, ask)).then((done) => done === true);
+    },
     getText() { return view.state.doc.toString(); },
     getView() { return view; },
     /** The bar of LaTeX keys shown above the on-screen keyboard, once its code has loaded (touch devices only). */

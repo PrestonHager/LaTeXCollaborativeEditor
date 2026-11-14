@@ -152,6 +152,32 @@ describe('createEditorPane', () => {
     expect(editor.getText()).toBe('Hello there');
   });
 
+  it('runs go to definition, find references and rename from the completion chunk, and copes when it fails to load', async () => {
+    const nav = {
+      goToDefinition: vi.fn(() => true),
+      findReferences: vi.fn(() => true),
+      renameLabel: vi.fn(async () => true),
+    };
+    const editor = createEditorPane(document.createElement('div'), { loadNavigation: async () => nav });
+    const project = { version: () => 0, files: () => [], mainPath: () => null };
+    editor.setCompletionProject(project);
+    expect(await editor.goToDefinition()).toBe(true);
+    expect(await editor.findReferences()).toBe(true);
+    const ask = vi.fn(async () => 'x');
+    expect(await editor.renameLabel(ask)).toBe(true);
+    const [view, getProject, passedAsk] = nav.renameLabel.mock.calls[0] as unknown as [EditorView, () => unknown, unknown];
+    expect(view).toBe(editor.getView());
+    expect(getProject()).toBe(project);
+    expect(passedAsk).toBe(ask);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const broken = createEditorPane(document.createElement('div'), { loadNavigation: () => Promise.reject(new Error('offline')) });
+    expect(await broken.goToDefinition()).toBe(false);
+    expect(await broken.renameLabel(ask)).toBe(false);
+    expect(warn).toHaveBeenCalledWith('Label navigation failed to load', expect.any(Error));
+    warn.mockRestore();
+  });
+
   describe('autocompletion', () => {
     it('loads after the editor and completes \\sec to \\section{title}', async () => {
       const container = document.createElement('div');

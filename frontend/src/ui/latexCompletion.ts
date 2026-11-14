@@ -14,6 +14,9 @@ import type { Extension } from '@codemirror/state';
 import type { LatexCommand, LatexEnvironment } from './latexCompletionData';
 import type { PackageData } from './latexPackageData';
 import { projectDiagnosticsExtension } from './projectDiagnostics';
+import { labelNavigationExtension } from './labelNavigation';
+
+export { findReferences, goToDefinition, renameLabel } from './labelNavigation';
 import { citationSource, labelSource, pathSource, projectIndex, type Definition, type ProjectGetter } from './projectCompletion';
 
 /**
@@ -250,7 +253,8 @@ export function latexEnvironmentSource(from: LatexOptionSet | LatexCompletionDat
  * The editor's completion extensions: closing brackets, LaTeX commands and environments from the
  * bundled data, the packages the project loads and its own definitions (issue #194), and labels,
  * citations and paths from the project `getProject` gives (issue #193), and that project's
- * undefined references, duplicate labels and missing citations in the lint gutter (issue #246).
+ * undefined references, duplicate labels and missing citations in the lint gutter (issue #246),
+ * and Ctrl+click to a definition and the references panel (issue #247).
  * The keys are CodeMirror's: Ctrl+Space opens the list, Enter accepts, Tab and Shift+Tab move
  * between a snippet's fields, and Escape closes the list.
  */
@@ -272,5 +276,6 @@ export function latexCompletionExtensions(
     keymap.of(closeBracketsKeymap),
     autocompletion({ override: sources, icons: false }),
     projectDiagnosticsExtension(getProject),
+    labelNavigationExtension(getProject),
   ];
 }

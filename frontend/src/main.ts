@@ -812,7 +812,16 @@ function bindProject() {
   session.getDoc().on('update', onUpdate);
   // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
   // The open file's \ref, \label and \cite problems are checked against it too (issue #246).
-  const completionProject = completionProjectFrom(session.getDoc(), project, () => (activeFileId && project.get(activeFileId)?.path) || null);
+  // Go to definition opens files, and rename edits every file as one step in the file history (issue #247).
+  const completionProject = completionProjectFrom(session.getDoc(), project, {
+    activePath: () => (activeFileId && project.get(activeFileId)?.path) || null,
+    open: ({ path }) => {
+      const entry = project.entries().find((e) => e.path === path && e.kind === 'text');
+      if (entry && entry.id !== activeFileId) openFile(entry.id);
+    },
+    record: (op, label, done) => runFileOp(op, label, done),
+    notify: (message) => showNotice(message),
+  });
   editor.setCompletionProject(completionProject);
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
