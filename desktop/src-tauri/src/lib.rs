@@ -2,10 +2,12 @@
 //! from inside the app, never from a remote URL). The opener lets the page open https links in the
 //! system browser; the dialog, fs and persisted-scope plugins let it open folders the person picks
 //! as projects (issue #178), and nothing else on disk. Google sign-in runs here too, through the
-//! system browser, with the refresh token in the OS keychain (issue #177, src/google_auth.rs).
+//! system browser, with the refresh token in the OS keychain (issue #177, src/google_auth.rs), and
+//! signed updates through the updater plugin when a release build configures it (#179, src/updates.rs).
 //! See docs/desktop.md for the plan.
 
 mod google_auth;
+mod updates;
 
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, Url, WebviewWindowBuilder};
@@ -30,9 +32,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             google_auth::google_sign_in,
             google_auth::google_access_token,
-            google_auth::google_sign_out
+            google_auth::google_sign_out,
+            updates::update_check,
+            updates::update_install
         ])
         .setup(|app| {
+            // Updates (#179): only release builds add plugins.updater (a public key and the
+            // GitHub Releases endpoint) with --config. Without it there's no updater to register.
+            let updater = updates::configured(app.config());
+            #[cfg(desktop)]
+            if updater {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+            app.manage(updates::Updates::new(updater));
             create_main_window(app)?;
             #[cfg(target_os = "linux")]
             enable_webrtc(app)?;

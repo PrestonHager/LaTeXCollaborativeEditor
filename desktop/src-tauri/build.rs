@@ -3,10 +3,16 @@ fn main() {
     // Rebuild when it changes, since src/google_auth.rs reads it with option_env!.
     println!("cargo:rerun-if-env-changed=GOOGLE_DESKTOP_CLIENT_ID");
     println!("cargo:rerun-if-env-changed=GOOGLE_DESKTOP_CLIENT_SECRET");
-    // The app's own commands get allow-* permissions, so the capability must grant each one
+    // The app's own commands (Google sign-in, #177; updates, #179) get allow-* permissions, so the capability must grant each one
     // (capabilities/main-window.json); without a grant the page can't call it.
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&["google_sign_in", "google_access_token", "google_sign_out"]),
+        tauri_build::AppManifest::new().commands(&[
+            "google_sign_in",
+            "google_access_token",
+            "google_sign_out",
+            "update_check",
+            "update_install",
+        ]),
     ))
     .expect("failed to run the Tauri build script");
 }

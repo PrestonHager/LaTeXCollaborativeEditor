@@ -170,7 +170,7 @@ const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 // the system browser too, so openExternal needs no desktop branch.
 if (isDesktopShell()) {
   void import('./app/desktopUi')
-    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase), notify: (message) => showNotice(message, true, true) }))
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase), notify: (message) => showNotice(message, true, true), updates: () => updateFlow }))
     .catch(console.warn);
 }
 
@@ -1683,7 +1683,8 @@ window.addEventListener('beforeunload', (event) => {
 updateFlow = setupUpdateFlow({
   root: document.getElementById('update-prompt') as HTMLElement,
   current: BUILD_INFO,
-  poll: import.meta.env.PROD,
+  // The desktop app's version.json is the bundled one; its updater checks instead (desktopUpdates.ts, #179).
+  poll: import.meta.env.PROD && !isDesktopShell(),
   baseUrl: document.baseURI,
   room: () => ({ isHost: !isClient, inRoom }),
   openChangelog: () => void changelogDialog.open('update'),

@@ -17,7 +17,8 @@ Issue #122 plans native apps for Windows, macOS and Linux, then tablets and phon
 | WebRTC | Windows and macOS are expected to work but are **not checked yet**. On Linux, the distro WebKitGTK we checked has **no WebRTC** (below) |
 | Local folders | Done (#178, below): open a folder on this computer as a project, save to one, and outside edits go to the conflict flow. **Not yet checked on real hardware** (#174) |
 | Google sign-in | Done (#177, below): through the system browser, loopback and PKCE in Rust, the refresh token in the OS keychain. Needs the maintainer's Desktop OAuth client, and **checking on real hardware** (#174) |
-| Updater, signing | Follow-ups (below) |
+| Updater, installers on releases | Done (#179, below): signed updates from GitHub Releases, and every release gets the installers, `.sig` files, checksums and `latest.json`. Needs the maintainer's updater key pair |
+| Code signing (Apple, Windows) | Follow-up (below) |
 | First numbers (Linux, from the sandbox) | `.deb` 2.4 MB and `.rpm` 2.4 MB. The AppImage is 78 MB because it carries WebKitGTK and GStreamer. After load, the app used about 420 MB PSS across its three processes, under Xvfb with software rendering. That's not a fair desktop number: measure on real hardware against a browser tab |
 
 ## The choice: Tauri 2
@@ -182,23 +183,37 @@ So the page can only reach folders the person picked in the dialog. `tauri-plugi
 
 ## Updates
 
-The website's update check reads `version.json` from the site. In the app, that file is the bundled one, so the check never finds anything. Desktop updates use **`tauri-plugin-updater`** instead:
+Issue #179. The website's update check reads `version.json` from the site. In the app, that file is the bundled one, so the check never finds anything. Desktop updates use **`tauri-plugin-updater`** instead, driven from Rust (`desktop/src-tauri/src/updates.rs`):
 
-- **Signing.** Updates are signed with a Tauri updater key pair (`tauri signer generate`). The public key goes in `tauri.conf.json` (`plugins.updater.pubkey`). The private key and its password are Actions secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). This key is separate from Apple and Windows code signing. **If it's lost, installed apps can never update again**, so keep a backup outside GitHub.
-- **Building.** `bundle.createUpdaterArtifacts: true` makes the update bundles and their `.sig` files.
-- **Fitting the release flow** (`docs/versioning.md`). After `release.yml` creates the GitHub release, it calls `desktop.yml` (`workflow_call` with the tag) with the signing secrets. That job uploads the installers, the `.sig` files and a `latest.json` manifest to the release. The updater endpoint is `https://github.com/PrestonHager/LaTeXCollaborativeEditor/releases/latest/download/latest.json`. GitHub's "latest" skips pre-releases, so `-rc` builds don't reach users. A beta channel could use a second manifest later.
-- **In the app:** check on start and every few hours, show the existing update card, and on **Restart to update** save first (`flushBeforeReload`) and then install. In the app, the web update card's version check is replaced by the updater. A collaborator on a newer protocol prompts "Update the app" instead of "Reload".
+- **The page never talks to the updater plugin.** It gets two app commands, `update_check` (returns `{ version, notes }` or nothing) and `update_install` (downloads, checks the signature against the public key, installs and restarts). So the capability has `allow-update-check` and `allow-update-install`, and no `updater:*` permission.
+- **Signing.** Updates are signed with a Tauri updater key pair (`tauri signer generate`). It's separate from Apple and Windows code signing. The plugin refuses any download whose signature doesn't match the public key built into the app. **If the private key is lost, installed apps can never update again**, so keep a backup outside GitHub.
+- **The config is added at release time.** `tauri.conf.json` has no `plugins.updater` and no `createUpdaterArtifacts`. `desktop/scripts/updater-config.mjs` writes an overlay with `bundle.createUpdaterArtifacts: true`, the public key, the one endpoint and Windows' passive install mode; `desktop.yml` passes it with `tauri build --config` only when the private key and the public key are both set. Without them (a local build, a pull request, or before the maintainer sets up the key) the build succeeds with no updater: Rust registers the plugin only when the config has a public key, and `update_check` answers "none". `npm run check` fails if `tauri.conf.json` gains updater settings, if the endpoint isn't the https GitHub one, or if `src/lib.rs` registers the plugin unconditionally.
+- **Where updates come from.** The endpoint is `https://github.com/PrestonHager/LaTeXCollaborativeEditor/releases/latest/download/latest.json`. GitHub's "latest" skips pre-releases, so `-rc` builds don't reach users. A beta channel could use a second manifest later. Production is moving to Coolify (#249), which could serve the manifest too, but GitHub Releases needs no deploy step, keeps the files next to the tag, and doesn't change when the site's host does, so it stays the source.
+- **Releases.** `release.yml` calls `desktop.yml` (`workflow_call`, `release: true`, `secrets: inherit`) after it creates the GitHub release. The three OS builds run in the Production environment; then the `publish` job runs `desktop/scripts/release-assets.mjs`, which copies the installers out of the artifacts with names GitHub keeps (spaces become `-`), writes `SHA256SUMS.txt`, and, when the build signed anything, `latest.json`. It uploads them to the release with `gh release upload --clobber`, so rerunning a release replaces them. `latest.json` lists each bundle under `{os}-{arch}-{bundle}` (like `windows-x86_64-msi`, `linux-x86_64-deb`) plus the default `{os}-{arch}` (AppImage, NSIS, the macOS `.app.tar.gz`, which serves both Mac archs since it's universal), the way the plugin looks them up; the notes are the CHANGELOG section. If the desktop job fails, the website release is already out, and the previous `latest.json` simply stays the newest one.
+- **In the app** (`frontend/src/app/desktopUpdates.ts`, part of the desktop chunk): it checks 10 seconds after start and every 6 hours. When the shell finds a newer release, the usual update card shows with **Restart to update**: the app saves first (`flushBeforeReload`, so held conflicts and uploads still block), then the shell installs and restarts. A failed install (for example a signature mismatch) shows its reason on the card, with **Restart anyway** to try again. The web card's `version.json` polling is off in the app. A collaborator on a newer protocol shows the card with "Restart to update".
+- **Linux packages.** The AppImage updates itself. A `.deb` or `.rpm` install updates through the matching package when the build signed it (the plugin installs it with `pkexec`); otherwise people install the new package from the release.
+
+**What the maintainer sets up** (once):
+
+1. On a trusted machine, run `npx tauri signer generate -w ~/.tauri/latex-editor-updater.key` in `desktop/` and pick a password.
+2. Save the private key's contents as the Actions secret `TAURI_SIGNING_PRIVATE_KEY` and the password as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, in the **Production** environment (or the repository).
+3. Save the public key's contents (`.key.pub`) as the Actions **variable** `TAURI_UPDATER_PUBKEY` in the same place. It isn't secret.
+4. Back up the private key and password outside GitHub.
+
+The first release after that is the first one installed apps can update **from** onward: apps built before the key existed have no updater, so people install that release by hand once.
+
+**To check on real hardware (#174):** install release N, publish N+1, and see the card, the restart and the new version on each OS; a tampered `latest.json` signature refused; the `.deb` path on Ubuntu.
 
 ## Releases and signing
 
-**Now:** `.github/workflows/desktop.yml` builds on Linux (Ubuntu 22.04, for older glibc: `.deb`, `.rpm`, AppImage), Windows (`.msi`, NSIS `.exe`) and macOS (a universal `.app` and `.dmg`). It uploads them as workflow artifacts, kept for 14 days. It runs:
+**Now:** `.github/workflows/desktop.yml` builds on Linux (Ubuntu 22.04, for older glibc: `.deb`, `.rpm`, AppImage), Windows (`.msi`, NSIS `.exe`) and macOS (a universal `.app` and `.dmg`). It runs:
 
-- from Actions > **Desktop app** > Run workflow (optionally with a tag);
-- on a `vX.Y.Z` tag pushed by hand.
+- from `release.yml` for every release, which attaches the installers, their updater `.sig` files, `SHA256SUMS.txt` and `latest.json` to the GitHub release ("Updates" above);
+- from Actions > **Desktop app** > Run workflow (optionally with a tag), which only uploads workflow artifacts, kept for 14 days.
 
-Tags that `tag-release.yml` pushes don't start it on their own, because pushes made with `GITHUB_TOKEN` don't start workflows. So for now, run it by hand with the tag after a release. Wiring it into `release.yml` belongs to the updater follow-up. The builds use the Production environment's `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL`, so the app meets the website's peers.
+The builds use the Production environment's `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL`, so the app meets the website's peers.
 
-The builds are unsigned, so people see warnings:
+The builds aren't code-signed for Windows or macOS yet (the updater's signature is separate), so people see warnings:
 
 - macOS says the app is from an unidentified developer. It's ad-hoc signed (`signingIdentity: "-"`), so it runs on Apple silicon: right-click > Open, or run `xattr -dr com.apple.quarantine` on the app.
 - Windows SmartScreen warns about an unknown publisher.
@@ -213,7 +228,7 @@ The builds are unsigned, so people see warnings:
 
   The Tauri CLI reads these from the environment, signs, notarizes and staples. The workflow then passes them to the macOS build step.
 - **Windows:** either an OV/EV code-signing certificate (`bundle.windows.certificateThumbprint` plus `timestampUrl`, with the `.pfx` imported on the runner), or Azure Trusted Signing through `bundle.windows.signCommand`. EV certificates and Trusted Signing build SmartScreen reputation fastest.
-- **Linux:** there's no OS signing. Publish SHA-256 checksums with the release, and consider Flathub later (which also settles the WebKitGTK question for that package).
+- **Linux:** there's no OS signing. Every release has `SHA256SUMS.txt` (#179). Consider Flathub later (which also settles the WebKitGTK question for that package).
 
 ## Security
 
@@ -221,12 +236,12 @@ The builds are unsigned, so people see warnings:
 - **CSP.** The app uses the web CSP unchanged: the `<meta>` tag in the bundled `index.html`. Tauri's own `app.security.csp` stays `null`. If both were set, the browser would enforce both, and the effective policy would be their intersection. A Tauri copy could only drift from the meta tag, for example when the build adds custom `VITE_P2P_RENDEZVOUS` trackers to the meta tag. Desktop builds must not use the `VITE_DISABLE_CSP=1` rollback switch.
 
   When a feature needs Tauri IPC from the page, `connect-src` needs `ipc: http://ipc.localhost`. Add it to the meta policy then (it means nothing on the web) and update `frontend/src/security/cspPolicy.test.ts`.
-- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above); and for Google sign-in (#177) the app's three sign-in commands ("Google sign-in" above). Each follow-up adds only what it uses, like `updater:default`.
+- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above); for Google sign-in (#177) the app's three sign-in commands ("Google sign-in" above); and for updates (#179) the app's two update commands, with no `updater:*` permission ("Updates" above). Each follow-up adds only what it uses.
 - **IPC in the CSP.** The opener goes through Tauri IPC, so the meta policy's `connect-src` has `ipc: http://ipc.localhost` (it means nothing on the web). `frontend/src/security/cspPolicy.test.ts` allows exactly those.
 - `withGlobalTauri` is off, and the asset protocol is off. The initial load imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads. The folder code uses `@tauri-apps/plugin-fs` and `@tauri-apps/plugin-dialog` from a lazy chunk.
 - `freezePrototype` is off. Freezing `Object.prototype` breaks code that assigns over an inherited property (the "override mistake"), and LaTeX.js, pdf.js and CodeMirror haven't been tested with it.
 - **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview"). The only script it adds to the page is the `__LCE_DESKTOP__` flag ("Google sign-in").
-- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, the app commands in `build.rs` and `invoke_handler`, that the page's token type never carries a refresh token, the `drive.file` scope, the one initialization script, no OAuth client in the sources, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
+- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, the app commands in `build.rs` and `invoke_handler`, that the page's token type never carries a refresh token, the `drive.file` scope, the one initialization script, no OAuth client in the sources, no updater settings in `tauri.conf.json` and only the GitHub endpoint in the release overlay, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
 
 ## Building locally
 
@@ -251,8 +266,8 @@ The builds are unsigned, so people see warnings:
    - signing.
 3. **Desktop 1.0:**
    - local folder projects (done, #178, needs checking on hardware);
-   - the updater;
-   - installers attached to every GitHub release;
+   - the updater (done, #179, needs the maintainer's key pair);
+   - installers attached to every GitHub release (done, #179);
    - LaTeX.js and its fonts bundled so the preview works offline (done, #181).
 4. **Later:** a real TeX engine in the native build (#43), and iOS and Android from the same Tauri project once the web layout works on phones and tablets (#123).
 
@@ -264,6 +279,6 @@ These are listed in the PR that added this page, to be filed:
 - Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), #176. The notice when WebRTC is missing is done (#205).
 - Desktop: Google sign-in through the system browser (loopback and PKCE, a Desktop OAuth client, tokens in the keychain, and the Picker question), #177 (done).
 - Desktop: a local folder storage provider, #178 (done).
-- Desktop: auto-updater, and installers attached to releases.
+- Desktop: auto-updater, and installers attached to releases, #179 (done).
 - Desktop: macOS notarization and Windows code signing (maintainer setup).
 - Desktop: shell polish, #181 (external links in the browser, navigation lock, wording, offline preview assets: done). Still open: the macOS menu and Cmd+W, and the web update card replaced in the app.

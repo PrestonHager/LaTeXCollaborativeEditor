@@ -1,5 +1,7 @@
 # Releases a vX.Y.Z tag: checks it, tests and builds it, deploys it to PRODUCTION (GitHub Pages)
 # and makes the GitHub release. Every production deploy is a release. See docs/versioning.md.
+# Then it builds the desktop app (desktop.yml) and attaches its installers, update signatures and
+# latest.json to the release, which installed apps update from (issue #179, docs/desktop.md).
 #
 # How it runs:
 # - Normally tag-release.yml calls it, after it tags a merged release PR. That run is on main,
@@ -133,3 +135,16 @@ jobs:
             --title "$TAG" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             "${flags[@]}"
+
+  # The desktop installers and the updater's latest.json (#179). After the release exists, so the
+  # files have somewhere to go; the website is already live by then and doesn't wait on this.
+  desktop:
+    needs: github-release
+    permissions:
+      contents: write
+    uses: ./.github/workflows/desktop.yml
+    with:
+      tag: ${{ inputs.tag || github.ref_name }}
+      release: true
+    # The Google Desktop client (#177) and the updater key (#179), from the Production environment.
+    secrets: inherit
