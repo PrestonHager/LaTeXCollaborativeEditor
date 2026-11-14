@@ -294,6 +294,19 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Each tour card sits next to what it points at without covering it: beside the file list, editor and preview, below the menus and toolbar. In a small window the card stays fully on screen and covers as little of the highlighted part as it can.
 - [ ] The page works at phone width without scrolling sideways.
 
+### Phone pass (under 640px)
+
+Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
+
+- [ ] The editor and preview never show side by side. A bar under the toolbar has Files, Editor and Preview, each at least 44px tall, and the Split, Editor only and Preview only toolbar buttons are hidden.
+- [ ] Tapping Preview shows only the preview, and Editor shows only the editor. The pressed one is highlighted. Reloading the tab keeps the choice, and a new tab starts on the editor.
+- [ ] Files opens the file list as a drawer over the editor, with a dimmed backdrop. Picking a file closes the drawer and opens that file in the editor, even if the preview was showing.
+- [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
+- [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
+- [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
+- [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
+
 ## Build
 
 - [ ] `npm run build` passes and reports the gzipped size under the budget.
