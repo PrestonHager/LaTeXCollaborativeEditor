@@ -10,6 +10,7 @@ import { diagnosticsExtensions, lintGutterPlaceholder, loadLintExtensions, setEd
 import { latexSyntaxHighlighting } from './syntaxHighlight';
 import { yUndoManagerKeymap } from 'y-codemirror.next';
 import { isAssignableKeybind, normalizeKeybind, type Platform } from './modifierShortcutLabels';
+import type { CompletionProject } from './completionProject';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
@@ -38,9 +39,10 @@ export const completionOpenKeys: readonly KeyBinding[] = [
  */
 export async function loadCompletionExtensions(
   load: () => Promise<Pick<typeof import('./latexCompletion'), 'latexCompletionExtensions'>> = () => import('./latexCompletion'),
+  getProject: () => CompletionProject | null = () => null,
 ): Promise<Extension> {
   const { latexCompletionExtensions } = await load();
-  return latexCompletionExtensions();
+  return latexCompletionExtensions(undefined, getProject);
 }
 
 /**
@@ -73,6 +75,8 @@ export function createEditorPane(container: HTMLElement) {
   const lintCompartment = new Compartment();
   // Empty until latexCompletion.ts has loaded, then autocompletion and closing brackets.
   const completionCompartment = new Compartment();
+  // The project that \ref, \cite and \input complete from (issue #193). Set with setCompletionProject.
+  let completionProject: CompletionProject | null = null;
 
   const state = EditorState.create({
     doc: DEFAULT_DOC,
@@ -108,7 +112,7 @@ export function createEditorPane(container: HTMLElement) {
     (error: unknown) => console.warn('Lint gutter failed to load', error),
   );
   // Typing works without it, so if it can't load, just log that.
-  const completionReady = loadCompletionExtensions().then(
+  const completionReady = loadCompletionExtensions(undefined, () => completionProject).then(
     (extensions) => view.dispatch({ effects: completionCompartment.reconfigure(extensions) }),
     (error: unknown) => console.warn('Autocompletion failed to load', error),
   );
@@ -121,6 +125,8 @@ export function createEditorPane(container: HTMLElement) {
     lintReady() { return lintReady; },
     /** Resolves once autocompletion is in (or failed to load). For tests. */
     completionReady() { return completionReady; },
+    /** The project that labels, citations and paths complete from, or null for none. */
+    setCompletionProject(project: CompletionProject | null) { completionProject = project; },
     setCollabExtensions(extensions: Extension[]) {
       view.dispatch({
         effects: collabCompartment.reconfigure(extensions),

@@ -6,6 +6,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+### Added
+
+- **Labels, citations and paths complete from the project.** `\ref{`, `\eqref{`, `\autoref{` and `\cref{` offer the labels from every `.tex` file. `\cite{` and its natbib and biblatex forms offer the keys from the project's `.bib` files, with the author, year and title. `\input{`, `\include{`, `\includegraphics{` and `\bibliography{` offer files from the project. The lists follow the project as you and your collaborators edit it, and nothing is sent anywhere.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added

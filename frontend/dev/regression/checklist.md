@@ -18,6 +18,10 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Autocompletion: typing `\begin{it` offers `itemize`. Enter gives `\begin{itemize}`, an indented `\item` line with the cursor on it, and `\end{itemize}`, with no extra `}` left over.
 - [ ] Autocompletion: Ctrl+Space (⌃Space on a Mac) opens the list, Escape closes it, and nothing shows inside a `%` comment or after `\\`. One Ctrl+Z takes back an accepted completion, and a peer in the room sees the completed text.
 - [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` only the first time the list opens.
+- [ ] Project completion: in `main.tex`, typing `\ref{sec` lists `sec:citations`, `sec:refs`, `sec:packages` and `sec:code`, each with the file and line it's on. `\eqref{`, `\autoref{` and `\cref{` list the same labels, and after `\cref{sec:refs,` it completes a second key.
+- [ ] Project completion: `\cite{` lists the keys in `refs.bib`, like `knuth` with "Knuth, 1984" beside it and "The TeXbook", the author and the year in its info box. `\citep{`, `\parencite[p.~4]{` and `\textcite{` list them too.
+- [ ] Project completion: `\input{` lists `chapters/text.tex` and the other `.tex` files (not `main.tex`), `\include{` the same without `.tex`, `\includegraphics{` the files in `figures/`, and `\bibliography{` lists `refs`.
+- [ ] Project completion: add `\label{sec:new}` to `chapters/math.tex`, then `\ref{` in `main.tex` lists `sec:new`. In a shared room, a label or `.bib` entry a peer adds shows up in your list too.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
