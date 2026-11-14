@@ -437,6 +437,15 @@ label.settings-row { justify-content: flex-start; }
 .pane-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0 0.5rem 0 0.75rem; border-bottom: 1px solid var(--panel-border); font-size: 12px; color: var(--muted-text); min-height: 2rem; }
 .pane-bar-actions { display: inline-flex; align-items: center; gap: 0.125rem; }
 /* Info button for "Preview is approximate": an icon and a small count, then a popover listing the changes. */
+/* Preview zoom (#190): Fit width, Zoom out, the level, Zoom in. Fit width shows pressed while it's on. */
+.preview-zoom { display: inline-flex; align-items: center; gap: 0.125rem; }
+.preview-zoom-fit[aria-pressed="true"] { background: var(--surface-3); color: var(--text); }
+.preview-zoom-level { min-width: 2.75rem; text-align: center; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--muted-text); }
+@media (pointer: coarse) {
+  .preview-zoom .btn { width: 2.75rem; height: 2.75rem; }
+}
+/* A pinch over the preview zooms the preview (the frame's script does it), not the whole app. */
+.preview { touch-action: pan-x pan-y; }
 .preview-changes[hidden] { display: none; }
 .preview-changes-btn { gap: 0.2rem; color: var(--muted-text); font-variant-numeric: tabular-nums; }
 .preview-changes-btn[aria-expanded="true"] { background: var(--surface-3); color: var(--text); }

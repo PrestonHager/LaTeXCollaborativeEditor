@@ -134,6 +134,18 @@ Your LaTeX stays in your browser.
 
 When the preview updates, it keeps your scroll position instead of jumping back to the top.
 
+### Zoom
+
+The preview's bar has zoom buttons: **Fit width** (↔), **Zoom out** (−), the zoom level, and **Zoom in** (+).
+
+- **Fit width** fills the pane. On a narrow pane, like a phone's, the page's side margins shrink to a small gutter so the text gets the whole width, and the text is scaled up so body text is at least 16 pixels and easy to read. On a wider pane it's the page at 100%. Fit width is the default on phones (under 640px wide), and 100% everywhere else.
+- **Zoom in** and **Zoom out** go a step at a time between 50% and 300%, starting from where you are, Fit width included.
+- **Pinch** the preview on a touch screen to zoom it. Only the preview zooms: the app's bars and the editor stay the same size. On a laptop, a trackpad pinch (or Ctrl + scroll wheel) over the preview does the same.
+
+The page always reflows to the pane, so zooming in makes the text bigger without a sideways scrollbar.
+In a pane under 480px wide the side margins are narrow at every zoom level, so a `\marginpar` note has no room there.
+The zoom isn't saved: a new tab starts at Fit width on a phone and 100% elsewhere. It stays the same as the preview updates.
+
 ### Links in the preview
 
 - Clicking a cross-reference made with `\ref` scrolls the preview to that section, figure or equation.

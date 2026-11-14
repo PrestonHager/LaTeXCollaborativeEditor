@@ -2,6 +2,7 @@ import './style.css';
 import * as Y from 'yjs';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
+import { bindPreviewZoomControls, createPreviewZoomState } from './ui/previewZoom';
 import { createMenuBar, type CommandId } from './ui/menuBar';
 import { setupShareButton } from './ui/shareButton';
 import { renderStaticIcons } from './ui/icons';
@@ -79,7 +80,6 @@ renderStaticIcons();
 
 const editorPane = document.getElementById('editor-pane') as HTMLElement;
 const editor = createEditorPane(editorPane);
-const preview = createPreviewPane(document.getElementById('preview-pane')!);
 const previewChanges = createPreviewChanges(previewChangesElements());
 const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
 const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
@@ -117,6 +117,28 @@ const phone = createPhoneLayout({
   onPaneChange: () => editor.getView()?.requestMeasure(),
 });
 phoneMedia?.addEventListener('change', () => phone.viewportChanged());
+// Preview zoom (issue #190): Fit width on phones, 100% elsewhere, until the person picks one.
+let renderZoomControls = () => {};
+const previewZoom = createPreviewZoomState({
+  isPhone,
+  apply: (zoom) => preview.setZoom(zoom),
+  onChange: () => renderZoomControls(),
+});
+const preview = createPreviewPane(document.getElementById('preview-pane')!, 'light', {
+  zoom: previewZoom.zoom,
+  onZoomReport: (scale, fit) => previewZoom.frameReported(scale, fit),
+});
+renderZoomControls = bindPreviewZoomControls(
+  {
+    fitButton: document.getElementById('preview-zoom-fit') as HTMLButtonElement,
+    zoomOutButton: document.getElementById('preview-zoom-out') as HTMLButtonElement,
+    zoomInButton: document.getElementById('preview-zoom-in') as HTMLButtonElement,
+    level: document.getElementById('preview-zoom-level')!,
+  },
+  () => previewZoom,
+);
+renderZoomControls();
+phoneMedia?.addEventListener('change', () => previewZoom.deviceChanged());
 const layout = createLayout({
   splitRoot,
   splitter,

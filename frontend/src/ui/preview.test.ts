@@ -7,7 +7,9 @@ import {
   PREVIEW_LINK_SCRIPT_ID,
   PREVIEW_MESSAGE_OPEN_LINK,
   PREVIEW_MESSAGE_SCROLL,
+  PREVIEW_MESSAGE_ZOOM,
   PREVIEW_SANDBOX,
+  PREVIEW_ZOOM_STYLE_ID,
   PREVIEW_THEME_STYLE_ID,
   previewDocument,
   PREVIEW_LINK_SCRIPT,
@@ -249,6 +251,16 @@ describe('parsePreviewMessage', () => {
     expect(scroll('120')).toBeNull();
   });
 
+  it('reads zoom reports, kept in range, and ignores bad ones', () => {
+    const zoom = (data: object) => parsePreviewMessage({ source: frameWindow, data: { type: PREVIEW_MESSAGE_ZOOM, ...data } }, frameWindow);
+    expect(zoom({ zoom: 1.2, fit: true })).toEqual({ kind: 'zoom', scale: 1.2, fit: true });
+    expect(zoom({ zoom: 40, fit: false })).toEqual({ kind: 'zoom', scale: 3, fit: false });
+    expect(zoom({ zoom: 0, fit: false })).toBeNull();
+    expect(zoom({ zoom: Number.NaN, fit: false })).toBeNull();
+    expect(zoom({ zoom: '2', fit: false })).toBeNull();
+    expect(zoom({ zoom: 2 })).toBeNull();
+  });
+
   it('ignores unknown and malformed messages', () => {
     for (const data of [null, 'hi', 7, {}, { type: 'other', url: 'https://example.com' }]) {
       expect(parsePreviewMessage({ source: frameWindow, data }, frameWindow)).toBeNull();
@@ -341,6 +353,55 @@ describe('preview link handling in the pane', () => {
   });
 });
 
+describe('preview zoom in the pane', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const fromFrame = (frame: HTMLIFrameElement, data: unknown) => window.dispatchEvent(new MessageEvent('message', { data, source: frame.contentWindow }));
+
+  it('starts renders at the zoom it was given, and at a new one after setZoom', async () => {
+    const pane = createPreviewPane(document.body, 'light', { zoom: 'fit' });
+    const frame = document.querySelector('iframe')!;
+    await pane.renderHtml('<p>hi</p>');
+    expect(frame.srcdoc).toBe(previewDocument('<p>hi</p>', 'light', 0, 'fit'));
+    expect(frame.srcdoc).toContain('data-zoom="fit"');
+    const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+    pane.setZoom(1.5);
+    expect(pane.zoom).toBe(1.5);
+    expect(post).toHaveBeenCalledWith({ type: PREVIEW_MESSAGE_ZOOM, zoom: 1.5 }, '*');
+    pane.setTheme('dark');
+    expect(frame.srcdoc).toContain('data-zoom="1.5"');
+  });
+
+  it('says the zoom again when a new document loads in the frame', () => {
+    const pane = createPreviewPane(document.body);
+    const frame = document.querySelector('iframe')!;
+    const post = vi.spyOn(frame.contentWindow!, 'postMessage');
+    pane.setZoom('fit');
+    post.mockClear();
+    frame.dispatchEvent(new Event('load'));
+    expect(post).toHaveBeenCalledWith({ type: PREVIEW_MESSAGE_ZOOM, zoom: 'fit' }, '*');
+  });
+
+  it('passes on what the frame reports, and keeps a pinched zoom for the next render', async () => {
+    const onZoomReport = vi.fn();
+    const pane = createPreviewPane(document.body, 'light', { zoom: 'fit', onZoomReport });
+    const frame = document.querySelector('iframe')!;
+    fromFrame(frame, { type: PREVIEW_MESSAGE_ZOOM, zoom: 1.2, fit: true });
+    expect(onZoomReport).toHaveBeenLastCalledWith(1.2, true);
+    expect(pane.zoom).toBe('fit');
+    fromFrame(frame, { type: PREVIEW_MESSAGE_ZOOM, zoom: 2.4, fit: false });
+    expect(onZoomReport).toHaveBeenLastCalledWith(2.4, false);
+    expect(pane.zoom).toBe(2.4);
+    await pane.renderHtml('<p>hi</p>');
+    expect(frame.srcdoc).toContain('data-zoom="2.4"');
+  });
+});
+
 describe('preview link script', () => {
   it('goes in the head after the theme style and has nothing from the document in it', () => {
     const html = '<html><head><title>t</title></head><body><a href="#x">x</a></body></html>';
@@ -349,9 +410,11 @@ describe('preview link script', () => {
     const script = doc.getElementById(PREVIEW_LINK_SCRIPT_ID)!;
     expect(script.parentElement).toBe(doc.head);
     expect(doc.head.lastElementChild).toBe(script);
-    expect(script.previousElementSibling?.id).toBe(PREVIEW_THEME_STYLE_ID);
+    expect(script.previousElementSibling?.id).toBe(PREVIEW_ZOOM_STYLE_ID);
+    expect(script.previousElementSibling?.previousElementSibling?.id).toBe(PREVIEW_THEME_STYLE_ID);
     expect(script.textContent).toBe(PREVIEW_LINK_SCRIPT);
     expect(script.getAttribute('data-scroll')).toBe('10');
+    expect(script.getAttribute('data-zoom')).toBe('1');
     expect(PREVIEW_LINK_SCRIPT).not.toContain('</');
   });
 
@@ -411,6 +474,107 @@ describe('preview link script', () => {
       expect(click('external', { button: 2 }, 'auxclick').defaultPrevented).toBe(false);
       expect(click('missing').defaultPrevented).toBe(false);
       expect(postMessage).toHaveBeenCalledTimes(1);
+    });
+
+    describe('zoom', () => {
+      const root = document.documentElement;
+      const zoomNow = () => root.style.getPropertyValue('zoom') || '1';
+      const fromApp = (zoom: unknown, source: unknown = window) =>
+        window.dispatchEvent(new MessageEvent('message', { data: { type: PREVIEW_MESSAGE_ZOOM, zoom }, source: source as Window }));
+      const touch = (type: string, points: Array<[number, number]>) => {
+        const event = new Event(type, { cancelable: true });
+        const touches = points.map(([clientX, clientY]) => ({ clientX, clientY }));
+        Object.defineProperty(event, 'touches', { value: touches });
+        window.dispatchEvent(event);
+        return event;
+      };
+      let scrollTo: ReturnType<typeof vi.fn>;
+      beforeEach(() => {
+        scrollTo = vi.fn();
+        window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+        fromApp(1);
+        postMessage.mockClear();
+      });
+
+      it('zooms to what the app sends, kept in range, and only from the app', () => {
+        fromApp(1.5);
+        expect(zoomNow()).toBe('1.5');
+        fromApp(99);
+        expect(zoomNow()).toBe('3');
+        fromApp('junk');
+        expect(zoomNow()).toBe('1');
+        fromApp(2, null);
+        expect(zoomNow()).toBe('1');
+        expect(postMessage).not.toHaveBeenCalled();
+      });
+
+      it('works out Fit width from the frame width and --size, and tells the app', () => {
+        const width = window.innerWidth;
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+        root.style.setProperty('--size', '13.284px');
+        try {
+          fromApp('fit');
+          expect(zoomNow()).toBe('1.2');
+          expect(postMessage).toHaveBeenLastCalledWith({ type: PREVIEW_MESSAGE_ZOOM, zoom: 1.2, fit: true }, '*');
+          // Wider than a phone, Fit width is the page at 100%. A resize works it out again.
+          Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
+          window.dispatchEvent(new Event('resize'));
+          expect(zoomNow()).toBe('1');
+          expect(postMessage).toHaveBeenLastCalledWith({ type: PREVIEW_MESSAGE_ZOOM, zoom: 1, fit: true }, '*');
+        } finally {
+          Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+          root.style.removeProperty('--size');
+        }
+        // A scale from the app stops following the width.
+        fromApp(1);
+        postMessage.mockClear();
+        window.dispatchEvent(new Event('resize'));
+        expect(postMessage).not.toHaveBeenCalled();
+      });
+
+      it('zooms with a two-finger pinch instead of letting the browser zoom the app', () => {
+        expect(touch('touchstart', [[100, 200], [140, 200]]).defaultPrevented).toBe(true);
+        expect(touch('touchmove', [[80, 200], [160, 200]]).defaultPrevented).toBe(true);
+        expect(zoomNow()).toBe('2');
+        // The point between the fingers stays put: (0 + 200) * 2 / 1 - 200.
+        expect(scrollTo).toHaveBeenLastCalledWith(0, 200);
+        expect(postMessage).not.toHaveBeenCalled();
+        touch('touchend', [[80, 200]]);
+        expect(postMessage).toHaveBeenCalledWith({ type: PREVIEW_MESSAGE_ZOOM, zoom: 2, fit: false }, '*');
+      });
+
+      it('leaves one-finger scrolling alone, and says nothing after a pinch that changed nothing', () => {
+        expect(touch('touchstart', [[100, 200]]).defaultPrevented).toBe(false);
+        expect(touch('touchmove', [[100, 150]]).defaultPrevented).toBe(false);
+        touch('touchstart', [[100, 200], [140, 200]]);
+        touch('touchmove', [[100, 200], [140, 200]]);
+        touch('touchcancel', []);
+        expect(zoomNow()).toBe('1');
+        expect(postMessage).not.toHaveBeenCalled();
+      });
+
+      it('stops Safari gesture zoom', () => {
+        const event = new Event('gesturestart', { cancelable: true });
+        window.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(true);
+      });
+
+      it('zooms with Ctrl + wheel (a trackpad pinch) and leaves a plain wheel alone', () => {
+        const wheel = (deltaY: number, ctrlKey: boolean) => {
+          const event = new WheelEvent('wheel', { deltaY, ctrlKey, cancelable: true, clientY: 10 });
+          window.dispatchEvent(event);
+          return event;
+        };
+        expect(wheel(-100, false).defaultPrevented).toBe(false);
+        expect(zoomNow()).toBe('1');
+        expect(wheel(-20, true).defaultPrevented).toBe(true);
+        expect(zoomNow()).toBe('1.22');
+        expect(postMessage).toHaveBeenLastCalledWith({ type: PREVIEW_MESSAGE_ZOOM, zoom: 1.22, fit: false }, '*');
+        fromApp(3);
+        postMessage.mockClear();
+        wheel(-50, true);
+        expect(postMessage).not.toHaveBeenCalled();
+      });
     });
   });
 });
