@@ -18,6 +18,7 @@ import { createKeymap, type Keymap } from './keymap';
 import { normalizeKeybind } from '../ui/modifierShortcutLabels';
 import { createEditorPane } from '../ui/editor';
 import { paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
+import { createProviderRegistry, googleDriveEntry, localStorageEntry } from '../storage/providers/registry';
 
 class FakeLocal extends MemoryProvider {
   clear = vi.fn(async () => {
@@ -40,13 +41,18 @@ class FakeDrive extends MemoryProvider {
   legacyProjectId() {
     return null;
   }
+  accountLabel() {
+    return this.signedIn ? 'ada@example.com' : null;
+  }
 }
 
-function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Keymap } = {}) {
+function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Keymap; driveClientId?: string } = {}) {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => undefined }));
   const local = new FakeLocal();
   const drive = new FakeDrive();
   const projectState = new ProjectState(local, drive as DriveLike);
+  // Drive is only set up when a test passes a client id, so Open goes straight to the browser's list.
+  const storageProviders = createProviderRegistry([localStorageEntry(local), googleDriveEntry(drive, options.driveClientId)]);
   const themeState = createThemeController();
   const div = () => document.createElement('div');
   const layout = createLayout({ splitRoot: div(), splitter: div(), editorPane: div(), previewPane: div() });
@@ -76,7 +82,9 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     editor: { focus: vi.fn(), selectAll: vi.fn(), insertText: vi.fn(() => true) },
     keymap: options.keymap ?? createKeymap(shortcuts, () => 'other'),
     fileTree: { currentFolder: vi.fn(() => '') },
-    projectsDialog: { open: vi.fn() },
+    projectsDialog: { open: vi.fn(), chooseProvider: vi.fn() },
+    storageProviders,
+    accountsPanel: { open: vi.fn() },
     uploadDialog: { open: vi.fn() },
     templates: { openNew: vi.fn(async () => {}), saveAsTemplate: vi.fn(async () => {}), editProfile: vi.fn(async () => {}) },
     zipInput: { click: vi.fn() } as unknown as HTMLInputElement,
@@ -131,7 +139,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     commands.executeCommand(id);
     await settle();
   };
-  return { app, commands, run, local, drive, projectState, themeState, layout, project, undo, palette: () => palette };
+  return { app, commands, run, local, drive, storageProviders, projectState, themeState, layout, project, undo, palette: () => palette };
 }
 
 /** Let pending promises (like a dialog's answer) settle. */
@@ -406,6 +414,61 @@ describe('commands', () => {
       expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Old' })]);
       await run('file.importZip');
       expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('asks which provider first when more than one is set up (#200)', async () => {
+      const { app, run, commands, local, drive } = setup({ driveClientId: 'client' });
+      await local.createProject('Old');
+      await run('file.openLocal');
+      expect(app.projectsDialog.chooseProvider).toHaveBeenCalledWith(['local', 'googleDrive']);
+      expect(app.projectsDialog.open).not.toHaveBeenCalled();
+      // Browser storage shows its list in the same dialog.
+      await commands.openFromProvider('local');
+      expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Old' })]);
+      // Drive goes to its picker without asking about guests again.
+      app.guestCount.mockReturnValue(1);
+      await commands.openFromProvider('googleDrive');
+      expect(app.confirmDialog).not.toHaveBeenCalled();
+      expect(app.pickFromDrive).toHaveBeenCalledWith('project');
+      expect(app.openStoredProject).toHaveBeenCalledWith(drive, 'f1');
+    });
+
+    it("doesn't open from a provider in a guest tab", async () => {
+      const { app, commands } = setup({ isClient: true, driveClientId: 'client' });
+      await commands.openFromProvider('local');
+      await commands.openFromProvider('googleDrive');
+      expect(app.projectsDialog.open).not.toHaveBeenCalled();
+      expect(app.pickFromDrive).not.toHaveBeenCalled();
+    });
+
+    it('opens Accounts for the host only', async () => {
+      const host = setup();
+      await host.run('app.accounts');
+      expect(host.app.accountsPanel.open).toHaveBeenCalled();
+      const guest = setup({ isClient: true });
+      await guest.run('app.accounts');
+      expect(guest.app.accountsPanel.open).not.toHaveBeenCalled();
+      expect(guest.commands.getCommandState('app.accounts').enabled).toBe(false);
+    });
+
+    it("runs Accounts' Connect and Log out through the registry's commands, and waits for them", async () => {
+      const { app, commands, projectState, local, drive, storageProviders } = setup({ driveClientId: 'client' });
+      const entry = storageProviders.get('googleDrive');
+      await commands.executeCommand(entry.connectCommand!);
+      expect(app.ensureDriveConnected).toHaveBeenCalled();
+      expect(projectState.activeProvider).toBe(drive);
+      // The returned promise settles after the command, so the panel can redraw with the new state.
+      await commands.executeCommand(entry.logOutCommand!);
+      expect(drive.disconnect).toHaveBeenCalled();
+      expect(projectState.activeProvider).toBe(local);
+      expect(app.menuBar.refresh).toHaveBeenCalled();
+      // A failure still becomes a notice, and the promise doesn't reject.
+      drive.signedIn = true;
+      drive.disconnect.mockRejectedValueOnce(new Error('revoke failed'));
+      await commands.executeCommand('file.disconnectDrive');
+      expect(app.showNotice).toHaveBeenCalledWith(expect.stringContaining('revoke failed'), true);
+      // Browser storage has no account to connect or log out of.
+      expect(storageProviders.get('local').connectCommand).toBeUndefined();
     });
 
     it('opens and imports without asking when no guest is in the room', async () => {

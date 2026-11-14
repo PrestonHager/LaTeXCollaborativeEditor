@@ -4,6 +4,7 @@ export type CommandId =
   | 'app.commandPalette'
   | 'app.openSettings'
   | 'app.editProfile'
+  | 'app.accounts'
   | 'file.new'
   | 'file.rename'
   | 'file.saveAsTemplate'

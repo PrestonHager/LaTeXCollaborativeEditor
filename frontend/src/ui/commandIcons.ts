@@ -50,6 +50,8 @@ const commandIcons: Record<CommandId, IconNode> = {
   ...toolbarCommandIcons,
   'app.openSettings': Settings,
   'app.editProfile': UserPen,
+  // Reuses Connect Google Drive's icon.
+  'app.accounts': Link,
   'file.new': FilePlus,
   'file.rename': SquarePen,
   'file.saveAsTemplate': LayoutTemplate,
