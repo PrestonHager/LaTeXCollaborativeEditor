@@ -19,6 +19,7 @@ exclude_docs: |
   qa-runbook.md
   ui-sizing.md
   desktop.md
+  compatibility-baseline.md
   assets/ui-sizing/
 
 theme:

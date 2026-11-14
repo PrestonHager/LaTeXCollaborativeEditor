@@ -16,7 +16,7 @@
 ## Validation commands
 - Root: `npm test`, `npm run test:coverage` (frontend coverage), `npm run test:load-time` (optional, throttled load time; see `docs/qa-runbook.md`)
 - In `desktop/`: `npm run check` (version, CSP and permissions settings); `cargo check` in `desktop/src-tauri/` (on Linux it needs the WebKitGTK 4.1 dev packages, see `docs/desktop.md`)
-- In `frontend/`: `npm run build` (fails if the initial load is over the 225 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches)
+- In `frontend/`: `npm run build` (fails if the initial load is over the 225 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches), `npm run test:corpus` (Overleaf-style corpus against `docs/compatibility-baseline.md`; `npm run corpus:update` rewrites the baseline when a preview change moves a result)
 
 ## Required docs updates
 If P2P protocol, bootstrap/build steps, or storage provider behavior changes, update:
