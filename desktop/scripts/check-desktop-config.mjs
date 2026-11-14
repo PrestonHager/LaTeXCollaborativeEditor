@@ -181,6 +181,10 @@ check(
   /"-no-shell-escape"/.test(texRs) && /"-norc"/.test(texRs) && /\.env\("openout_any", "p"\)/.test(texRs) && /\.env\("openin_any", "p"\)/.test(texRs),
   'src/local_tex.rs must pass -no-shell-escape (and -norc to latexmk) and set openout_any=p and openin_any=p.',
 );
+check(
+  /refuse_runnable_files\(&files\)\?;/.test(texRs) && /"bat"/.test(texRs) && /"exe"/.test(texRs) && /\.env\("NoDefaultCurrentDirectoryInExePath", "1"\)/.test(texRs) && /dir\.is_absolute\(\)/.test(texRs),
+  'src/local_tex.rs must refuse projects with runnable files, set NoDefaultCurrentDirectoryInExePath=1 and drop relative PATH entries, so latexmk never runs a program from the project.',
+);
 check(/impl Drop for WorkDir/.test(texRs) && /tokio::time::timeout\(limits\.timeout/.test(texRs), 'src/local_tex.rs must remove its temporary copy and stop TeX at the time limit.');
 
 const security = conf.app?.security ?? {};

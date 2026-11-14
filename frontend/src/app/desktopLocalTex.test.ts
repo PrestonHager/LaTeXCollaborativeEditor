@@ -145,6 +145,7 @@ describe('local TeX Live in the desktop app (#264)', () => {
     expect(describeTexError('too_large: the project is over 200 MB', off)).toBe("Couldn't compile: the project is over 200 MB.");
     expect(describeTexError('bad_request: the main file must be a .tex file', off)).toMatch(/^Couldn't compile: the main file/);
     expect(describeTexError(new Error('io: permission denied'), off)).toBe("Couldn't run TeX: permission denied");
+    expect(describeTexError('runnable: tools/pdflatex.bat', off)).toMatch(/has tools\/pdflatex.bat, a file a program could run instead of TeX/);
   });
 
   it('needs a main file, and the desktop shell', async () => {

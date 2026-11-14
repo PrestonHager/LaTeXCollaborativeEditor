@@ -28,6 +28,67 @@ pub const PROGRAMS: [&str; 4] = ["latexmk", "pdflatex", "xelatex", "lualatex"];
 /// The engines latexmk may drive.
 pub const ENGINES: [&str; 3] = ["pdflatex", "xelatex", "lualatex"];
 
+/// Programs that TeX or latexmk start by name. A file named like one of them in the project's root
+/// could be run instead of the real one (Windows looks in the current folder first), so it's refused.
+pub const STARTED_BY_NAME: [&str; 12] = [
+    "latexmk",
+    "pdflatex",
+    "xelatex",
+    "lualatex",
+    "bibtex",
+    "bibtex8",
+    "biber",
+    "makeindex",
+    "xindy",
+    "dvipdfmx",
+    "xdvipdfmx",
+    "perl",
+];
+
+/// Windows runs these by name or by double-click, so a project file with one of these extensions
+/// is refused anywhere in the project.
+pub const RUNNABLE_EXTENSIONS: [&str; 13] = [
+    "exe", "bat", "cmd", "com", "ps1", "vbs", "js", "jse", "wsf", "msi", "scr", "pif", "cpl",
+];
+
+/// Refuse a project holding a file that a program could run instead of TeX (#264): a runnable
+/// extension at any depth, or a file in the root named like a program TeX starts, with or without
+/// an extension.
+pub fn refuse_runnable_files(files: &[(PathBuf, Vec<u8>)]) -> Result<(), TexError> {
+    for (path, _) in files {
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let extension = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        let display = path.to_string_lossy().replace('\\', "/");
+        if RUNNABLE_EXTENSIONS.contains(&extension.as_str()) {
+            return Err(TexError::Runnable(display));
+        }
+        let in_root = path.components().count() == 1;
+        let stem = name.split('.').next().unwrap_or("");
+        if in_root && STARTED_BY_NAME.contains(&stem) {
+            return Err(TexError::Runnable(display));
+        }
+    }
+    Ok(())
+}
+
+/// The PATH the program gets: the configured folder first, then the absolute entries of PATH.
+/// Empty, `.` and other relative entries are dropped, so nothing is found in the project copy.
+pub fn child_path(tex_dir: Option<&Path>, path_var: Option<&OsString>) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = tex_dir.map(|d| vec![d.to_path_buf()]).unwrap_or_default();
+    if let Some(path) = path_var {
+        dirs.extend(std::env::split_paths(path).filter(|dir| dir.is_absolute()));
+    }
+    dirs
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Limits {
     pub timeout: Duration,
@@ -60,6 +121,8 @@ pub enum TexError {
     /// The program isn't on PATH or in the folder the setting names.
     NotFound(String),
     TooLarge(String),
+    /// A project file a program could run instead of TeX.
+    Runnable(String),
     TimedOut,
     Io(String),
 }
@@ -70,6 +133,7 @@ impl From<TexError> for String {
             TexError::BadRequest(detail) => format!("bad_request: {detail}"),
             TexError::NotFound(program) => format!("not_found: {program}"),
             TexError::TooLarge(detail) => format!("too_large: {detail}"),
+            TexError::Runnable(path) => format!("runnable: {path}"),
             TexError::TimedOut => "timed_out".into(),
             TexError::Io(detail) => format!("io: {detail}"),
         }
@@ -173,9 +237,7 @@ pub fn find_program(
             }
             vec![dir.to_path_buf()]
         }
-        None => path_var
-            .map(|p| std::env::split_paths(&p).collect())
-            .unwrap_or_default(),
+        None => child_path(None, path_var.as_ref()),
     };
     for dir in dirs {
         for name in &names {
@@ -371,6 +433,7 @@ pub async fn compile(
     path_var: Option<OsString>,
 ) -> Result<Outcome, TexError> {
     let main = safe_main(&job.main)?;
+    refuse_runnable_files(&files)?;
     if !files.iter().any(|(path, _)| *path == main) {
         return Err(TexError::BadRequest(format!(
             "{} isn't in the project",
@@ -403,16 +466,15 @@ pub async fn compile(
         .env("shell_escape", "f")
         .env_remove("TEXMFOUTPUT")
         .kill_on_drop(true);
-    // latexmk calls the engine by name: the configured folder goes first on its PATH.
-    if let Some(dir) = &job.tex_dir {
-        let mut dirs = vec![dir.clone()];
-        if let Some(path) = &path_var {
-            dirs.extend(std::env::split_paths(path));
-        }
-        if let Ok(joined) = std::env::join_paths(dirs) {
-            command.env("PATH", joined);
-        }
+    // latexmk calls the engine by name: the configured folder first, then PATH's absolute
+    // entries only. Windows would also look in the current folder (the project copy) first;
+    // NoDefaultCurrentDirectoryInExePath turns that off, and refuse_runnable_files above means
+    // there's nothing there to find anyway.
+    if let Ok(joined) = std::env::join_paths(child_path(job.tex_dir.as_deref(), path_var.as_ref()))
+    {
+        command.env("PATH", joined);
     }
+    command.env("NoDefaultCurrentDirectoryInExePath", "1");
     #[cfg(unix)]
     command.process_group(0);
 
@@ -719,7 +781,7 @@ mod tests {
         let (_dir, folder) = fake_tex(
             "pdflatex",
             r#"printf '%s\n' "$@" > args.txt
-               echo "out=$openout_any in=$openin_any esc=$shell_escape" > env.txt
+               echo "out=$openout_any in=$openin_any esc=$shell_escape nocwd=$NoDefaultCurrentDirectoryInExePath" > env.txt
                [ -f ch/one.tex ] || exit 3
                printf '%%PDF-1.4 fake' > main.pdf
                { cat args.txt env.txt; echo 'Output written on main.pdf'; } > main.log"#,
@@ -738,7 +800,7 @@ mod tests {
             .log
             .contains("-no-shell-escape\n-interaction=nonstopmode"));
         assert!(
-            outcome.log.contains("main.tex\nout=p in=p esc=f"),
+            outcome.log.contains("main.tex\nout=p in=p esc=f nocwd=1"),
             "{}",
             outcome.log
         );
@@ -881,6 +943,93 @@ mod tests {
             compile(&j, project(), &Limits::default(), path()).await,
             Err(TexError::NotFound("lualatex".into()))
         );
+    }
+
+    #[test]
+    fn project_files_a_program_could_run_are_refused() {
+        let f = |paths: &[&str]| -> Vec<(PathBuf, Vec<u8>)> {
+            paths
+                .iter()
+                .map(|p| (safe_relative_path(p).unwrap(), Vec::new()))
+                .collect()
+        };
+        assert!(refuse_runnable_files(&f(&[
+            "main.tex",
+            "fig/a.png",
+            "refs.bib",
+            "sections/pdflatex.tex"
+        ]))
+        .is_ok());
+        for bad in [
+            "pdflatex.bat",
+            "PDFLATEX.EXE",
+            "xelatex.cmd",
+            "lualatex",
+            "latexmk",
+            "bibtex.com",
+            "biber",
+            "perl.exe",
+            "makeindex",
+            "deep/nested/run.ps1",
+            "a/b.vbs",
+            "x.js",
+            "y.JSE",
+            "z.wsf",
+            "i.msi",
+            "s.scr",
+            "p.pif",
+            "c.cpl",
+            "tools/helper.exe",
+        ] {
+            let files = f(&["main.tex", bad]);
+            assert_eq!(
+                refuse_runnable_files(&files),
+                Err(TexError::Runnable(bad.to_string())),
+                "{bad}"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_project_with_a_fake_engine_never_runs_anything() {
+        let (_dir, folder) = fake_tex("pdflatex", "touch ran; exit 0");
+        let mut files = project();
+        files.push((
+            PathBuf::from("pdflatex"),
+            b"#!/bin/sh\ntouch pwned".to_vec(),
+        ));
+        let result = compile(&job("pdflatex", &folder), files, &Limits::default(), path()).await;
+        assert_eq!(result, Err(TexError::Runnable("pdflatex".into())));
+        assert!(!folder.join("ran").exists());
+        assert_eq!(
+            String::from(TexError::Runnable("x.bat".into())),
+            "runnable: x.bat"
+        );
+    }
+
+    #[test]
+    fn the_child_path_has_the_folder_first_and_no_relative_entries() {
+        let path = std::env::join_paths(["/usr/bin", "", ".", "rel/bin", "/opt/tex/bin"]).unwrap();
+        assert_eq!(
+            child_path(None, Some(&path)),
+            vec![PathBuf::from("/usr/bin"), PathBuf::from("/opt/tex/bin")]
+        );
+        assert_eq!(
+            child_path(Some(Path::new("/texlive/bin")), Some(&path)),
+            vec![
+                PathBuf::from("/texlive/bin"),
+                PathBuf::from("/usr/bin"),
+                PathBuf::from("/opt/tex/bin")
+            ]
+        );
+        // A program in "." on PATH isn't found.
+        let (_dir, folder) = fake_tex("pdflatex", "exit 0");
+        let dot = std::env::join_paths([".", ""]).unwrap();
+        let here = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&folder).unwrap();
+        let found = find_program("pdflatex", None, Some(dot));
+        std::env::set_current_dir(here).unwrap();
+        assert_eq!(found, Err(TexError::NotFound("pdflatex".into())));
     }
 
     #[test]

@@ -93,7 +93,9 @@ export function describeTexError(error: unknown, settings: LocalTexSettings): st
   const text = typeof error === 'string' ? error : error instanceof Error ? error.message : String(error);
   const where = settings.texDir ? `in ${settings.texDir}` : 'on this computer’s PATH';
   if (text.startsWith('not_found:')) return `${text.slice('not_found:'.length).trim()} isn't installed ${where}. Install TeX Live, or set its folder with Set Up Local TeX.`;
-  if (text === 'timed_out') return 'TeX took too long (over 3 minutes) and was stopped.';
+  if (text.startsWith('runnable:'))
+    return `Couldn't compile: the project has ${text.slice('runnable:'.length).trim()}, a file a program could run instead of TeX. Remove or rename it to compile with local TeX.`;
+    if (text === 'timed_out') return 'TeX took too long (over 3 minutes) and was stopped.';
   if (text.startsWith('too_large:')) return `Couldn't compile: ${text.slice('too_large:'.length).trim()}.`;
   if (text.startsWith('bad_request:')) return `Couldn't compile: ${text.slice('bad_request:'.length).trim()}.`;
   return `Couldn't run TeX: ${text.replace(/^io:\s*/, '')}`;
