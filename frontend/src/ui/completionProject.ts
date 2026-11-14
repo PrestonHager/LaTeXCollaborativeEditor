@@ -19,15 +19,27 @@ export interface CompletionProject {
   files(): readonly CompletionFile[];
   /** The main file's path. Paths in \input and the like are relative to its folder. */
   mainPath(): string | null;
+  /** The path of the file open in the editor, which project diagnostics are shown for (issue #246). */
+  activePath?(): string | null;
+  /** Calls `listener` after each change to the project. Returns a function that stops it. */
+  onChange?(listener: () => void): () => void;
 }
 
 /**
  * Wraps a project doc for completion. It only counts updates to the doc, so nothing is parsed
  * until someone asks for a completion. Call `dispose` when the doc is replaced.
  */
-export function completionProjectFrom(doc: Y.Doc, project: ProjectDoc): CompletionProject & { dispose(): void } {
+export function completionProjectFrom(
+  doc: Y.Doc,
+  project: ProjectDoc,
+  activePath: () => string | null = () => null,
+): CompletionProject & { dispose(): void } {
   let version = 0;
-  const bump = () => { version += 1; };
+  const listeners = new Set<() => void>();
+  const bump = () => {
+    version += 1;
+    listeners.forEach((listener) => listener());
+  };
   doc.on('update', bump);
   return {
     version: () => version,
@@ -36,6 +48,14 @@ export function completionProjectFrom(doc: Y.Doc, project: ProjectDoc): Completi
       const id = project.getMainFileId();
       return id ? (project.get(id)?.path ?? null) : null;
     },
-    dispose: () => doc.off('update', bump),
+    activePath,
+    onChange: (listener) => {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    dispose: () => {
+      doc.off('update', bump);
+      listeners.clear();
+    },
   };
 }
