@@ -46,7 +46,7 @@ import { manifestFromProject, saveProject, type SavedManifest } from './storage/
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
-import { isDesktopShell, openInSystemBrowser } from './app/desktopShell';
+import { driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -167,7 +167,7 @@ const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 // the system browser too, so openExternal needs no desktop branch.
 if (isDesktopShell()) {
   void import('./app/desktopUi')
-    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase) }))
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase), notify: (message) => showNotice(message, true, true) }))
     .catch(console.warn);
 }
 
@@ -473,7 +473,7 @@ driveProvider.onSessionLost(() => {
   showDriveAccount();
   if (!projectState.isDrive()) return;
   useProvider(localAppProvider, null);
-  showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true, {
+  showNotice(driveSessionLostNotice(), true, true, {
     topic: 'driveSignIn',
   });
   if (!projectState.savingPaused) void autosave.saveNow();

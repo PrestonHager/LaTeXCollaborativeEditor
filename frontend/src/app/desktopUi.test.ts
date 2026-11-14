@@ -1,4 +1,4 @@
-import { applyDesktopWording, desktopWording, externalTarget, routeExternalLinks, setUpDesktopUi } from './desktopUi';
+import { applyDesktopWording, desktopWording, externalTarget, linkFailedMessage, routeExternalLinks, setUpDesktopUi } from './desktopUi';
 
 const HERE = 'tauri://localhost/index.html';
 const WEB_APP = 'https://latex.example.com/';
@@ -140,7 +140,36 @@ describe('routeExternalLinks', () => {
 describe('setUpDesktopUi', () => {
   it('rewrites the wording and routes links', () => {
     document.body.innerHTML = '<p id="p">Saved in this browser.</p>';
-    setUpDesktopUi(document, { webApp: null, open: async () => true });
+    setUpDesktopUi(document, { webApp: null, open: async () => true })();
     expect(document.getElementById('p')!.textContent).toBe('Saved in this app.');
+  });
+
+  const click = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+  it('shows a notice with the link when the browser could not open it (issue #235)', async () => {
+    document.body.innerHTML = '<a id="out" href="https://github.com/x">GitHub</a>';
+    const notify = vi.fn();
+    const stop = setUpDesktopUi(document, { webApp: null, open: async () => false, notify });
+    click(document.getElementById('out')!);
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith(linkFailedMessage('https://github.com/x')));
+    expect(linkFailedMessage('https://github.com/x')).toBe("Couldn't open https://github.com/x in your browser. Copy the link and open it there.");
+    stop();
+  });
+
+  it('prefers onFail over notify, and stays quiet with neither', async () => {
+    document.body.innerHTML = '<a id="a" href="https://a.example/">A</a>';
+    const notify = vi.fn();
+    const onFail = vi.fn();
+    const stopFirst = setUpDesktopUi(document, { webApp: null, open: async () => false, notify, onFail });
+    click(document.getElementById('a')!);
+    await vi.waitFor(() => expect(onFail).toHaveBeenCalledWith('https://a.example/'));
+    expect(notify).not.toHaveBeenCalled();
+    stopFirst();
+    document.body.innerHTML = '<a id="b" href="https://b.example/">B</a>';
+    const open = vi.fn(async () => false);
+    const stopSecond = setUpDesktopUi(document, { webApp: null, open });
+    click(document.getElementById('b')!);
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith('https://b.example/'));
+    stopSecond();
   });
 });

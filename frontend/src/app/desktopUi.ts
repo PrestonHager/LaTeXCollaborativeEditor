@@ -1,7 +1,8 @@
 // What the desktop app (desktop/, docs/desktop.md) changes in the page, loaded lazily behind
 // isDesktopShell() so the website never downloads it (issue #181):
 // - external links open in the system browser, through the opener plugin (https only);
-// - text that says "this browser" says "this app", since the app keeps its own storage.
+// - text that says "this browser" says "this app", since the app keeps its own storage;
+// - a link the system browser couldn't open shows a notice with the link (issue #235).
 // The shell itself also blocks navigation away from the app and sends https pop-ups to the
 // browser (desktop/src-tauri/src/lib.rs), so this is the friendly path, not the only guard.
 import { openInSystemBrowser } from './desktopShell';
@@ -123,8 +124,19 @@ export function routeExternalLinks(doc: Document, options: LinkOptions): () => v
   };
 }
 
-/** Everything the desktop app changes in the page. Called once at startup, in the app only. */
-export function setUpDesktopUi(doc: Document, options: LinkOptions): void {
+/** The notice for a link the system browser couldn't open, so people can still copy it (issue #235). */
+export function linkFailedMessage(url: string): string {
+  return `Couldn't open ${url} in your browser. Copy the link and open it there.`;
+}
+
+type DesktopUiOptions = LinkOptions & {
+  /** Shows a notice. Without it (and without onFail), a link that couldn't be opened only logs a warning. */
+  notify?: (message: string) => void;
+};
+
+/** Everything the desktop app changes in the page. Called once at startup, in the app only. Returns a stop for the link routing. */
+export function setUpDesktopUi(doc: Document, options: DesktopUiOptions): () => void {
   applyDesktopWording(doc.body);
-  routeExternalLinks(doc, options);
+  const { notify, ...links } = options;
+  return routeExternalLinks(doc, { ...links, onFail: links.onFail ?? (notify && ((url) => notify(linkFailedMessage(url)))) });
 }

@@ -39,3 +39,11 @@ export async function openInSystemBrowser(url: string, win: object | undefined =
 export function localPlace(win: object | undefined = globalThis.window): 'this browser' | 'this app' {
   return isDesktopShell(win) ? 'this app' : 'this browser';
 }
+
+/**
+ * The notice shown when Google Drive's sign-in lapses and saves fall back to local storage. Says
+ * "this app" in the desktop app, which keeps its own storage (issue #235).
+ */
+export function driveSessionLostNotice(win: object | undefined = globalThis.window): string {
+  return `Google Drive sign-in expired, so edits are saving in ${localPlace(win)}. Use File > Connect Google Drive to switch back.`;
+}
