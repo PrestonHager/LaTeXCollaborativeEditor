@@ -21,7 +21,7 @@ Floating UI that isn't a dialog uses two more tokens:
 
 | Token | Width | Used by |
 |-------|-------|---------|
-| `--popover-card` | 22rem (352px) | The tour card, the update prompt and the preview-changes popover. |
+| `--popover-card` | 22rem (352px) | The tour card, the update prompt, the preview-changes popover and the hover preview card (#89). |
 | `--popover-menu` | 15rem minimum | The menu bar's dropdowns. They grow to fit their longest item. |
 
 Every size is capped at `calc(100vw - var(--viewport-gutter))`. `--viewport-gutter` is 2rem, so there's 1rem on each side and nothing scrolls sideways.
@@ -118,3 +118,9 @@ These screenshots are from #141, at 1280 x 800:
 | ![Open a project before: the Close button runs past the edge](assets/ui-sizing/projects-before-1280x800.png) | ![Open a project after: the footer fits](assets/ui-sizing/projects-after-1280x800.png) |
 
 Settings at 768 x 1024 is one column at the full `dialog-lg` cap: ![Settings at 768px](assets/ui-sizing/settings-after-768x1024.png)
+
+The hover preview card (#89) is `--popover-card` wide. It sits beside a menu (flipping to the left side at the window edge) or under a toolbar button, and stays 12px inside the window:
+
+| Toolbar, 1280 x 800 | Menu, 1280 x 800 | 390 x 844 |
+|---------------------|------------------|-----------|
+| ![Share's preview card under the toolbar](assets/hover-preview/toolbar-share.png) | ![New File's preview card beside the File menu](assets/hover-preview/menu-new-file.png) | ![The card at phone width, inside the window](assets/hover-preview/narrow-390.png) |

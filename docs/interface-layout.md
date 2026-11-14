@@ -13,6 +13,15 @@ Click a menu to open it, or focus it with **Tab** and use the arrow keys.
 **Escape** closes it.
 Items that don't apply right now are grayed out, for example host-only items when you're a guest.
 
+Rest the mouse on a menu item, or reach it with the arrow keys, and after a moment a preview card opens beside the menu.
+It shows what the command does: a small picture where one helps (the layouts show how the panes are arranged, Share shows the link being copied, New File shows the new file in the list), and a sentence about it.
+The card closes as soon as the mouse leaves, focus moves on, or you press a key or click.
+Hovering only shows the card. The command runs only when you click it or press **Enter**.
+On a touch screen there's no hover, so there's no preview card.
+
+![The preview card for View > Split View](assets/screenshots/hover-preview-light.png#only-light)
+![The preview card for View > Split View](assets/screenshots/hover-preview-dark.png#only-dark)
+
 ### File
 
 ![The File menu](assets/screenshots/file-menu-light.png#only-light)
@@ -90,6 +99,7 @@ Include the version when you report a problem. The bug form fills it in for you.
 
 The row of icon buttons under the menus covers the things you do most: new file, upload, save now, compile now, share, the three layout modes, the command palette, and the docs.
 Hover a button (or focus it) to see what it does and its shortcut.
+Keep the mouse there a little longer, or stay on it with the keyboard, and the tooltip turns into the same preview card as the menus, under the button.
 They run the same commands as the menus, so they're disabled in the same cases.
 
 With the keyboard, Tab moves into the toolbar, then the arrow keys move between buttons, and Home and End jump to the first and last.

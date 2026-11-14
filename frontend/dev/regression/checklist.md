@@ -242,6 +242,10 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Arrow keys move through menu items and between menus, and Escape closes them.
 - [ ] With one menu open, moving the mouse over another menu (File, Edit, View, Help) switches to it without clicking. Hovering never runs a command, and with no menu open hovering does nothing.
 - [ ] After switching menus by hover, arrow keys still move between menus and Escape closes the menu.
+- [ ] Resting the mouse on a menu item for about a second opens a preview card beside the menu (never on top of its items), with the item's name, its shortcut, and what it does. View > Split View, Editor Only and Preview Only show the pane layout; New File, New Folder, Upload, Save Now, Export, Compile Now, Command Palette and the theme toggles show a small picture too; Help > Documentation shows only text. Moving to the next item swaps the card after a short wait. Moving off the menu closes it at once, and hovering never runs the command.
+- [ ] Opening a menu with Enter or the arrow keys and resting on an item shows the same card, and arrowing on moves it. Enter hides the card and runs the item. Opening a menu with a click doesn't show a card until you hover an item.
+- [ ] Toolbar buttons show their tooltip at once, then after about a second the preview card replaces it, under the button. Share shows the link being copied. Tabbing into the toolbar shows it too. Near the right edge of a narrow window the card stays on screen, and it reads well in the light and dark app themes.
+- [ ] On a phone or tablet (touch), tapping a menu item or toolbar button never shows the preview card.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
