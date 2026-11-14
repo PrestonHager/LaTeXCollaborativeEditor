@@ -1,4 +1,4 @@
-import { isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
+import { driveSessionLostNotice, isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
 
 describe('isDesktopShell', () => {
   it('sees the Tauri globals and nothing else', () => {
@@ -55,5 +55,15 @@ describe('localPlace', () => {
     expect(localPlace({ __TAURI_INTERNALS__: {} })).toBe('this app');
     expect(localPlace({})).toBe('this browser');
     expect(localPlace()).toBe('this browser');
+  });
+});
+
+describe('driveSessionLostNotice', () => {
+  it('names the place edits now save (issue #235)', () => {
+    expect(driveSessionLostNotice({ __TAURI_INTERNALS__: {} })).toBe(
+      'Google Drive sign-in expired, so edits are saving in this app. Use File > Connect Google Drive to switch back.',
+    );
+    expect(driveSessionLostNotice({})).toContain('saving in this browser.');
+    expect(driveSessionLostNotice()).toContain('saving in this browser.');
   });
 });
