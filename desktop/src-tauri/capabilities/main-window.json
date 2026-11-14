@@ -1,12 +1,24 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "The main window may only open https links in the system browser. Add a permission only with the feature that needs it (docs/desktop.md, Security).",
+  "description": "The main window may open https links in the system browser, and read and write only the folders the person picks in the system dialog (local folder projects, #178). Add a permission only with the feature that needs it (docs/desktop.md, Security).",
   "windows": ["main"],
   "permissions": [
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://*" }]
-    }
+    },
+    "dialog:allow-open",
+    "fs:deny-default",
+    "fs:allow-exists",
+    "fs:allow-stat",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    "fs:allow-mkdir",
+    "fs:allow-rename",
+    "fs:allow-remove",
+    "fs:allow-watch",
+    "fs:allow-unwatch"
   ]
 }

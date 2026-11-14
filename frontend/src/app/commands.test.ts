@@ -442,6 +442,45 @@ describe('commands', () => {
       expect(app.openStoredProject).toHaveBeenCalledWith(drive, 'f1');
     });
 
+    it('opens and saves to folders on this computer, in the desktop app only (#178)', async () => {
+      const { app, run, commands } = setup();
+      const ids = () => commands.buildPaletteCommands().map((command) => command.id);
+      // The website has no folder commands.
+      expect(ids()).not.toContain('file.openFolder');
+      await run('file.openFolder');
+      await run('file.saveToFolder');
+      expect(app.confirmDialog).not.toHaveBeenCalled();
+
+      const folders = { open: vi.fn(async () => {}), saveTo: vi.fn(async () => {}), reopen: vi.fn() };
+      (app as { folders?: unknown }).folders = Promise.resolve(folders);
+      expect(ids()).toEqual(expect.arrayContaining(['file.openFolder', 'file.saveToFolder']));
+      expect(commands.listCommands().map((command) => command.id)).toContain('file.saveToFolder');
+      await run('file.saveToFolder');
+      expect(folders.saveTo).toHaveBeenCalled();
+      // Opening asks about guests first, like any open, then goes straight to the folder dialog.
+      app.guestCount.mockReturnValue(1);
+      app.confirmDialog.mockResolvedValueOnce(false);
+      await run('file.openFolder');
+      expect(folders.open).not.toHaveBeenCalled();
+      await run('file.openFolder');
+      expect(folders.open).toHaveBeenCalledTimes(1);
+      await commands.openFromProvider('localFolder');
+      expect(folders.open).toHaveBeenCalledTimes(2);
+      expect(commands.getCommandState('file.openFolder').enabled).toBe(true);
+    });
+
+    it("doesn't run folder commands in a guest tab", async () => {
+      const { app, run, commands } = setup({ isClient: true });
+      const folders = { open: vi.fn(), saveTo: vi.fn(), reopen: vi.fn() };
+      (app as { folders?: unknown }).folders = Promise.resolve(folders);
+      await run('file.openFolder');
+      await run('file.saveToFolder');
+      await commands.openFromProvider('localFolder');
+      expect(folders.open).not.toHaveBeenCalled();
+      expect(folders.saveTo).not.toHaveBeenCalled();
+      expect(commands.getCommandState('file.saveToFolder').enabled).toBe(false);
+    });
+
     it("doesn't open from a provider in a guest tab", async () => {
       const { app, commands } = setup({ isClient: true, driveClientId: 'client' });
       await commands.openFromProvider('local');

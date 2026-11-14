@@ -63,6 +63,23 @@ describe('accounts panel', () => {
     expect(rowFor('googleDrive').querySelector('svg')).not.toBeNull();
   });
 
+  it("offers a provider's action when it has no sign-in, like Save to a Folder (#178)", async () => {
+    const { panel, options, rowFor, buttons, press } = setup();
+    options.registry.add({
+      ...localStorageEntry(new MemoryProvider()),
+      id: 'localFolder',
+      name: 'Folder on this computer',
+      icon: 'folder',
+      connectCommand: 'file.saveToFolder',
+      actionLabel: 'Save to a Folder',
+    });
+    panel.open();
+    expect(rowFor('localFolder').textContent).toContain('A folder on this computer');
+    expect(buttons('localFolder')).toEqual(['Save to a Folder']);
+    press('localFolder', 'Save to a Folder');
+    await vi.waitFor(() => expect(options.runCommand).toHaveBeenCalledWith('file.saveToFolder'));
+  });
+
   it('logs out, then offers Connect, and redraws after each', async () => {
     const { panel, options, rowFor, buttons, press, logOutAll } = setup();
     panel.open();

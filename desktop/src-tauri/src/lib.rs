@@ -1,6 +1,7 @@
 //! The desktop shell. It opens one window on the bundled frontend build (frontend/dist, served
-//! from inside the app, never from a remote URL). Its only plugin is the opener, which the page
-//! uses to open https links in the system browser.
+//! from inside the app, never from a remote URL). The opener lets the page open https links in the
+//! system browser; the dialog, fs and persisted-scope plugins let it open folders the person picks
+//! as projects (issue #178), and nothing else on disk.
 //! See docs/desktop.md for the plan.
 
 use tauri::webview::NewWindowResponse;
@@ -15,6 +16,12 @@ const LATEXJS_PATH: &str = "/latexjs/";
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Local folder projects (#178). The fs capability allows no path on its own: only folders
+        // picked in the dialog join its scope, and persisted-scope remembers them across restarts.
+        // persisted-scope reads the fs plugin's scope, so it comes after it.
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_persisted_scope::init())
         .setup(|app| {
             create_main_window(app)?;
             #[cfg(target_os = "linux")]

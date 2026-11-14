@@ -15,7 +15,8 @@ Issue #122 plans native apps for Windows, macOS and Linux, then tablets and phon
 | Desktop detection in the frontend | `frontend/src/app/desktopShell.ts`. The keymap uses it, Share uses it to offer the system browser when WebRTC is missing, and a lazy chunk (`frontend/src/app/desktopUi.ts`) changes the wording and sends links to the browser |
 | Links, wording, offline preview | Done (#181, below): links open in the system browser, the window can't leave the app, text says "this app", and LaTeX.js is bundled |
 | WebRTC | Windows and macOS are expected to work but are **not checked yet**. On Linux, the distro WebKitGTK we checked has **no WebRTC** (below) |
-| Google sign-in, local folders, updater, signing | Follow-ups (below) |
+| Local folders | Done (#178, below): open a folder on this computer as a project, save to one, and outside edits go to the conflict flow. **Not yet checked on real hardware** (#174) |
+| Google sign-in, updater, signing | Follow-ups (below) |
 | First numbers (Linux, from the sandbox) | `.deb` 2.4 MB and `.rpm` 2.4 MB. The AppImage is 78 MB because it carries WebKitGTK and GStreamer. After load, the app used about 420 MB PSS across its three processes, under Xvfb with software rendering. That's not a fair desktop number: measure on real hardware against a browser tab |
 
 ## The choice: Tauri 2
@@ -132,16 +133,35 @@ To check on real systems:
 - **Windows:** WebView2's own "browser accelerator keys" (Ctrl+F, Ctrl+P, Ctrl+R, F5, Ctrl+Shift+I and others). Check which still act after the page calls `preventDefault`, and turn them off in the shell if they get in the way.
 - **Linux:** the window has no menu, so only the window manager's keys are kept.
 
-## Storage: local folders (follow-up)
+## Storage: local folders
 
-The desktop win is **opening a folder on disk as a project**. It would be a new storage provider next to the browser and Drive ones (`frontend/src/storage/providers/`, coordinated with #47):
+Issue #178. The desktop app can **open a folder on this computer as a project**, or save the open project to one. It's a storage provider next to the browser and Drive ones, with the same interface (`StorageProvider`, #47) and an entry in the provider registry (#200):
 
-- It would use `tauri-plugin-dialog` to pick a folder and `tauri-plugin-fs` to read and write it. Permissions are scoped at runtime to the folders the user picked, never the whole disk.
-- It would use the same layout as the `.zip` export (#73), so a folder, a zip and a Drive folder hold the same project.
-- It would watch the folder for outside changes (an editor or `git pull`) and go through the existing conflict flow.
-- Its code loads lazily, behind `isDesktopShell()`.
+- **Where it is in the app.** File > Open Project lists **Folder on this computer** next to this app's storage and Drive. The Accounts panel has a row for it with **Save to a Folder**. The command palette has **Open Folder as Project** and **Save to a Folder**. None of this exists on the website: the entry, the commands and the code only appear in the desktop app.
+- **Code.** `frontend/src/storage/providers/localFolder.ts` (the provider, over a small `FolderFs` interface) and `frontend/src/app/desktopFolders.ts` (the registry entry, the commands, reopening and the watcher) are one lazy chunk. `main.ts` imports it only behind `isDesktopShell()`, so neither it nor `@tauri-apps/plugin-fs` and `@tauri-apps/plugin-dialog` is in the website's initial load (they add about 0.5 kB to it, for the hooks in `main.ts`, `commands.ts` and the registry).
+- **Layout.** The folder holds the project's files as they are, the same layout as the `.zip` export (#73): no metadata file, so a folder, a zip and a Drive folder hold the same project, and git and other editors see plain files. The project's display name and main file are kept in the app (`localStorage` key `latex_editor_folder_projects`, keyed by the folder's path), not in the folder; without them the folder's name and the usual main file guess are used.
+- **What's left out.** Hidden files and folders (`.git`, `.vscode`), `node_modules` and TeX build output (`.aux`, `.log`, `.synctex.gz` and the like) don't open, and saving never touches them, because the project doesn't know them. Files over the app's file size limit don't open. A folder with more than 5,000 files is refused, so picking a home folder by mistake fails fast.
+- **Versions and conflicts.** A file's version is its modified time and size. Saving checks it first, like Drive's: if the file changed on disk since the app read or wrote it, that file's save is held and the existing conflict dialog asks which copy to keep. Saving into a folder that already has files asks first, then replaces files with the project's names and leaves the rest.
+- **Outside edits.** While a folder project is open, the fs plugin's watcher (`notify`, debounced 400 ms) reports changes. A file the project has that changed on disk goes into the conflict flow: with no unsaved edits in the app, it reloads quietly ("Loaded main.tex from the project folder"), the way `git pull` should feel; with unsaved edits, the conflict dialog asks. The app's own writes are recognised by their version and skipped. Files added outside the app show a notice to open the folder again; files deleted outside are written back by the next save, since the project still has them. If the watch can't start (for example Linux's inotify limit), saving still works and conflicts still show up on the next save.
+- **Deleting.** Deleting a file in the app deletes it on disk; the fs plugin has no trash. Undo writes it back, as for browser storage.
+- **Restarts.** The session remembers the folder (`providerMode: 'folder'`). On the next start the app waits for the folder chunk, checks the folder is still there and reachable, and goes back to saving there. If it's gone, edits save in the app and a status says to open it again.
+- **Privacy.** The folder's path never leaves the computer. Guests only see "Host: computer folder" (`ProjectState.currentStorageLabel`); the P2P protocol is unchanged.
 
-Not in this PR.
+### Permissions
+
+The page gets the folder dialog and a fixed list of fs commands, with **no path scope of their own** (`capabilities/main-window.json`):
+
+| Permission | Why |
+| --- | --- |
+| `dialog:allow-open` | The native folder picker. Picking a folder with `recursive: true` adds that folder and everything under it to the fs scope at runtime. Nothing else ever does. |
+| `fs:deny-default` | Denies the app's own webview data folders even if someone picks a folder that contains them. |
+| `fs:allow-exists`, `fs:allow-stat`, `fs:allow-read-dir`, `fs:allow-read-file` | Open the project and check versions. |
+| `fs:allow-write-file`, `fs:allow-mkdir`, `fs:allow-rename`, `fs:allow-remove` | Save, make folders, move and delete, as the project changes. |
+| `fs:allow-watch`, `fs:allow-unwatch` | Outside edits. The Rust crate has the `watch` feature for this. |
+
+So the page can only reach folders the person picked in the dialog. `tauri-plugin-persisted-scope` saves those picks in the app's data folder and restores them on start, so the last project reopens; nothing else is persisted. The fs plugin's default `requireLiteralLeadingDot` keeps hidden files out of the scope's globs too. There's no `fs:default`, no `fs:scope-*` set, and no `plugins.fs.scope` in `tauri.conf.json`. `desktop/scripts/check-desktop-config.mjs` checks the list exactly (plain strings, in order, no object form that could add a path), that `plugins.fs.scope` is unset, and that `src/lib.rs` registers dialog, fs and persisted-scope in that order (persisted-scope reads the fs plugin's scope).
+
+**To check on real hardware (#174):** the dialog on each OS, Windows paths (`C:\...`) and network drives, macOS's file access prompts for Desktop and Documents (the app isn't sandboxed, so no security-scoped bookmarks are needed), the watcher with `git pull` and with editors that save by rename (Vim, VS Code), and a restart reopening the folder.
 
 ## Updates
 
@@ -184,12 +204,12 @@ The builds are unsigned, so people see warnings:
 - **CSP.** The app uses the web CSP unchanged: the `<meta>` tag in the bundled `index.html`. Tauri's own `app.security.csp` stays `null`. If both were set, the browser would enforce both, and the effective policy would be their intersection. A Tauri copy could only drift from the meta tag, for example when the build adds custom `VITE_P2P_RENDEZVOUS` trackers to the meta tag. Desktop builds must not use the `VITE_DISABLE_CSP=1` rollback switch.
 
   When a feature needs Tauri IPC from the page, `connect-src` needs `ipc: http://ipc.localhost`. Add it to the meta policy then (it means nothing on the web) and update `frontend/src/security/cspPolicy.test.ts`.
-- **Capabilities.** There's one capability, `main-window`. Its only permission is `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); not even `core:default`. Each follow-up adds only what it uses: `updater:default`, `dialog:allow-open`, `fs` scoped to the picked folders.
+- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205), and for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above). Each follow-up adds only what it uses, like `updater:default`.
 - **IPC in the CSP.** The opener goes through Tauri IPC, so the meta policy's `connect-src` has `ipc: http://ipc.localhost` (it means nothing on the web). `frontend/src/security/cspPolicy.test.ts` allows exactly those.
-- `withGlobalTauri` is off, and the asset protocol is off. The frontend imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads.
+- `withGlobalTauri` is off, and the asset protocol is off. The initial load imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads. The folder code uses `@tauri-apps/plugin-fs` and `@tauri-apps/plugin-dialog` from a lazy chunk.
 - `freezePrototype` is off. Freezing `Object.prototype` breaks code that assigns over an inherited property (the "override mistake"), and LaTeX.js, pdf.js and CodeMirror haven't been tested with it.
 - **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview").
-- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the one permission, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
+- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
 
 ## Building locally
 
@@ -213,7 +233,7 @@ The builds are unsigned, so people see warnings:
    - macOS menu keys;
    - signing.
 3. **Desktop 1.0:**
-   - local folder projects;
+   - local folder projects (done, #178, needs checking on hardware);
    - the updater;
    - installers attached to every GitHub release;
    - LaTeX.js and its fonts bundled so the preview works offline (done, #181).
@@ -226,7 +246,7 @@ These are listed in the PR that added this page, to be filed:
 - Desktop: check the app on Windows, macOS and Linux, and measure startup and memory.
 - Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), #176. The notice when WebRTC is missing is done (#205).
 - Desktop: Google sign-in through the system browser (loopback and PKCE, a Desktop OAuth client, tokens in the keychain, and the Picker question).
-- Desktop: a local folder storage provider.
+- Desktop: a local folder storage provider, #178 (done).
 - Desktop: auto-updater, and installers attached to releases.
 - Desktop: macOS notarization and Windows code signing (maintainer setup).
 - Desktop: shell polish, #181 (external links in the browser, navigation lock, wording, offline preview assets: done). Still open: the macOS menu and Cmd+W, and the web update card replaced in the app.

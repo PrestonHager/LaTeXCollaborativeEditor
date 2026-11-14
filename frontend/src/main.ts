@@ -1160,6 +1160,27 @@ const switchToDrive = () => {
   if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
 
+// Folders on this computer as projects, in the desktop app only (#178). A lazy chunk the website never loads.
+const folders = isDesktopShell()
+  ? import('./app/desktopFolders')
+      .then(({ setUpFolders }) =>
+        setUpFolders({
+          registry: storageProviders,
+          projectState,
+          getProject: () => project,
+          useProvider,
+          openStoredProject,
+          holdConflict,
+          takeTheirs: (conflict) => (conflicts.set(conflict.id, conflict), resolveConflict(conflict, 'theirs')),
+          confirmDialog,
+          autosave,
+          setStatus,
+          showNotice,
+        }),
+      )
+      .catch((error: unknown) => (console.warn('Folder projects did not load', error), null))
+  : null;
+
 // Every shortcut label and key press reads from this one table.
 // Where the browser keeps a key for itself (a normal tab), the built-in fallback is used and shown instead.
 // Going fullscreen or opening in an app window gives those keys back, so follow that.
@@ -1190,6 +1211,7 @@ const commands = createCommands({
   fileTree,
   projectsDialog,
   storageProviders,
+  folders,
   accountsPanel,
   uploadDialog,
   templates,
@@ -1468,6 +1490,12 @@ if (!isClient) {
           if (ok) void driveProvider.loadAccount().then(showDriveAccount);
           else showDriveAccount();
         });
+      }
+      // The desktop app's last session saved to a folder (#178): pick it back up if it's still there.
+      const folder = projectState.awaitingFolder();
+      if (folder !== null) {
+        driveRestoreMessage = projectState.resumeFolder((await (await folders)?.reopen(folder)) ?? null);
+        showStorageProvider();
       }
       if (!projectState.projectId && projectState.activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
         const mainId = project.getMainFileId();

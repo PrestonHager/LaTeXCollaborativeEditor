@@ -62,7 +62,7 @@ describe('provider registry', () => {
   });
 
   it('labels statuses and capabilities for people', () => {
-    expect(Object.keys(providerDescriptions)).toEqual(['local', 'googleDrive']);
+    expect(Object.keys(providerDescriptions)).toEqual(['local', 'googleDrive', 'localFolder']);
     expect(statusLabels).toEqual({ connected: 'Connected', expired: 'Expired', signedOut: 'Not connected', notConfigured: 'Not configured' });
     expect(describeCapabilities({ binaryFiles: true, folders: true, history: true, maxFileBytes: null })).toBe('Folders, images and other files, version history');
     expect(describeCapabilities({ binaryFiles: false, folders: false, history: true, maxFileBytes: 1 })).toBe('Version history');

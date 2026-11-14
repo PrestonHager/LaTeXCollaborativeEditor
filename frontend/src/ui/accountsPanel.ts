@@ -174,6 +174,8 @@ export function createAccountsPanel(dialog: HTMLDialogElement, options: Accounts
       actions.append(connect);
     }
     if (isSignedIn(entry)) actions.append(button('Log out', 'outline', entry.logOutCommand, title.id));
+    // No sign-in, but something to do, like the desktop app's Save to a Folder (#178).
+    if (!entry.needsSignIn && entry.actionLabel && entry.connectCommand) actions.append(button(entry.actionLabel, 'outline', entry.connectCommand, title.id));
 
     li.append(figure, body);
     if (actions.childElementCount) li.append(actions);

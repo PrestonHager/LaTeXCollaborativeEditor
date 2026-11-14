@@ -4,7 +4,10 @@
 // - its version is frontend/package.json's;
 // - the Content-Security-Policy is the web one: Tauri adds no header of its own, and the bundled
 //   index.html still has the CSP <meta> tag (a desktop build must not use VITE_DISABLE_CSP=1);
-// - the window's only Tauri permission opens https links in the browser, and no remote origin gets any;
+// - the window's Tauri permissions are exactly the documented ones (docs/desktop.md, Security): the
+//   https opener, and for local folder projects (#178) the folder dialog and a list of fs commands
+//   with no path scope of their own, so only folders picked in the dialog are reachable. No remote
+//   origin gets any;
 // - the build bundles LaTeX.js for an offline preview (build:desktop), and the shell builds the
 //   window itself so navigation away from the app is blocked and https links go to the browser.
 // Run with `npm run check` in desktop/. The desktop workflow runs it before building.
@@ -52,14 +55,40 @@ check(
   'src/lib.rs may only widen CORS for the bundled LaTeX.js assets under /latexjs/.',
 );
 
+// No static fs scope: tauri.conf.json must not grant paths through plugins.fs either.
+check(!conf.plugins?.fs?.scope, 'plugins.fs.scope must stay unset: only folders picked in the dialog are reachable (#178).');
+// The plugins the folder permissions belong to are registered, and persisted-scope after fs.
+check(
+  /tauri_plugin_dialog::init\(\)[\s\S]*tauri_plugin_fs::init\(\)[\s\S]*tauri_plugin_persisted_scope::init\(\)/.test(libRs),
+  'src/lib.rs must register the dialog, fs and persisted-scope plugins, in that order.',
+);
+
 const security = conf.app?.security ?? {};
 check(security.csp === null, 'app.security.csp must stay null: the CSP <meta> tag in frontend/index.html is the policy (docs/desktop.md, Security).');
 check(!security.dangerousDisableAssetCspModification, 'dangerousDisableAssetCspModification only matters with a Tauri CSP, which this app does not set.');
 check(!security.assetProtocol?.enable, 'The asset protocol stays off until a feature needs it.');
-check(conf.app?.withGlobalTauri !== true, 'withGlobalTauri stays off: the frontend only calls the opener, through __TAURI_INTERNALS__ (frontend/src/app/desktopShell.ts).');
+check(conf.app?.withGlobalTauri !== true, 'withGlobalTauri stays off: the frontend reaches Tauri through __TAURI_INTERNALS__ and the plugin packages in lazy chunks.');
 
 const indexHtml = read(join(repo, 'frontend', 'index.html'));
 check(/<meta\s+http-equiv=["']Content-Security-Policy["']/i.test(indexHtml), 'frontend/index.html must keep its CSP <meta> tag.');
+
+// Local folder projects (#178): the dialog picks a folder and adds it to the fs scope at runtime.
+// None of these carry a path of their own, and fs:deny-default keeps the app's webview data out
+// even if someone picks a folder that holds it. No fs:default, no scope-* sets, no write-text-file.
+const ALLOWED_PLAIN_PERMISSIONS = [
+  'dialog:allow-open',
+  'fs:deny-default',
+  'fs:allow-exists',
+  'fs:allow-stat',
+  'fs:allow-read-dir',
+  'fs:allow-read-file',
+  'fs:allow-write-file',
+  'fs:allow-mkdir',
+  'fs:allow-rename',
+  'fs:allow-remove',
+  'fs:allow-watch',
+  'fs:allow-unwatch',
+];
 
 const capabilitiesDir = join(tauriDir, 'capabilities');
 const capabilityFiles = readdirSync(capabilitiesDir).filter((name) => name.endsWith('.json'));
@@ -67,14 +96,19 @@ check(capabilityFiles.length > 0, 'Expected at least one capability file in src-
 for (const name of capabilityFiles) {
   const capability = json(join(capabilitiesDir, name));
   check(!capability.remote, `${name}: no remote origin may get Tauri permissions.`);
-  // The only permission: open https links in the system browser (issue #205).
+  // Exactly these, in this order. Adding one needs docs/desktop.md updated (Security) and this list.
   const permissions = Array.isArray(capability.permissions) ? capability.permissions : [];
-  const onlyHttpsOpener =
-    permissions.length === 1 &&
-    permissions[0]?.identifier === 'opener:allow-open-url' &&
-    JSON.stringify(permissions[0].allow) === JSON.stringify([{ url: 'https://*' }]) &&
-    !permissions[0].deny;
-  check(onlyHttpsOpener, `${name}: the main window's only permission is opener:allow-open-url for https://*. Adding one needs docs/desktop.md updated.`);
+  const opener = permissions[0];
+  check(
+    opener?.identifier === 'opener:allow-open-url' && JSON.stringify(opener.allow) === JSON.stringify([{ url: 'https://*' }]) && !opener.deny,
+    `${name}: the first permission must be opener:allow-open-url for https://* only.`,
+  );
+  const rest = permissions.slice(1);
+  // Plain strings only: an object form could add a path scope ({ identifier, allow: [{ path }] }).
+  check(
+    JSON.stringify(rest) === JSON.stringify(ALLOWED_PLAIN_PERMISSIONS),
+    `${name}: after the opener, the permissions must be exactly ${ALLOWED_PLAIN_PERMISSIONS.join(', ')}, with no path scopes. Adding one needs docs/desktop.md updated.`,
+  );
   check((security.capabilities ?? []).includes(capability.identifier), `${name}: list "${capability.identifier}" in app.security.capabilities.`);
 }
 
@@ -83,4 +117,4 @@ if (errors.length) {
   process.exit(1);
 }
 const version = json(join(repo, 'frontend', 'package.json')).version;
-console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, only the https opener, links guarded.`);
+console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, https opener and picked-folder access only, links guarded.`);

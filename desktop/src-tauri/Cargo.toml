@@ -20,9 +20,16 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 tauri = { version = "2.12", features = [] }
+# Folders on this computer as projects (issue #178, docs/desktop.md "Storage: local folders").
+# The dialog picks a folder and adds it to the fs scope; the capability itself allows no path.
+tauri-plugin-dialog = "2"
+# "watch" reports edits made outside the app, which go into the conflict flow.
+tauri-plugin-fs = { version = "2", features = ["watch"] }
 # Opens https links in the system browser, like a room link when this window has no WebRTC
 # (issue #205). The capability allows https URLs only (capabilities/main-window.json).
 tauri-plugin-opener = "2"
+# Keeps the folders picked in the dialog in the fs scope across restarts, so the last project reopens.
+tauri-plugin-persisted-scope = "2"
 
 # Only to turn on WebKitGTK's WebRTC setting (src/lib.rs). The same major version wry uses.
 [target.'cfg(target_os = "linux")'.dependencies]

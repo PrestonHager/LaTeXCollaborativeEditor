@@ -187,6 +187,19 @@ describe('projects dialog provider step (#200)', () => {
     expect(row('googleDrive').textContent).toContain('Signed in');
   });
 
+  it('closes for a folder on this computer, which opens the system dialog (#178)', () => {
+    const { dialogEl, onProvider, row } = setup();
+    // The desktop app adds its folder entry to the registry later, from a lazy chunk.
+    const registry = createProviderRegistry([localStorageEntry(new MemoryProvider())]);
+    registry.add({ ...localStorageEntry(new MemoryProvider()), id: 'localFolder', name: 'Folder on this computer', icon: 'folder' });
+    const folderDialog = createProjectsDialog(dialogEl, { onPick: vi.fn(), onImportZip: vi.fn(), registry, onProvider });
+    folderDialog.chooseProvider(['local', 'localFolder']);
+    expect(row('localFolder').textContent).toContain('Pick a folder on this computer');
+    row('localFolder').click();
+    expect(dialogEl.open).toBe(false);
+    expect(onProvider).toHaveBeenCalledWith('localFolder');
+  });
+
   it('does nothing without a registry', () => {
     mountAppShell();
     const dialogEl = document.getElementById('projects-dialog') as HTMLDialogElement;

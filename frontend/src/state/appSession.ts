@@ -1,6 +1,7 @@
 import type { SavedManifest } from '../storage/projectSaver';
 
-export type ProviderMode = 'local' | 'drive';
+// 'folder' is a folder on this computer, in the desktop app only (#178).
+export type ProviderMode = 'local' | 'drive' | 'folder';
 export type ThemeMode = 'dark' | 'light' | 'system';
 
 // Themes used to live in this session blob too. They're settings now (see settings.ts), which
@@ -38,7 +39,7 @@ export function readAppSessionState(): AppSessionState | null {
     if (
       typeof parsed.documentName !== 'string' ||
       typeof parsed.content !== 'string' ||
-      (parsed.providerMode !== 'local' && parsed.providerMode !== 'drive') ||
+      !['local', 'drive', 'folder'].includes(parsed.providerMode as string) ||
       typeof parsed.saveNowEnabled !== 'boolean'
     ) {
       return null;
@@ -46,7 +47,7 @@ export function readAppSessionState(): AppSessionState | null {
     return {
       documentName: parsed.documentName,
       content: parsed.content,
-      providerMode: parsed.providerMode,
+      providerMode: parsed.providerMode as ProviderMode,
       saveNowEnabled: parsed.saveNowEnabled,
       updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : Date.now(),
       documentId: typeof parsed.documentId === 'string' && parsed.documentId ? parsed.documentId : undefined,

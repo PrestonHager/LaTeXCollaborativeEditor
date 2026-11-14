@@ -63,7 +63,9 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
         const status = entry.status();
         const account = entry.account();
         item.querySelector('.project-item-date')!.textContent = !entry.needsSignIn
-          ? 'Projects saved on this device'
+          ? id === 'localFolder'
+            ? 'Pick a folder on this computer'
+            : 'Projects saved on this device'
           : status === 'connected' && account
             ? `Signed in as ${account}`
             : status === 'connected'
@@ -71,7 +73,7 @@ export function createProjectsDialog(dialog: HTMLDialogElement, options: Project
               : `${statusLabels[status]}. You'll be asked to sign in.`;
         item.addEventListener('click', () => {
           // Browser storage swaps to its list here. Anything else opens its own picker, so this closes.
-          if (entry.needsSignIn) close();
+          if (id !== 'local') close();
           options.onProvider?.(id);
         });
         return item;
