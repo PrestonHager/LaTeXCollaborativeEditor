@@ -20,6 +20,9 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 tauri = { version = "2.12", features = [] }
+# Opens https links in the system browser, like a room link when this window has no WebRTC
+# (issue #205). The capability allows https URLs only (capabilities/main-window.json).
+tauri-plugin-opener = "2"
 
 # Only to turn on WebKitGTK's WebRTC setting (src/lib.rs). The same major version wry uses.
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -47,6 +47,22 @@ If you had turned **Ctrl+N** off, it stays off, now for **New File**. Keybinds y
 | **Select all** | **Ctrl+A** | **⌘A** |
 | Indent | **Tab** | **Tab** |
 
+## Autocompletion
+
+These work while you type in the editor. See [Autocompletion](editing-and-preview.md#autocompletion).
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| Open the completion list | **Ctrl+Space** | **⌃Space**, **⌥`** or **⌥I** |
+| Accept the highlighted completion | **Enter** | **↩** |
+| Move through the list | **↑** / **↓**, **Page Up** / **Page Down** | **↑** / **↓**, **Page Up** / **Page Down** |
+| Close the list, or leave a command's placeholders | **Escape** | **Escape** |
+| Next placeholder (tab stop) | **Tab** | **Tab** |
+| Previous placeholder | **Shift+Tab** | **⇧Tab** |
+
+The list opens by itself after `\` or `\begin{`.
+While a command's placeholders are active, **Tab** moves between them instead of indenting.
+
 Undo and Redo go by where focus is, like VS Code.
 In the editor they undo typing in the open file.
 In the **Files** panel they undo and redo file operations: create, rename, move, delete and upload.
@@ -90,7 +106,7 @@ Press **Use it here** or **Give it to ...** to pick, and the other command's key
 
 ### Keys the editor or browser keeps
 
-- While you type in the editor, its own keys come first, like **Ctrl+]** to indent or **Ctrl+Z** to undo.
+- While you type in the editor, its own keys come first, like **Ctrl+]** to indent, **Ctrl+Z** to undo or **Ctrl+Space** to open the completion list.
   If you give one of those to a command, Settings warns you, and the command only runs when the editor doesn't have focus.
 - Some keys belong to the browser or your computer, like **Ctrl+W** (close tab), **Ctrl+T** (new tab) and **Ctrl+N** (new window) in a browser tab, or **⌘H** (hide) on a Mac.
   Settings warns you about those, and says which key is used instead. See [Keys your browser keeps](#keys-your-browser-keeps).

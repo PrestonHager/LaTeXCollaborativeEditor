@@ -45,6 +45,9 @@ const GOOGLE_RUNTIME_SOURCES: Record<string, string[]> = {
   'connect-src': ['https://accounts.google.com/gsi/', 'https://content.googleapis.com'],
 };
 
+/** The desktop app's IPC origin on Windows (Tauri), which no URL in src/ names (issue #205). */
+const DESKTOP_IPC_SOURCES = ['http://ipc.localhost'];
+
 function externalUrls(): Map<string, string> {
   const found = new Map<string, string>();
   for (const [file, text] of Object.entries(sources)) {
@@ -138,8 +141,16 @@ describe('Content-Security-Policy in index.html', () => {
   });
 
   it("doesn't allow the e2e tests' local tracker, which only the e2e build adds (issue #167)", () => {
-    expect(csp['connect-src'].filter((source) => /localhost|127\.0\.0\.1|^ws:/.test(source))).toEqual([]);
+    // The desktop app's IPC (ipc: and http://ipc.localhost, issue #205) is the one exception.
+    expect(csp['connect-src'].filter((source) => /localhost|127\.0\.0\.1|^ws:/.test(source))).toEqual(DESKTOP_IPC_SOURCES);
     expect(cspAllows(csp, 'connect-src', 'ws://127.0.0.1:4185/', APP_ORIGIN)).toBe(false);
+  });
+
+  it("allows the desktop app's IPC, which only reaches its opener plugin (issue #205)", () => {
+    expect(csp['connect-src']).toEqual(expect.arrayContaining(['ipc:', 'http://ipc.localhost']));
+    expect(cspAllows(csp, 'connect-src', 'ipc://localhost/plugin%3Aopener%7Copen_url', 'tauri://localhost')).toBe(true);
+    expect(cspAllows(csp, 'connect-src', 'http://ipc.localhost/plugin%3Aopener%7Copen_url', 'https://tauri.localhost')).toBe(true);
+    expect(cspAllows(csp, 'connect-src', 'http://localhost:4185/', APP_ORIGIN)).toBe(false);
   });
 
   it('allows the app itself, including the Vite dev server socket', () => {
@@ -207,6 +218,7 @@ describe('Content-Security-Policy in index.html', () => {
       for (const source of csp[directive] ?? []) {
         if (source.startsWith("'") || /^[a-z]+:$/.test(source)) continue;
         if (GOOGLE_RUNTIME_SOURCES[directive]?.includes(source)) continue;
+        if (directive === 'connect-src' && DESKTOP_IPC_SOURCES.includes(source)) continue;
         if (urls.some((url) => sourceMatchesUrl(source, url))) continue;
         unexplained.push(`${directive} ${source}`);
       }

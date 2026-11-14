@@ -25,6 +25,23 @@ Some things to know:
 - The room is remembered per tab. Closing the tab, or opening the app in a new one, starts fresh.
 - To drop everyone on the old link, click **New link** next to Share. The app asks first, then makes a new room and copies the new link.
 
+## When a window can't share
+
+Sharing and joining need WebRTC, the browser feature that connects people directly.
+Some windows don't have it: the Linux desktop app today (its system webview is built without WebRTC), or a browser where a setting or an extension turns it off.
+
+In such a window:
+
+- **Share** doesn't make a room. It shows "This window can't make peer-to-peer connections, so it can't share or join a room." with what to do instead.
+- Opening a `?room=` link shows the same message, and the Files panel says so instead of "Waiting for the host".
+- The connection badge says **Can't connect in this window**.
+- None of the networking code starts, so nothing connects to the trackers.
+
+What to do instead:
+
+- **In a browser,** open the app in a recent version of Chrome, Edge, Firefox or Safari, with WebRTC on.
+- **In the desktop app,** click **Open in browser**. For a room link, it opens that room in the web app in your system browser. For Share, it opens the web app, where you can share. Projects in the desktop app don't carry over to the browser, so export the project first. If the browser can't be opened, the link is copied so you can paste it in.
+
 ## Joining a room
 
 Open the link in a recent browser.

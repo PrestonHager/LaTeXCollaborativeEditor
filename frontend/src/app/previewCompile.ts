@@ -43,6 +43,8 @@ const FIGURE_FILE = /\.(?:pdf|eps)$/i;
 
 export type DiagnosticsTopic = 'diagnostics' | 'previewErrors';
 
+const SEVERITY_RANK = { error: 0, warning: 1, info: 2 } as const;
+
 /** Compile the project into the preview, debounced while typing and throttled so it can't run back to back. */
 export function createPreviewCompile({
   getProject,
@@ -137,8 +139,9 @@ export function createPreviewCompile({
       lastCompiledKey = key;
       compileStatusEl.textContent = 'Compiled';
       onCompiled?.();
-      if (errors.length) {
-        const first = errors[0];
+      // Lead with the worst one. Info notes, like a package the preview leaves out, don't hide missing files.
+      const first = [...errors].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])[0];
+      if (first && (first.severity !== 'info' || !missing.length)) {
         setDiagnostics(`${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`);
       } else {
         const hint = missing.length ? missingHint?.() : '';

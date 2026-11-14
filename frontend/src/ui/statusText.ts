@@ -6,13 +6,16 @@ export type ConnectionInfo = {
   inRoom: boolean;
   state: TransportState;
   peers: number;
+  /** This window has no WebRTC, so it can't be in a room at all (issue #205). */
+  noWebRtc?: boolean;
 };
 
 /**
  * Short text for the connection pill. It says who's here instead of the raw transport state,
  * since nobody showing up yet is normal for a host.
  */
-export function connectionText({ isHost, inRoom, state, peers }: ConnectionInfo): string {
+export function connectionText({ isHost, inRoom, state, peers, noWebRtc }: ConnectionInfo): string {
+  if (noWebRtc) return "Can't connect in this window";
   if (!inRoom) return 'Not shared';
   if (peers > 0) {
     const who = peers === 1 ? '1 other person' : `${peers} other people`;
