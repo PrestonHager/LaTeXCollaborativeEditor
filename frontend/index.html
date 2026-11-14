@@ -21,7 +21,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'sha256-Zpzult2XEA/2OY8gNXdZF7kOuCuNQyWpeGn5nr95yYc=' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style https://www.gstatic.com https://ssl.gstatic.com; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://*.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://www.googleapis.com https://content.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073 ipc: http://ipc.localhost; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com https://drive.google.com https://content.googleapis.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
+      content="default-src 'self'; script-src 'self' 'sha256-DJOJgdhvVJBYqQIC2wEBNNN4el1FrTYKs/ys0ktcKuM=' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style https://www.gstatic.com https://ssl.gstatic.com; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://*.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://www.googleapis.com https://content.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073 ipc: http://ipc.localhost; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com https://drive.google.com https://content.googleapis.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
     />
     <title>Collaborative LaTeX Editor</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
@@ -252,6 +252,12 @@
             <div class="pane-bar">
               <span>Preview</span>
               <div class="pane-bar-actions">
+                <div id="preview-zoom" class="preview-zoom" role="group" aria-label="Preview zoom">
+                  <button id="preview-zoom-fit" type="button" class="btn preview-zoom-fit" data-variant="ghost" data-size="icon-xs" aria-pressed="false" aria-label="Fit width" data-tooltip="Fit width" data-side="bottom"><i data-lucide="move-horizontal"></i></button>
+                  <button id="preview-zoom-out" type="button" class="btn" data-variant="ghost" data-size="icon-xs" aria-label="Zoom out" data-tooltip="Zoom out" data-side="bottom"><i data-lucide="zoom-out"></i></button>
+                  <output id="preview-zoom-level" class="preview-zoom-level" aria-live="polite" aria-label="Zoom level">100%</output>
+                  <button id="preview-zoom-in" type="button" class="btn" data-variant="ghost" data-size="icon-xs" aria-label="Zoom in" data-tooltip="Zoom in" data-side="bottom"><i data-lucide="zoom-in"></i></button>
+                </div>
                 <div id="preview-changes" class="popover preview-changes" hidden>
                   <button id="preview-changes-btn" type="button" class="btn preview-changes-btn" data-variant="ghost" data-size="xs" aria-haspopup="dialog" aria-expanded="false" aria-controls="preview-changes-popover" aria-label="Preview is approximate" data-tooltip="Preview is approximate" data-side="bottom" data-align="end"><i data-lucide="info"></i><span id="preview-changes-count" class="preview-changes-count" aria-hidden="true"></span></button>
                   <div id="preview-changes-popover" class="preview-changes-popover" data-popover data-side="bottom" data-align="end" role="dialog" aria-labelledby="preview-changes-title" aria-hidden="true">

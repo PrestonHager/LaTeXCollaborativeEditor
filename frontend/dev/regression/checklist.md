@@ -41,6 +41,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] References: "This is section 1.5" in the Text section shows 1.5, not `??`.
 - [ ] References: clicking the 4 in "Jump to section 4" scrolls the preview to the Citations section, and clicking the 1.5 there scrolls back up.
 - [ ] References: the missing label shows `??` as plain text, not a link.
+- [ ] Zoom (desktop): the preview bar shows Fit width (↔), Zoom out, the level (100%) and Zoom in. Zoom in and out step through 110%, 125%… and 90%, 80%… down to 50% and up to 300%, where that button greys out. The text grows and shrinks and the page reflows, with no sideways scrollbar. Fit width shows pressed and goes back to 100%. Ctrl + scroll wheel (or a trackpad pinch) over the preview zooms the preview, not the app. Type in the editor: the preview keeps its zoom when it updates.
 - [ ] Scroll the preview halfway down, then type in the editor. After the preview updates it stays at the same place instead of jumping to the top.
 - [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list (the ⓘ button above the preview) doesn't mention `\vspace` or `\addcontentsline`.
 - [ ] Code: in the Code section, each `verbatim`, `lstlisting`, `minted` and `\lstinputlisting` block shows as a monospaced box with the text exactly as typed (indents, tabs, `%`, `<b>`, and `\ { } $ & # ^ _ ~`), in both the light and dark preview themes. Captions, line numbers, `firstline`/`lastline` and `\ref` to listings match the `% Expect:` comments, and the ⓘ list says listings have no syntax highlighting.
@@ -310,6 +311,7 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
 - [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
 - [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] Preview zoom on a phone: the preview opens at Fit width (↔ pressed, about 120%), with narrow side margins and body text easy to read at 360px wide, and no sideways scrolling. The zoom buttons are finger-sized. Pinching the preview zooms only the preview (the bars and the toolbar stay the same size) and the level follows; Fit width brings it back. Pinching the toolbar or bars doesn't zoom the preview.
 - [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
 - [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
 
