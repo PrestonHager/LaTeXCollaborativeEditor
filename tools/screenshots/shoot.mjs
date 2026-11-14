@@ -368,8 +368,12 @@ async function shootTheme(browser, theme) {
   await shot(page, 'settings', theme);
   await page.click('#settings-done');
 
-  // Share, which joins a room and shows the link. Do this last since it starts networking.
+  // Share opens a popover, and Start sharing joins a room and shows the link (issue #224).
+  // Do this last since it starts networking.
   await page.click('#share-btn');
+  await page.waitForTimeout(300);
+  await shot(page, 'share-start', theme, { clip: { x: 300, y: 0, width: 520, height: 260 } });
+  await page.click('#share-start-btn');
   await page.waitForFunction(() => (document.getElementById('share-link')?.textContent ?? '').includes('room='));
   await page.waitForTimeout(500);
   // Keep the room id out of the picture, since it's random every time.
@@ -378,17 +382,19 @@ async function shootTheme(browser, theme) {
     if (link) link.textContent = link.textContent.replace(/room=[^&]+/, 'room=...');
   });
   await annotate(page, [
-    { selector: '#share-btn', label: 'Share copies the link', side: 'below', dy: 20 },
-    { selector: '#new-link-btn', label: 'New link drops everyone', side: 'below', dy: 60 },
-    { selector: '#share-link', label: 'The link to send', side: 'below', dy: 100 },
-    { selector: '#connection-status', label: 'Connection status', side: 'below', dx: -100 },
+    { selector: '#share-link', label: 'The link to send', side: 'right', dx: 12 },
+    { selector: '#new-link-btn', label: 'New link drops everyone', side: 'below', dy: 40 },
+    { selector: '#share-stop-btn', label: 'Stop sharing leaves the room', side: 'below', dy: 80 },
+    { selector: '#connection-status', label: 'Connection status', side: 'below', dx: 60, dy: 8 },
   ]);
   await shot(page, 'share', theme);
+  // Close the popover so the header shows for the status picture.
+  await page.keyboard.press('Escape');
 
   // The status pills and notice, cropped to the header.
   await annotate(page, [
-    // The pills wrap under the share link at 1280px, so the notice label goes beside it, not below.
-    { selector: '#app-notice', label: 'Notices', side: 'right' },
+    // The notice and the pills share one row at 1280px, so the notice label goes below the others.
+    { selector: '#app-notice', label: 'Notices', side: 'below', dy: 116 },
     { selector: '#connection-status', label: 'Connection', side: 'below', dy: 8 },
     { selector: '#compile-status', label: 'Compile', side: 'below', dy: 44 },
     { selector: '#autosave-status', label: 'Autosave', side: 'below', dy: 80 },

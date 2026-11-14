@@ -131,6 +131,7 @@ const staticIcons = {
   Save,
   Check,
   ChevronRight,
+  Copy,
   Download,
   File,
   FileArchive,

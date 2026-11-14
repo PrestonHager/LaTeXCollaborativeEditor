@@ -202,6 +202,46 @@ describe('SessionController', () => {
     vi.useRealTimers();
   });
 
+  it('a host only joins a room when asked (issue #224)', async () => {
+    const controller = new SessionController({
+      isHost: true,
+      onConnectionState: vi.fn(),
+      blobs: new BlobStore(),
+    });
+    // Preloading the P2P code on hover must not connect.
+    await controller.preloadTransport();
+    expect(joinRoom).not.toHaveBeenCalled();
+    expect(controller.getRoomId()).toBeNull();
+    const room = controller.ensureRoom();
+    expect(joinRoom).toHaveBeenCalledWith(room);
+  });
+
+  it('leave closes the room, stops retrying, and lets a later Start join a new one', () => {
+    vi.useFakeTimers();
+    const onConnectionState = vi.fn();
+    const controller = new SessionController({
+      isHost: true,
+      onConnectionState,
+      blobs: new BlobStore(),
+    });
+    controller.join('old-room');
+    callbacks?.onState('Reconnecting');
+    controller.leave();
+
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(controller.getRoomId()).toBeNull();
+    vi.advanceTimersByTime(30_000);
+    expect(joinRoom).toHaveBeenCalledTimes(1);
+    // Leaving twice doesn't close again.
+    controller.leave();
+    expect(close).toHaveBeenCalledTimes(1);
+
+    const next = controller.ensureRoom();
+    expect(next).not.toBe('old-room');
+    expect(joinRoom).toHaveBeenLastCalledWith(next);
+    vi.useRealTimers();
+  });
+
   it('newRoom without a current room just creates one', () => {
     const controller = new SessionController({
       isHost: true,

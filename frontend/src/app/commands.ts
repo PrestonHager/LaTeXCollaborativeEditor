@@ -71,7 +71,8 @@ export type CommandContext = {
    */
   templates: { openNew(): Promise<void>; saveAsTemplate(): Promise<void>; editProfile(): Promise<void> };
   zipInput: HTMLInputElement;
-  shareButtonEl: HTMLElement;
+  /** Copy the share link, or open the Share popover to start sharing. */
+  copyShareLink: () => void;
   // These get swapped out or made later, so we read them each time we need them.
   readonly project: ProjectDoc;
   /**
@@ -183,7 +184,7 @@ export function createCommands(app: CommandContext) {
     projectsDialog,
     uploadDialog,
     zipInput,
-    shareButtonEl,
+    copyShareLink,
     guestCount,
     projectName,
     setStatus,
@@ -457,7 +458,7 @@ export function createCommands(app: CommandContext) {
     'view.focusEditor': () => editor.focus(),
     'app.openSettings': () => app.settingsDialog.open(),
     'file.rename': () => renameProject(),
-    'share.copyLink': () => shareButtonEl.click(),
+    'share.copyLink': () => copyShareLink(),
     'view.compileNow': () => compile.compileNow(),
     'view.layoutSplit': () => {
       layout.setMode('split');

@@ -3,27 +3,35 @@
 You can edit a project with other people at the same time.
 Their browsers connect straight to yours over WebRTC.
 
-![The Share button and the link it makes](assets/screenshots/share-light.png#only-light)
-![The Share button and the link it makes](assets/screenshots/share-dark.png#only-dark)
+![The Share popover while sharing, with the link, Copy, New link and Stop sharing](assets/screenshots/share-light.png#only-light)
+![The Share popover while sharing, with the link, Copy, New link and Stop sharing](assets/screenshots/share-dark.png#only-dark)
 
 ## Share button
 
-1. Click **Share** in the header.
-2. The app makes a room and builds a link to this page with `?room=...` on the end.
-3. It copies the link to your clipboard and shows it next to the button. The notice says "Share link copied to clipboard".
+Sharing is off until you turn it on. Opening the app, reloading it, or opening the Share popover doesn't make a room or connect to anything.
+
+![The Share popover before sharing, with Start sharing](assets/screenshots/share-start-light.png#only-light)
+![The Share popover before sharing, with Start sharing](assets/screenshots/share-start-dark.png#only-dark)
+
+1. Click **Share** in the header. A small popover says what sharing does: anyone with the link can see and edit the project, edits and files go straight between browsers (peer-to-peer), and it lasts until you stop sharing or close the tab.
+2. Click **Start sharing**. Only this makes a room. The app builds a link to this page with `?room=...` on the end.
+3. It copies the link to your clipboard and shows it in the popover. The notice says "Share link copied to clipboard".
 4. Send the link to the people you want to work with.
 
 If the copy fails, the notice says "Could not copy automatically."
-Copy the link shown next to Share by hand.
+Copy the link shown in the popover by hand, or click **Copy**.
 
-The **Copy share link** command in the command palette does the same thing as the button.
+While you're sharing, the popover shows the link, **Copy**, **New link** and **Stop sharing**.
+The **Copy share link** command in the command palette copies the link while you're sharing. When you aren't, it opens the Share popover, so you still start sharing yourself.
 
 Some things to know:
 
-- Clicking Share again keeps the same room and link.
-- If you reload the host tab, it rejoins the same room, so the link keeps working.
+- Opening Share again keeps the same room and link.
+- **Stop sharing** leaves the room, disconnects everyone, and forgets the link. If anyone is connected, the app asks first. The badge goes back to Not sharing.
+- To drop everyone on the old link but keep sharing, click **New link**. The app asks first, then makes a new room and copies the new link.
+- A reload never starts sharing again on its own. If the tab was sharing, the popover offers **Resume sharing (same link)**, which rejoins the same room so the link you sent still works. **Start sharing** makes a new link instead.
 - The room is remembered per tab. Closing the tab, or opening the app in a new one, starts fresh.
-- To drop everyone on the old link, click **New link** next to Share. The app asks first, then makes a new room and copies the new link.
+- Guests don't need to do anything: opening a `?room=` link joins that room. Their Share popover shows the link so they can pass it on, but only the host can make a new link or stop sharing.
 
 ## When a window can't share
 
@@ -80,7 +88,7 @@ The connection badge in the header says who you're editing with.
 
 | Text | What it means |
 | --- | --- |
-| Not shared | You haven't clicked Share and you're not in a room. |
+| Not sharing | You haven't started sharing (or you stopped), so you're not in a room. |
 | Shared, waiting for others | You're the host and nobody else has joined yet. This is normal right after sharing. |
 | Looking for the host | You opened a link and the host hasn't shown up yet. |
 | Connected with 2 other people | You're talking to peers directly. |

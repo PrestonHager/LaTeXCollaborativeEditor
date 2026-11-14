@@ -6,7 +6,8 @@ Overview
 
 Checklist
 - [ ] Sharing and session bootstrap: a link that creates/joins the same room across two browsers works reliably.
-- [x] Host reload: reloading the host tab after Share rejoins the same room, and New link starts a fresh one.
+- [x] Host reload: reloading the host tab after Share and picking Resume sharing (same link) rejoins the same room (before #224 it rejoined on its own), and New link starts a fresh one.
+- [ ] Explicit sharing (issue #224): a fresh load and a reload of a host tab make no tracker or WebRTC connection (the e2e-sync jobs check for no WebSocket before Start sharing). Share opens a popover, and only Start sharing (or Resume sharing (same link) after a reload) makes a room. A reload offers Resume sharing instead of rejoining. Stop sharing asks when someone is connected, leaves the room, drops the guest, clears the saved room id, and the badge says Not sharing. Guests opening a `?room=` link still join on load.
 - [x] Host reload with guests: a guest still connected while the host reloads keeps syncing in both directions, and edits it made while the host was away reach the host.
 - [x] Real-time collaboration: concurrent edits synchronize in both directions with acceptable latency.
 - [ ] Editor readiness: the editor shows LaTeX syntax highlighting and line numbers.
