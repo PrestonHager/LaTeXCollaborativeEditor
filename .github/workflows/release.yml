@@ -1,11 +1,19 @@
-# Releases a vX.Y.Z tag: checks it, tests and builds it, deploys it to PRODUCTION (GitHub Pages)
-# and makes the GitHub release. Every production deploy is a release. See docs/versioning.md.
+# Releases a vX.Y.Z tag: checks it, tests it, deploys it to PRODUCTION and makes the GitHub release.
+# Every production deploy is a release. See docs/versioning.md and docs/deployment.md.
+#
+# Where production is:
+# - Coolify (issue #249), once COOLIFY_URL, COOLIFY_API_TOKEN and COOLIFY_PRODUCTION_APP_UUID are
+#   set as secrets in the Production environment. Coolify builds the repo-root Dockerfile from main
+#   (auto-deploy off), so the deploy-coolify job only runs when main's head is the tagged commit,
+#   asks Coolify's API to deploy, and waits until the live version.json shows this release.
+# - GitHub Pages, until all three secrets are set: the build and deploy jobs below, as before.
 #
 # How it runs:
 # - Normally tag-release.yml calls it, after it tags a merged release PR. That run is on main,
 #   so the github-pages environment's default "main only" rule lets it deploy.
 # - "Run workflow" on main with a tag redeploys or retries a release. Use this one when unsure.
-# - Pushing a vX.Y.Z tag by hand runs it on the tag. The deploy then needs the github-pages
+#   On Coolify that only works for the tag at main's head, since Coolify always builds main.
+# - Pushing a vX.Y.Z tag by hand runs it on the tag. A Pages deploy then needs the github-pages
 #   environment to allow v* tags (docs/deployment.md, one-time setup).
 name: Release
 
@@ -24,10 +32,8 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
+# Each job asks for only what it needs.
+permissions: {}
 
 jobs:
   build:
@@ -35,6 +41,9 @@ jobs:
     environment: Production
     permissions:
       contents: read
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+      commit: ${{ steps.target.outputs.commit }}
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
       VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
@@ -61,6 +70,24 @@ jobs:
             echo "::error title=Tag not on main::$TAG isn't on main. Only tag commits that are already on main."
             exit 1
           fi
+      - name: Pick the production host
+        id: target
+        env:
+          HAS_URL: ${{ secrets.COOLIFY_URL != '' }}
+          HAS_TOKEN: ${{ secrets.COOLIFY_API_TOKEN != '' }}
+          HAS_APP: ${{ secrets.COOLIFY_PRODUCTION_APP_UUID != '' }}
+        run: |
+          set -euo pipefail
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          if [ "$HAS_URL" = true ] && [ "$HAS_TOKEN" = true ] && [ "$HAS_APP" = true ]; then
+            echo "target=coolify" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Production host::Coolify. It builds the Dockerfile itself, so this job only checks and tests the tag."
+          else
+            if [ "$HAS_URL" = true ] || [ "$HAS_TOKEN" = true ] || [ "$HAS_APP" = true ]; then
+              echo "::warning title=Coolify half set up::Only some of COOLIFY_URL, COOLIFY_API_TOKEN and COOLIFY_PRODUCTION_APP_UUID are set in the Production environment, so this release still deploys to GitHub Pages."
+            fi
+            echo "target=pages" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -72,23 +99,27 @@ jobs:
           npm ci
           npm run test:run
       - uses: ./.github/actions/build-site
+        if: steps.target.outputs.target == 'pages'
         with:
           deploy-env: production
           docs-site-url: ${{ vars.DOCS_SITE_URL }}
           docs-fallback-url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/docs/
       - uses: actions/upload-pages-artifact@v5
+        if: steps.target.outputs.target == 'pages'
         with:
           path: frontend/dist
 
+  # GitHub Pages, while the Coolify secrets aren't set. A follow-up removes it once production is on Coolify.
   deploy:
     needs: build
+    if: needs.build.outputs.target == 'pages'
     runs-on: ubuntu-latest
     permissions:
       pages: write
       id-token: write
     # One production deploy at a time, and never cancel one halfway.
     concurrency:
-      group: pages-production
+      group: production-deploy
       cancel-in-progress: false
     environment:
       name: github-pages
@@ -99,8 +130,112 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
+  # Coolify (issue #249). Coolify builds main's head, not a tag, so this only deploys when that's the tag.
+  deploy-coolify:
+    needs: build
+    if: needs.build.outputs.target == 'coolify'
+    runs-on: ubuntu-latest
+    environment:
+      name: Production
+      url: ${{ vars.PRODUCTION_URL || 'https://latex.prestonhager.com/' }}
+    permissions:
+      contents: read
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      TAG_COMMIT: ${{ needs.build.outputs.commit }}
+      SITE_URL: ${{ vars.PRODUCTION_URL || 'https://latex.prestonhager.com/' }}
+      COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+      COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+      COOLIFY_PRODUCTION_APP_UUID: ${{ secrets.COOLIFY_PRODUCTION_APP_UUID }}
+      # How long to wait for Coolify's build and the live version.json, in seconds.
+      DEPLOY_TIMEOUT: 1800
+    steps:
+      - name: Check main's head is the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          main="$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          if [ "$main" != "$TAG_COMMIT" ]; then
+            echo "::error title=main moved past the tag::Coolify deploys main's head (${main::7}), but $TAG is ${TAG_COMMIT::7}. Production only ships the tagged commit, so this isn't deployed. Release main's head as a new version instead, or roll back in Coolify (docs/deployment.md, \"Production on Coolify\")."
+            exit 1
+          fi
+          echo "main is at $TAG (${TAG_COMMIT::7})."
+      - name: Ask Coolify to deploy
+        id: deploy
+        run: |
+          set -euo pipefail
+          base="${COOLIFY_URL%/}"
+          case "$base" in
+            https://*) ;;
+            *) echo "::error title=Bad COOLIFY_URL::COOLIFY_URL must start with https://."; exit 1 ;;
+          esac
+          # The token goes to curl on stdin, so it's never in a command line or the log.
+          status="$(printf 'header = "Authorization: Bearer %s"\n' "$COOLIFY_API_TOKEN" | curl -sS --config - \
+            --max-time 60 -X POST -H 'Accept: application/json' \
+            -o "$RUNNER_TEMP/deploy.json" -w '%{http_code}' \
+            --url-query "uuid=$COOLIFY_PRODUCTION_APP_UUID" --url-query force=false \
+            "$base/api/v1/deploy")"
+          if [ "$status" != 200 ]; then
+            echo "::error title=Coolify deploy failed::POST /api/v1/deploy answered HTTP $status. Check COOLIFY_URL, COOLIFY_PRODUCTION_APP_UUID, and that the token has the deploy permission."
+            jq -r '.message? // empty' "$RUNNER_TEMP/deploy.json" 2> /dev/null || true
+            exit 1
+          fi
+          id="$(jq -r '.deployments[0].deployment_uuid // empty' "$RUNNER_TEMP/deploy.json")"
+          if [ -z "$id" ]; then
+            echo "::error title=Coolify didn't queue a deploy::$(jq -r '.deployments[0].message // .message // "No deployment_uuid in the answer."' "$RUNNER_TEMP/deploy.json")"
+            exit 1
+          fi
+          echo "Coolify queued deployment $id."
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: Wait for the live site to show this release
+        env:
+          DEPLOYMENT_UUID: ${{ steps.deploy.outputs.id }}
+        run: |
+          set -euo pipefail
+          base="${COOLIFY_URL%/}"
+          site="${SITE_URL%/}"
+          want_version="${TAG#v}"
+          want_commit="${TAG_COMMIT::7}"
+          deadline=$(( $(date +%s) + DEPLOY_TIMEOUT ))
+          last=""
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            # Coolify's own status, to stop early when its build fails. A failed status read is only logged.
+            state="$(printf 'header = "Authorization: Bearer %s"\n' "$COOLIFY_API_TOKEN" | curl -sS --config - \
+              --max-time 30 -H 'Accept: application/json' "$base/api/v1/deployments/$DEPLOYMENT_UUID" 2> /dev/null \
+              | jq -r '.status // empty' 2> /dev/null || true)"
+            case "$state" in
+              failed|cancelled*)
+                echo "::error title=Coolify deploy $state::Deployment $DEPLOYMENT_UUID ended as $state. See its log in Coolify. Production still serves the previous build."
+                exit 1 ;;
+            esac
+            live="$(curl -sS --max-time 30 -H 'Cache-Control: no-cache' "$site/version.json?t=$(date +%s)" 2> /dev/null || true)"
+            version="$(jq -r '.version // empty' <<< "$live" 2> /dev/null || true)"
+            commit="$(jq -r '.commit // empty' <<< "$live" 2> /dev/null || true)"
+            env_name="$(jq -r '.env // empty' <<< "$live" 2> /dev/null || true)"
+            now="Coolify: ${state:-unknown}. Live: ${version:-?} ${commit:-?} ${env_name:-?}."
+            [ "$now" = "$last" ] || echo "$now"
+            last="$now"
+            if [ "$version" = "$want_version" ] && [ -n "$commit" ] && [ "$commit" = "${TAG_COMMIT::${#commit}}" ] && [ ${#commit} -ge 7 ]; then
+              if [ "$env_name" != production ]; then
+                echo "::error title=Not a production build::$site serves $TAG, but its version.json says env \"$env_name\". Set the VITE_DEPLOY_ENV build variable to production in Coolify and run Release again."
+                exit 1
+              fi
+              echo "::notice title=Deployed::$site serves $TAG (${commit})."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error title=Deploy timed out::$site didn't show $want_version ($want_commit) within $DEPLOY_TIMEOUT seconds. Last seen: $last"
+          exit 1
+
   github-release:
-    needs: deploy
+    needs: [build, deploy, deploy-coolify]
+    # Runs after whichever deploy ran. The other one is skipped.
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.deploy.result == 'success' || needs.deploy-coolify.result == 'success') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -93,8 +93,8 @@ The project is GPL-3.0-or-later.
 
 ## Where package files come from
 
-The app is static, with no server of ours. Today it is GitHub Pages in production and Coolify
-for staging (`docs/deployment.md`). The options:
+The app is static, with no server of ours. Staging is on Coolify, and production moves from GitHub
+Pages to Coolify too (issue #249, `docs/deployment.md`), which lifts the Pages limits below. The options:
 
 1. **A third-party TeX Live server** (texlive.swiftlatex.com, packages.siglum.org, CTAN mirrors).
    Rejected. It is a server we don't control, CTAN mirrors don't send CORS headers, and each

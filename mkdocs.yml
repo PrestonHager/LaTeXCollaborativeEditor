@@ -21,6 +21,7 @@ exclude_docs: |
   desktop.md
   compatibility-baseline.md
   wasm-tex-engine.md
+  lsp-in-browser.md
   assets/ui-sizing/
 
 theme:
