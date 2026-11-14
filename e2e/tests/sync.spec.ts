@@ -44,23 +44,50 @@ test('host and guest sync files and edits both ways', async ({ browser, guestBro
   const stamp = Date.now().toString(36);
 
   try {
-    // First, the host opens the app and uploads an image.
+    // Sharing is off until the host starts it (issue #224), so watch for tracker connections.
+    const sockets: string[] = [];
+    host.on('websocket', (socket) => sockets.push(socket.url()));
+    const shareLink = host.locator('#share-link');
+    /** Open the Share popover and check nothing has connected. Hovering Share only preloads the P2P code. */
+    const expectNotSharing = async () => {
+      await expect(host.locator('#connection-status')).toHaveText('Not sharing');
+      await host.locator('#share-btn').click();
+      await expect(host.locator('#share-popover')).toHaveAttribute('aria-hidden', 'false');
+      await expect(host.locator('#share-start-btn')).toBeVisible();
+      await expect(shareLink).toBeHidden();
+      // Give a join a moment to show up if one were going to.
+      await host.waitForTimeout(1_000);
+      expect(sockets).toEqual([]);
+    };
+
+    // First, the host opens the app. Opening Share doesn't start anything.
     await host.goto('/');
     await waitForApp(host);
     await expect(fileRow(host, 'main.tex')).toBeVisible();
+    await expectNotSharing();
 
+    // Start sharing makes the link. We read it from the page since the clipboard may be blocked.
+    await host.locator('#share-start-btn').click();
+    await expect(shareLink).toHaveAttribute('href', /[?&]room=/);
+    const roomUrl = (await shareLink.getAttribute('href'))!;
+
+    // A reload doesn't rejoin on its own. It offers the same link instead.
+    sockets.length = 0;
+    await host.reload();
+    await waitForApp(host);
+    await expectNotSharing();
+    await host.locator('#share-resume-btn').click();
+    await expect(shareLink).toHaveAttribute('href', roomUrl);
+    await host.keyboard.press('Escape');
+    await expect(host.locator('#share-popover')).toHaveAttribute('aria-hidden', 'true');
+
+    // Then the host uploads an image.
     // The file pane also has an Upload button for empty projects, so use the one in its header.
     await host.locator('#file-pane .file-pane-actions [data-command="file.upload"]').click();
     await host.locator('#upload-input').setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: PIXEL_PNG });
     await expect(host.locator('#upload-results')).toContainText('pixel.png: added');
     await host.locator('#upload-done').click();
     await expect(fileRow(host, 'pixel.png')).toBeVisible();
-
-    // Now the host shares, and we read the room link from the page since the clipboard may be blocked.
-    await host.locator('#share-btn').click();
-    const shareLink = host.locator('#share-link');
-    await expect(shareLink).toHaveAttribute('href', /[?&]room=/);
-    const roomUrl = (await shareLink.getAttribute('href'))!;
 
     // Then the guest opens the link and both sides wait to find each other through the relays.
     await guest.goto(roomUrl);
@@ -97,6 +124,15 @@ test('host and guest sync files and edits both ways', async ({ browser, guestBro
     const image = guest.locator('#file-viewer img.file-viewer-image');
     await expect(image).toBeVisible();
     await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+
+    // Stop sharing asks first, since the guest is connected, then really leaves the room.
+    await host.locator('#share-btn').click();
+    await host.locator('#share-stop-btn').click();
+    await host.getByRole('alertdialog').getByRole('button', { name: 'Stop sharing' }).click();
+    await expect(host.locator('#connection-status')).toHaveText('Not sharing');
+    await expect(host.locator('#share-start-btn')).toBeVisible();
+    await expect(host.locator('#share-resume-btn')).toBeHidden();
+    await expect(guest.locator('#connection-status')).not.toHaveText(/Connected|Relayed/);
   } finally {
     await guestContext.close();
     await hostContext.close();

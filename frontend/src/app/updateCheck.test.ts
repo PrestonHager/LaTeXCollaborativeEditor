@@ -166,7 +166,7 @@ describe('updatePromptText', () => {
     expect(updatePromptText('peer', { isHost: false, inRoom: true }).message).toMatch(/collaborator is on a newer version/);
     expect(updatePromptText('peer', { isHost: false, inRoom: true }).detail).toMatch(/rejoin the room/);
     expect(updatePromptText('stale-chunk', { isHost: true, inRoom: true }).message).toMatch(/couldn't load/);
-    expect(updatePromptText('deploy', { isHost: true, inRoom: true }).detail).toMatch(/Guests are disconnected for a moment/);
+    expect(updatePromptText('deploy', { isHost: true, inRoom: true }).detail).toMatch(/Resume sharing \(same link\)/);
   });
 });
 

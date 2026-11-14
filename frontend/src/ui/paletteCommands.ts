@@ -12,7 +12,7 @@ export const themeSwitchCommands: (PaletteOnlyCommand & { theme: ThemeMode })[] 
 ];
 
 export const paletteOnlyCommands: PaletteOnlyCommand[] = [
-  { id: 'share.copyLink', section: 'Share', label: 'Copy share link', description: 'Start sharing if needed, and copy the link for others to join.' },
+  { id: 'share.copyLink', section: 'Share', label: 'Copy share link', description: 'Copy the link for others to join, or open Share to start sharing.' },
   { id: 'view.focusEditor', section: 'View', label: 'Focus editor', description: 'Put the cursor back in the editor.' },
 ];
 

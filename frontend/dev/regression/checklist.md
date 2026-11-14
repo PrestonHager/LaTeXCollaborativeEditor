@@ -214,14 +214,19 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 
 Use two browser windows, or a normal and a private window, so each has its own storage.
 
-- [ ] Before sharing, the connection badge says Not shared.
-- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
+- [ ] Before sharing, the connection badge says Not sharing. With the Network tab open (WS filter), loading the app, hovering Share and opening the Share popover make no tracker connection.
+- [ ] Share opens a popover that explains sharing, with **Start sharing**. Escape or a click outside closes it, and focus goes back to Share after Escape. No link exists yet.
+- [ ] Start sharing copies a `?room=` link and shows it in the popover with Copy, New link and Stop sharing, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
+- [ ] The palette's **Copy share link** opens the Share popover when not sharing, and copies the link while sharing.
+- [ ] On a phone-width window (390px), the Share popover fits on screen with no sideways scroll.
 - [ ] Opening the link in the second window joins as a guest, and both badges say Connected with 1 other person.
 - [ ] The guest gets the whole file tree, the text and the image.
 - [ ] Edits show up in the other window within a couple of seconds, both ways.
 - [ ] A new file or folder from either side shows up on the other.
 - [ ] An image uploaded on one side shows up in the other's preview, with a progress bar while it transfers.
-- [ ] Reloading the host rejoins the same room, and the guest keeps syncing.
+- [ ] Reloading the host doesn't rejoin: the badge says Not sharing and no tracker connection is made. The Share popover offers **Resume sharing (same link)**, which rejoins the same room, and the guest keeps syncing. Start sharing instead makes a new link.
+- [ ] Stop sharing with a guest connected asks in a **Stop sharing?** dialog (Keep sharing focused, red Stop sharing). Stopping says "Stopped sharing", the host badge says Not sharing, the guest loses the host, and a reload doesn't offer Resume sharing. With nobody connected it stops without asking.
+- [ ] A guest's Share popover shows the room link with Copy only, no New link or Stop sharing.
 - [ ] Text the guest typed while the host was reloading shows up on the host.
 - [ ] New link asks in a **Start a new link?** dialog with Keep current link (focused) and a red Start new link. Start new link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.

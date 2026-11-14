@@ -128,9 +128,31 @@
 
         <div id="share-area" class="share-area">
           <div id="presence-bar" class="presence-bar" role="group" aria-label="People in this room" hidden></div>
-          <button id="share-btn" class="btn" data-size="sm" type="button"><i data-lucide="share-2"></i>Share</button>
-          <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>New link</button>
-          <a id="share-link" class="muted share-link" href="" target="_blank" rel="noreferrer"></a>
+          <div id="share-menu" class="popover share-menu">
+            <button id="share-btn" class="btn" data-size="sm" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-popover"><i data-lucide="share-2"></i>Share</button>
+            <div id="share-popover" class="share-popover" data-popover data-side="bottom" data-align="start" role="dialog" aria-labelledby="share-popover-title" aria-hidden="true">
+              <h2 id="share-popover-title" class="share-popover-title">Share this project</h2>
+              <div id="share-start" class="share-popover-view">
+                <ul class="share-popover-points">
+                  <li>Anyone with the link can see and edit this project.</li>
+                  <li>Edits and files go straight between browsers (peer-to-peer).</li>
+                  <li>It lasts until you stop sharing or close this tab.</li>
+                </ul>
+                <div class="share-popover-actions">
+                  <button id="share-start-btn" class="btn" data-size="sm" type="button">Start sharing</button>
+                  <button id="share-resume-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>Resume sharing (same link)</button>
+                </div>
+              </div>
+              <div id="share-active" class="share-popover-view" hidden>
+                <a id="share-link" class="share-link" target="_blank" rel="noreferrer"></a>
+                <div class="share-popover-actions">
+                  <button id="share-copy-btn" class="btn" data-size="sm" type="button"><i data-lucide="copy"></i>Copy</button>
+                  <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button">New link</button>
+                  <button id="share-stop-btn" class="btn" data-variant="destructive" data-size="sm" type="button">Stop sharing</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="share" aria-label="Help with sharing" data-tooltip="Help with sharing" data-side="bottom"><i data-lucide="circle-help"></i></a>
         </div>
         <span id="app-notice" class="app-notice" role="status" aria-live="polite">
