@@ -67,6 +67,7 @@ import { describeError } from './storage/errors';
 import { BlobStore } from './project/blobStore';
 import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
+import { completionProjectFrom } from './ui/completionProject';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
@@ -766,6 +767,9 @@ function bindProject() {
     persistAppSession();
   };
   session.getDoc().on('update', onUpdate);
+  // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
+  const completionProject = completionProjectFrom(session.getDoc(), project);
+  editor.setCompletionProject(completionProject);
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
     renderFiles();
@@ -774,6 +778,8 @@ function bindProject() {
   });
   unbindDoc = () => {
     session.getDoc().off('update', onUpdate);
+    completionProject.dispose();
+    editor.setCompletionProject(null);
     stopTree();
   };
   activeFileId = activeFileId && project.get(activeFileId) ? activeFileId : null;

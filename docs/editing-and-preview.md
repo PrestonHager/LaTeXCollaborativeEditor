@@ -25,6 +25,23 @@ The list covers about 250 common commands (structure, references and citations, 
 It comes with the app and loads just after the editor shows, so nothing you type is sent anywhere to complete it.
 Undo takes back an accepted completion like any other typing, and collaborators see the text it puts in.
 
+#### Labels, citations and paths
+
+Inside the braces of some commands, the list offers what's in the project rather than commands.
+It opens as you type after the `{`, and after a comma for commands that take a list, like `\cref{sec:a,sec:b}` or `\cite{a,b}`.
+
+- **Labels**: `\ref{`, `\eqref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{` and `\vref{` offer every `\label{...}` in the project's `.tex` files, with the file and line it's on.
+  Commented-out labels are left out.
+- **Citations**: `\cite{` and its natbib and biblatex forms (`\citep`, `\citet`, `\parencite`, `\textcite`, `\autocite`, `\footcite`, `\nocite` and the rest) offer the keys in the project's `.bib` files.
+  Each shows its first author and year, and its info box the title, the authors and the entry type.
+  Optional arguments before the braces, like `\parencite[see][12]{`, are fine.
+- **Paths**: `\input{` offers the project's `.tex` files and `\include{` the same without `.tex`, `\includegraphics{` its images and PDFs, `\bibliography{` its `.bib` files without `.bib`, and `\addbibresource{` with it.
+  Paths are relative to the main file's folder, the way the preview reads them.
+
+The list follows the project as it changes: a file you add, a label you write, or a `.bib` entry a collaborator adds shows up the next time the list opens.
+The project is only read when one of these lists opens, and only files that changed since are read again.
+Like the rest of autocompletion, it all happens in your browser and nothing is sent anywhere.
+
 The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
 - Undo and redo only undo your own typing, not a collaborator's.

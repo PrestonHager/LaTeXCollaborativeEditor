@@ -12,6 +12,7 @@ import {
 import { keymap, type EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
 import type { LatexCommand, LatexEnvironment } from './latexCompletionData';
+import { citationSource, labelSource, pathSource, type ProjectGetter } from './projectCompletion';
 
 /**
  * LaTeX autocompletion (issue #192). This module is a lazy chunk: the editor imports it just after
@@ -137,14 +138,22 @@ export function latexEnvironmentSource(load: LatexCompletionDataLoader = loadBun
 }
 
 /**
- * The editor's completion extensions: closing brackets, and LaTeX commands and environments
- * from the bundled data. The keys are CodeMirror's: Ctrl+Space opens the list, Enter accepts,
- * Tab and Shift+Tab move between a snippet's fields, and Escape closes the list.
+ * The editor's completion extensions: closing brackets, LaTeX commands and environments from the
+ * bundled data, and labels, citations and paths from the project `getProject` gives (issue #193).
+ * The keys are CodeMirror's: Ctrl+Space opens the list, Enter accepts, Tab and Shift+Tab move
+ * between a snippet's fields, and Escape closes the list.
  */
-export function latexCompletionExtensions(load: LatexCompletionDataLoader = loadBundledData): Extension {
+export function latexCompletionExtensions(load: LatexCompletionDataLoader = loadBundledData, getProject: ProjectGetter = () => null): Extension {
+  const sources = [
+    labelSource(getProject),
+    citationSource(getProject),
+    pathSource(getProject),
+    latexEnvironmentSource(load),
+    latexCommandSource(load),
+  ];
   return [
     closeBrackets(),
     keymap.of(closeBracketsKeymap),
-    autocompletion({ override: [latexEnvironmentSource(load), latexCommandSource(load)], icons: false }),
+    autocompletion({ override: sources, icons: false }),
   ];
 }
