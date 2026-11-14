@@ -15,9 +15,10 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
   - `VITE_DISABLE_CSP` (optional; `1` ships without the Content Security Policy, see "Turning the CSP off" below)
-  - `VITE_DEPLOY_ENV` (set by the deploy workflows: `production` or `staging`, see "Staging and production" below)
-- The deploy workflows (`release.yml` for production, `staging.yml` for staging) read `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** or **staging** environment). Both build with the `.github/actions/build-site` action.
-  The rendezvous and TURN values aren't passed to the build yet, so production uses the defaults in `bootstrapConfig.ts`.
+  - `VITE_DEPLOY_ENV` (`production` from `release.yml`, `staging` from the staging Dockerfile, see "Staging and production" below)
+- `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action.
+  The rendezvous and TURN values aren't passed to the production build yet, so production uses the defaults in `bootstrapConfig.ts`.
+  Staging builds in Coolify from the repo-root `Dockerfile` instead, and takes every `VITE_*` value above, rendezvous and TURN included, as a build variable (see "Staging on Coolify" below).
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
@@ -48,49 +49,52 @@ Frontend deployment (GitHub Pages)
   - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
   - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
-- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder: to staging on every push to the `staging` branch, to production on a release (see "Staging and production" below).
+- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder to production on a release. Staging runs the same two builds inside the `Dockerfile` on every push to the `staging` branch (see "Staging and production" below).
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
 - **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository, or **Production** or **staging** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/` (for staging, the staging site's URL under `/docs/`). Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
 
 Staging and production
-- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site (`.github/workflows/staging.yml`). A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
-- **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the staging deploy and tests. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
+- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site on Coolify. A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
+- **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the tests. Coolify picks up that push like any other. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
 - **Staging is on its own origin.** If it were a path on the production site, it would share localStorage and IndexedDB with production, so a staging build's migration could damage real users' projects, and Google OAuth only allows exact origins anyway.
-  GitHub Pages has one site per repo, so staging lives in a second repo, `PrestonHager/LaTeXCollaborativeEditor-staging`, served at `https://staging.latex.prestonhager.com/`.
-  `staging.yml` builds the site and force-pushes it as one commit to that repo's `gh-pages` branch, with a `.nojekyll` file and a `CNAME` for the custom domain. Pages in the staging repo publishes it a minute or two later.
-- **Skipped until it's set up.** Without the `STAGING_REPO` variable and the `STAGING_DEPLOY_TOKEN` secret, the Deploy staging run passes with a notice saying staging was skipped, so forks and a fresh setup don't fail on every push.
+  Staging is served at `https://staging.latex.prestonhager.com/` from Coolify (https://coolify.prestonhager.com/). Production stays on GitHub Pages and shares nothing with it.
 - **Its own peers.** Peers only meet peers with the same `VITE_P2P_APP_ID`. A staging build always uses an app id with `staging` in it: the staging value as is if it already has one, else that value (or the default) plus `-staging`. So staging peers never meet production peers, even if staging inherits production's app id from a repository variable.
-- **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. The deploy workflows set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
+- **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. `release.yml` and the staging `Dockerfile` set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
   It goes in `dist/version.json` as `env`. A staging build also shows a small **Staging** badge next to the project name, adds `<meta name="robots" content="noindex">` to every page, and ships a `robots.txt` that blocks every crawler (that covers the docs too). Production and dev builds have none of these.
   It's all done at build time by `deployEnvPlugin` in `frontend/scripts/build-info.mjs`, which replaces the `<!-- deploy-env-badge -->` comment in `index.html`. No app code reads it.
-- **Environments.** The production build runs in the **Production** environment, and its deploy in **github-pages**. The staging build runs in the **staging** environment. Each one's variables and secrets override the repository's, so put values that differ in the environment:
 
-  | Name | Kind | Staging | Production |
-  | --- | --- | --- | --- |
-  | `STAGING_REPO` | variable | `PrestonHager/LaTeXCollaborativeEditor-staging` | (not used) |
-  | `STAGING_DOMAIN` | variable | `staging.latex.prestonhager.com` (leave unset to use `https://<owner>.github.io/<repo>/`) | (not used) |
-  | `STAGING_DEPLOY_TOKEN` | secret | Fine-grained token, see below | (not used) |
-  | `VITE_P2P_APP_ID` | variable | Something with `staging` in it, like `latex-collaborative-editor-staging` | As today |
-  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY` | secrets | The same client ID and key as production | As today |
-  | `VITE_GOOGLE_APP_ID` | variable | The same project number | As today |
-  | `DOCS_SITE_URL` | variable | `https://staging.latex.prestonhager.com/docs/` | `https://latex.prestonhager.com/docs/` |
-  | `VITE_DOCS_BASE_URL` | variable | Unset (same-origin `docs/`), or the staging docs URL | As today |
-  | `VITE_STUN_URL` | variable | As production, unless staging should test another | As today |
+Staging on Coolify
+- Everything staging lives in its own Coolify project, **LaTeX Collaborative Editor (staging)**, in its `staging` environment.
+  Our own tooling for testing (WebTorrent trackers, TURN or forwarding servers, and so on) goes in that project too, as separate resources.
+  Never point production at anything in it.
+- The site itself is an Application resource built from this repo's `staging` branch with the **Dockerfile** build pack.
+  The `Dockerfile` builds the app (with `VITE_DEPLOY_ENV=staging`), builds the docs with MkDocs, and serves both from nginx on port 80 (`deploy/nginx.conf`).
+  Coolify deploys on every push to `staging` through its GitHub App webhook, so there's no deploy workflow for staging.
+- There's no `.git` in the build, so the commit in `version.json` comes from Coolify's `SOURCE_COMMIT` build arg. Leave **Include Source Commit in Build** on, or the version shows `dev`.
+- Build variables (Application > Environment Variables, each with **Build Variable** ticked):
 
+  | Name | Value |
+  | --- | --- |
+  | `VITE_P2P_APP_ID` | Something with `staging` in it, like `latex-collaborative-editor-staging` (the build adds `-staging` if it's missing) |
+  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY`, `VITE_GOOGLE_APP_ID` | The same as production |
+  | `DOCS_SITE_URL` | `https://staging.latex.prestonhager.com/docs/` |
+  | `VITE_P2P_RENDEZVOUS` | Optional. Our own trackers in the staging project, comma separated |
+  | `VITE_STUN_URL`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` | Optional. Our own STUN/TURN in the staging project |
+  | `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP` | Optional, as in production |
+
+  Empty values are dropped before the build, so the defaults in `bootstrapConfig.ts` still apply.
 - **One-time setup** (a maintainer, once):
-  1. Create the public repo `PrestonHager/LaTeXCollaborativeEditor-staging`, with nothing in it. Pages on a free plan needs it public.
-  2. Make a fine-grained personal access token: **Settings > Developer settings > Fine-grained tokens**, resource owner PrestonHager, **Only select repositories**: the staging repo, **Repository permissions > Contents: Read and write**, and nothing else. Give it an expiry and a calendar reminder to renew it.
-  3. In this repo, **Settings > Environments > New environment** `staging`. Add the secret `STAGING_DEPLOY_TOKEN` (the token) and the variables in the table above. Restrict its deployment branches to `staging`.
-  4. Run **Deploy staging** (Actions, Run workflow, on `staging`) once, so the staging repo gets a `gh-pages` branch.
-  5. In the staging repo, **Settings > Pages**: Source **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`. Set the custom domain to `staging.latex.prestonhager.com` and tick **Enforce HTTPS** once the certificate is ready.
-  6. DNS: add `CNAME staging.latex.prestonhager.com -> prestonhager.github.io`. Verifying the domain for the account (**Settings > Pages > Verified domains**) keeps anyone else from claiming it.
-  7. Google Cloud console, the production OAuth client: add `https://staging.latex.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
-  8. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
-  9. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
-  10. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
+  1. In Coolify, make the project **LaTeX Collaborative Editor (staging)** with a `staging` environment.
+  2. Add an Application from the GitHub App source, this repo, branch `staging`, build pack **Dockerfile**, port `80`, domain `https://staging.latex.prestonhager.com`.
+  3. Add the build variables above, then deploy.
+  4. DNS: point `staging.latex.prestonhager.com` at the Coolify server (an `A` record, or a `CNAME` to its host name). Coolify gets the certificate once it resolves.
+  5. Google Cloud console, the production OAuth client: add `https://staging.latex.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
+  6. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
+  7. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
+  8. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
 - **Why production deploys from `main`, not from the tag.** The github-pages environment only lets `main` deploy, and that's the setting most likely to be left as it is. A tag pushed with `GITHUB_TOKEN` doesn't start other workflows either.
   So when a release PR merges, `tag-release.yml` (a push to `main`) tags the merge commit and then calls `release.yml` as a reusable workflow. That run's ref is still `main`, so the deploy passes the default rule, and the code it builds is the tag's.
-  Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 9's `v*` rule is in.
+  Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 7's `v*` rule is in.
 - **Transition.** Once this setup merges, production stops updating from `main`, and stays on the last build from `main` until the first release. The first one is **v0.2.0**: the Trystero protocol break in Unreleased is a breaking change, which before 1.0 is a minor bump (`docs/versioning.md`). Cut it with Prepare release, version `0.2.0`.
 
 Desktop app (experimental, issue #122)
