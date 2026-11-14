@@ -310,6 +310,12 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
 - [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
 - [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] The header shows one Menu button instead of File, Edit, View and Help. Its menu is the window's width minus 1rem on each side, starts under the button, and has every item from the four menus under File, Edit, View and Help headings. It scrolls to About at 360 x 640, and nothing runs past the edge.
+- [ ] Items in Menu work like the desktop menus: grayed out when they don't apply, the check marks on Pause Saving and the layout items, the keybinds on the right, and a tap runs the command and closes the menu.
+- [ ] With a keyboard, Enter or Down on Menu opens it on New Project. Up and Down move through every group, skipping grayed-out items, Home and End jump to the ends, and Escape closes it with focus back on Menu. A screen reader reads the File, Edit, View and Help headings as groups.
+- [ ] The toolbar shows only Compile now, Share and the More actions (⋯) button at the right. More actions has New file, Upload files, Save now, Export, Command palette and Documentation, with their keybinds, and stays inside the window. Its tooltip doesn't cover the open menu.
+- [ ] In the toolbar, Left and Right move between Compile now, Share and More actions. Down on More actions opens it, and Escape goes back to the button.
+- [ ] Widening the window past 640px with Menu or More actions open closes it and brings back File, Edit, View and Help and the full toolbar. Tab still lands on a toolbar button that shows.
 - [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
 - [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
 

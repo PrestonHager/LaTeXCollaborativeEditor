@@ -15,6 +15,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 - **The preview says which packages it can't load.** Each package the preview takes out of `\usepackage` or `\RequirePackage` gets a diagnostic on its line: an info note for one it can leave out or stand in for, like `geometry` or `amsmath`, and a warning for one whose output will be missing, like `tikz`. Each says what will look different. `\RequirePackage` no longer stops the preview, and the footer leads with the worst diagnostic. The full list is in the Editing and preview docs.
 - **A clear message when a window can't share.** If the browser or the desktop app has no WebRTC (like the Linux desktop app today), Share and room links say "This window can't make peer-to-peer connections, so it can't share or join a room." instead of failing quietly, and the P2P code never starts. A browser suggests a supported one; the desktop app offers to open the room, or the web app, in your system browser.
 
+### Changed
+
+- **Phone menus.** Under 640px wide, File, Edit, View and Help become one Menu button with every item grouped under its menu's name, and the toolbar keeps Compile now and Share and puts the rest under More actions (⋯). The keys and screen reader labels are the same as the desktop menus. Menus no longer run off the right edge of the window. Before, File ran about 54px off-screen at 390px.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added

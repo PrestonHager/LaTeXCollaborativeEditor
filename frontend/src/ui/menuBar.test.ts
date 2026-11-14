@@ -452,4 +452,141 @@ describe('createMenuBar', () => {
     expect(plainItem.hasAttribute('aria-checked')).toBe(false);
     menuBar.destroy();
   });
+
+  describe('the one-button phone menu (#186)', () => {
+    const MENUS: TestMenu[] = [
+      { label: 'File', items: [{ commandId: 'file.new', label: 'New', shortcut: 'Ctrl+N' }, { commandId: 'file.saveNow', label: 'Save' }] },
+      { label: 'Edit', items: [{ commandId: 'edit.undo', label: 'Undo' }] },
+      { label: 'View', items: [{ commandId: 'view.layoutSplit', label: 'Split View', checkable: true }] },
+    ];
+    const COLLAPSED = `<div class="menu-root dropdown-menu" data-menu-label="Menu" data-collapsed-menu id="phone-root">
+      <button type="button" class="menu-trigger btn" aria-haspopup="menu" aria-controls="menu-all" aria-expanded="false">Menu</button>
+      <div id="menu-all" class="menu-popover" data-popover aria-hidden="true"><div class="menu-list" role="menu" aria-label="Main menu"></div></div>
+    </div>`;
+
+    const setup = (phone = { on: true }, disabled: CommandId[] = []) => {
+      const container = withMenus(document.createElement('div'), MENUS);
+      container.insertAdjacentHTML('beforeend', COLLAPSED);
+      container.querySelector('[data-menu-label="File"] [role="menu"]')!.insertAdjacentHTML('beforeend', '<hr role="separator" />');
+      document.body.replaceChildren(container);
+      const calls: CommandId[] = [];
+      let checked = false;
+      const menuBar = createMenuBar(container, {
+        getCommandState: (id) => ({ enabled: !disabled.includes(id), checked: id === 'view.layoutSplit' ? checked : undefined }),
+        onCommand: (id) => calls.push(id),
+        shortcutLabel: (id) => (id === 'file.new' ? 'Ctrl+N' : undefined),
+        isCollapsed: () => phone.on,
+      });
+      const trigger = container.querySelector<HTMLButtonElement>('#phone-root .menu-trigger')!;
+      const items = () => Array.from(container.querySelectorAll<HTMLButtonElement>('#phone-root .menu-item'));
+      return { container, menuBar, calls, trigger, items, setChecked: (value: boolean) => (checked = value) };
+    };
+    const press = (target: Element, key: string) => target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+
+    it('copies every item into one menu, grouped and labelled by menu, and lists each command once', () => {
+      const { container, menuBar, items } = setup();
+      expect(items().map((item) => item.dataset.command)).toEqual(['file.new', 'file.saveNow', 'edit.undo', 'view.layoutSplit']);
+      const groups = Array.from(container.querySelectorAll<HTMLElement>('#phone-root [role="group"]'));
+      expect(groups.map((group) => document.getElementById(group.getAttribute('aria-labelledby')!)!.textContent)).toEqual(['File', 'Edit', 'View']);
+      // A separator between groups, plus the one copied from inside File.
+      expect(container.querySelectorAll('#phone-root [role="separator"]')).toHaveLength(3);
+      expect(items().every((item) => item.querySelector('svg'))).toBe(true);
+      expect(items()[0].querySelector('[data-shortcut]')!.textContent).toBe('Ctrl+N');
+      expect(menuBar.entries().map((entry) => entry.commandId)).toEqual(['file.new', 'file.saveNow', 'edit.undo', 'view.layoutSplit']);
+      menuBar.destroy();
+    });
+
+    it('runs commands and tracks state like the desktop menus', () => {
+      const { menuBar, calls, trigger, items, setChecked } = setup({ on: true }, ['edit.undo']);
+      trigger.click();
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(document.activeElement).toBe(items()[0]);
+      const undo = items().find((item) => item.dataset.command === 'edit.undo')!;
+      expect(undo.disabled).toBe(true);
+      undo.click();
+      expect(calls).toEqual([]);
+      setChecked(true);
+      menuBar.refresh();
+      expect(items().at(-1)!.getAttribute('aria-checked')).toBe('true');
+      items()[1].click();
+      expect(calls).toEqual(['file.saveNow']);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      menuBar.destroy();
+    });
+
+    it('moves through every group with the arrow keys, Home and End, and Escape goes back to Menu', () => {
+      const { menuBar, trigger, items } = setup({ on: true }, ['edit.undo']);
+      trigger.focus();
+      press(trigger, 'ArrowDown');
+      expect(document.activeElement).toBe(items()[0]);
+      press(items()[0], 'ArrowDown');
+      press(items()[1], 'ArrowDown');
+      // Undo is disabled, so it's skipped, straight from File to View.
+      expect(document.activeElement).toBe(items()[3]);
+      press(items()[3], 'Home');
+      expect(document.activeElement).toBe(items()[0]);
+      press(items()[0], 'ArrowUp');
+      expect(document.activeElement).toBe(items()[3]);
+      press(items()[3], 'End');
+      expect(document.activeElement).toBe(items()[3]);
+      // Menu is the only trigger on a phone, so Left and Right stay in it.
+      press(items()[3], 'ArrowRight');
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      press(document.activeElement!, 'Escape');
+      expect(document.activeElement).toBe(trigger);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      press(trigger, 'ArrowLeft');
+      expect(document.activeElement).toBe(trigger);
+      menuBar.destroy();
+    });
+
+    it('skips the Menu button on wider windows, and closes when the window crosses the breakpoint', () => {
+      const phone = { on: false };
+      const { container, menuBar, trigger } = setup(phone);
+      const triggers = Array.from(container.querySelectorAll<HTMLButtonElement>('.menu-root:not([data-collapsed-menu]) .menu-trigger'));
+      triggers[2].focus();
+      press(triggers[2], 'ArrowRight');
+      expect(document.activeElement).toBe(triggers[0]);
+      triggers[0].click();
+      expect(triggers[0].getAttribute('aria-expanded')).toBe('true');
+      menuBar.closeMenus();
+      expect(triggers[0].getAttribute('aria-expanded')).toBe('false');
+      phone.on = true;
+      trigger.click();
+      // The sheet starts under its button. jsdom has no layout, so that's 4px below 0.
+      expect(container.querySelector<HTMLElement>('#menu-all')!.style.getPropertyValue('--menu-top')).toBe('4px');
+      menuBar.destroy();
+    });
+  });
+
+  it('pulls a menu back inside the window when it would run past the right edge', () => {
+    const container = withMenus(document.createElement('div'), [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }]);
+    document.body.replaceChildren(container);
+    const popover = container.querySelector<HTMLElement>('[data-popover]')!;
+    const box = { left: 110, right: 444 };
+    const menuRoot = container.querySelector<HTMLElement>('.menu-root')!;
+    menuRoot.getBoundingClientRect = () => ({ left: box.left } as DOMRect);
+    Object.defineProperty(popover, 'offsetLeft', { configurable: true, get: () => 0 });
+    Object.defineProperty(popover, 'offsetWidth', { configurable: true, get: () => box.right - box.left });
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    try {
+      const menuBar = createMenuBar(container, { getCommandState: () => ({ enabled: true }), onCommand: () => {} });
+      container.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
+      // 444 - (390 - 16) = 70px too far right.
+      expect(popover.style.getPropertyValue('--menu-shift')).toBe('-70px');
+      menuBar.closeMenus();
+      // A menu that fits isn't moved, and a menu wider than the window stops at the left gap.
+      box.right = 300;
+      container.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
+      expect(popover.style.getPropertyValue('--menu-shift')).toBe('');
+      menuBar.closeMenus();
+      Object.assign(box, { left: 20, right: 500 });
+      container.querySelector<HTMLButtonElement>('.menu-trigger')!.click();
+      expect(popover.style.getPropertyValue('--menu-shift')).toBe('-4px');
+      menuBar.destroy();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    }
+  });
 });
