@@ -60,6 +60,11 @@ check(conf.app?.withGlobalTauri !== true, 'withGlobalTauri stays off: the fronte
 
 const indexHtml = read(join(repo, 'frontend', 'index.html'));
 check(/<meta\s+http-equiv=["']Content-Security-Policy["']/i.test(indexHtml), 'frontend/index.html must keep its CSP <meta> tag.');
+// Compile PDF compiles a WebAssembly TeX engine (issue #240). The desktop app uses the same meta
+// policy, so it needs 'wasm-unsafe-eval' in script-src there, and never 'unsafe-eval'.
+const scriptSrc = /content="[^"]*?script-src([^;"]*)/i.exec(indexHtml)?.[1]?.trim().split(/\s+/) ?? [];
+check(scriptSrc.includes("'wasm-unsafe-eval'"), "frontend/index.html: script-src needs 'wasm-unsafe-eval' for the WebAssembly TeX engine (docs/desktop.md, Security).");
+check(!/'unsafe-eval'/.test(indexHtml.replace(/'wasm-unsafe-eval'/g, '')), "frontend/index.html: the CSP must never allow 'unsafe-eval'.");
 
 const capabilitiesDir = join(tauriDir, 'capabilities');
 const capabilityFiles = readdirSync(capabilitiesDir).filter((name) => name.endsWith('.json'));
@@ -83,4 +88,4 @@ if (errors.length) {
   process.exit(1);
 }
 const version = json(join(repo, 'frontend', 'package.json')).version;
-console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, only the https opener, links guarded.`);
+console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP with WebAssembly, only the https opener, links guarded.`);
