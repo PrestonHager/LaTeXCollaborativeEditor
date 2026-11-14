@@ -64,7 +64,7 @@ It only ever has these four fields. `env` is the deploy environment, `VITE_DEPLO
 
 After `vite build`, `frontend/scripts/check-build-pages.mjs` fails the build if `version.json` is missing, isn't JSON, has a bad field (`env` included), or has a version that doesn't match `package.json`.
 
-The update check fetches it, checks it with `parseVersionInfo`, and compares it with `BUILD_INFO` using `isDifferentBuild`. GitHub Pages sends `Cache-Control: max-age=600` and we can't change headers there, so the fetch bypasses the cache itself: `fetch('version.json?t=' + Date.now(), { cache: 'no-store' })`. There's no service worker, so nothing else caches it.
+The update check fetches it, checks it with `parseVersionInfo`, and compares it with `BUILD_INFO` using `isDifferentBuild`. Production's nginx (`deploy/nginx.conf`) sends `Cache-Control: no-cache` for it, but GitHub Pages (the old host, and any other static host) sends `Cache-Control: max-age=600`, so the fetch bypasses the cache itself: `fetch('version.json?t=' + Date.now(), { cache: 'no-store' })`. There's no service worker, so nothing else caches it.
 
 ### The update prompt
 
@@ -129,15 +129,18 @@ PRs target the `staging` branch, and every push to it deploys to the staging sit
    A PR opened with `GITHUB_TOKEN` doesn't start other workflows, so its `pull_request` checks don't run on their own. Prepare release runs **Test and Coverage** on the branch itself (`workflow_dispatch`). If the checks still don't show on the PR, close and reopen it, or push a commit to the branch. Both start `pull_request` runs.
 4. Merge it. `.github/workflows/tag-release.yml` runs on the push to `main`. It sees the release when `frontend/package.json`'s version went up, or the commit message names `release/vX.Y.Z` for the current version (`frontend/scripts/release-tag.mjs`). Then it:
    - tags `vX.Y.Z` (annotated) on that commit, unless the tag is already there;
-   - calls `.github/workflows/release.yml`, which checks the tag is on `main`, matches both `package.json` files and has a changelog section (`frontend/scripts/release-notes.mjs`), runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to GitHub Pages, and creates the GitHub release with that changelog section as the notes, marked as a pre-release if the version has a `-`.
+   - calls `.github/workflows/release.yml`, which checks the tag is on `main`, matches both `package.json` files and has a changelog section (`frontend/scripts/release-notes.mjs`), runs the tests, deploys it to production, and creates the GitHub release with that changelog section as the notes, marked as a pre-release if the version has a `-`.
+
+   The deploy: with the Coolify secrets set (`docs/deployment.md`, "Production on Coolify"), it checks `main`'s head is still the tagged commit, asks Coolify to deploy (Coolify builds the `Dockerfile` from `main`), and waits until the live `version.json` shows this version and commit, failing after 30 minutes. Without them, it builds with `VITE_DEPLOY_ENV=production` and deploys to GitHub Pages, as before.
 
    A normal PR that bumps the version by hand releases the same way when it merges.
 5. `.github/workflows/sync-staging.yml` merges `main` back into `staging`, so `staging` has the version commit and the next release PR starts clean.
 
 If the release fails after tagging, fix it in a new PR, then Actions > **Release** > Run workflow on `main` with the tag to retry. That's also how to redeploy a release (for example after changing a Production variable): it deploys the tag again and refreshes the GitHub release's notes.
+On Coolify that only works for the tag at `main`'s head, since Coolify builds `main`, not the tag. To go back to an older release, use Coolify's own rollback (`docs/deployment.md`, "Production on Coolify"), or release a fix as the next patch.
 If the tagged commit itself is broken, release the fix as the next patch. Don't move a tag that's been deployed.
 
-You can still tag by hand (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`) on a commit on `main` whose version already matches. That runs `release.yml` on the tag, which can only deploy if the github-pages environment allows `v*` tags (`docs/deployment.md`, one-time setup). Running Release on `main` with the tag needs no such rule.
+You can still tag by hand (`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`) on a commit on `main` whose version already matches. That runs `release.yml` on the tag, which on GitHub Pages can only deploy if the github-pages environment allows `v*` tags (`docs/deployment.md`, one-time setup). Running Release on `main` with the tag needs no such rule.
 
 Between releases, staging runs the last released version number, so the commit in `version.json` and the footer tells builds apart. `version.json`'s `env` says which site a build is for.
 
