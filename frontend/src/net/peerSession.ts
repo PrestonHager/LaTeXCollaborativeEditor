@@ -33,7 +33,7 @@ export class PeerSession {
   private readonly callbacks: PeerSessionCallbacks;
   private readonly load: LoadTransport;
 
-  constructor(bootstrap: BootstrapConfig, callbacks: PeerSessionCallbacks, load: LoadTransport = () => whenOnline(() => import('./p2pTransport'))) {
+  constructor(bootstrap: BootstrapConfig, callbacks: PeerSessionCallbacks, load: LoadTransport = () => whenOnline(() => import('./p2pTransport').then(async (transport) => (await transport.prepareRtc(), transport)))) {
     this.bootstrap = bootstrap;
     this.callbacks = callbacks;
     this.load = load;

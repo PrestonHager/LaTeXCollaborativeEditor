@@ -1,7 +1,16 @@
 //! The desktop shell. It opens one window on the bundled frontend build (frontend/dist, served
-//! from inside the app, never from a remote URL). Its only plugin is the opener, which the page
-//! uses to open https links in the system browser.
+//! from inside the app, never from a remote URL). The opener lets the page open https links in the
+//! system browser; the dialog, fs and persisted-scope plugins let it open folders the person picks
+//! as projects (issue #178), and nothing else on disk. Google sign-in runs here too, through the
+//! system browser, with the refresh token in the OS keychain (issue #177, src/google_auth.rs), and
+//! signed updates through the updater plugin when a release build configures it (#179, src/updates.rs).
+//! Where the webview has no RTCPeerConnection (distro WebKitGTK), the page's WebRTC peer
+//! connections run here instead, over IPC (#176, src/native_rtc.rs).
 //! See docs/desktop.md for the plan.
+
+mod google_auth;
+pub mod native_rtc;
+mod updates;
 
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, Url, WebviewWindowBuilder};
@@ -15,7 +24,40 @@ const LATEXJS_PATH: &str = "/latexjs/";
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Local folder projects (#178). The fs capability allows no path on its own: only folders
+        // picked in the dialog join its scope, and persisted-scope remembers them across restarts.
+        // persisted-scope reads the fs plugin's scope, so it comes after it.
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_persisted_scope::init())
+        // Google sign-in (#177). Each command needs its allow-* permission in the capability.
+        .manage(google_auth::GoogleAuth::default())
+        // WebRTC DataChannels for webviews without RTCPeerConnection (#176). Host candidates
+        // are mDNS names, like a browser's, so local IPs don't reach the trackers.
+        .manage(native_rtc::NativeRtc::new(true))
+        .invoke_handler(tauri::generate_handler![
+            google_auth::google_sign_in,
+            google_auth::google_access_token,
+            google_auth::google_sign_out,
+            updates::update_check,
+            updates::update_install,
+            native_rtc::commands::rtc_create,
+            native_rtc::commands::rtc_create_data_channel,
+            native_rtc::commands::rtc_create_description,
+            native_rtc::commands::rtc_set_description,
+            native_rtc::commands::rtc_add_ice_candidate,
+            native_rtc::commands::rtc_send,
+            native_rtc::commands::rtc_close
+        ])
         .setup(|app| {
+            // Updates (#179): only release builds add plugins.updater (a public key and the
+            // GitHub Releases endpoint) with --config. Without it there's no updater to register.
+            let updater = updates::configured(app.config());
+            #[cfg(desktop)]
+            if updater {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
+            app.manage(updates::Updates::new(updater));
             create_main_window(app)?;
             #[cfg(target_os = "linux")]
             enable_webrtc(app)?;
@@ -42,6 +84,10 @@ fn create_main_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
     let nav_dev_url = dev_url.clone();
 
     WebviewWindowBuilder::from_config(app.handle(), &config)?
+        // Tells the page, before its scripts run, whether this build can sign in to Google (#177),
+        // so Accounts can say "Not configured" without an IPC round trip, and that the shell can
+        // run WebRTC for it (#176). Only booleans: the client id and secret stay on the Rust side.
+        .initialization_script(desktop_info_script(google_auth::Client::from_env().is_some()))
         // Nothing but the app itself loads in this window. An https link opens in the
         // system browser instead; anything else (http, file, custom schemes) goes nowhere.
         .on_navigation(move |url| {
@@ -70,6 +116,15 @@ fn create_main_window(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
         })
         .build()?;
     Ok(())
+}
+
+/// The one global the shell sets in the page (frontend/src/app/desktopShell.ts reads it): whether
+/// this build can sign in to Google (#177), and that the shell can run WebRTC for the page (#176),
+/// which the page only uses when its webview has no RTCPeerConnection.
+fn desktop_info_script(google_sign_in: bool) -> String {
+    format!(
+        "Object.defineProperty(window,'__LCE_DESKTOP__',{{value:Object.freeze({{googleSignIn:{google_sign_in},nativeRtc:true}})}});"
+    )
 }
 
 /// The app's own pages: the bundled build (tauri://localhost, or http(s)://tauri.localhost on
@@ -128,6 +183,15 @@ mod tests {
 
     fn url(s: &str) -> Url {
         Url::parse(s).unwrap()
+    }
+
+    #[test]
+    fn the_page_only_learns_whether_google_sign_in_is_set_up() {
+        assert_eq!(
+            desktop_info_script(true),
+            "Object.defineProperty(window,'__LCE_DESKTOP__',{value:Object.freeze({googleSignIn:true,nativeRtc:true})});"
+        );
+        assert!(desktop_info_script(false).contains("googleSignIn:false"));
     }
 
     #[test]

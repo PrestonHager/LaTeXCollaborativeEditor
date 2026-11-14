@@ -1,5 +1,19 @@
 import { joinRoom, selfId, type DataPayload, type JsonValue, type Room } from '@trystero-p2p/torrent';
 import type { BootstrapConfig } from './bootstrapConfig';
+import { hasWebRtc } from '../app/p2pSupport';
+import { desktopNativeRtc } from '../app/desktopShell';
+
+/**
+ * The desktop app's RTCPeerConnection stand-in where the webview has none (issue #176): WebRTC in
+ * the shell, over IPC (nativeRtc.ts). Undefined in browsers and wherever the real one exists.
+ */
+let rtcPolyfill: typeof RTCPeerConnection | undefined;
+
+/** Load the stand-in when this window needs it. Runs before the first join (peerSession.ts). */
+export async function prepareRtc(win: object | undefined = globalThis.window): Promise<void> {
+  if (rtcPolyfill || hasWebRtc(win) || !desktopNativeRtc(win)) return;
+  rtcPolyfill = await (await import('./nativeRtc')).nativeRtcPeerConnection();
+}
 
 export type TransportState = 'Not sharing' | 'Waiting for peers' | 'Connected' | 'Relayed' | 'Reconnecting';
 
@@ -71,6 +85,7 @@ export class P2pTransport {
         appId: this.bootstrap.appId,
         relayConfig: { urls: this.bootstrap.rendezvous },
         rtcConfig: { iceServers: this.bootstrap.iceServers },
+        ...(rtcPolyfill ? { rtcPolyfill } : {}),
       },
       roomId,
     );

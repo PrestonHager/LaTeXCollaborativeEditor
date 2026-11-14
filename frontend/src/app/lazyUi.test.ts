@@ -151,9 +151,11 @@ describe('lazyProjectsDialog and lazyUploadDialog', () => {
     const lazyUpload = lazyUploadDialog(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createUploadDialog: () => upload }) as never });
     const list = [{ id: 'p1', name: 'One' }] as never;
     lazyProjects.open(list);
+    lazyProjects.open(list, 'googleDrive');
     lazyUpload.open('figures');
     await settle();
-    expect(projects.open).toHaveBeenCalledWith(list);
+    expect(projects.open).toHaveBeenCalledWith(list, undefined);
+    expect(projects.open).toHaveBeenCalledWith(list, 'googleDrive');
     expect(upload.open).toHaveBeenCalledWith('figures');
     lazyProjects.chooseProvider(['local', 'googleDrive']);
     await settle();

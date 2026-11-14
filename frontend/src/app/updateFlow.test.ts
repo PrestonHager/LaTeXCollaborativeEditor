@@ -42,6 +42,39 @@ const peer = (over: Partial<PeerVersion>): PeerVersion => ({
 });
 
 describe('setupUpdateFlow', () => {
+  it('installs and restarts instead of reloading in the desktop app (#179)', async () => {
+    const { flow, root, button, reload, beforeReload, deps } = setup({ room: () => ({ isHost: false, inRoom: true }) });
+    const install = vi.fn(async () => {});
+    flow.useAppUpdater(install);
+    expect(button('reload').textContent).toBe('Restart to update');
+    expect(button('anyway').textContent).toBe('Restart anyway');
+    flow.offer('peer');
+    expect(root.textContent).toContain('Restart to update so you can keep editing together.');
+    expect(root.textContent).toContain("You'll rejoin the room after the restart.");
+    button('reload').click();
+    await vi.waitFor(() => expect(install).toHaveBeenCalled());
+    expect(deps.flush).toHaveBeenCalled();
+    expect(beforeReload).toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("says why the desktop app couldn't install, and keeps the card up", async () => {
+    const { flow, root, button } = setup();
+    flow.useAppUpdater(async () => {
+      throw new Error('No update is ready yet');
+    });
+    flow.offer('deploy');
+    button('reload').click();
+    await vi.waitFor(() => expect(root.textContent).toContain("Couldn't install the update (No update is ready yet)."));
+    expect(root.hidden).toBe(false);
+    expect(button('reload').textContent).toBe('Restart to update');
+    flow.useAppUpdater(async () => {
+      throw 'raw';
+    });
+    button('anyway').click();
+    await vi.waitFor(() => expect(root.textContent).toContain("Couldn't install the update (raw)."));
+  });
+
   it('shows the prompt for a new deploy without taking focus', async () => {
     const { flow, root } = setup();
     const input = document.createElement('input');
