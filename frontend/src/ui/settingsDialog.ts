@@ -1,7 +1,10 @@
 import type { ThemeMode } from '../state/appSession';
 import type { SettingSection } from '../state/settings';
 import { returnFocusOnClose } from './focusReturn';
+import { formatBytes } from './formatBytes';
 import './settingsDialog.css';
+
+export { formatBytes };
 
 export type SettingsState = {
   editorTheme: ThemeMode;
@@ -40,14 +43,6 @@ type SettingsDialogOptions = {
    */
   texAssets?: { usage(): Promise<{ bytes: number; files: number }>; remove(): Promise<void> };
 };
-
-/** "12.3 MB", for download and storage sizes. */
-export function formatBytes(bytes: number): string {
-  if (bytes < 1000) return `${bytes} B`;
-  if (bytes < 1_000_000) return `${(bytes / 1000).toFixed(1)} kB`;
-  if (bytes < 1_000_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-  return `${(bytes / 1_000_000_000).toFixed(2)} GB`;
-}
 
 // How long Reset waits for the second click before it lets go.
 const RESET_CONFIRM_MS = 5000;

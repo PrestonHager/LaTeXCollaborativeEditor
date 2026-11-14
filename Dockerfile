@@ -17,6 +17,7 @@ ARG VITE_GOOGLE_API_KEY
 ARG VITE_GOOGLE_APP_ID
 ARG VITE_DOCS_BASE_URL
 ARG VITE_DISABLE_CSP
+ARG VITE_COMPILE_PDF
 # There's no .git in the build context, so the version's commit comes from Coolify instead.
 ARG SOURCE_COMMIT
 COPY frontend/package.json frontend/package-lock.json ./

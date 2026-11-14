@@ -74,6 +74,7 @@ See [Undoing file operations](editing-and-preview.md#undoing-file-operations).
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
 | **Compile Now** (refresh the preview) | **Ctrl+Enter** | **⌘↩** |
+| **Compile PDF** (the real PDF, with TeX) | **Ctrl+Shift+Enter** | **⇧⌘↩** |
 
 **Compile Now** used to be **Ctrl+Shift+C**, but Chrome and Edge open the element inspector on that key.
 In the editor, **Ctrl+Enter** compiles instead of inserting a blank line.

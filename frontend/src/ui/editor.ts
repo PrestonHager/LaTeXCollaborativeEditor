@@ -191,6 +191,13 @@ export function createEditorPane(container: HTMLElement, options: EditorPaneOpti
       touchKeyBar?.refresh();
     },
     focus() { view.focus(); },
+    /** Put the cursor at the start of a line (1-based, clamped to the document) and scroll to it, like a diagnostic link (#242). */
+    goToLine(line: number) {
+      const doc = view.state.doc;
+      const target = doc.line(Math.min(Math.max(1, Math.floor(line)), doc.lines));
+      view.dispatch({ selection: EditorSelection.cursor(target.from), scrollIntoView: true });
+      view.focus();
+    },
     selectAll() {
       view.dispatch({
         selection: EditorSelection.range(0, view.state.doc.length),

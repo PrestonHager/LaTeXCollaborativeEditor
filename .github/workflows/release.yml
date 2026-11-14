@@ -45,6 +45,8 @@ jobs:
       VITE_STUN_URL: ${{ vars.VITE_STUN_URL }}
       # Rollback switch: set the VITE_DISABLE_CSP variable to 1 to ship without the CSP meta tags.
       VITE_DISABLE_CSP: ${{ vars.VITE_DISABLE_CSP }}
+      # Compile PDF (#242): set the VITE_COMPILE_PDF variable to 1 once the TeX engine files are hosted.
+      VITE_COMPILE_PDF: ${{ vars.VITE_COMPILE_PDF }}
     steps:
       - uses: actions/checkout@v7
         with:

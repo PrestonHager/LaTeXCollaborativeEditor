@@ -15,8 +15,9 @@ Frontend deployment (GitHub Pages)
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
   - `VITE_DISABLE_CSP` (optional; `1` ships without the Content Security Policy, see "Turning the CSP off" below)
+  - `VITE_COMPILE_PDF` (optional; `1` turns on View > Compile PDF once the TeX engine files are hosted under `tex/`, see "Compile PDF engine" below. Off, the command says it isn't available yet)
   - `VITE_DEPLOY_ENV` (`production` from `release.yml`, `staging` from the staging Dockerfile, see "Staging and production" below)
-- `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action.
+- `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP` and `VITE_COMPILE_PDF` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action.
   The rendezvous and TURN values aren't passed to the production build yet, so production uses the defaults in `bootstrapConfig.ts`.
   Staging builds in Coolify from the repo-root `Dockerfile` instead, and takes every `VITE_*` value above, rendezvous and TURN included, as a build variable (see "Staging on Coolify" below).
 - Storage providers are listed once in `frontend/src/storage/providers/registry.ts` (#200): each has an id, name, icon, capabilities, and a `configured()` check against its build variables. The Accounts panel, File > Open Project and the status bar read the registry. A provider whose keys are missing stays listed as **Not configured**, so a deployment never has to hide it. Adding a provider (#202, #203, #204) means a registry entry plus its own build variables and app registration, documented here. Tokens stay in the browser tab that signed in and are never sent to peers.
@@ -88,7 +89,7 @@ Staging on Coolify
   | `DOCS_SITE_URL` | `https://staging.latex.apps.prestonhager.com/docs/` |
   | `VITE_P2P_RENDEZVOUS` | Optional. Our own trackers in the staging project, comma separated |
   | `VITE_STUN_URL`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` | Optional. Our own STUN/TURN in the staging project |
-  | `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP` | Optional, as in production |
+  | `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP`, `VITE_COMPILE_PDF` | Optional, as in production |
 
   Empty values are dropped before the build, so the defaults in `bootstrapConfig.ts` still apply.
 - **One-time setup** (a maintainer, once):
@@ -147,6 +148,8 @@ Runtime architecture (summary)
   - **No assets yet is a normal state.** Until the asset-hosting issue publishes them, `tex/manifest.json` is a 404 and Compile PDF says it isn't available on this site. Nothing else in a deploy changes. A host that answers unknown paths with `index.html` (an HTML response) counts the same, and the staging nginx (`deploy/nginx.conf`) returns a real 404 under `/tex/`.
   - **Cache:** the files go in the Cache API cache `tex-assets-v1`, keyed by SHA-256 (under a synthetic `/__tex-asset/<sha256>` URL that's never fetched). Each download is checked against its hash before it's stored. After the first download the app asks for `navigator.storage.persist()`. Entries the current manifest doesn't list, and caches in older formats (`tex-assets-*`), are deleted after a compile loads the engine. Settings shows how much is stored, with Remove, once anything is.
   - **The glue module** is imported from its own URL (`script-src 'self'`; never a `blob:` URL). It exports `createTexEngine()`, returning the small `TexEngineBackend` interface in `src/compile/pdf/engine.ts` (load assets, write files, run a pass, read the PDF and log). Swapping BusyTeX for another engine means shipping another glue module and manifest.
+  - **The command** (issue #242): View > Compile PDF (Ctrl+Shift+Enter) loads `app/compilePdf.ts`, `ui/compilePdfDialog.ts` and the worker client as lazy chunks (`compilePdf-*.js`, about 5 kB gzipped, and `texEngine.worker-*.js`). With `VITE_COMPILE_PDF` unset it loads nothing and shows a notice. pdf.js (`pdfRender-*.js`) loads only to draw the compiled PDF's pages. Devices that report under 2 GB in `navigator.deviceMemory` are refused, under 4 GB get a warning, and out-of-memory errors show a plain message.
+  - The compiled PDF stays in the tab's memory for the PDF view and File > Export (**PDF (Compile PDF)**). It isn't stored or sent to peers; each peer compiles on its own, and the P2P protocol doesn't change.
   - **Document content** goes to the worker by `postMessage` and into the engine's in-memory filesystem only. The worker's only network requests are the manifest and the asset files, on our origin, with no project data in them.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.

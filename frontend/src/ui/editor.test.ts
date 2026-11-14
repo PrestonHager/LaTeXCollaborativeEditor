@@ -35,6 +35,18 @@ describe('createEditorPane', () => {
     expect(seen[0]).toEqual({ text: 'remote', sync: false });
   });
 
+  it('goes to a line, clamped to the document (#242)', () => {
+    const container = document.createElement('div');
+    const editor = createEditorPane(container);
+    editor.setText('one\ntwo\nthree', true);
+    editor.goToLine(2);
+    expect(editor.getView().state.selection.main.head).toBe(4);
+    editor.goToLine(99);
+    expect(editor.getView().state.selection.main.head).toBe(8);
+    editor.goToLine(0);
+    expect(editor.getView().state.selection.main.head).toBe(0);
+  });
+
   it('renders line numbers in gutters', () => {
     const container = document.createElement('div');
     createEditorPane(container);

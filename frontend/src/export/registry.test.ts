@@ -9,7 +9,7 @@ const run = (signal = new AbortController().signal): ExportRun => ({ signal, onP
 describe('exporter registry', () => {
   it('lists each format once, with what the dialog needs', () => {
     const ids = exporters.map((exporter) => exporter.id);
-    expect(ids).toEqual(['zip', 'pdf-preview', 'html', 'flat-tex', 'file']);
+    expect(ids).toEqual(['zip', 'pdf-compiled', 'pdf-preview', 'html', 'flat-tex', 'file']);
     expect(new Set(ids).size).toBe(ids.length);
     for (const exporter of exporters) {
       expect(exporter.label).toBeTruthy();

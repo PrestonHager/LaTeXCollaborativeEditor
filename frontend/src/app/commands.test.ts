@@ -132,6 +132,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     openFeatureForm: vi.fn(),
     startTour: vi.fn(),
     openAbout: vi.fn(),
+    compilePdf: vi.fn(),
   } satisfies CommandContext;
   const commands = createCommands(app);
   // Run a command and let its promise settle.
@@ -865,6 +866,8 @@ describe('commands', () => {
       expect(layout.mode).toBe('split');
       await run('view.compileNow');
       expect(app.compile.compileNow).toHaveBeenCalled();
+      await run('view.compilePdf');
+      expect(app.compilePdf).toHaveBeenCalled();
       await run('share.copyLink');
       expect(app.copyShareLink).toHaveBeenCalled();
       await run('app.openSettings');

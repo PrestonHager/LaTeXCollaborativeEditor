@@ -8,7 +8,7 @@ const pdfjs = vi.hoisted(() => ({
 vi.mock('pdfjs-dist', () => pdfjs);
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?worker&url', () => ({ default: '/assets/pdf.worker.js' }));
 
-import { MAX_RENDER_SIDE_PX, cropRect, renderPdfFigure, renderScale } from './pdfRender';
+import { MAX_RENDER_SIDE_PX, cropRect, renderPdfFigure, renderPdfPages, renderScale } from './pdfRender';
 
 type FakeViewportOptions = { scale: number; offsetX?: number; offsetY?: number };
 
@@ -21,6 +21,8 @@ function fakePage(view: number[]) {
       scale,
       offsetX,
       offsetY,
+      width: (view[2] - view[0]) * scale,
+      height,
       convertToViewportPoint: (x: number, y: number) => [(x - view[0]) * scale + offsetX, (height - (y - view[1])) * scale + offsetY],
     })),
     render: vi.fn((_params: { canvas: HTMLCanvasElement }) => ({ promise: Promise.resolve() })),
@@ -117,5 +119,27 @@ describe('renderPdfFigure', () => {
     expect(workers).toHaveLength(4);
     expect(new Set(workers).size).toBe(1);
     expect(workers[0]).toBeInstanceOf(pdfjs.PDFWorker);
+  });
+});
+
+describe('renderPdfPages (#242)', () => {
+  it('draws every page in order and destroys the document', async () => {
+    const destroy = fakeDocument([fakePage([0, 0, 612, 792]), fakePage([0, 0, 612, 792])]);
+    const pages: number[] = [];
+    const count = await renderPdfPages(new Uint8Array([1]), (page, index, total) => {
+      expect(page).toEqual({ url: 'data:image/png;base64,AAAA', width: 612, height: 792 });
+      expect(total).toBe(2);
+      pages.push(index);
+    });
+    expect(count).toBe(2);
+    expect(pages).toEqual([0, 1]);
+    expect(destroy).toHaveBeenCalled();
+  });
+
+  it('stops drawing when the view is no longer current', async () => {
+    fakeDocument([fakePage([0, 0, 100, 100]), fakePage([0, 0, 100, 100]), fakePage([0, 0, 100, 100])]);
+    const pages: number[] = [];
+    await renderPdfPages(new Uint8Array([1]), (_page, index) => pages.push(index), () => pages.length < 1);
+    expect(pages).toEqual([0]);
   });
 });

@@ -7,6 +7,7 @@ import type { ProjectDoc } from '../project/projectDoc';
 import { mimeType } from '../project/paths';
 import type { createEditorPane } from '../ui/editor';
 import type { createPreviewPane } from '../ui/preview';
+import type { ProjectDiagnostic } from '../compile/projectSource';
 
 export const COMPILE_DEBOUNCE_MS = 500;
 export const COMPILE_MIN_INTERVAL_MS = 900;
@@ -36,6 +37,8 @@ type PreviewCompileOptions = {
   onCompileError?: () => void;
   /** Extra words after "Not found in the project", like where to look for the missing files. */
   missingHint?: () => string;
+  /** More diagnostics to show in the editor with the preview's, like the TeX log's from Compile PDF (#242). */
+  extraDiagnostics?: () => ProjectDiagnostic[];
 };
 
 /** Files the preview needs figureImages.ts for: PDF and EPS figures. */
@@ -62,6 +65,7 @@ export function createPreviewCompile({
   onCompileError,
   missingHint,
   loadPdfRenderer,
+  extraDiagnostics,
 }: PreviewCompileOptions) {
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -137,7 +141,7 @@ export function createPreviewCompile({
       }
       const activeFileId = getActiveFileId();
       const activePath = activeFileId ? project.get(activeFileId)?.path : undefined;
-      editor.setDiagnostics(errors.filter((error) => error.path === activePath));
+      editor.setDiagnostics([...errors, ...(extraDiagnostics?.() ?? [])].filter((error) => error.path === activePath));
       lastCompiledKey = key;
       compileStatusEl.textContent = 'Compiled';
       onCompiled?.();
