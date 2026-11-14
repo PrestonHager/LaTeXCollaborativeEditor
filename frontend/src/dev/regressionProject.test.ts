@@ -4,6 +4,7 @@ import { projectToPreviewHtml } from '../compile/latexJsPreview';
 import { parseEpsBoundingBox } from '../compile/epsBoundingBox';
 import { ProjectIndex } from '../ui/projectCompletion';
 import { projectDiagnostics } from '../ui/projectDiagnostics';
+import { buildOutline } from '../ui/outline';
 
 describe('regressionProject', () => {
   it('loads every file in dev/regression/project with main.tex as the main file', async () => {
@@ -66,6 +67,19 @@ describe('regressionProject', () => {
       'checks.tex:6 Label “sec:refs” is defined 2 times. Also at chapters/text.tex:47.',
       'styles/unknown.tex:9 Missing citation: “nosuchkey” isn\'t in any .bib file in the project.',
     ]);
+  });
+
+  it('outlines main.tex through its chapters, without checks.tex or verbatim text', async () => {
+    const content = await regressionProject(new BlobStore());
+    const files = content.files.map((file) => ({ path: file.path, kind: file.kind, text: () => file.text ?? '' }));
+    const entries = buildOutline({ version: () => 0, files: () => files, mainPath: () => 'main.tex' });
+    const paths = new Set(entries.map((e) => e.path));
+    expect(paths.has('main.tex')).toBe(true);
+    expect(paths.has('chapters/text.tex')).toBe(true);
+    expect(paths.has('checks.tex')).toBe(false);
+    expect(entries.some((e) => e.kind === 'figure')).toBe(true);
+    expect(entries.some((e) => e.title === 'Not a section')).toBe(false);
+    expect(entries.every((e) => e.title || e.kind === 'figure' || e.kind === 'table')).toBe(true);
   });
 
   it('compiles the code listings chapter with nothing missing', async () => {

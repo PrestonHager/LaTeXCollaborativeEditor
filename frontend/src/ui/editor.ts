@@ -215,6 +215,14 @@ export function createEditorPane(container: HTMLElement, options: EditorPaneOpti
       touchKeyBar?.refresh();
     },
     focus() { view.focus(); },
+    /** Selects `length` characters at a line (from 1) and column (from 0), scrolled into view, like for the outline. */
+    reveal(line: number, column = 0, length = 0, focus = true) {
+      const doc = view.state.doc;
+      const target = doc.line(Math.min(Math.max(line, 1), doc.lines));
+      const from = Math.min(target.from + column, target.to);
+      view.dispatch({ selection: { anchor: from, head: Math.min(from + length, target.to) }, effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 48 }) });
+      if (focus) view.focus();
+    },
     selectAll() {
       view.dispatch({
         selection: EditorSelection.range(0, view.state.doc.length),

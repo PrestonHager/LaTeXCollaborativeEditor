@@ -58,6 +58,12 @@ The list follows the project as it changes: a file you add, a label you write, o
 The project is only read when one of these lists opens, and only files that changed since are read again.
 Like the rest of autocompletion, it all happens in your browser and nothing is sent anywhere.
 
+### Hover docs
+
+Rest the mouse on a command, like `\section`, or on an environment name after `\begin{` or `\end{`, and after a moment a card shows its arguments and what it does.
+It knows the same commands as [autocompletion](#autocompletion): LaTeX's own, those of the packages the project loads, and the ones the project defines, which show where they're defined, like `\newcommand in main.tex:3`.
+A command it doesn't know shows nothing. Hover cards are mouse only.
+
 ### Labels, citations and commands
 
 With the cursor on a label, a citation key or a command, three commands find your way around the project.

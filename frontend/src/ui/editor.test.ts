@@ -152,6 +152,22 @@ describe('createEditorPane', () => {
     expect(editor.getText()).toBe('Hello there');
   });
 
+  it('reveals a line and column, selecting a range, and clamps past the end', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createEditorPane(container);
+    editor.setText('one\ntwo three\nfour');
+    const view = editor.getView();
+    editor.reveal(2, 4, 5);
+    expect(view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)).toBe('three');
+    expect(view.hasFocus).toBe(true);
+    editor.reveal(99, 99, 1, false);
+    expect(view.state.selection.main.from).toBe(view.state.doc.length);
+    editor.reveal(0);
+    expect(view.state.selection.main.from).toBe(0);
+    container.remove();
+  });
+
   it('runs go to definition, find references and rename from the completion chunk, and copes when it fails to load', async () => {
     const nav = {
       goToDefinition: vi.fn(() => true),
