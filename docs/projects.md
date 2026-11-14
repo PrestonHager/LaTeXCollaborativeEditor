@@ -125,7 +125,7 @@ It's host only, and if you're sharing, it clears the project for everyone in the
 
 ## Opening a project
 
-- **File > Open Local Project** (**Ctrl+O**) opens a dialog listing projects saved in this browser, newest first. Click one to open it.
+- **File > Open Project…** (**Ctrl+O**) asks where the project is saved: **This browser** lists the projects saved here, newest first, and **Google Drive** opens the Drive picker. Click one to open it.
 - **File > Open from Google Drive** (**Ctrl+Shift+O**) opens the Drive picker. Pick a project folder, or an old single `.tex` file.
 - **File > Upload .zip as New Project** makes a new project from a `.zip`, like one downloaded from Overleaf. The **Upload .zip** button in the open dialog does the same.
 

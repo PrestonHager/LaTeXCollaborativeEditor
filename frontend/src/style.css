@@ -163,6 +163,11 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .share-area { display: inline-flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .status-badges { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; flex-wrap: wrap; }
 .status-badges .pill { gap: 0.3rem; }
+/* Where the open project is stored (#200). A button, so the host can open Accounts from it. */
+.storage-provider { cursor: pointer; max-width: 14rem; }
+.storage-provider > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.storage-provider:disabled { cursor: default; opacity: 1; }
+.storage-provider[data-status='expired'] { border-color: var(--diag-text); }
 .muted { color: var(--muted-text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .share-link { color: var(--link-text); text-decoration: underline; }
 /* The Share popover (issue #224): a popover card, like the preview-changes one (docs/ui-sizing.md). */
@@ -239,7 +244,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
  */
 :root {
   --dialog-sm: 28rem;      /* Confirm, prompt and notice: one question, one or two buttons. */
-  --dialog-md: 36rem;      /* Short forms and info: Upload, Export, About, Open a project, Conflict. */
+  --dialog-md: 36rem;      /* Short forms and info: Upload, Export, About, Open a project, Accounts, Conflict. */
   --dialog-lg: 52rem;      /* Dense content with lists or sections side by side: Settings, Changelog. */
   --dialog-palette: 40rem; /* The command palette (640px). */
   --popover-card: 22rem;   /* Floating cards that point at something: tour, update prompt, preview changes, hover preview. */
@@ -492,6 +497,9 @@ label.settings-row { justify-content: flex-start; }
 .project-item { width: 100%; text-align: left; }
 .project-item:hover { background: var(--surface-3); }
 .projects-dialog footer, .upload-dialog footer { justify-content: space-between; }
+.projects-list[hidden], .projects-back[hidden] { display: none; }
+.projects-back { justify-self: start; }
+
 
 /* Export dialog. exportDialog.ts fills the Format and Save to menus and the options. */
 .export-dialog-body { display: grid; gap: 1rem; min-width: 0; }

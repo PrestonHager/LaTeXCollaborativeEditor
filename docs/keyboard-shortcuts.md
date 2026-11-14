@@ -21,7 +21,7 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 | --- | --- | --- |
 | **New File** | **Ctrl+N**, or ***Alt+N*** | **⌘N**, or ***⌥⌘N*** |
 | **New Project** (after you confirm, host only) | **Ctrl+Shift+N**, or ***Alt+Shift+N*** | **⇧⌘N**, or ***⌥⇧⌘N*** |
-| **Open Local Project** (host only) | **Ctrl+O** | **⌘O** |
+| **Open Project…** (host only) | **Ctrl+O** | **⌘O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⇧⌘O** |
 | **Download Project .zip** | **Ctrl+Shift+S** | **⇧⌘S** |
 | **Export…** | **Ctrl+Shift+E**, or ***Alt+Shift+E*** | **⇧⌘E** |

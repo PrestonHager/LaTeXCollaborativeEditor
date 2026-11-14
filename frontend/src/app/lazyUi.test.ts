@@ -1,4 +1,4 @@
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './lazyUi';
+import { lazyAboutDialog, lazyAccountsPanel, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './lazyUi';
 import { mountAppShell } from '../test/appShell';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -145,7 +145,7 @@ describe('lazyTour', () => {
 
 describe('lazyProjectsDialog and lazyUploadDialog', () => {
   it('open the dialog with its arguments once loaded', async () => {
-    const projects = { open: vi.fn() };
+    const projects = { open: vi.fn(), chooseProvider: vi.fn() };
     const upload = { open: vi.fn() };
     const lazyProjects = lazyProjectsDialog(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createProjectsDialog: () => projects }) as never });
     const lazyUpload = lazyUploadDialog(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createUploadDialog: () => upload }) as never });
@@ -155,6 +155,29 @@ describe('lazyProjectsDialog and lazyUploadDialog', () => {
     await settle();
     expect(projects.open).toHaveBeenCalledWith(list);
     expect(upload.open).toHaveBeenCalledWith('figures');
+    lazyProjects.chooseProvider(['local', 'googleDrive']);
+    await settle();
+    expect(projects.chooseProvider).toHaveBeenCalledWith(['local', 'googleDrive']);
+  });
+});
+
+describe('lazyAccountsPanel', () => {
+  it('loads on open, refreshes only once loaded, and reports a failed load', async () => {
+    const panel = { open: vi.fn(), refresh: vi.fn() };
+    const lazy = lazyAccountsPanel(dialogEl(), {} as never, vi.fn(), { load: async () => ({ createAccountsPanel: () => panel }) as never });
+    lazy.refresh();
+    expect(panel.refresh).not.toHaveBeenCalled();
+    lazy.open();
+    await settle();
+    expect(panel.open).toHaveBeenCalled();
+    lazy.refresh();
+    expect(panel.refresh).toHaveBeenCalled();
+
+    const onError = vi.fn();
+    const failed = lazyAccountsPanel(dialogEl(), {} as never, onError, { load: async () => Promise.reject(new Error('offline')) });
+    failed.open();
+    await settle();
+    expect(onError).toHaveBeenCalledWith('Accounts', expect.any(Error), expect.any(Function));
   });
 
   it('report failed loads by name', async () => {

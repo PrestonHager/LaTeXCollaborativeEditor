@@ -77,6 +77,8 @@ const commandIcons: Record<CommandId, IconNode> = {
   'app.commandPalette': Command,
   'app.openSettings': Settings,
   'app.editProfile': UserPen,
+  // Reuses Connect Google Drive's icon, so it adds nothing to the first load.
+  'app.accounts': Link,
   'file.new': FilePlus,
   'file.rename': SquarePen,
   'file.saveAsTemplate': LayoutTemplate,
@@ -147,6 +149,7 @@ const staticIcons = {
   FolderOpen,
   FolderPlus,
   HardDrive,
+  Monitor,
   PencilLine,
   Search,
   Share2,
@@ -168,6 +171,9 @@ export const exportIcons: Record<string, IconNode> = {
   'file-text': FileText,
   printer: Printer,
 };
+
+/** Icons for storage providers, by the name a registry entry gives (storage/providers/registry.ts). */
+export const storageIcons: Record<string, IconNode> = { 'hard-drive': HardDrive, monitor: Monitor };
 
 /** Icons for the keybind list in Settings. */
 export const keybindIcons = { Plus, X, TriangleAlert };

@@ -162,7 +162,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] With Google Drive connected, type and close the tab within 4 seconds. The "Leave site?" box shows.
 - [ ] An error from a library in the background (dev tools console: `Promise.reject(new Error('test'))`) only shows in the console. No red notice replaces the one in the header. A failed command (like a Drive action with the network blocked) still shows its red notice.
 - [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
-- [ ] Open Local Project (Ctrl+O) lists saved projects and opens the one you pick.
+- [ ] File > Open Project… (Ctrl+O) asks where the project is (This browser, Google Drive). This browser lists saved projects and opens the one you pick; Choose another place goes back. On a site with no Google keys it goes straight to the list.
 - [ ] Clear Local Projects asks first, then removes the saved projects. Templates saved in this browser stay.
 
 ## Templates and profile
@@ -210,6 +210,16 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 - [ ] A full Drive shows "Google Drive is full" and stops retrying.
 - [ ] After the sign-in expires (about an hour), the app renews it or shows a notice and saves to the browser.
 
+## Accounts
+
+- [ ] Edit > Accounts… (also in the palette) lists This browser (Connected, no buttons) and Google Drive with its status and capabilities.
+- [ ] On a site with no Google keys, Google Drive says Not configured and its Connect button is turned off. Log out of everything is turned off.
+- [ ] Not signed in: Google Drive says Not connected with Connect. Connect opens Google's sign-in, then the row says Connected and "Signed in as" your account, with Log out. Saving moves to Drive, the same as File > Connect Google Drive.
+- [ ] Log out on Google Drive signs out, switches saving to the browser without losing edits, and the row goes back to Connect. Log out of everything does the same for every signed-in account.
+- [ ] Let the Drive sign-in run out (or wait an hour): the row says Expired with both Connect and Log out, and the status bar badge gets a coloured border.
+- [ ] The status bar badge says This browser or Google Drive for the open project, with the account in its tooltip. Clicking it opens Accounts. In a guest tab it says "Host: Google Drive" (or "Host: local storage") and does nothing on click; Accounts is turned off.
+- [ ] At 360 x 640 the panel is a full-screen sheet, buttons sit under each account, and nothing scrolls sideways.
+
 ## Sharing and collaboration
 
 Use two browser windows, or a normal and a private window, so each has its own storage.
@@ -232,11 +242,11 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
 - [ ] No WebRTC (issue #205): in a window where `RTCPeerConnection` is missing (Firefox with `media.peerconnection.enabled` off in `about:config`, or the Linux desktop app), the badge says Can't connect in this window. Share opens **Can't share from this window** with "This window can't make peer-to-peer connections, so it can't share or join a room." and a supported-browser suggestion, and no link shows. Opening a `?room=` link shows **Can't join from this window**, and the Files panel says so instead of Waiting for the host. The Network tab shows no `p2pTransport` chunk and no tracker connection, even after hovering Share.
-- [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
+- [ ] Guests can't use New Project, Open Project…, Accounts…, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
-- [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
+- [ ] With a guest connected, the host's Open Project…, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
 - [ ] With a guest connected, New Project's Start new project button is red and focus starts on Cancel.
-- [ ] With a guest connected, Choose a project on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.
+- [ ] With a guest connected, Choose a project on Open Project…, then This browser, and then Upload .zip in that dialog asks only once and opens the file picker.
 - [ ] With nobody connected, those three open straight away without asking.
 - [ ] With a guest connected, leaving the Upload .zip dialog open for more than 5 seconds and then clicking Choose a .zip (or Tab to it and Enter) still opens the file picker. If the browser ever blocks it, a notice says so and the next Upload .zip opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
@@ -348,7 +358,7 @@ Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
 - [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] The build's lazy chunks list `p2pTransport`, `commandPalette`, `settingsDialog`, `keybindSettings`, `tour`, `projectsDialog`, `uploadDialog`, `aboutDialog`, `conflictDialog`, `driveAddFiles`, `googlePicker` and `zip` chunks, and the initial load is under the budget it prints.
-- [ ] In `npm run preview` with the Network tab open and nothing touched, `p2pTransport` doesn't load until you hover or focus Share (or open a `?room=` link, where it loads right away). Ctrl+P, Ctrl+, (Settings), Help > Tour, File > Open Local Project and File > Upload Files each open on the first press, right after a reload too. The lint gutter shows a marker on a broken line, and the editor text doesn't jump sideways when the page finishes loading.
+- [ ] In `npm run preview` with the Network tab open and nothing touched, `p2pTransport` doesn't load until you hover or focus Share (or open a `?room=` link, where it loads right away). Ctrl+P, Ctrl+, (Settings), Help > Tour, File > Open Project… and File > Upload Files each open on the first press, right after a reload too. The lint gutter shows a marker on a broken line, and the editor text doesn't jump sideways when the page finishes loading.
 - [ ] In `npm run preview`, block the `commandPalette-*.js` request in dev tools (Network > Block request URL), reload, and press Ctrl+P: a red notice says the command palette couldn't load and to check your connection, then reload. No update card shows, since `version.json` still names this build. Unblock it and reload: Ctrl+P works.
 - [ ] Same as above, but first edit `dist/version.json` to another commit: now the update card says part of the app couldn't load because a new version is live, and offers Reload to update.
 - [ ] In `npm run preview`, open the app, set dev tools to Offline (Network > No throttling > Offline) and press Ctrl+Shift+E. A notice says "You're offline. Export will load when you're back online." and no update card shows. Go back online: the notice clears and the Export dialog opens by itself. Help > About and Ctrl+P also work after going back online.

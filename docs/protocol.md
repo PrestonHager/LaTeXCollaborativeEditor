@@ -135,6 +135,7 @@ Message validation and limits
   - `{ kind: 'y-update', update }`: `update` is an array of bytes (integers 0 to 255), at most 10 MB, and it has to decode as a Yjs update.
   - `{ kind: 'snapshot', state, docId?, metadata? }`: `state` is a byte array of at most 20 MB that decodes as a Yjs update. `docId` is a string of at most 128 characters.
   - `{ kind: 'metadata', metadata }`: `metadata` is `{ title, storage }`. The title is at most 200 characters and the storage label at most 200.
+    The storage label is only the host's provider name, like "Saved on host Google Drive". The provider registry and Accounts panel (#200) don't change the wire format: no account, email or token is ever sent, and a guest's status bar badge is drawn from this label alone.
   - `{ kind: 'sync-request' }`: no other fields.
   - `{ kind: 'file-request', hash }`: `hash` is 1 to 128 letters, digits, or dashes.
   - `{ kind: 'hello', protocol, appVersion, commit? }`: `protocol` is a whole number from 1 to 1,000,000. `appVersion` is 1 to 64 letters, digits, dots, pluses, or dashes. `commit` is 7 to 40 lowercase hex characters, or `dev`.

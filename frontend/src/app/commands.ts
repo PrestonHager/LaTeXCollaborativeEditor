@@ -9,6 +9,7 @@ import { pathProblem, suggestFreeName } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
 import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
+import type { ProviderId, ProviderRegistry } from '../storage/providers/registry';
 import { describeError } from '../storage/errors';
 import type { BlobStore } from '../project/blobStore';
 import type { ProjectContent, ProjectDoc } from '../project/projectDoc';
@@ -63,7 +64,15 @@ export type CommandContext = {
   /** The resolved keybinds, for labels and key presses. */
   keymap: Keymap;
   fileTree: { currentFolder(): string };
-  projectsDialog: { open(projects: ProjectSummary[]): void };
+  /** Every storage provider (storage/providers/registry.ts), for File > Open Project and Accounts. */
+  storageProviders: ProviderRegistry;
+  /**
+   * The Open a project dialog. With more than one provider set up, chooseProvider asks where the
+   * project is first, and the dialog calls back openFromProvider (below) with the choice.
+   */
+  projectsDialog: { open(projects: ProjectSummary[]): void; chooseProvider(providers: ProviderId[]): void };
+  /** The Accounts panel (ui/accountsPanel.ts), which loads on first use. */
+  accountsPanel: { open(): void };
   uploadDialog: { open(folder?: string): void };
   /**
    * The template dialogs (templates/templatesUi.ts), which load on first use. Each resolves once its
@@ -182,6 +191,7 @@ export function createCommands(app: CommandContext) {
     editor,
     fileTree,
     projectsDialog,
+    storageProviders,
     uploadDialog,
     zipInput,
     copyShareLink,
@@ -240,7 +250,34 @@ export function createCommands(app: CommandContext) {
     zipInput.click();
   }
 
+  /** Pick a project folder or .tex file in Drive and open it. Pass alreadyConfirmed when the host just OK'd replacing the project. */
+  async function openFromDrive(alreadyConfirmed: boolean) {
+    if (isClient) return;
+    if (!ensureDrivePickerConfig()) return;
+    if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
+    if (!(await ensureDriveConnected())) return;
+    setStatus('Drive: Opening picker...');
+    const picked = await pickFromDrive('project');
+    if (picked === undefined) return;
+    if (!picked) {
+      setStatus('Drive: Selection canceled');
+      return;
+    }
+    // A folder is a project. A single file opens as a one-file project, like before projects.
+    await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
+  }
+
+  /** The Open a project dialog's provider choice. File > Open Project already asked about guests. */
+  async function openFromProvider(id: ProviderId) {
+    if (isClient) return;
+    if (id === 'googleDrive') return openFromDrive(true);
+    projectsDialog.open(await localAppProvider.listProjects());
+  }
+
   const commandRegistry: Record<CommandId, CommandHandler> = {
+    'app.accounts': () => {
+      if (!isClient) app.accountsPanel.open();
+    },
     'app.commandPalette': () => {
       app.commandPalette.toggle();
     },
@@ -269,23 +306,12 @@ export function createCommands(app: CommandContext) {
       openDialogConfirmed = false;
       if (!(await confirmReplace('open'))) return;
       openDialogConfirmed = asked;
-      projectsDialog.open(await localAppProvider.listProjects());
+      // Ask where the project is first. A site with only browser storage goes straight to its list.
+      const providers = storageProviders.list().filter((entry) => entry.configured());
+      if (providers.length > 1) projectsDialog.chooseProvider(providers.map((entry) => entry.id));
+      else projectsDialog.open(await localAppProvider.listProjects());
     },
-    'file.openDrive': async () => {
-      if (isClient) return;
-      if (!ensureDrivePickerConfig()) return;
-      if (!(await confirmReplace('open'))) return;
-      if (!(await ensureDriveConnected())) return;
-      setStatus('Drive: Opening picker...');
-      const picked = await pickFromDrive('project');
-      if (picked === undefined) return;
-      if (!picked) {
-        setStatus('Drive: Selection canceled');
-        return;
-      }
-      // A folder is a project. A single file opens as a one-file project, like before projects.
-      await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
-    },
+    'file.openDrive': () => openFromDrive(false),
     'file.importZip': () => importZip(false),
     'file.newFile': async () => {
       const folder = fileTree.currentFolder();
@@ -517,9 +543,10 @@ export function createCommands(app: CommandContext) {
 
   /**
    * Run a command and report any error it throws, then refresh the menus.
-   * Every menu, palette, and shortcut path goes through here.
+   * Every menu, palette, and shortcut path goes through here. The promise settles once the
+   * command is done, for callers that wait on it (the Accounts panel).
    */
-  function executeCommand(commandId: CommandId) {
+  function executeCommand(commandId: CommandId): Promise<void> | void {
     const report = (error: unknown) => {
       if (isLoadFailure(error) && app.loadFailed) {
         const label = app.menuBar.entries().find((entry) => entry.commandId === commandId)?.label ?? 'That command';
@@ -540,8 +567,8 @@ export function createCommands(app: CommandContext) {
       refreshCommands();
       return;
     }
-    if (result instanceof Promise) void result.catch(report).finally(refreshCommands);
-    else refreshCommands();
+    if (result instanceof Promise) return result.catch(report).finally(refreshCommands);
+    refreshCommands();
   }
 
   // Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
@@ -554,6 +581,7 @@ export function createCommands(app: CommandContext) {
   const getCommandState = (commandId: CommandId): CommandState => {
     switch (commandId) {
       case 'file.new':
+      case 'app.accounts':
       case 'file.saveAsTemplate':
       case 'file.openLocal':
       case 'file.openDrive':
@@ -671,6 +699,7 @@ export function createCommands(app: CommandContext) {
     commandRegistry,
     executeCommand,
     importZipFromOpenDialog,
+    openFromProvider,
     refreshCommands,
     getCommandState,
     buildPaletteCommands,
