@@ -6,6 +6,10 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+### Added
+
+- **Editing on phones and tablets.** The cursor line stays in view above the on-screen keyboard, and while the editor has focus on a touch screen a key bar above the keyboard types `\`, `{`, `}`, `$`, `%`, `[`, `]` and `&`. The keys are ordinary typing: collaborators see them and undo takes them back.
+
 ## [0.1.1] - 2026-11-13
 
 ### Added
