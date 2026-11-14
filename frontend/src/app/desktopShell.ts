@@ -60,3 +60,15 @@ export function desktopGoogleClient(win: object | undefined = globalThis.window)
     return undefined;
   }
 }
+
+/**
+ * Whether the shell can run WebRTC for this page when the webview has none (#176): it says so in
+ * `__LCE_DESKTOP__` before the page loads. Only used when RTCPeerConnection is missing (Linux).
+ */
+export function desktopNativeRtc(win: object | undefined = globalThis.window): boolean {
+  try {
+    return (win as { __LCE_DESKTOP__?: { nativeRtc?: boolean } } | undefined)?.__LCE_DESKTOP__?.nativeRtc === true;
+  } catch {
+    return false;
+  }
+}

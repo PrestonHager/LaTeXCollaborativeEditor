@@ -8,7 +8,8 @@
 //   https opener, and for local folder projects (#178) the folder dialog and a list of fs commands
 //   with no path scope of their own, so only folders picked in the dialog are reachable, and for
 //   Google sign-in (#177) the app's three sign-in commands, and its two update commands (#179),
-//   with the updater config only added at release time. No remote origin gets any;
+//   with the updater config only added at release time, and WebRTC data channels in the shell for
+//   webviews without them (#176). No remote origin gets any;
 // - the build bundles LaTeX.js for an offline preview (build:desktop), and the shell builds the
 //   window itself so navigation away from the app is blocked and https links go to the browser.
 // Run with `npm run check` in desktop/. The desktop workflow runs it before building.
@@ -54,9 +55,31 @@ const ALLOWED_PLAIN_PERMISSIONS = [
   // updater:* permission; Rust checks signatures and installs.
   'allow-update-check',
   'allow-update-install',
+  // WebRTC in the shell for webviews without it (#176, src/native_rtc.rs). Data channels only,
+  // driven by the page's Trystero through frontend/src/net/nativeRtc.ts.
+  'allow-rtc-create',
+  'allow-rtc-create-data-channel',
+  'allow-rtc-create-description',
+  'allow-rtc-set-description',
+  'allow-rtc-add-ice-candidate',
+  'allow-rtc-send',
+  'allow-rtc-close',
 ];
 // The app commands build.rs may declare, each with its allow-* permission above.
-const APP_COMMANDS = ['google_sign_in', 'google_access_token', 'google_sign_out', 'update_check', 'update_install'];
+const APP_COMMANDS = [
+  'google_sign_in',
+  'google_access_token',
+  'google_sign_out',
+  'update_check',
+  'update_install',
+  'rtc_create',
+  'rtc_create_data_channel',
+  'rtc_create_description',
+  'rtc_set_description',
+  'rtc_add_ice_candidate',
+  'rtc_send',
+  'rtc_close',
+];
 
 
 check(conf.version === '../../frontend/package.json', 'tauri.conf.json "version" must be "../../frontend/package.json", the one app version.');
@@ -101,8 +124,8 @@ check(
   JSON.stringify(declared) === JSON.stringify(APP_COMMANDS),
   `build.rs must declare exactly the app commands ${APP_COMMANDS.join(', ')} in its AppManifest, so each needs a permission.`,
 );
-const handlers = [...(libRs.match(/generate_handler!\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/(?:google_auth|updates)::([a-z_]+)/g)].map((match) => match[1]);
-check(JSON.stringify(handlers) === JSON.stringify(APP_COMMANDS), 'src/lib.rs may only register the Google sign-in and update commands with invoke_handler.');
+const handlers = [...(libRs.match(/generate_handler!\[([\s\S]*?)\]/)?.[1] ?? '').matchAll(/(?:google_auth|updates|native_rtc::commands)::([a-z_]+)/g)].map((match) => match[1]);
+check(JSON.stringify(handlers) === JSON.stringify(APP_COMMANDS), 'src/lib.rs may only register the Google sign-in, update and WebRTC commands with invoke_handler.');
 const authRs = read(join(tauriDir, 'src', 'google_auth.rs'));
 const accessTokenStruct = authRs.match(/pub struct AccessToken \{([^}]*)\}/)?.[1] ?? '';
 check(
@@ -136,6 +159,12 @@ check(
   'The updater overlay may only use the https GitHub Releases endpoint.',
 );
 check(/\.plugin\(tauri_plugin_updater::Builder::new\(\)\.build\(\)\)/.test(libRs) && /if updater \{/.test(libRs), 'src/lib.rs must register the updater only when the release config has it.');
+
+// WebRTC in the shell (#176): host candidates as mDNS names, like browsers, so local IP addresses
+// never go out through the trackers; and no media.
+check(/\.manage\(native_rtc::NativeRtc::new\(true\)\)/.test(libRs), 'src/lib.rs must run the shell WebRTC with mDNS host candidates (NativeRtc::new(true)).');
+const rtcRs = read(join(tauriDir, 'src', 'native_rtc.rs'));
+check(!/add_track|on_track\(|TrackLocal/.test(rtcRs), 'src/native_rtc.rs is for data channels only; it must not handle audio or video.');
 
 const security = conf.app?.security ?? {};
 check(security.csp === null, 'app.security.csp must stay null: the CSP <meta> tag in frontend/index.html is the policy (docs/desktop.md, Security).');
@@ -173,4 +202,4 @@ if (errors.length) {
   process.exit(1);
 }
 const version = json(join(repo, 'frontend', 'package.json')).version;
-console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, https opener, picked-folder access, Google sign-in and update commands only, links guarded.`);
+console.log(`Desktop config OK: version ${version}, bundled frontend and LaTeX.js, web CSP, https opener, picked-folder access, Google sign-in, update and WebRTC commands only, links guarded.`);

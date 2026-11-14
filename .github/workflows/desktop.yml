@@ -104,6 +104,14 @@ jobs:
         run: |
           npm run check
           npm test
+      # The shell's own tests, including two native WebRTC peers connecting over loopback (#176).
+      # They embed frontend/dist, so the frontend is built first.
+      - name: Test the Rust shell
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          npm --prefix frontend run build:desktop
+          cargo test --manifest-path desktop/src-tauri/Cargo.toml
       # tauri.conf.json's beforeBuildCommand builds the frontend (npm run build in frontend/,
       # with its bundle size check) before Tauri bundles frontend/dist into the app.
       - name: Build the app

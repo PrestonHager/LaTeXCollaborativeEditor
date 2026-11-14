@@ -9,9 +9,12 @@ const transportMocks = vi.hoisted(() => ({
   disconnect: vi.fn(),
   getPeerCount: vi.fn(() => 3),
   getSelfId: vi.fn(() => 'self-1'),
+  prepareRtc: vi.fn(async () => {}),
 }));
 
 vi.mock('./p2pTransport', () => ({
+  // The desktop app's WebRTC stand-in loads before the first join (#176).
+  prepareRtc: transportMocks.prepareRtc,
   P2pTransport: class MockP2pTransport {
     constructor(...args: unknown[]) {
       transportMocks.created(...args);
@@ -67,6 +70,7 @@ describe('PeerSession', () => {
     await settle();
     expect(transportMocks.created).toHaveBeenCalledTimes(1);
     expect(transportMocks.join).toHaveBeenCalledWith('room-xyz');
+    expect(transportMocks.prepareRtc).toHaveBeenCalled();
     // Later joins go straight to the loaded transport.
     session.joinRoom('room-2');
     expect(transportMocks.join).toHaveBeenLastCalledWith('room-2');

@@ -1,4 +1,4 @@
-import { desktopGoogleClient, driveSessionLostNotice, isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
+import { desktopGoogleClient, desktopNativeRtc, driveSessionLostNotice, isDesktopShell, localPlace, openInSystemBrowser } from './desktopShell';
 
 describe('isDesktopShell', () => {
   it('sees the Tauri globals and nothing else', () => {
@@ -80,5 +80,20 @@ describe('desktopGoogleClient', () => {
       },
     };
     expect(desktopGoogleClient(hostile)).toBeUndefined();
+  });
+});
+
+describe('desktopNativeRtc', () => {
+  it('is true only when the shell offers its own WebRTC (#176)', () => {
+    expect(desktopNativeRtc({})).toBe(false);
+    expect(desktopNativeRtc(undefined)).toBe(false);
+    expect(desktopNativeRtc({ __LCE_DESKTOP__: { nativeRtc: 'yes' } })).toBe(false);
+    expect(desktopNativeRtc({ __LCE_DESKTOP__: { googleSignIn: true, nativeRtc: true } })).toBe(true);
+    const hostile = {
+      get __LCE_DESKTOP__() {
+        throw new Error('nope');
+      },
+    };
+    expect(desktopNativeRtc(hostile)).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ Issue #122 plans native apps for Windows, macOS and Linux, then tablets and phon
 | CI | `.github/workflows/desktop.yml` builds unsigned Linux, Windows and macOS installers as workflow artifacts |
 | Desktop detection in the frontend | `frontend/src/app/desktopShell.ts`. The keymap uses it, Share uses it to offer the system browser when WebRTC is missing, and a lazy chunk (`frontend/src/app/desktopUi.ts`) changes the wording and sends links to the browser |
 | Links, wording, offline preview | Done (#181, below): links open in the system browser, the window can't leave the app, text says "this app", and LaTeX.js is bundled |
-| WebRTC | Windows and macOS are expected to work but are **not checked yet**. On Linux, the distro WebKitGTK we checked has **no WebRTC** (below) |
+| WebRTC | Windows and macOS use the webview's own and are expected to work, but are **not checked yet**. On Linux, where the distro WebKitGTK has **no WebRTC**, the shell runs real WebRTC data channels in Rust behind Trystero's `rtcPolyfill` (#176, "WebRTC in the shell" below). Checked against Chromium both ways; **needs real hardware** (#174) |
 | Local folders | Done (#178, below): open a folder on this computer as a project, save to one, and outside edits go to the conflict flow. **Not yet checked on real hardware** (#174) |
 | Google sign-in | Done (#177, below): through the system browser, loopback and PKCE in Rust, the refresh token in the OS keychain. Needs the maintainer's Desktop OAuth client, and **checking on real hardware** (#174) |
 | Updater, installers on releases | Done (#179, below): signed updates from GitHub Releases, and every release gets the installers, `.sig` files, checksums and `latest.json`. Needs the maintainer's updater key pair |
@@ -93,14 +93,27 @@ This is the weak spot. Here's what we checked, on Ubuntu 24.04 with `libwebkit2g
 - The library isn't linked against `libgstwebrtc`. Ubuntu builds WebKitGTK without WebRTC (`ENABLE_WEB_RTC` off). Debian is believed to be the same. Fedora, Arch and the GNOME Flatpak runtime were not checked.
 - WebKitGTK also leaves WebRTC off at runtime unless the app turns on its `enable-webrtc` setting, and wry (Tauri's webview layer, 0.57) doesn't. So the shell turns it on (`desktop/src-tauri/src/lib.rs`), which is enough on a distro whose WebKitGTK has WebRTC.
 
-So **on most Linux installs today, the desktop app can edit, preview and save, but can't share a room.** Ways out, best first:
+So on most Linux installs the webview can't make peer connections. Ways out we looked at, best first:
 
-1. **DataChannels in Rust, exposed to the page.** Trystero takes an `rtcPolyfill` option, an `RTCPeerConnection` stand-in. The Rust side would run real WebRTC DataChannels (libdatachannel through the `datachannel` crate, or the pure-Rust `webrtc` crate) and pass messages to the page over Tauri IPC. DataChannels are standard DTLS and SCTP, so web peers can't tell the difference. This works on every distro without shipping a browser engine. It needs IPC permissions and `ipc:` in the CSP. Recommended.
+1. **DataChannels in Rust, exposed to the page.** Done (#176), below.
 2. **Flatpak with a GNOME runtime whose WebKitGTK has WebRTC.** That needs checking. Even if it works, it only covers the Flatpak.
 3. **Bundle our own WebKitGTK built with WebRTC** in the AppImage. That's large and means tracking WebKit security updates ourselves.
 4. **Tauri's Chromium (CEF) runtime** once it's stable. It's heavier, close to what #122 wants to avoid.
 
-Until then the app says so instead of failing quietly (issue #205). When `RTCPeerConnection` is missing, Share and `?room=` links say "This window can't make peer-to-peer connections, so it can't share or join a room.", the P2P code never loads, and the app offers to open the room (or, for Share, the web app) in the system browser:
+### WebRTC in the shell
+
+Issue #176. Where the webview has no `RTCPeerConnection`, the shell runs the page's WebRTC peer connections in Rust, and the page drives them over Tauri IPC:
+
+- **Rust** (`desktop/src-tauri/src/native_rtc.rs`) uses `webrtc-rs` 0.17 (the `webrtc` crate, pure Rust: ICE, DTLS, SCTP), so these are standard WebRTC data channels and **browser peers can't tell the difference**. It covers what Trystero uses: ordered binary data channels, offers and answers, rollback, ICE restart, trickled or gathered candidates, and the connection, ICE and gathering states. No audio or video: `npm run check` fails if the module touches tracks.
+- **The page** (`frontend/src/net/nativeRtc.ts`, a 2.7 kB lazy chunk) is an `RTCPeerConnection` and `RTCDataChannel` stand-in. `p2pTransport.ts` passes it to Trystero as `rtcPolyfill`, only when the window has no `RTCPeerConnection` and the shell says it can do this (`__LCE_DESKTOP__.nativeRtc`, read by `desktopNativeRtc()`). Everything above Trystero (the sync protocol, `PROTOCOL_VERSION`, rooms) is the same code as in a browser. In a browser, or in the app on Windows and macOS, it never loads.
+- **IPC.** Seven app commands (`rtc_create`, `rtc_create_data_channel`, `rtc_create_description`, `rtc_set_description`, `rtc_add_ice_candidate`, `rtc_send`, `rtc_close`), each with its `allow-*` permission. Events (states, candidates, channels opening and closing) come back on one Tauri channel per peer connection, and incoming messages on a second one as raw bytes (`[channel id u16][payload]`). Outgoing messages go in ordered batches as a raw request body (`[channel u16][length u32][bytes]`, repeated), one IPC call at a time, so they keep their order; each message is capped at 64 KiB (Trystero sends 16 KiB chunks). The page keeps `signalingState` and `localDescription` in step itself, since Trystero reads them right after each `await`; when gathering finishes, the shell sends the local SDP with its candidates. `connect-src` already has `ipc: http://ipc.localhost`, so the CSP doesn't change.
+- **Privacy.** Host candidates are gathered as mDNS `.local` names, like browsers do, so local IP addresses don't go out through the public trackers; mDNS names from browser peers are resolved. At most 64 peer connections at once; only `stun:`, `stuns:`, `turn:` and `turns:` ICE servers are passed on.
+- **Peer to peer only.** Document content still goes straight between peers, encrypted by DTLS. The shell is only the page's network stack: there's no server, and signaling stays the page's own (Trystero over the WebTorrent trackers, `docs/protocol.md`).
+- **What doesn't work yet:** `getStats()` returns nothing, so the status bar can't say a connection is relayed through TURN; it still works through one.
+- **Checks.** `cargo test` has two native peers connect over loopback the way Trystero does (no trickle) and swap a short and a 16 KiB message. `frontend/src/net/nativeRtc.test.ts` runs Trystero's own `peer.mjs` over the stand-in with a fake shell. `desktop/scripts/rtc-interop.mjs` (`cargo build --example rtc_interop` in `src-tauri/`, then `node scripts/rtc-interop.mjs` with Playwright's Chromium) connects a real Chromium to the Rust side, each side offering in turn, with Chromium's mDNS host names, and checks both messages come back; it passed in the sandbox. Run it after changing `native_rtc.rs`.
+- **To check on real hardware (#174):** the Linux app joining a room with Chrome, Firefox and Safari peers on another machine, through NAT and through a TURN relay; a 20 MB file; leaving and rejoining.
+
+Before this, the app said so instead of failing quietly (issue #205), and it still does wherever neither the webview nor the shell can make peer connections. When `RTCPeerConnection` is missing and the shell doesn't offer its own, Share and `?room=` links say "This window can't make peer-to-peer connections, so it can't share or join a room.", the P2P code never loads, and the app offers to open the room (or, for Share, the web app) in the system browser:
 
 - The web app's address comes from `VITE_DOCS_BASE_URL`: the site serves the docs under `/docs/`, so the app is the folder above (`webAppUrl()` in `frontend/src/app/p2pSupport.ts`). The page's own origin, `tauri://localhost`, means nothing to a browser. Without an https docs base, the app only explains.
 - The link opens through `tauri-plugin-opener` (`openInSystemBrowser()` in `frontend/src/app/desktopShell.ts`, which calls `__TAURI_INTERNALS__.invoke('plugin:opener|open_url')`). If that fails, the link is copied instead.
@@ -236,12 +249,12 @@ The builds aren't code-signed for Windows or macOS yet (the updater's signature 
 - **CSP.** The app uses the web CSP unchanged: the `<meta>` tag in the bundled `index.html`. Tauri's own `app.security.csp` stays `null`. If both were set, the browser would enforce both, and the effective policy would be their intersection. A Tauri copy could only drift from the meta tag, for example when the build adds custom `VITE_P2P_RENDEZVOUS` trackers to the meta tag. Desktop builds must not use the `VITE_DISABLE_CSP=1` rollback switch.
 
   When a feature needs Tauri IPC from the page, `connect-src` needs `ipc: http://ipc.localhost`. Add it to the meta policy then (it means nothing on the web) and update `frontend/src/security/cspPolicy.test.ts`.
-- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above); for Google sign-in (#177) the app's three sign-in commands ("Google sign-in" above); and for updates (#179) the app's two update commands, with no `updater:*` permission ("Updates" above). Each follow-up adds only what it uses.
+- **Capabilities.** There's one capability, `main-window`, and not even `core:default`. It has `opener:allow-open-url`, scoped to `https://*`, so the page can open https links in the system browser (issue #205); for local folder projects (#178) `dialog:allow-open` and a fixed list of fs commands with no path scope, so only folders picked in the dialog are reachable ("Storage: local folders" above); for Google sign-in (#177) the app's three sign-in commands ("Google sign-in" above); and for updates (#179) the app's two update commands, with no `updater:*` permission ("Updates" above); and for WebRTC on Linux (#176) the seven `rtc_*` commands ("WebRTC in the shell" above). Each follow-up adds only what it uses.
 - **IPC in the CSP.** The opener goes through Tauri IPC, so the meta policy's `connect-src` has `ipc: http://ipc.localhost` (it means nothing on the web). `frontend/src/security/cspPolicy.test.ts` allows exactly those.
 - `withGlobalTauri` is off, and the asset protocol is off. The initial load imports nothing from Tauri; the opener call goes through `__TAURI_INTERNALS__`, which Tauri defines in every page it loads. The folder code uses `@tauri-apps/plugin-fs` and `@tauri-apps/plugin-dialog` from a lazy chunk.
 - `freezePrototype` is off. Freezing `Object.prototype` breaks code that assigns over an inherited property (the "override mistake"), and LaTeX.js, pdf.js and CodeMirror haven't been tested with it.
-- **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview"). The only script it adds to the page is the `__LCE_DESKTOP__` flag ("Google sign-in").
-- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, the app commands in `build.rs` and `invoke_handler`, that the page's token type never carries a refresh token, the `drive.file` scope, the one initialization script, no OAuth client in the sources, no updater settings in `tauri.conf.json` and only the GitHub endpoint in the release overlay, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
+- **Links and navigation** are guarded in the shell, not only in the page ("Links and navigation" above). The only header the shell changes is `Access-Control-Allow-Origin: *` on the bundled LaTeX.js files ("Offline preview"). The only script it adds to the page is the `__LCE_DESKTOP__` flags ("Google sign-in", "WebRTC in the shell").
+- `desktop/scripts/check-desktop-config.mjs` (`npm run check` in `desktop/`, run by the workflow) fails if any of the above drifts: the exact permission list, the app commands in `build.rs` and `invoke_handler`, that the page's token type never carries a refresh token, the `drive.file` scope, the one initialization script, no OAuth client in the sources, no updater settings in `tauri.conf.json` and only the GitHub endpoint in the release overlay, the shell WebRTC's mDNS mode and no media, `"create": false` on the window, the `on_navigation` and `on_new_window` guards, `https`-only opening, the CORS header limited to `/latexjs/`, and the `build:desktop` and `dev:desktop` commands.
 
 ## Building locally
 
@@ -259,7 +272,7 @@ The builds aren't code-signed for Windows or macOS yet (the updater's signature 
 1. **Scaffold (this PR):** this page, `desktop/`, CI, and desktop detection.
 2. **Desktop beta:**
    - check it on the three OSes against the #122 prototype list (open, edit, preview, join a room with a browser peer; startup time and memory against the browser);
-   - Linux WebRTC;
+   - Linux WebRTC (done, #176, needs checking on hardware);
    - Google sign-in (done, #177, needs the Desktop OAuth client and checking on hardware);
    - external links (done, #181);
    - macOS menu keys;
@@ -276,7 +289,7 @@ The builds aren't code-signed for Windows or macOS yet (the updater's signature 
 These are listed in the PR that added this page, to be filed:
 
 - Desktop: check the app on Windows, macOS and Linux, and measure startup and memory.
-- Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), #176. The notice when WebRTC is missing is done (#205).
+- Desktop: WebRTC on Linux (DataChannels in Rust behind Trystero's `rtcPolyfill`), #176 (done). The notice when WebRTC is missing is done (#205).
 - Desktop: Google sign-in through the system browser (loopback and PKCE, a Desktop OAuth client, tokens in the keychain, and the Picker question), #177 (done).
 - Desktop: a local folder storage provider, #178 (done).
 - Desktop: auto-updater, and installers attached to releases, #179 (done).

@@ -44,6 +44,12 @@ tauri-plugin-opener = "2"
 tauri-plugin-persisted-scope = "2"
 # The one-shot loopback listener for the sign-in redirect. Tauri already runs on tokio.
 tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros"] }
+# WebRTC data channels for webviews without RTCPeerConnection (issue #176, src/native_rtc.rs):
+# pure Rust ICE, DTLS and SCTP, so Linux needs no extra system library. 0.17 is the stable
+# async API; 0.20+ is a rewrite.
+webrtc = "0.17"
+# Messages for the shell WebRTC (src/native_rtc.rs).
+bytes = "1"
 
 # Only to turn on WebKitGTK's WebRTC setting (src/lib.rs). The same major version wry uses.
 [target.'cfg(target_os = "linux")'.dependencies]

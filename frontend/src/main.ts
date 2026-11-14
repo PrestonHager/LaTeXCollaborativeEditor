@@ -47,7 +47,7 @@ import { manifestFromProject, saveProject, type SavedManifest } from './storage/
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
 import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
-import { desktopGoogleClient, driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
+import { desktopGoogleClient, desktopNativeRtc, driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -155,8 +155,9 @@ const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
-// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205).
-const p2pAvailable = hasWebRtc();
+// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205), unless
+// the desktop app runs WebRTC in its shell instead (Linux, #176).
+const p2pAvailable = hasWebRtc() || desktopNativeRtc();
 
 // Now point every [data-help] link in the page at its docs section.
 wireHelpLinks(document, docsBase);
