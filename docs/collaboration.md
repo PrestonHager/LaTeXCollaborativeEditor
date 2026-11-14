@@ -116,16 +116,16 @@ Guests can create, rename, move, upload, and delete individual files and folders
 Those changes show up for everyone in the room.
 
 Guests can't replace the whole project.
-**New Project**, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** are turned off in a guest tab.
+**New Project**, **Open Project…**, **Open from Google Drive**, and **Upload .zip as New Project** are turned off in a guest tab.
 So are the Drive commands, **Save Now**, **Rename Project**, **Clear Local Projects**, and **Pause Saving**, since they touch the host's storage.
 Their shortcuts do nothing in a guest tab either.
 If you're a guest and want your own project, open the editor in a new tab without the `room` link.
 
 When the host picks **New Project**, the dialog says it clears the project for everyone in the room, and its **Start new project** button is red.
 Opening or importing another project as the host also swaps it out for every guest.
-So while at least one guest is connected, **Open Local Project**, **Open from Google Drive**, and **Upload .zip as New Project** ask first, before any dialog, sign-in, or file picker opens.
+So while at least one guest is connected, **Open Project…**, **Open from Google Drive**, and **Upload .zip as New Project** ask first, before any dialog, sign-in, or file picker opens.
 Cancel leaves the project as it was.
-After **Choose a project** on Open Local Project, its **Upload .zip** button doesn't ask again.
+After **Choose a project** on Open Project…, its **Upload .zip** button doesn't ask again.
 With nobody connected, they open straight away.
 
 ## Related topics

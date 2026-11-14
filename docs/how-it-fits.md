@@ -45,7 +45,7 @@ flowchart TB
     Menus -- "Edit > Settings<br/>or Ctrl+," --> Settings
     Menus -- "File > Upload Files" --> Upload
     Files -- "Upload button<br/>or drop files" --> Upload
-    Menus -- "File > Open Local Project<br/>or Ctrl+O" --> Projects
+    Menus -- "File > Open Project…<br/>or Ctrl+O" --> Projects
     Menus -- "File > Open from Google Drive<br/>or Ctrl+Shift+O" --> DrivePicker
     Files -- "click a text file" --> Editor
     Files -- "click an image or PDF" --> Viewer
@@ -147,7 +147,7 @@ You can open a project from this browser, from Drive, or from a `.zip`.
 ```mermaid
 flowchart TD
     A{Where is it?}
-    A -- this browser --> B([File > Open Local Project])
+    A -- this browser --> B([File > Open Project…, This browser])
     B --> C[Open a project dialog]
     C --> D[Click a project]
     A -- Google Drive --> E([File > Open from Google Drive])

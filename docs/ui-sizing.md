@@ -13,7 +13,7 @@ Put one size class on the `<dialog class="dialog ...">` element. It sizes the bo
 | Class | Token | Width | Use it for | Used by |
 |-------|-------|-------|------------|---------|
 | `dialog-sm` | `--dialog-sm` | 28rem (448px) | One question with one or two buttons: confirm, prompt, notice. | `confirmDialog`, `promptDialog` and `noticeDialog` in `frontend/src/ui/dialogs.ts` |
-| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Conflict |
+| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Accounts, Conflict |
 | `dialog-lg` | `--dialog-lg` | 52rem (832px) | Dense content: long lists, sections side by side, long text to read. | Settings, What's new (changelog, #140) |
 | `dialog-palette` | `--dialog-palette` | 40rem (640px) | The command palette. | `.command-palette` uses the token. The palette is a `div`, not a `<dialog>`. |
 

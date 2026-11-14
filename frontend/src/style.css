@@ -145,6 +145,11 @@ body.is-resizing { cursor: col-resize; user-select: none; }
 .share-area { display: inline-flex; align-items: center; gap: 0.35rem; min-width: 0; }
 .status-badges { display: inline-flex; align-items: center; gap: 0.35rem; margin-left: auto; flex-wrap: wrap; }
 .status-badges .pill { gap: 0.3rem; }
+/* Where the open project is stored (#200). A button, so the host can open Accounts from it. */
+.storage-provider { cursor: pointer; max-width: 14rem; }
+.storage-provider > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.storage-provider:disabled { cursor: default; opacity: 1; }
+.storage-provider[data-status='expired'] { border-color: var(--diag-text); }
 .muted { color: var(--muted-text); max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .share-link { color: var(--link-text); text-decoration: underline; }
 /* Who's in the room (issue #22). Avatars are 32px like Basecoat's sm buttons, 44px on touch screens (docs/ui-sizing.md).
@@ -211,7 +216,7 @@ body.is-resizing { cursor: col-resize; user-select: none; }
  */
 :root {
   --dialog-sm: 28rem;      /* Confirm, prompt and notice: one question, one or two buttons. */
-  --dialog-md: 36rem;      /* Short forms and info: Upload, Export, About, Open a project, Conflict. */
+  --dialog-md: 36rem;      /* Short forms and info: Upload, Export, About, Open a project, Accounts, Conflict. */
   --dialog-lg: 52rem;      /* Dense content with lists or sections side by side: Settings, Changelog. */
   --dialog-palette: 40rem; /* The command palette (640px). */
   --popover-card: 22rem;   /* Floating cards that point at something: tour, update prompt, preview changes, hover preview. */
@@ -455,6 +460,27 @@ label.settings-row { justify-content: flex-start; }
 .project-item { width: 100%; text-align: left; }
 .project-item:hover { background: var(--surface-3); }
 .projects-dialog footer, .upload-dialog footer { justify-content: space-between; }
+.projects-list[hidden], .projects-back[hidden] { display: none; }
+.projects-back { justify-self: start; }
+
+/* Accounts panel (#200, dialog-md, a sheet on phones). accountsPanel.ts draws one row per storage provider. */
+.accounts-dialog-body { display: grid; gap: 1rem; }
+.accounts-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.accounts-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.75rem; border: 1px solid var(--panel-border); border-radius: var(--radius-lg); }
+.accounts-row figure { margin: 0; display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border-radius: var(--radius-md); background: var(--surface-2); }
+.accounts-row-body { display: grid; gap: 0.2rem; min-width: 0; }
+.accounts-row-body h3 { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; font-size: 0.875rem; font-weight: 500; }
+.accounts-row-account, .accounts-row-caps { margin: 0; overflow-wrap: anywhere; }
+.accounts-row-account { font-size: 0.8125rem; }
+.accounts-row-caps { font-size: 0.75rem; color: var(--muted-text); }
+.accounts-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.accounts-dialog footer { justify-content: space-between; }
+/* Narrow windows: the buttons go under the text, so a long email still fits. */
+@media (max-width: 39.99rem) {
+  .accounts-row { grid-template-columns: auto minmax(0, 1fr); }
+  .accounts-row-actions { grid-column: 1 / -1; justify-content: stretch; }
+  .accounts-row-actions .btn { flex: 1; min-height: 2.75rem; }
+}
 
 /* Export dialog. exportDialog.ts fills the Format and Save to menus and the options. */
 .export-dialog-body { display: grid; gap: 1rem; min-width: 0; }

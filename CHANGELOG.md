@@ -8,6 +8,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ### Added
 
+- **Accounts.** Edit > Accounts… lists every place a project can be saved (this browser and Google Drive) with its status (Connected, Expired, Not connected or Not configured), who's signed in, and Connect and Log out buttons, plus Log out of everything. File > Open Project now asks where the project is first, and a badge in the status bar shows where the open project is stored; click it for Accounts. Sign-ins stay in your tab and are never sent to your room.
+
 - **Editing on phones and tablets.** The cursor line stays in view above the on-screen keyboard, and while the editor has focus on a touch screen a key bar above the keyboard types `\`, `{`, `}`, `$`, `%`, `[`, `]` and `&`. The keys are ordinary typing: collaborators see them and undo takes them back.
 - **Preview cards on hover.** Rest the mouse on a menu item or toolbar button, or reach it with the keyboard, and after a moment a card shows what it does: a small picture for things like the layouts, Share, New File and Export, and the same description as the command palette. It hides as soon as you move away, and hovering never runs anything. Touch screens don't show it.
 - **Autocompletion.** Type `\` and the editor offers common LaTeX commands, each with its arguments and what it does. Accepting one puts in placeholders for its arguments, and Tab moves between them. After `\begin{` it offers environments and adds the matching `\end{...}`. Ctrl+Space opens the list. The list comes with the app, loads after the editor, and nothing you type is sent anywhere.

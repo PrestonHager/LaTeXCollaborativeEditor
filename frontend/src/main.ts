@@ -4,7 +4,7 @@ import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
 import { createMenuBar, type CommandId } from './ui/menuBar';
 import { setupShareButton } from './ui/shareButton';
-import { renderStaticIcons } from './ui/icons';
+import { icon, renderStaticIcons, storageIcons } from './ui/icons';
 import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
@@ -16,7 +16,7 @@ import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
 import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { lazyAboutDialog, lazyAccountsPanel, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -28,6 +28,7 @@ import { LocalDownloadStorage } from './storage/localDownload';
 import { GoogleDriveProvider } from './storage/providers/googleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
+import { createProviderRegistry, googleDriveEntry, localStorageEntry } from './storage/providers/registry';
 import type { StorageProvider } from './storage/providers/types';
 import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
@@ -86,6 +87,8 @@ const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
+const storageProviderEl = document.getElementById('storage-provider') as HTMLButtonElement;
+const storageProviderNameEl = document.getElementById('storage-provider-name')!;
 const connectionStatusEl = document.getElementById('connection-status')!;
 const diagnosticsHelpEl = document.getElementById('diagnostics-help') as HTMLAnchorElement;
 const editorEmptyEl = document.getElementById('editor-empty') as HTMLElement;
@@ -147,6 +150,11 @@ const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
 const driveProvider = new GoogleDriveProvider();
+// Every place a project can be saved (#200). The Accounts panel, File > Open Project and the status bar read it.
+const storageProviders = createProviderRegistry([
+  localStorageEntry(localAppProvider),
+  googleDriveEntry(driveProvider, import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined),
+]);
 const blobs = new BlobStore();
 const projectState = new ProjectState(localAppProvider, driveProvider);
 const { conflicts, overwrite } = projectState;
@@ -282,6 +290,7 @@ const session: SessionController = new SessionController({
   onRemoteMetadata: ({ storage }) => {
     hostStorageText = storage;
     setStatus(storage);
+    showStorageProvider();
   },
   getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
@@ -451,6 +460,7 @@ driveProvider.onSessionLost(() => {
 /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
 function useProvider(provider: StorageProvider, id: string | null, loaded: SavedManifest | null = null) {
   projectState.use(provider, id, loaded);
+  showStorageProvider();
   persistAppSession();
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
@@ -914,7 +924,7 @@ const exportDialogModule = lazyModule<ExportDialog>(() =>
           driveChoice({
             api: driveProvider,
             isGuest: () => isClient,
-            configured: () => Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+            configured: () => storageProviders.get('googleDrive').configured(),
             signedIn: () => driveProvider.hasUsableToken(),
             // Not ensureDriveConnected: signing in to export doesn't change where autosave goes or what the pill says.
             signIn: async () => {
@@ -955,6 +965,20 @@ const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dial
   },
   // The host already OK'd Open to get here, so this doesn't ask again.
   onImportZip: () => commands.importZipFromOpenDialog(),
+  registry: storageProviders,
+  onProvider: (id) => void commands.openFromProvider(id),
+}, lazyLoadFailed);
+
+// File > Accounts (#200). Connect and Log out run the same steps as the File menu's Drive items.
+const accountsPanel = lazyAccountsPanel(document.getElementById('accounts-dialog') as HTMLDialogElement, {
+  registry: storageProviders,
+  onConnect: (id) => commands.connectProvider(id),
+  onLogOut: (id) => commands.logOutProvider(id),
+  onLogOutAll: async () => {
+    const names = await commands.logOutAll();
+    if (names.length > 1) showNotice(`Logged out of ${names.join(' and ')}. Edits now save in this browser.`);
+    return names;
+  },
 }, lazyLoadFailed);
 
 // File > New Project's template picker, Save as Template and the profile (#74). They load on first use.
@@ -1059,7 +1083,36 @@ function showDriveAccount() {
   const account = driveProvider.accountLabel();
   autosaveStatusEl.title = account ? `Google Drive: ${account}` : '';
   if (settingsDialog.isOpen()) settingsDialog.refresh();
+  accountsPanel.refresh();
+  showStorageProvider();
   refreshCommands();
+}
+
+/**
+ * The status bar badge for where the open project is stored, from the registry. A guest sees the
+ * host's storage, from the room's metadata, which only ever carries a name like "Google Drive".
+ */
+function showStorageProvider() {
+  const entry = storageProviders.forProvider(projectState.activeProvider) ?? storageProviders.get('local');
+  const status = entry.status();
+  let text = entry.name;
+  let title = `Stored in ${entry.name}`;
+  if (isClient) {
+    text = `Host: ${hostStorageText.replace(/^Saved on host /, '')}`;
+    title = hostStorageText;
+  } else if (entry.needsSignIn) {
+    const account = entry.account();
+    if (account) title += ` as ${account}`;
+    if (status === 'expired') title += '. The sign-in ran out';
+    title += '. Click for Accounts.';
+  } else {
+    title += '. Click for Accounts.';
+  }
+  storageProviderNameEl.textContent = text;
+  storageProviderEl.title = title;
+  storageProviderEl.dataset.status = status;
+  storageProviderEl.disabled = isClient;
+  storageProviderEl.querySelector('svg')?.replaceWith(icon(storageIcons[entry.icon] ?? storageIcons.monitor));
 }
 
 const ensureDrivePickerConfig = () => {
@@ -1120,6 +1173,8 @@ const commands = createCommands({
   editor,
   fileTree,
   projectsDialog,
+  storageProviders,
+  accountsPanel,
   uploadDialog,
   templates,
   zipInput,
@@ -1316,6 +1371,7 @@ const preloadDialogs = () => {
   commandPalette.preload();
   preloadSettings();
   projectsDialog.preload();
+  accountsPanel.preload();
   uploadDialog.preload();
   tour.preload();
   aboutDialog.preload();
@@ -1411,6 +1467,9 @@ window.addEventListener('pagehide', () => presence.stop());
 window.addEventListener('pageshow', (event) => {
   if (event.persisted && inRoom) startPresence();
 });
+// The storage badge opens Accounts, where the host can connect or log out.
+storageProviderEl.addEventListener('click', () => executeCommand('app.accounts'));
+showStorageProvider();
 renderConnection();
 layout.installSplitter();
 layout.applyLayoutMode();

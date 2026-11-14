@@ -11,6 +11,8 @@ import type { createKeybindSettings } from '../ui/keybindSettings';
 import type { createTour, TourSeen } from '../ui/tour';
 import type { createProjectsDialog } from '../ui/projectsDialog';
 import type { createUploadDialog } from '../ui/uploadDialog';
+import type { createAccountsPanel } from '../ui/accountsPanel';
+import type { ProviderId } from '../storage/providers/registry';
 import type { createAboutDialog } from '../ui/aboutDialog';
 import type { TemplatesUiDeps } from '../templates/templatesUi';
 import type { BuildInfo } from './buildInfo';
@@ -115,7 +117,26 @@ export function lazyProjectsDialog(
   );
   return {
     open: (list: ProjectSummary[]) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.open(list)),
+    chooseProvider: (ids: ProviderId[]) => withInstance(projects.get, 'The Open dialog', onError, (instance) => instance.chooseProvider(ids)),
     preload: projects.preload,
+  };
+}
+
+/** The Accounts panel (#200). */
+export function lazyAccountsPanel(
+  dialog: HTMLDialogElement,
+  options: Parameters<typeof createAccountsPanel>[1],
+  onError: LazyLoadError,
+  deps: Loader<typeof import('../ui/accountsPanel')> = {},
+) {
+  const accounts = lazyModule(() =>
+    (deps.load ?? (() => import('../ui/accountsPanel')))().then(({ createAccountsPanel }) => createAccountsPanel(dialog, options)),
+  );
+  return {
+    open: () => withInstance(accounts.get, 'Accounts', onError, (instance) => instance.open()),
+    // Until it loads, the panel can't be open, so there's nothing to redraw.
+    refresh: () => accounts.current()?.refresh(),
+    preload: accounts.preload,
   };
 }
 

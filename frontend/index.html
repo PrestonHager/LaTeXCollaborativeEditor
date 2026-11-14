@@ -47,7 +47,7 @@
             <div id="menu-file" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="File">
                 <button type="button" class="menu-item" role="menuitem" data-command="file.new" data-description="Start a project from a template, or an empty one. The current one stays saved."><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal" data-description="Open a project saved in this browser."><span class="menu-item-label">Open Local Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal" data-description="Choose where the project is saved, this browser or a connected account, then pick it."><span class="menu-item-label">Open Project…</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive" data-description="Pick a project folder or .tex file from Google Drive."><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.importZip" data-description="Turn a .zip of files into a new project."><span class="menu-item-label">Upload .zip as New Project</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveAsTemplate" data-description="Save this project's files as a template for new projects."><span class="menu-item-label">Save as Template…</span></button>
@@ -87,6 +87,7 @@
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="app.openSettings" data-description="Change themes and how saving works."><span class="menu-item-label">Settings</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="app.editProfile" data-description="Your name, affiliation and email, which templates fill in. Never sent to your room."><span class="menu-item-label">Profile…</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="app.accounts" data-description="See which storage accounts are connected, connect one, or log out of them."><span class="menu-item-label">Accounts…</span></button>
               </div>
             </div>
           </div>
@@ -142,6 +143,8 @@
         <div class="status-badges">
           <span class="pill badge" data-variant="outline" title="Who you're editing with"><i data-lucide="users"></i><span id="connection-status" role="status" aria-live="polite">Not shared</span></span>
           <span class="pill badge" data-variant="outline" title="Preview status"><i data-lucide="play"></i><span id="compile-status">Idle</span></span>
+          <!-- Where the open project is stored, from the provider registry. main.ts fills it in; the host can click it for Accounts. -->
+          <button id="storage-provider" type="button" class="pill badge storage-provider" data-variant="outline" title="Where this project is stored"><i data-lucide="monitor"></i><span id="storage-provider-name">This browser</span></button>
           <span class="pill badge" data-variant="outline" title="Where and when the project last saved"><i data-lucide="save"></i><span id="autosave-status">Autosave Off</span></span>
           <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="saving" aria-label="Help with saving and storage" data-tooltip="Help with saving" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
         </div>
@@ -486,9 +489,12 @@
       <div>
         <header>
           <h2 id="projects-dialog-title">Open a project</h2>
-          <p id="projects-dialog-description">Projects saved in this browser. For Google Drive, use File > Open from Google Drive.</p>
+          <p id="projects-dialog-description">Projects saved in this browser.</p>
         </header>
         <section class="projects-dialog-body">
+          <!-- File > Open Project asks where the project is first (#200). projectsDialog.ts draws a row per provider. -->
+          <div id="projects-providers" class="item-group projects-list" role="list" aria-label="Where the project is saved" hidden></div>
+          <button id="projects-back" type="button" class="btn projects-back" data-variant="ghost" data-size="sm" hidden><i data-lucide="chevron-left"></i>Choose another place</button>
           <div id="projects-list" class="item-group projects-list" role="list"></div>
           <div id="projects-empty" class="empty" hidden>
             <header>
@@ -519,6 +525,27 @@
         </section>
       </button>
     </template>
+
+    <!-- Accounts (#200). One row per storage provider in storage/providers/registry.ts, drawn by accountsPanel.ts. -->
+    <dialog id="accounts-dialog" class="dialog dialog-md accounts-dialog" aria-labelledby="accounts-dialog-title" aria-describedby="accounts-dialog-description">
+      <div>
+        <header>
+          <h2 id="accounts-dialog-title">Accounts</h2>
+          <p id="accounts-dialog-description">Where projects can be saved, and who's signed in. Sign-ins stay in this tab and are never shared with your room.</p>
+        </header>
+        <section class="accounts-dialog-body">
+          <ul id="accounts-list" class="accounts-list" aria-label="Storage providers"></ul>
+        </section>
+        <footer>
+          <button id="accounts-logout-all" type="button" class="btn" data-variant="outline">Log out of everything</button>
+          <span class="dialog-help-links">
+            <a class="btn" data-variant="link" data-size="sm" data-help="saving">About saving</a>
+          </span>
+          <button id="accounts-done" type="button" class="btn">Close</button>
+        </footer>
+        <button id="accounts-close" type="button" class="btn" data-variant="ghost" data-size="icon-sm" aria-label="Close accounts"><i data-lucide="x"></i></button>
+      </div>
+    </dialog>
 
     <!-- Save conflict. Shown when a file changed in storage since we last saved it, and it has no close button on purpose. -->
     <dialog id="conflict-dialog" class="dialog dialog-md conflict-dialog" aria-labelledby="conflict-dialog-title" aria-describedby="conflict-dialog-description">
