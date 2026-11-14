@@ -83,7 +83,7 @@ describe('createToolbar', () => {
     const moreItems = () => Array.from(document.querySelectorAll<HTMLButtonElement>('#toolbar-more-menu .menu-item'));
     const press = (target: Element, key: string) => target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
 
-    it('keeps compile and share, hides the layout buttons, and moves the rest to More', () => {
+    it('keeps compile and share, hides the layout buttons, and moves the rest to More', async () => {
       const { buttons } = setup();
       const place = Object.fromEntries(buttons.map((button) => [button.dataset.command, button.dataset.phonePlace]));
       expect(place).toEqual({
@@ -106,10 +106,10 @@ describe('createToolbar', () => {
       expect(moreItems().map((item) => item.querySelector('.menu-item-label')!.textContent)).toEqual(['New file', 'Upload files', 'Save now', 'Export', 'Command palette', 'Documentation']);
       // The same keybinds as the menus.
       expect(moreItems().find((item) => item.dataset.command === 'file.saveNow')!.querySelector('[data-shortcut]')!.textContent).toBe('Ctrl+S');
-      moreItems().forEach((item) => {
-        expect(item.getAttribute('role')).toBe('menuitem');
-        expect(item.querySelector('svg')).toBeTruthy();
-      });
+      moreItems().forEach((item) => expect(item.getAttribute('role')).toBe('menuitem'));
+      // Their icons come from the menus' lazy chunk (#231), which opening More loads.
+      more().click();
+      await vi.waitFor(() => moreItems().forEach((item) => expect(item.querySelector('svg')).toBeTruthy()));
     });
 
     it('runs the command from More, and disables the same items as the toolbar', () => {

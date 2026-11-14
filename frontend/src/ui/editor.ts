@@ -11,7 +11,7 @@ import { latexSyntaxHighlighting } from './syntaxHighlight';
 import { yUndoManagerKeymap } from 'y-codemirror.next';
 import { isAssignableKeybind, normalizeKeybind, type Platform } from './modifierShortcutLabels';
 import type { CompletionProject } from './completionProject';
-import { createTouchKeyBar } from './touchKeyBar';
+import type { TouchKeyBar } from './touchKeyBar';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
@@ -63,7 +63,25 @@ export function editorKeybinds(platform: Platform): Set<string> {
 
 const DEFAULT_DOC = '\\documentclass{article}\n\\begin{document}\nHello, collaborative LaTeX!\n\\end{document}\n';
 
-export function createEditorPane(container: HTMLElement) {
+/** Only phones and tablets get the touch key bar, so its code loads only there (issue #231). */
+export const COARSE_POINTER = '(pointer: coarse)';
+
+type EditorPaneOptions = {
+  /** Where the touch key bar's code comes from. Tests pass their own. */
+  loadTouchKeyBar?: () => Promise<typeof import('./touchKeyBar')>;
+  /** Whether this device has a coarse pointer now, and tells of changes. Defaults to matchMedia. */
+  coarsePointer?: Pick<MediaQueryList, 'matches' | 'addEventListener' | 'removeEventListener'> | null;
+};
+
+function coarsePointerQuery() {
+  try {
+    return typeof window.matchMedia === 'function' ? window.matchMedia(COARSE_POINTER) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function createEditorPane(container: HTMLElement, options: EditorPaneOptions = {}) {
   const host = document.createElement('div');
   host.className = 'editor';
   container.appendChild(host);
@@ -107,8 +125,29 @@ export function createEditorPane(container: HTMLElement) {
   });
 
   const view = new EditorView({ state, parent: host });
-  // LaTeX keys above the on-screen keyboard, on touch devices while the editor has focus.
-  const touchKeyBar = createTouchKeyBar(view, container);
+  // LaTeX keys above the on-screen keyboard, on touch devices while the editor has focus. The code
+  // loads once the device has a coarse pointer, now or later (a tablet whose keyboard comes off).
+  // Typing works without it, so if it can't load, just log that and try on the next change.
+  let touchKeyBar: TouchKeyBar | null = null;
+  let touchKeyBarReady: Promise<void> = Promise.resolve();
+  const coarse = options.coarsePointer === undefined ? coarsePointerQuery() : options.coarsePointer;
+  const loadTouchKeyBar = () => {
+    if (touchKeyBar) return;
+    touchKeyBarReady = (options.loadTouchKeyBar ?? (() => import('./touchKeyBar')))().then(
+      ({ createTouchKeyBar }) => {
+        if (touchKeyBar) return;
+        touchKeyBar = createTouchKeyBar(view, container);
+        touchKeyBar.refresh();
+        coarse?.removeEventListener('change', onCoarseChange);
+      },
+      (error: unknown) => console.warn('Touch key bar failed to load', error),
+    );
+  };
+  const onCoarseChange = () => {
+    if (coarse?.matches) loadTouchKeyBar();
+  };
+  if (coarse?.matches) loadTouchKeyBar();
+  else coarse?.addEventListener?.('change', onCoarseChange);
   // Lines with problems are highlighted without it, so if it can't load, just log that.
   const lintReady = loadLintExtensions().then(
     (extensions) => view.dispatch({ effects: lintCompartment.reconfigure(extensions) }),
@@ -124,8 +163,10 @@ export function createEditorPane(container: HTMLElement) {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
     getText() { return view.state.doc.toString(); },
     getView() { return view; },
-    /** The bar of LaTeX keys shown above the on-screen keyboard. */
-    getTouchKeyBar() { return touchKeyBar.element; },
+    /** The bar of LaTeX keys shown above the on-screen keyboard, once its code has loaded (touch devices only). */
+    getTouchKeyBar(): HTMLElement | null { return touchKeyBar?.element ?? null; },
+    /** Resolves once a touch key bar that started loading is in (or failed to load). For tests. */
+    touchKeyBarReady() { return touchKeyBarReady; },
     /** Resolves once the lint gutter is in (or failed to load). For tests. */
     lintReady() { return lintReady; },
     /** Resolves once autocompletion is in (or failed to load). For tests. */
@@ -147,7 +188,7 @@ export function createEditorPane(container: HTMLElement) {
           EditorState.readOnly.of(!isEditable),
         ]),
       });
-      touchKeyBar.refresh();
+      touchKeyBar?.refresh();
     },
     focus() { view.focus(); },
     selectAll() {

@@ -1,4 +1,4 @@
-import { commandIcon } from './icons';
+import { iconSlot } from './icons';
 import { keepOnScreen } from './keepOnScreen';
 
 export type CommandId =
@@ -85,6 +85,8 @@ type MenuBarOptions = {
   isCollapsed?: () => boolean;
   /** False for a lone dropdown, like the toolbar's More menu, so Left and Right go to the toolbar instead. */
   arrowsBetweenMenus?: boolean;
+  /** Loads the items' icons (commandIcons.ts, a lazy chunk). Tests pass their own. */
+  loadIcons?: () => Promise<(commandId: CommandId) => SVGElement>;
 };
 
 /**
@@ -136,6 +138,26 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
   const entries: MenuEntry[] = [];
   const shortcutEls: { commandId: CommandId; el: HTMLElement }[] = [];
   let openMenuLabel: string | null = null;
+  // Each item's icon goes in an empty slot of the same size until commandIcons.ts loads (issue #231).
+  // It loads when the browser is idle (main.ts), or when the pointer or focus reaches the menus, so
+  // it's in before a menu opens. If it can't load, the slots stay empty and the next visit tries again.
+  const iconSlots: { slot: HTMLElement; commandId: CommandId }[] = [];
+  let iconsLoading: Promise<void> | null = null;
+  let iconsLoaded = false;
+  const loadIcons = (): Promise<void> => {
+    if (iconsLoaded) return Promise.resolve();
+    iconsLoading ??= (options.loadIcons ?? (() => import('./commandIcons').then((module) => module.commandIcon)))().then(
+      (commandIcon) => {
+        iconsLoaded = true;
+        for (const { slot, commandId } of iconSlots.splice(0)) slot.replaceWith(commandIcon(commandId));
+      },
+      (error: unknown) => {
+        iconsLoading = null;
+        console.warn('Menu icons failed to load', error);
+      },
+    );
+    return iconsLoading;
+  };
 
   const focusFirstEnabledItem = (menuLabel: string) => {
     const items = menuItemByLabel.get(menuLabel) ?? [];
@@ -208,6 +230,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
    */
   const openMenu = (menuLabel: string, focus: 'firstItem' | 'trigger') => {
     openMenuLabel = menuLabel;
+    void loadIcons();
     updateOpenState();
     if (focus === 'firstItem') {
       focusFirstEnabledItem(menuLabel);
@@ -266,7 +289,9 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
       const commandId = itemButton.dataset.command as CommandId;
 
       // First, fill in what the HTML leaves to us: the icon and a place for the shortcut text.
-      itemButton.prepend(commandIcon(commandId));
+      const slot = iconSlot();
+      iconSlots.push({ slot, commandId });
+      itemButton.prepend(slot);
       let shortcutEl = itemButton.querySelector<HTMLElement>('[data-shortcut]');
       if (!shortcutEl) {
         shortcutEl = document.createElement('span');
@@ -356,10 +381,15 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
 
   refresh();
   refreshShortcuts();
+  const preloadIcons = () => void loadIcons();
+  root.addEventListener('pointerover', preloadIcons, { passive: true });
+  root.addEventListener('focusin', preloadIcons);
 
   return {
     refresh,
     refreshShortcuts,
+    /** Load the items' icons now. Resolves once they're in, or failed to load. */
+    loadIcons,
     /** Every menu item in page order, for building the command palette. */
     entries: (): MenuEntry[] => entries.map((entry) => ({ ...entry, shortcut: options.shortcutLabel?.(entry.commandId) })),
     /** Close any open menu, since the window crossed the phone breakpoint and the other set of triggers shows now. */

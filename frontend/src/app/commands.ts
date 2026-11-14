@@ -1,3 +1,4 @@
+import { localPlace } from './desktopShell';
 import type { CommandId, CommandState, MenuEntry } from '../ui/menuBar';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { KeybindCommand } from '../ui/keybindSettings';
@@ -8,7 +9,7 @@ import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
 import { pathProblem, suggestFreeName } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
-import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
+import { LEGACY_PREFIX } from '../storage/providers/driveShared';
 import { describeError } from '../storage/errors';
 import type { BlobStore } from '../project/blobStore';
 import type { ProjectContent, ProjectDoc } from '../project/projectDoc';
@@ -345,7 +346,7 @@ export function createCommands(app: CommandContext) {
       // Then let a Drive save that's already running finish before the token goes away.
       await autosave.enqueue(() => driveProvider.disconnect());
       showDriveAccount();
-      showNotice('Disconnected Google Drive. Edits now save in this browser.');
+      showNotice(`Disconnected Google Drive. Edits now save in ${localPlace()}.`);
       await autosave.saveNow();
     },
     'file.saveToDrive': async () => {
@@ -406,7 +407,7 @@ export function createCommands(app: CommandContext) {
       }
       const deleteAll = await confirmDialog({
         title: 'Delete all local projects?',
-        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in this browser. Your templates and projects on Google Drive stay. This cannot be undone.`,
+        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in ${localPlace()}. Your templates and projects on Google Drive stay. This cannot be undone.`,
         confirmLabel: count === 1 ? 'Delete 1 project' : `Delete ${count} projects`,
         destructive: true,
       });

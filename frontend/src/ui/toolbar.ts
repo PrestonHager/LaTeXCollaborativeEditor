@@ -1,5 +1,5 @@
 import { createMenuBar, type CommandId, type CommandState } from './menuBar';
-import { commandIcon } from './icons';
+import { toolbarCommandIcon } from './icons';
 
 type ToolbarOptions = {
   getCommandState: (commandId: CommandId) => CommandState;
@@ -72,7 +72,8 @@ export function createToolbar(root: HTMLElement, options: ToolbarOptions) {
   buttons.forEach((button) => {
     const commandId = button.dataset.command as CommandId;
     // First, add the command's icon unless the HTML already has one.
-    if (!button.querySelector('svg, i')) button.prepend(commandIcon(commandId));
+    const commandSvg = button.querySelector('svg, i') ? null : toolbarCommandIcon(commandId);
+    if (commandSvg) button.prepend(commandSvg);
     // Keep the tooltip from the HTML, refreshShortcuts adds the keybind to it.
     button.dataset.tooltipText = button.dataset.tooltip ?? '';
     const place = phonePlace(commandId);

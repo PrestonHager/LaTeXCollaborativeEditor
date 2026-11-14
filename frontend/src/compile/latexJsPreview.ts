@@ -7,7 +7,7 @@ import { addKatexFontFallbacks } from './katexFonts';
 import { extractVerbatim, insertVerbatimBlocks, type VerbatimBlock } from './verbatimBlocks';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
-import { LATEX_JS_ASSET_BASE } from './latexJsAssets';
+import { LATEX_JS_ASSET_BASE, latexJsAssetBase } from './latexJsAssets';
 
 export { LATEX_JS_ASSET_BASE };
 
@@ -94,7 +94,7 @@ function typeset(
     const generator = parse(adapted.source, {
       generator: new HtmlGenerator({ hyphenate: false, documentClass: 'article' }),
     });
-    const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
+    const doc = generator.htmlDocument(latexJsAssetBase());
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
     unlinkMissingRefs(doc);

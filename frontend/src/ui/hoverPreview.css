@@ -1,0 +1,11 @@
+/* Loads with the hover preview's code (ui/hoverPreview.ts, issue #231). */
+/* Hover preview card for menu items and toolbar buttons (#89, ui/hoverPreview.ts). It ignores the pointer, so it never
+   catches a hover or click. The pictures' own styles load with them (ui/hoverPreviewMocks.css). */
+.hover-preview { position: fixed; z-index: 380; width: min(var(--popover-card), calc(100vw - var(--viewport-gutter))); padding: 0.75rem; display: grid; gap: 0.4rem; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); font-size: 13px; line-height: 1.4; pointer-events: none; }
+.hover-preview[hidden] { display: none; }
+.hover-preview-header { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.hover-preview-title { font-weight: 600; }
+.hover-preview-shortcut { color: var(--muted-text); font-family: inherit; font-size: 12px; }
+.hover-preview-text { margin: 0; color: var(--muted-text); }
+/* The card has the tooltip's text and more, so don't show both. */
+[data-hover-preview]::before, [data-hover-preview]::after { display: none; }

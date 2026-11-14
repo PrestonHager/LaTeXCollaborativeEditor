@@ -8,7 +8,7 @@
 // Template folders aren't tagged as projects, so File > Open from Google Drive's project list skips
 // them, and opening the Templates folder itself as a project is refused (googleDrive.ts).
 import { StorageError } from '../storage/errors';
-import { FOLDER_MIME, TEMPLATES_FOLDER_PROPERTY, TEMPLATE_PROPERTY } from '../storage/providers/googleDrive';
+import { FOLDER_MIME, TEMPLATES_FOLDER_PROPERTY, TEMPLATE_PROPERTY } from '../storage/providers/driveShared';
 import type { ProjectSummary } from '../storage/providers/types';
 
 export const PROFILE_PROPERTY = 'latexProfile';

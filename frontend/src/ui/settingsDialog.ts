@@ -1,6 +1,7 @@
 import type { ThemeMode } from '../state/appSession';
 import type { SettingSection } from '../state/settings';
 import { returnFocusOnClose } from './focusReturn';
+import './settingsDialog.css';
 
 export type SettingsState = {
   editorTheme: ThemeMode;

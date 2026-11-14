@@ -1,132 +1,67 @@
+// Import icons by name so the bundler only keeps the ones we use. Icons that only lazy parts of the
+// app show are imported there instead (commandIcons.ts, exportDialog.ts, keybindSettings.ts), so
+// they stay out of the initial load (issue #231).
 import {
   createElement,
   createIcons,
   BookOpen,
-  FlaskConical,
-  ListChecks,
-  ChevronRight,
-  File,
-  FileArchive,
-  FileDown,
-  FileCode,
-  FileOutput,
-  Printer,
-  FileImage,
-  FileText,
-  Folder,
-  FolderPlus,
-  Star,
-  Upload,
-  Users,
-  Check,
-  ClipboardPaste,
-  CloudUpload,
   Columns2,
   Command,
-  Copy,
-  Download,
+  FileOutput,
   FilePlus,
-  FileInput,
-  FolderInput,
-  FolderOpen,
-  HardDrive,
-  Info,
-  Link,
   PanelLeft,
   PanelRight,
-  Pause,
-  PencilLine,
   Play,
-  Redo2,
   Save,
-  Scissors,
-  Search,
   Share2,
-  SunMoon,
-  Palette,
-  TextSelect,
-  Trash2,
-  Undo2,
-  Unlink,
-  Settings,
-  Moon,
-  Sun,
-  Monitor,
-  X,
-  TextCursorInput,
-  SquarePen,
-  Keyboard,
-  Bug,
-  ShieldExclamationPoint,
-  Lightbulb,
-  Signpost,
+  Upload,
   CircleHelp,
-  Plus,
-  TriangleAlert,
-  LayoutTemplate,
-  UserPen,
-  Menu,
-  Ellipsis,
   MoveHorizontal,
   ZoomIn,
   ZoomOut,
+  Info,
+  Check,
+  ChevronRight,
+  Copy,
+  Download,
+  File,
+  FileArchive,
+  FileText,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  HardDrive,
+  PencilLine,
+  Search,
+  Star,
+  Trash2,
+  Users,
+  X,
+  FileImage,
+  Ellipsis,
+  Menu,
   type IconNode,
 } from 'lucide';
 import type { CommandId } from './menuBar';
 
-// Import icons by name so the bundler only keeps the ones we use.
-const commandIcons: Record<CommandId, IconNode> = {
+
+/**
+ * Icons for the toolbar's commands, which show from the start (index.html). The menus' and the
+ * palette's icons are in commandIcons.ts, a lazy chunk (issue #231).
+ */
+export const toolbarCommandIcons = {
   'app.commandPalette': Command,
-  'app.openSettings': Settings,
-  'app.editProfile': UserPen,
-  'file.new': FilePlus,
-  'file.rename': SquarePen,
-  'file.saveAsTemplate': LayoutTemplate,
   'share.copyLink': Share2,
-  'view.darkMode': Moon,
-  'view.lightMode': Sun,
-  'view.systemTheme': Monitor,
-  'view.focusEditor': TextCursorInput,
-  'file.openLocal': FolderOpen,
-  'file.openDrive': HardDrive,
-  'file.download': Download,
-  'file.connectDrive': Link,
-  'file.disconnectDrive': Unlink,
-  'file.saveToDrive': CloudUpload,
-  'file.moveDrive': FolderInput,
-  'file.addFromDrive': FileInput,
-  'file.renameDrive': PencilLine,
   'file.saveNow': Save,
-  'file.clearLocalDocs': Trash2,
   'file.newFile': FilePlus,
-  'file.newFolder': FolderPlus,
   'file.upload': Upload,
-  'file.importZip': FileArchive,
-  'file.downloadFile': FileDown,
   'file.export': FileOutput,
-  'edit.undo': Undo2,
-  'edit.redo': Redo2,
-  'edit.cut': Scissors,
-  'edit.copy': Copy,
-  'edit.paste': ClipboardPaste,
-  'edit.selectAll': TextSelect,
-  'view.toggleEditorTheme': SunMoon,
-  'view.togglePreviewTheme': Palette,
-  'view.togglePauseSaving': Pause,
   'view.compileNow': Play,
   'view.layoutSplit': Columns2,
   'view.layoutEditorOnly': PanelLeft,
   'view.layoutPreviewOnly': PanelRight,
   'help.documentation': BookOpen,
-  'help.shortcuts': Keyboard,
-  'help.tour': Signpost,
-  'help.reportBug': Bug,
-  'help.reportSecurity': ShieldExclamationPoint,
-  'help.requestFeature': Lightbulb,
-  'help.about': Info,
-  'dev.openTestProject': FlaskConical,
-  'dev.openChecklist': ListChecks,
-};
+} satisfies Partial<Record<CommandId, IconNode>>;
 
 // Icons the HTML asks for with <i data-lucide="name">. Add one here when you use a new name.
 const staticIcons = {
@@ -164,26 +99,24 @@ const staticIcons = {
 /** Icons for file tree rows, picked by kind. */
 export const fileIcons = { File, FileImage, FileText, Folder, FolderOpen };
 
-/** Icons for the Export dialog's formats, by the name an exporter gives (see src/export/types.ts). */
-export const exportIcons: Record<string, IconNode> = {
-  'file-archive': FileArchive,
-  'file-code': FileCode,
-  'file-down': FileDown,
-  'file-text': FileText,
-  printer: Printer,
-};
-
-/** Icons for the keybind list in Settings. */
-export const keybindIcons = { Plus, X, TriangleAlert };
-
 /** Build an SVG icon. Icons are decorative, so screen readers skip them. */
 export function icon(node: IconNode, className = 'size-4'): SVGElement {
   return createElement(node, { class: className, 'aria-hidden': 'true' });
 }
 
-/** Icon for a menu or palette command. */
-export function commandIcon(commandId: CommandId): SVGElement {
-  return icon(commandIcons[commandId]);
+/** Icon for a toolbar command, or null for a command that isn't on the toolbar. */
+export function toolbarCommandIcon(commandId: CommandId): SVGElement | null {
+  const node = (toolbarCommandIcons as Partial<Record<CommandId, IconNode>>)[commandId];
+  return node ? icon(node) : null;
+}
+
+/** An empty box the size of an icon, where a menu item's icon goes once commandIcons.ts loads. */
+export function iconSlot(): HTMLElement {
+  const slot = document.createElement('span');
+  slot.className = 'size-4 shrink-0 inline-block';
+  slot.setAttribute('aria-hidden', 'true');
+  slot.dataset.iconSlot = '';
+  return slot;
 }
 
 /** Replace every <i data-lucide> placeholder under root with its SVG. */

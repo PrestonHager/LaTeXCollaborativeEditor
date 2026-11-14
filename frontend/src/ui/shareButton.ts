@@ -1,4 +1,5 @@
 import { keepOnScreen } from './keepOnScreen';
+import './shareButton.css';
 
 /** The parts of the Share popover in index.html. */
 export type ShareElements = {
