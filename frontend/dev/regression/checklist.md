@@ -165,6 +165,7 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
 - [ ] File > Open Project… (Ctrl+O) asks where the project is (This browser, Google Drive). This browser lists saved projects and opens the one you pick; Choose another place goes back. On a site with no Google keys it goes straight to the list.
 - [ ] Clear Local Projects asks first, then removes the saved projects. Templates saved in this browser stay.
+- [ ] Compile PDF engine files (issue #241): Settings has no **Compile PDF engine** row on a fresh browser. In the dev tools console run `(await caches.open('tex-assets-v1')).put('/__tex-asset/test', new Response('x'.repeat(2000)))`, then open Settings: the row says `2.0 kB stored in this browser` with **Remove**. Remove says the files were removed, the row says Not downloaded, and reopening Settings hides it again.
 
 ## Templates and profile
 
