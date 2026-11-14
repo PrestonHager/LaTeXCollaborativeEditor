@@ -32,6 +32,12 @@ export const LATEX_JS_PACKAGES: ReadonlySet<string> = new Set([
   'comment',
 ]);
 
+/** Packages that only add what a package LaTeX.js has does, so the preview loads that one instead. */
+export const PACKAGE_STAND_INS: ReadonlyMap<string, string> = new Map([
+  ['url', 'hyperref'],
+  ['xurl', 'hyperref'],
+]);
+
 /**
  * How the preview copes without a package:
  * - `ignored`: safe to leave out of the preview, only the look changes (info).
@@ -58,14 +64,28 @@ const PACKAGE_SUPPORT = new Map<string, PackageSupport>([
   ),
   ...group(['babel', 'polyglossia'], { kind: 'ignored', effect: 'Hyphenation and names like "Contents" stay in English.' }),
   // Math, which KaTeX draws.
-  ...group(['amssymb', 'amsfonts', 'mathtools', 'bm'], { kind: 'ignored', effect: 'KaTeX draws the math, and has most of these commands.' }),
+  ...group(['amssymb', 'amsfonts', 'mathtools', 'bm', 'cancel', 'mathrsfs', 'esint'], { kind: 'ignored', effect: 'KaTeX draws the math, and has most of these commands.' }),
   ...group(['amsmath'], { kind: 'shimmed', effect: 'KaTeX draws the math; numbered equations show without their numbers.' }),
   ...group(['amsthm'], { kind: 'shimmed', effect: 'Theorems and proofs show without numbers.' }),
+  ...group(['physics'], { kind: 'shimmed', effect: 'Its commands, like \\dv, \\abs, \\qty and \\ket, show as plain math.' }),
+  ...group(['derivative'], { kind: 'shimmed', effect: '\\odv, \\pdv and the other derivatives show as fractions.' }),
+  ...group(['braket'], { kind: 'shimmed', effect: '\\bra, \\ket, \\braket and \\set show as plain math.' }),
+  // Other links and PDF settings.
+  ...group(['url', 'xurl'], { kind: 'shimmed', effect: 'The preview uses hyperref for \\url.' }),
+  ...group(['bookmark', 'epstopdf'], { kind: 'ignored', effect: 'They only change the PDF, not what the preview shows.' }),
   // Stand-ins in packageShims.ts, the adapter and verbatimBlocks.ts.
   ...group(['cleveref'], { kind: 'shimmed', effect: '\\cref shows as a plain reference.' }),
   ...group(['csquotes'], { kind: 'shimmed', effect: '\\enquote shows plain quotation marks.' }),
   ...group(['siunitx'], { kind: 'shimmed', effect: 'Numbers and units show as plain text.' }),
-  ...group(['booktabs'], { kind: 'shimmed', effect: "Tables the preview can't draw show as a note." }),
+  ...group(['booktabs', 'tabularx', 'longtable', 'array', 'multirow', 'makecell', 'tabularray'], { kind: 'shimmed', effect: "Tables the preview can't draw show as a note." }),
+  ...group(['enumitem', 'enumerate'], { kind: 'shimmed', effect: 'Lists use the preview labels and spacing.' }),
+  ...group(['xspace'], { kind: 'shimmed', effect: '\\xspace adds no space.' }),
+  ...group(['lipsum', 'blindtext'], { kind: 'shimmed', effect: 'Filler text shows as one short paragraph.' }),
+  ...group(['todonotes'], { kind: 'shimmed', effect: '\\todo notes show inline, and the list of them is left out.' }),
+  ...group(['ulem', 'soul'], { kind: 'shimmed', effect: 'Underlines show; strike-outs and highlights show as plain text.' }),
+  ...group(['wrapfig'], { kind: 'shimmed', effect: 'Wrapped figures show in place, without text around them.' }),
+  ...group(['subcaption'], { kind: 'shimmed', effect: 'Subfigures show one after another.' }),
+  ...group(['placeins'], { kind: 'shimmed', effect: '\\FloatBarrier does nothing, since figures show in place.' }),
   ...group(['appendix'], { kind: 'shimmed', effect: 'The appendices environment works like \\appendix.' }),
   ...group(['authblk'], { kind: 'shimmed', effect: 'Authors and affiliations show as plain text.' }),
   ...group(['nomencl'], { kind: 'shimmed', effect: 'Entries show as plain text, and the list itself is left out.' }),

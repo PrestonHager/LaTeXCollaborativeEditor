@@ -21,6 +21,7 @@ describe('regressionProject', () => {
       'figures/quadrants.png',
       'figures/wave.eps',
       'main.tex',
+      'package-stand-ins.tex',
       'refs.bib',
       ...['abbrv', 'alpha', 'apalike', 'biblatex', 'citations', 'ieeetr', 'natbib', 'unknown', 'unsrt'].map((name) => `styles/${name}.tex`),
       'unsupported-packages.tex',

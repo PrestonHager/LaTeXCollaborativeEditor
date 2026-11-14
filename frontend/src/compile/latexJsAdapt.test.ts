@@ -111,6 +111,14 @@ describe('adaptLatexSource package diagnostics', () => {
     expect(note).toEqual({ line: 2, severity: 'info', message: 'The preview uses a stand-in for the siunitx package. Numbers and units show as plain text.' });
   });
 
+  it('uses a stand-in for physics, and still warns about a package it knows nothing about on the same line', () => {
+    const { diagnostics } = adaptLatexSource(doc('\\usepackage{physics,made-up}'));
+    expect(diagnostics.map((d) => [d.line, d.severity, d.message.split('.')[0]])).toEqual([
+      [2, 'info', 'The preview uses a stand-in for the physics package'],
+      [2, 'warning', "The preview can't load the made-up package"],
+    ]);
+  });
+
   it('warns about a package it knows nothing about', () => {
     const [note] = adaptLatexSource(doc('\\usepackage{made-up}')).diagnostics;
     expect(note.severity).toBe('warning');
@@ -434,5 +442,53 @@ describe('adaptLatexSource user-defined verbatim environments', () => {
       '\\end{pycode}',
     );
     expect(adaptLatexSource(src)).toEqual({ source: src, changes: [], diagnostics: [] });
+  });
+});
+
+describe('adaptLatexSource package stand-ins', () => {
+  it('previews a document full of physics commands with no error', () => {
+    const body = String.raw`$\dv{f}{x} + \pdv[2]{f}{x} + \pdv{f}{x}{y}$, $\abs{x} \norm{\vb{v}} \qty(\frac{a}{b})$,
+$\bra{\psi} \ket{0} \braket{a}{b} \expval{H}$, $\eval{x^2}_0^1 = \order{\epsilon}$,
+$\grad f, \div\vb{E}, \curl\vb{B}, \tr\rho, \vu{x}$, \[ \int f \dd{x} = \mqty(a & b \\ c & d) \]`;
+    const { html, errors, changes } = latexSourceToPreviewHtml(doc('\\usepackage{amsmath,physics}', '\\begin{document}', body, '\\end{document}'));
+    expect(errors.filter((e) => e.severity !== 'info')).toEqual([]);
+    expect(changes).toContain('Wrote physics commands as plain math.');
+    const page = new DOMParser().parseFromString(html!, 'text/html');
+    expect(page.querySelectorAll('.katex').length).toBeGreaterThan(5);
+    expect(page.querySelector('.katex-error')).toBeNull();
+    expect(page.body.textContent).not.toContain('\\dv');
+  });
+
+  it('only rewrites a package\'s commands when the document loads it', () => {
+    expect(adaptLatexSource(doc('$a \\div b \\abs{x}$')).source).toBe(doc('$a \\div b \\abs{x}$'));
+    expect(adaptLatexSource(doc('\\usepackage{physics}', '$\\div E$')).source).toBe(doc('', '$\\boldsymbol{\\nabla}\\cdot  E$'));
+  });
+
+  it('lets siunitx keep \\qty when physics is loaded too', () => {
+    const { source } = adaptLatexSource(doc('\\usepackage{siunitx}', '\\usepackage{physics}', '\\qty{3}{\\metre} $\\abs{x}$'));
+    expect(source).toBe(doc('', '', '3~m $\\left\\lvert x \\right\\rvert$'));
+  });
+
+  it('loads hyperref in place of url, once', () => {
+    expect(adaptLatexSource(doc('\\usepackage{url}')).source).toBe(doc('\\usepackage{hyperref}'));
+    expect(adaptLatexSource(doc('\\usepackage{url,xurl,xcolor}')).source).toBe(doc('\\usepackage{hyperref,xcolor}'));
+    const { html, errors } = latexSourceToPreviewHtml(doc('\\usepackage{url}', '\\begin{document}\\url{https://example.com}\\end{document}'));
+    expect(errors.filter((e) => e.severity !== 'info')).toEqual([]);
+    expect(html).toContain('href="https://example.com"');
+  });
+
+  it('previews documents using the small text packages', () => {
+    const { errors } = latexSourceToPreviewHtml(
+      doc(
+        '\\usepackage{enumitem,xspace,lipsum,todonotes,ulem,wrapfig,subcaption,placeins,cancel}',
+        '\\begin{document}',
+        '\\begin{enumerate}[label=(\\alph*)]\\item a\\xspace\\end{enumerate}',
+        '\\lipsum[1] \\todo{x} \\uline{u} \\sout{s} \\FloatBarrier $\\cancel{y}$',
+        '\\begin{wrapfigure}{r}{0.4\\textwidth}w\\end{wrapfigure}',
+        '\\begin{figure}\\begin{subfigure}{0.4\\textwidth}s\\subcaption{a}\\end{subfigure}\\end{figure}',
+        '\\end{document}',
+      ),
+    );
+    expect(errors.filter((e) => e.severity !== 'info')).toEqual([]);
   });
 });

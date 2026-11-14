@@ -219,13 +219,26 @@ An **info** note means the preview leaves the package out on purpose, or has a s
 | `inputenc`, `fontenc` | The preview reads Unicode already. |
 | `fontspec`, `lmodern`, `times`, `mathptmx`, `helvet`, `courier`, `palatino`, `mathpazo`, `newtxtext`, `newtxmath`, `libertine`, `charter`, `kpfonts` | The preview uses its own fonts. |
 | `babel`, `polyglossia` | Hyphenation and names like "Contents" stay in English. |
-| `amssymb`, `amsfonts`, `mathtools`, `bm` | KaTeX draws the math, and has most of their commands. |
+| `amssymb`, `amsfonts`, `mathtools`, `bm`, `cancel`, `mathrsfs`, `esint` | KaTeX draws the math, and has most of their commands. |
+| `bookmark`, `epstopdf` | They only change the PDF, not what the preview shows. |
 | `amsmath` (stand-in) | KaTeX draws the math. Numbered equations show without their numbers. |
 | `amsthm` (stand-in) | Theorems and proofs show without numbers. |
+| `physics` (stand-in) | Its commands show as plain math: derivatives (`\dv`, `\pdv`, `\dd`), brackets (`\qty`, `\abs`, `\norm`, `\eval`, `\order`), vectors (`\vb`, `\vu`, `\grad`, `\div`, `\curl`), Dirac notation (`\bra`, `\ket`, `\braket`, `\expval`, `\mel`), matrices (`\mqty`) and `\tr`. `\qty` needs math mode, as in LaTeX. |
+| `derivative` (stand-in) | `\odv`, `\pdv` and the other derivatives show as fractions. |
+| `braket` (stand-in) | `\bra`, `\ket`, `\braket` and `\set` show as plain math. |
+| `url`, `xurl` (stand-in) | The preview loads `hyperref` instead, which has `\url`. |
 | `cleveref` (stand-in) | `\cref` shows as a plain reference. |
 | `csquotes` (stand-in) | `\enquote` shows plain quotation marks. |
 | `siunitx` (stand-in) | Numbers and units show as plain text. |
-| `booktabs` (stand-in) | Tables the preview can't draw show as a note. |
+| `booktabs`, `tabularx`, `longtable`, `array`, `multirow`, `makecell`, `tabularray` (stand-in) | Tables the preview can't draw show as a note. |
+| `enumitem`, `enumerate` (stand-in) | List options like `[label=(\alph*)]` are left out, and lists use the preview labels. |
+| `xspace` (stand-in) | `\xspace` adds no space. |
+| `lipsum`, `blindtext` (stand-in) | Filler text shows as one short paragraph. |
+| `todonotes` (stand-in) | `\todo` notes show inline in parentheses, and `\listoftodos` is left out. |
+| `ulem`, `soul` (stand-in) | Underlines show; strike-outs and highlights show as plain text. |
+| `wrapfig` (stand-in) | Wrapped figures show in place, without text around them. |
+| `subcaption` (stand-in) | Subfigures show one after another, and `\subcaption` works like `\caption`. |
+| `placeins` (stand-in) | `\FloatBarrier` does nothing, since figures show in place. |
 | `appendix` (stand-in) | The `appendices` environment works like `\appendix`. |
 | `authblk` (stand-in) | Authors and affiliations show as plain text. |
 | `nomencl` (stand-in) | Entries show as plain text, and the list itself is left out. |

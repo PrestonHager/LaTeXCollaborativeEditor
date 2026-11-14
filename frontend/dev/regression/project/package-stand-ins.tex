@@ -1,0 +1,32 @@
+% Package stand-ins test (#227). In the Files panel, use Set main file on this file, then compare
+% the preview with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+% Expect: an info marker on each of the next two lines saying the preview uses a stand-in, and no warning.
+\usepackage{amsmath,physics}
+\usepackage{enumitem,xspace,lipsum,todonotes,ulem,url}
+\begin{document}
+
+\section{physics}
+% Expect: each formula as typeset math, with no red KaTeX error text and no backslash commands showing.
+Derivatives: $\dv{f}{x}$, $\dv[2]{y}{t}$, $\pdv{f}{x}{y}$, and inline $\dv*{f}{x}$.
+
+Brackets: $\abs{x}$, $\norm{\vb{v}}$, $\qty(\frac{a}{b})$, $\qty[x]$, $\eval{x^2}_0^1$ and $\order{\epsilon^2}$.
+
+Vectors: $\vb{E}$, $\vu{r}$, $\grad\phi$, $\div\vb{E}$, $\curl\vb{B}$, $\laplacian\phi$ and $\tr\rho$.
+
+Dirac: $\bra{\psi}$, $\ket{0}$, $\braket{a}{b}$, $\expval{H}{\psi}$ and $\mel{n}{H}{m}$.
+
+% Expect: a 2 by 2 matrix in parentheses, then "for all" with space either side.
+\[ \int f \dd{x} = \mqty(a & b \\ c & d) \qq{for all} x \]
+
+\section{Small text packages}
+% Expect: items labeled 1. and 2. (the label option is left out), and "e.g. this" with one space (\xspace adds nothing).
+\begin{enumerate}[label=(\alph*)]
+  \item First, e.g.\xspace this.
+  \item Second.
+\end{enumerate}
+% Expect: one paragraph starting "Lorem ipsum", then "(To do: check)" in italics,
+% "under" underlined, "struck" as plain text, and a link to example.com.
+\lipsum[1-2]
+Some text\todo{check}, \uline{under} and \sout{struck}. See \url{https://example.com}.
+\end{document}

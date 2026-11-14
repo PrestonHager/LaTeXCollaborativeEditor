@@ -8,10 +8,10 @@
  * Like every adapter step, each rewrite keeps the line breaks of what it replaces.
  */
 
-const keepLineBreaks = (removed: string) => removed.replace(/[^\n]/g, '');
+export const keepLineBreaks = (removed: string) => removed.replace(/[^\n]/g, '');
 
 /** The line breaks of `whole` that aren't in the parts of it that are kept. */
-const outside = (whole: string, ...kept: string[]) => keepLineBreaks(whole).slice(kept.reduce((count, part) => count + keepLineBreaks(part).length, 0));
+export const outside = (whole: string, ...kept: string[]) => keepLineBreaks(whole).slice(kept.reduce((count, part) => count + keepLineBreaks(part).length, 0));
 
 /** Escape every character a regular expression treats as special, so a string matches only itself. */
 export const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
@@ -31,14 +31,14 @@ const LATEX_SPECIALS: Record<string, string> = {
 };
 export const escapeLatexText = (text: string) => text.replace(/[\\{}&%$#_~^]/g, (char) => LATEX_SPECIALS[char]);
 
-type Matcher = (start: number) => number;
+export type Matcher = (start: number) => number;
 
 /**
  * Where each { and [ in a source closes, found in one pass, so reading many commands' arguments
  * stays linear even when braces never close. A backslash skips the next character, so \{ and \[
  * don't count. The result is -1 for an opener with no match.
  */
-function matcher(source: string): Matcher {
+export function matcher(source: string): Matcher {
   let closes: Map<number, number> | null = null;
   return (start) => {
     if (!closes) {
@@ -58,24 +58,26 @@ function matcher(source: string): Matcher {
   };
 }
 
-const skipSpaces = (source: string, i: number) => {
+export const skipSpaces = (source: string, i: number) => {
   while (i < source.length && (source[i] === ' ' || source[i] === '\t' || source[i] === '\n')) i += 1;
   return i;
 };
 
-type Parsed = { end: number; optional: string[]; groups: string[] };
+export type Parsed = { end: number; optional: string[]; groups: string[] };
 
 /**
  * Read a command's arguments from `i` (just past its name): a `*`, then [options] and {groups}
  * until `groups` mandatory ones are read. [options] right after the last group are read too.
+ * With `min` below `groups`, the groups past `min` are optional, like physics' \braket{a}{b},
+ * and [options] count only before the first group or before group `min`.
  */
-function readArgs(source: string, i: number, groups: number, matching: Matcher = matcher(source)): Parsed | null {
+export function readArgs(source: string, i: number, groups: number, matching: Matcher = matcher(source), min = groups): Parsed | null {
   const optional: string[] = [];
   const found: string[] = [];
   if (source[i] === '*') i += 1;
   for (;;) {
     const j = skipSpaces(source, i);
-    if (source[j] === '[' && found.length < groups) {
+    if (source[j] === '[' && found.length < groups && (found.length < min || !found.length)) {
       const close = matching(j);
       if (close === -1) return null;
       optional.push(source.slice(j + 1, close));
@@ -87,9 +89,9 @@ function readArgs(source: string, i: number, groups: number, matching: Matcher =
       i = close + 1;
     } else break;
   }
-  if (found.length < groups) return null;
+  if (found.length < min) return null;
   // Trailing [options] only count when they follow right away, like \newtheorem{thm}{Theorem}[chapter].
-  while (source[i] === '[') {
+  while (min === groups && source[i] === '[') {
     const close = matching(i);
     if (close === -1) break;
     optional.push(source.slice(i + 1, close));
@@ -98,8 +100,17 @@ function readArgs(source: string, i: number, groups: number, matching: Matcher =
   return { end: i, optional, groups: found };
 }
 
-/** Replace every `\name` for the given names (not longer names) with what `replace` returns for its arguments. */
-function replaceCommand(source: string, names: string | string[], groups: number, replace: (args: Parsed, whole: string) => string): string {
+/**
+ * Replace every `\name` for the given names (not longer names) with what `replace` returns for its
+ * arguments. `min` makes the groups past it optional (see readArgs).
+ */
+export function replaceCommand(
+  source: string,
+  names: string | string[],
+  groups: number,
+  replace: (args: Parsed, whole: string) => string,
+  min = groups,
+): string {
   const alternatives = (Array.isArray(names) ? names : [names]).map(escapeRegExp).join('|');
   const pattern = new RegExp(`\\\\(?:${alternatives})(?![A-Za-z@])`, 'g');
   let out = '';
@@ -108,7 +119,7 @@ function replaceCommand(source: string, names: string | string[], groups: number
   for (const match of source.matchAll(pattern)) {
     const start = match.index;
     if (start < last) continue;
-    const args = readArgs(source, start + match[0].length, groups, matching);
+    const args = readArgs(source, start + match[0].length, groups, matching, min);
     if (!args) continue;
     const whole = source.slice(start, args.end);
     out += source.slice(last, start) + replace(args, whole);
@@ -127,7 +138,7 @@ type Pair = { start: number; beginEnd: number; endStart: number; end: number; na
  * their result is what the outer one sees. A scanner with a stack, not one big regex, so a
  * document with unclosed environments can't make it backtrack.
  */
-function replaceEnvironment(
+export function replaceEnvironment(
   source: string,
   names: string[],
   replace: (name: string, args: Parsed, body: string, begin: string, end: string) => string,
@@ -442,3 +453,66 @@ export function rewriteBeamer(source: string): string {
   s = s.replace(/(\\item)\s*<[^>]*>/g, '$1');
   return s;
 }
+
+// --- Small text packages --------------------------------------------------------------------------
+// Each runs only when its package is loaded (latexJsAdapt.ts), since the commands mean nothing otherwise.
+
+/** enumitem and enumerate: list options like \begin{enumerate}[label=(\alph*)] go, and the preview numbers lists its own way. */
+export function stripListOptions(source: string): string {
+  const matching = matcher(source);
+  let out = '';
+  let last = 0;
+  for (const match of source.matchAll(/\\begin\s*\{(?:enumerate|itemize|description)\*?\}/g)) {
+    const open = skipSpaces(source, match.index + match[0].length);
+    if (source[open] !== '[' || match.index < last) continue;
+    const close = matching(open);
+    if (close === -1) continue;
+    out += source.slice(last, match.index) + match[0].replace('*', '') + keepLineBreaks(source.slice(match.index + match[0].length, close + 1));
+    last = close + 1;
+  }
+  return out + source.slice(last);
+}
+
+/** xspace: \xspace adds a space only when one is needed; leaving it out is close enough. */
+export const stripXspace = (source: string) => source.replace(/\\xspace(?![A-Za-z@])/g, '');
+
+const FILLER =
+  'Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Ut purus elit, vestibulum ut, placerat ac, adipiscing vitae, felis. Curabitur dictum gravida mauris. Nam arcu libero, nonummy eget, consectetuer id, vulputate a, magna.';
+
+/** lipsum and blindtext: one paragraph of filler text for each \lipsum[...] or \blindtext. */
+export function rewriteFillerText(source: string): string {
+  return replaceCommand(source, ['lipsum', 'blindtext', 'Blindtext'], 0, (_args, whole) => `\\par ${FILLER}\\par ${keepLineBreaks(whole)}`);
+}
+
+/** todonotes: \todo{text} shows inline in brackets, \missingfigure as a note, and \listoftodos goes. */
+export function rewriteTodos(source: string): string {
+  let s = replaceCommand(source, 'todo', 1, ({ groups: [text] }, whole) => `\\textit{(To do: ${text})}${outside(whole, text)}`);
+  s = replaceCommand(s, 'missingfigure', 1, ({ groups: [text] }, whole) => `\\par\\noindent\\textit{(Missing figure: ${text})}\\par ${outside(whole, text)}`);
+  return replaceCommand(s, 'listoftodos', 0, (_args, whole) => keepLineBreaks(whole));
+}
+
+/** ulem and soul: underlines become \underline; strike-outs and highlights show as plain text. */
+export function rewriteUnderlines(source: string): string {
+  let s = replaceCommand(source, ['uline', 'uuline', 'uwave', 'dashuline', 'dotuline', 'ul'], 1, ({ groups: [text] }, whole) => `\\underline{${text}}${outside(whole, text)}`);
+  s = replaceCommand(s, ['sout', 'xout', 'st', 'hl', 'so'], 1, ({ groups: [text] }, whole) => `{${text}}${outside(whole, text)}`);
+  return replaceCommand(s, 'caps', 1, ({ groups: [text] }, whole) => `\\textsc{${text}}${outside(whole, text)}`);
+}
+
+/** wrapfig: wrapped figures and tables show in place, like other figures. */
+export function rewriteWrapFigures(source: string): string {
+  return replaceEnvironment(
+    source,
+    ['wrapfigure', 'wraptable'],
+    (_name, _args, body, begin, end) => `\\begin{center}${keepLineBreaks(begin)}${body}\\end{center}${keepLineBreaks(end)}`,
+    2,
+  );
+}
+
+/** subcaption: each subfigure shows in turn, and \subcaption works like \caption. */
+export function rewriteSubfigures(source: string): string {
+  const s = replaceEnvironment(source, ['subfigure', 'subtable'], (_name, _args, body, begin, end) => `${keepLineBreaks(begin)}${body}\\par ${keepLineBreaks(end)}`, 1);
+  return s.replace(/\\subcaption(?![A-Za-z@])\*?/g, '\\caption');
+}
+
+/** placeins: \FloatBarrier has nothing to do, since figures already show in place. */
+export const stripFloatBarrier = (source: string) => source.replace(/\\FloatBarrier(?![A-Za-z@])/g, '');

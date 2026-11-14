@@ -9,9 +9,17 @@ import {
   rewriteCleveref,
   rewriteDisplayMath,
   rewriteEnquote,
+  rewriteFillerText,
   rewriteSiunitx,
+  rewriteSubfigures,
   rewriteTheorems,
+  rewriteTodos,
+  rewriteUnderlines,
+  rewriteWrapFigures,
+  stripFloatBarrier,
+  stripListOptions,
   stripSetupCommands,
+  stripXspace,
   theoremNames,
 } from './packageShims';
 import { adaptLatexSource } from './latexJsAdapt';
@@ -195,5 +203,38 @@ describe('package stand-ins for the preview', () => {
     for (const input of inputs) adaptLatexSource(`\\documentclass{beamer}\n${input}`);
     // About 0.2 s here; the bound leaves room for slow CI machines, and quadratic code takes far longer.
     expect(performance.now() - started).toBeLessThan(2000);
+  });
+});
+
+describe('small text package stand-ins', () => {
+  it('drops enumitem list options, keeping line breaks', () => {
+    expect(stripListOptions('\\begin{enumerate}[label=(\\alph*),\n  nosep]\\item a\\end{enumerate}')).toBe('\\begin{enumerate}\n\\item a\\end{enumerate}');
+    expect(stripListOptions('\\begin{itemize*} [x] \\begin{description}\\begin{itemize}[')).toBe('\\begin{itemize} \\begin{description}\\begin{itemize}[');
+  });
+
+  it('drops \\xspace and \\FloatBarrier', () => {
+    expect(stripXspace('\\newcommand{\\eg}{e.g.\\xspace} \\xspaceafter')).toBe('\\newcommand{\\eg}{e.g.} \\xspaceafter');
+    expect(stripFloatBarrier('a\\FloatBarrier b')).toBe('a b');
+  });
+
+  it('puts one paragraph of filler text for each \\lipsum and \\blindtext', () => {
+    const out = rewriteFillerText('\\lipsum[1-3]\n\\blindtext');
+    expect(out.match(/Lorem ipsum/g)).toHaveLength(2);
+    expect(lines(out)).toBe(2);
+  });
+
+  it('shows \\todo notes inline and drops \\listoftodos', () => {
+    expect(rewriteTodos('a\\todo[inline]{fix} \\missingfigure{plot}\\listoftodos')).toBe(
+      'a\\textit{(To do: fix)} \\par\\noindent\\textit{(Missing figure: plot)}\\par ',
+    );
+  });
+
+  it('keeps underlines and shows strike-outs and highlights as plain text', () => {
+    expect(rewriteUnderlines('\\uline{a} \\ul{b} \\sout{c} \\hl{d} \\caps{e}')).toBe('\\underline{a} \\underline{b} {c} {d} \\textsc{e}');
+  });
+
+  it('shows wrapped figures and subfigures in place', () => {
+    expect(rewriteWrapFigures('\\begin{wrapfigure}[10]{r}{0.5\\textwidth}\nx\\end{wrapfigure}')).toBe('\\begin{center}\nx\\end{center}');
+    expect(rewriteSubfigures('\\begin{subfigure}[b]{0.4\\textwidth}x\\subcaption{a}\\end{subfigure}')).toBe('x\\caption{a}\\par ');
   });
 });

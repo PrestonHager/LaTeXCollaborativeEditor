@@ -16,10 +16,19 @@ import {
   rewriteDisplayMath,
   rewriteEnquote,
   rewriteSiunitx,
+  rewriteFillerText,
+  rewriteSubfigures,
   rewriteTheorems,
+  rewriteTodos,
+  rewriteUnderlines,
+  rewriteWrapFigures,
+  stripFloatBarrier,
+  stripListOptions,
   stripSetupCommands,
+  stripXspace,
 } from './packageShims';
-import { LATEX_JS_PACKAGES, packageDiagnostic } from './previewPackages';
+import { rewriteBraketPackage, rewriteDerivativePackage, rewritePhysics } from './mathPackageShims';
+import { LATEX_JS_PACKAGES, PACKAGE_STAND_INS, packageDiagnostic } from './previewPackages';
 import type { EditorDiagnostic } from '../ui/diagnostics';
 
 /** Find index of closing `}` matching `{` at openIdx (brace depth, ignore escaped braces loosely). */
@@ -77,7 +86,8 @@ const packageName = (entry: string) => entry.replace(/%[^\n]*/g, '').trim();
 /**
  * Remove every package LaTeX.js can't load from \usepackage and \RequirePackage, and note each
  * one with its line. Packages it can load stay, and \RequirePackage becomes \usepackage, which
- * is the only one LaTeX.js knows.
+ * is the only one LaTeX.js knows. A package with a stand-in LaTeX.js can load, like url for
+ * hyperref, is noted and swapped for it.
  */
 function stripUnsupportedPackages(source: string, removed: RemovedPackage[]): string {
   // Count lines as we go, since matches come in order.
@@ -96,10 +106,12 @@ function stripUnsupportedPackages(source: string, removed: RemovedPackage[]): st
         const name = packageName(entry);
         if (LATEX_JS_PACKAGES.has(name)) kept.push(name);
         else if (name) removed.push({ name, line: lineAt(at + entry.indexOf(name)) });
+        const standIn = PACKAGE_STAND_INS.get(name);
+        if (standIn && !kept.includes(standIn)) kept.push(standIn);
         at += entry.length + 1;
       }
       const names = list.split(',').map(packageName).filter(Boolean);
-      if (command === 'usepackage' && kept.length === names.length) return whole;
+      if (command === 'usepackage' && kept.join() === names.join()) return whole;
       if (!kept.length) return keepLineBreaks(whole);
       const opts = options === undefined ? '' : `[${packageName(options).replace(/\s+/g, ' ')}]`;
       return `\\usepackage${opts}{${kept.join(',')}}${keepLineBreaks(whole)}`;
@@ -438,7 +450,8 @@ function maskProtectedText(source: string): { masked: string; unmask: (text: str
   };
 }
 
-type Rewrite = { note: string | null; apply: (source: string) => string };
+/** A rewrite with `packages` runs only when the document loads one of them. */
+type Rewrite = { note: string | null; packages?: string[]; apply: (source: string, loaded: ReadonlySet<string>) => string };
 
 // Each rewrite in order, with the note to show in the preview when it changes something.
 const REWRITES: Rewrite[] = [
@@ -446,11 +459,23 @@ const REWRITES: Rewrite[] = [
   { note: 'Showed Beamer frames as pages, without the theme.', apply: rewriteBeamer },
   { note: 'Showed theorems and proofs without numbers.', apply: rewriteTheorems },
   { note: 'Showed numbered equations without their numbers.', apply: rewriteDisplayMath },
+  // Math packages KaTeX lacks (mathPackageShims.ts). physics leaves \qty to siunitx when both are loaded.
+  { note: 'Wrote physics commands as plain math.', packages: ['physics'], apply: (s, loaded) => rewritePhysics(s, { qty: !loaded.has('siunitx') }) },
+  { note: 'Wrote derivative commands as plain math.', packages: ['derivative'], apply: rewriteDerivativePackage },
+  { note: 'Wrote braket commands as plain math.', packages: ['braket'], apply: rewriteBraketPackage },
   { note: 'Showed \\cref as a plain reference.', apply: rewriteCleveref },
   { note: null, apply: rewriteEnquote },
   { note: 'Wrote siunitx quantities as plain text.', apply: rewriteSiunitx },
   { note: "Put a note in place of tables the preview can't show.", apply: placeholderTables },
   { note: null, apply: rewriteAppendices },
+  { note: 'Numbered lists with the default labels.', packages: ['enumitem', 'enumerate'], apply: stripListOptions },
+  { note: null, packages: ['xspace'], apply: stripXspace },
+  { note: 'Showed filler text as one short paragraph.', packages: ['lipsum', 'blindtext'], apply: rewriteFillerText },
+  { note: 'Showed \\todo notes inline.', packages: ['todonotes'], apply: rewriteTodos },
+  { note: 'Showed underlines as \\underline, and strike-outs and highlights as plain text.', packages: ['ulem', 'soul'], apply: rewriteUnderlines },
+  { note: 'Showed wrapped figures in place.', packages: ['wrapfig'], apply: rewriteWrapFigures },
+  { note: 'Showed subfigures one after another.', packages: ['subcaption'], apply: rewriteSubfigures },
+  { note: null, packages: ['placeins'], apply: stripFloatBarrier },
   { note: 'Removed fancyhdr and nomencl setup commands.', apply: (s) => stripRenewcommandNomname(stripLinesMatching(s, LINE_REMOVE_PATTERNS)) },
   { note: 'Removed \\hypersetup.', apply: (s) => stripAllMacroGroups(s, 'hypersetup') },
   { note: 'Removed \\geometry.', apply: (s) => stripAllMacroGroups(s, 'geometry') },
@@ -493,8 +518,10 @@ export function adaptLatexSource(source: string): AdaptedSource {
   const diagnostics: EditorDiagnostic[] = packages.map(({ name, line }) => ({ line, ...packageDiagnostic(name) }));
 
   // Then run each rewrite and note the ones that did something.
+  const loaded = new Set(names);
   for (const rewrite of REWRITES) {
-    const next = rewrite.apply(s);
+    if (rewrite.packages && !rewrite.packages.some((name) => loaded.has(name))) continue;
+    const next = rewrite.apply(s, loaded);
     if (next !== s && rewrite.note) changes.push(rewrite.note);
     s = next;
   }
