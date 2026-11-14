@@ -21,15 +21,58 @@ Type `\begin{` and the start of an environment name, and the list shows environm
 - Accepting a `\begin` completion puts in `\begin{}` and opens the environment list.
 - It doesn't show in `%` comments or after `\\`.
 
-The list covers about 250 common commands (structure, references and citations, text, math, siunitx and Beamer) and about 50 environments.
+The list always has about 200 of LaTeX's own commands (structure, references and citations, text, math) and about 20 environments.
 It comes with the app and loads just after the editor shows, so nothing you type is sent anywhere to complete it.
+
+#### Packages and your own commands
+
+The list also offers commands and environments from the packages the project loads, and the ones it defines itself.
+Like the rest of the list, they follow the project as you and your collaborators edit it.
+
+- **Packages**: a package's commands only show once a `.tex` or `.sty` file in the project loads it with `\usepackage` or `\RequirePackage`.
+  For example, `\includegraphics` shows after `\usepackage{graphicx}`, and `\begin{align` after `\usepackage{amsmath}`.
+  The app knows amsmath, amssymb and amsfonts, amsthm, mathtools, graphicx, hyperref and url, booktabs, xcolor, siunitx, cleveref, TikZ and pgfplots, natbib, biblatex, csquotes, multirow, tabularx, longtable, listings, minted, subcaption and appendix.
+  A package that loads another brings its commands too, like TikZ with xcolor, and so do the Beamer, amsart and amsbook classes in `\documentclass`.
+  The package lists come with the app, in a file of their own that loads the first time the list needs one.
+  Packages it doesn't know add nothing.
+- **Your own commands**: commands defined with `\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\DeclareMathOperator`, `\def` or `\NewDocumentCommand` in any `.tex` or `.sty` file, and environments defined with `\newenvironment`, `\renewenvironment`, `\newtheorem` or `\NewDocumentEnvironment`.
+  Each goes in with a placeholder for each argument you have to give, and its info box says what defined it and where, and the default of an optional first argument.
+  A command you define takes the place of a built-in one with the same name.
+  Commented-out definitions, and internal names with `@` in them, are left out.
 Undo takes back an accepted completion like any other typing, and collaborators see the text it puts in.
+
+#### Labels, citations and paths
+
+Inside the braces of some commands, the list offers what's in the project rather than commands.
+It opens as you type after the `{`, and after a comma for commands that take a list, like `\cref{sec:a,sec:b}` or `\cite{a,b}`.
+
+- **Labels**: `\ref{`, `\eqref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{` and `\vref{` offer every `\label{...}` in the project's `.tex` files, with the file and line it's on.
+  Commented-out labels are left out.
+- **Citations**: `\cite{` and its natbib and biblatex forms (`\citep`, `\citet`, `\parencite`, `\textcite`, `\autocite`, `\footcite`, `\nocite` and the rest) offer the keys in the project's `.bib` files.
+  Each shows its first author and year, and its info box the title, the authors and the entry type.
+  Optional arguments before the braces, like `\parencite[see][12]{`, are fine.
+- **Paths**: `\input{` offers the project's `.tex` files and `\include{` the same without `.tex`, `\includegraphics{` its images and PDFs, `\bibliography{` its `.bib` files without `.bib`, and `\addbibresource{` with it.
+  Paths are relative to the main file's folder, the way the preview reads them.
+
+The list follows the project as it changes: a file you add, a label you write, or a `.bib` entry a collaborator adds shows up the next time the list opens.
+The project is only read when one of these lists opens, and only files that changed since are read again.
+Like the rest of autocompletion, it all happens in your browser and nothing is sent anywhere.
 
 The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
 - Undo and redo only undo your own typing, not a collaborator's.
 - Each file has its own undo history, and it starts over when you switch files.
 - File operations have a history of their own. See [Undoing file operations](#undoing-file-operations).
+
+### Phones and tablets
+
+When the on-screen keyboard opens, the page shrinks to the part above it, and the line with the cursor scrolls into view so it isn't hidden behind the keyboard.
+Android browsers do this through `interactive-widget=resizes-content` in the page's viewport tag; on iPhone and iPad the editor follows the browser's `visualViewport` instead.
+
+While the editor has focus on a touch screen, a **key bar** sits just above the keyboard with the LaTeX keys phone keyboards hide: `\` `{` `}` `$` `%` `[` `]` `&`.
+Tapping one puts that character at the cursor (or in place of the selection) without closing the keyboard.
+It's ordinary typing as far as the editor is concerned: collaborators see it, undo takes it back, and `\` opens [autocompletion](#autocompletion) like a typed one.
+The bar doesn't show with a mouse, in a read-only file, or when the editor doesn't have focus.
 
 ### Undoing file operations
 
@@ -90,6 +133,18 @@ Its fonts and styles load from a CDN.
 Your LaTeX stays in your browser.
 
 When the preview updates, it keeps your scroll position instead of jumping back to the top.
+
+### Zoom
+
+The preview's bar has zoom buttons: **Fit width** (↔), **Zoom out** (−), the zoom level, and **Zoom in** (+).
+
+- **Fit width** fills the pane. On a narrow pane, like a phone's, the page's side margins shrink to a small gutter so the text gets the whole width, and the text is scaled up so body text is at least 16 pixels and easy to read. On a wider pane it's the page at 100%. Fit width is the default on phones (under 640px wide), and 100% everywhere else.
+- **Zoom in** and **Zoom out** go a step at a time between 50% and 300%, starting from where you are, Fit width included.
+- **Pinch** the preview on a touch screen to zoom it. Only the preview zooms: the app's bars and the editor stay the same size. On a laptop, a trackpad pinch (or Ctrl + scroll wheel) over the preview does the same.
+
+The page always reflows to the pane, so zooming in makes the text bigger without a sideways scrollbar.
+In a pane under 480px wide the side margins are narrow at every zoom level, so a `\marginpar` note has no room there.
+The zoom isn't saved: a new tab starts at Fit width on a phone and 100% elsewhere. It stays the same as the preview updates.
 
 ### Links in the preview
 

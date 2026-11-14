@@ -170,6 +170,27 @@ describe('createEditorPane', () => {
       container.remove();
     });
 
+    it('completes \\ref{ from the project it was given', async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = createEditorPane(container);
+      await editor.completionReady();
+      editor.setCompletionProject({
+        version: () => 1,
+        files: () => [{ path: 'ch.tex', kind: 'text', text: () => '\\label{sec:one}' }],
+        mainPath: () => 'main.tex',
+      });
+      const view = editor.getView();
+      editor.setText('');
+      view.dispatch({ changes: { from: 0, insert: '\\ref{sec' }, selection: { anchor: 8 }, userEvent: 'input.type' });
+      startCompletion(view);
+      await vi.waitFor(() => expect(completionStatus(view.state)).toBe('active'));
+      await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+      expect(editor.getText()).toBe('\\ref{sec:one');
+      view.destroy();
+      container.remove();
+    });
+
     it('keeps the editor working if it fails to load', async () => {
       await expect(loadCompletionExtensions(() => Promise.reject(new Error('offline')))).rejects.toThrow('offline');
       const extension = [] as const;

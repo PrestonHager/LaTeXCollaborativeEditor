@@ -2,7 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget: Android shrinks the page for the on-screen keyboard, so the editor and its key bar stay above it (src/ui/touchKeyBar.ts). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <!--
       Content Security Policy. GitHub Pages can't send headers, so it's a meta tag, which means
       frame-ancestors, report-to and sandbox can't be set here (see docs/deployment.md).
@@ -20,7 +21,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'sha256-Zpzult2XEA/2OY8gNXdZF7kOuCuNQyWpeGn5nr95yYc=' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style https://www.gstatic.com https://ssl.gstatic.com; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://*.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://www.googleapis.com https://content.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073 ipc: http://ipc.localhost; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com https://drive.google.com https://content.googleapis.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
+      content="default-src 'self'; script-src 'self' 'sha256-DJOJgdhvVJBYqQIC2wEBNNN4el1FrTYKs/ys0ktcKuM=' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style https://www.gstatic.com https://ssl.gstatic.com; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://*.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://www.googleapis.com https://content.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073 ipc: http://ipc.localhost; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com https://drive.google.com https://content.googleapis.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
     />
     <title>Collaborative LaTeX Editor</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
@@ -134,9 +135,31 @@
 
         <div id="share-area" class="share-area">
           <div id="presence-bar" class="presence-bar" role="group" aria-label="People in this room" hidden></div>
-          <button id="share-btn" class="btn" data-size="sm" type="button"><i data-lucide="share-2"></i>Share</button>
-          <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>New link</button>
-          <a id="share-link" class="muted share-link" href="" target="_blank" rel="noreferrer"></a>
+          <div id="share-menu" class="popover share-menu">
+            <button id="share-btn" class="btn" data-size="sm" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-popover"><i data-lucide="share-2"></i>Share</button>
+            <div id="share-popover" class="share-popover" data-popover data-side="bottom" data-align="start" role="dialog" aria-labelledby="share-popover-title" aria-hidden="true">
+              <h2 id="share-popover-title" class="share-popover-title">Share this project</h2>
+              <div id="share-start" class="share-popover-view">
+                <ul class="share-popover-points">
+                  <li>Anyone with the link can see and edit this project.</li>
+                  <li>Edits and files go straight between browsers (peer-to-peer).</li>
+                  <li>It lasts until you stop sharing or close this tab.</li>
+                </ul>
+                <div class="share-popover-actions">
+                  <button id="share-start-btn" class="btn" data-size="sm" type="button">Start sharing</button>
+                  <button id="share-resume-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>Resume sharing (same link)</button>
+                </div>
+              </div>
+              <div id="share-active" class="share-popover-view" hidden>
+                <a id="share-link" class="share-link" target="_blank" rel="noreferrer"></a>
+                <div class="share-popover-actions">
+                  <button id="share-copy-btn" class="btn" data-size="sm" type="button"><i data-lucide="copy"></i>Copy</button>
+                  <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button">New link</button>
+                  <button id="share-stop-btn" class="btn" data-variant="destructive" data-size="sm" type="button">Stop sharing</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="share" aria-label="Help with sharing" data-tooltip="Help with sharing" data-side="bottom"><i data-lucide="circle-help"></i></a>
         </div>
         <span id="app-notice" class="app-notice" role="status" aria-live="polite">
@@ -265,6 +288,12 @@
             <div class="pane-bar">
               <span>Preview</span>
               <div class="pane-bar-actions">
+                <div id="preview-zoom" class="preview-zoom" role="group" aria-label="Preview zoom">
+                  <button id="preview-zoom-fit" type="button" class="btn preview-zoom-fit" data-variant="ghost" data-size="icon-xs" aria-pressed="false" aria-label="Fit width" data-tooltip="Fit width" data-side="bottom"><i data-lucide="move-horizontal"></i></button>
+                  <button id="preview-zoom-out" type="button" class="btn" data-variant="ghost" data-size="icon-xs" aria-label="Zoom out" data-tooltip="Zoom out" data-side="bottom"><i data-lucide="zoom-out"></i></button>
+                  <output id="preview-zoom-level" class="preview-zoom-level" aria-live="polite" aria-label="Zoom level">100%</output>
+                  <button id="preview-zoom-in" type="button" class="btn" data-variant="ghost" data-size="icon-xs" aria-label="Zoom in" data-tooltip="Zoom in" data-side="bottom"><i data-lucide="zoom-in"></i></button>
+                </div>
                 <div id="preview-changes" class="popover preview-changes" hidden>
                   <button id="preview-changes-btn" type="button" class="btn preview-changes-btn" data-variant="ghost" data-size="xs" aria-haspopup="dialog" aria-expanded="false" aria-controls="preview-changes-popover" aria-label="Preview is approximate" data-tooltip="Preview is approximate" data-side="bottom" data-align="end"><i data-lucide="info"></i><span id="preview-changes-count" class="preview-changes-count" aria-hidden="true"></span></button>
                   <div id="preview-changes-popover" class="preview-changes-popover" data-popover data-side="bottom" data-align="end" role="dialog" aria-labelledby="preview-changes-title" aria-hidden="true">
