@@ -292,17 +292,60 @@ describe('createTouchKeyBar', () => {
 });
 
 describe('createEditorPane key bar', () => {
-  it('adds the key bar next to the editor', () => {
+  const coarseQuery = (matches: boolean) => {
+    const listeners = new Set<() => void>();
+    const query = {
+      matches,
+      addEventListener: vi.fn((_type: string, listener: () => void) => void listeners.add(listener)),
+      removeEventListener: vi.fn((_type: string, listener: () => void) => void listeners.delete(listener)),
+      change(next: boolean) {
+        query.matches = next;
+        listeners.forEach((listener) => listener());
+      },
+    };
+    return query;
+  };
+
+  it('adds the key bar next to the editor on a touch device', async () => {
     const container = document.createElement('div');
-    const editor = createEditorPane(container);
+    const editor = createEditorPane(container, { coarsePointer: coarseQuery(true) });
+    await editor.touchKeyBarReady();
+    expect(editor.getTouchKeyBar()).not.toBeNull();
     expect(container.querySelector('.touch-key-bar')).toBe(editor.getTouchKeyBar());
   });
 
-  it('hides the key bar when the editor becomes read-only', () => {
+  it("doesn't load the key bar with a fine pointer, until the pointer becomes coarse", async () => {
+    const container = document.createElement('div');
+    const query = coarseQuery(false);
+    const load = vi.fn(() => import('./touchKeyBar'));
+    const editor = createEditorPane(container, { coarsePointer: query, loadTouchKeyBar: load });
+    await editor.touchKeyBarReady();
+    expect(load).not.toHaveBeenCalled();
+    expect(editor.getTouchKeyBar()).toBeNull();
+    query.change(true);
+    await editor.touchKeyBarReady();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('.touch-key-bar')).toBe(editor.getTouchKeyBar());
+    expect(query.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+  });
+
+  it('keeps the editor working when the key bar fails to load', async () => {
+    const container = document.createElement('div');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const editor = createEditorPane(container, { coarsePointer: coarseQuery(true), loadTouchKeyBar: () => Promise.reject(new Error('chunk gone')) });
+    await editor.touchKeyBarReady();
+    expect(editor.getTouchKeyBar()).toBeNull();
+    expect(warn).toHaveBeenCalledWith('Touch key bar failed to load', expect.any(Error));
+    expect(() => editor.setEditable(false)).not.toThrow();
+    warn.mockRestore();
+  });
+
+  it('hides the key bar when the editor becomes read-only', async () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
-    const editor = createEditorPane(container);
-    const bar = editor.getTouchKeyBar();
+    const editor = createEditorPane(container, { coarsePointer: coarseQuery(true) });
+    await editor.touchKeyBarReady();
+    const bar = editor.getTouchKeyBar()!;
     bar.hidden = false;
     editor.setEditable(false);
     expect(bar.hidden).toBe(true);

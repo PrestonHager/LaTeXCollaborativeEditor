@@ -1,5 +1,6 @@
 import type { CommandId } from './menuBar';
-import { commandIcon } from './icons';
+import { commandIcon } from './commandIcons';
+import './commandPalette.css';
 
 export type PaletteCommand = {
   id: CommandId;

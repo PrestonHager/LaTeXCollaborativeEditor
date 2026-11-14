@@ -30,7 +30,7 @@ describe('App integration behavior', () => {
     vi.useRealTimers();
   });
 
-  it('wires every menu item in index.html to a command with an icon', () => {
+  it('wires every menu item in index.html to a command with an icon', async () => {
     mountAppShell();
     const calls: string[] = [];
     const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
@@ -39,7 +39,10 @@ describe('App integration behavior', () => {
     });
     const items = Array.from(document.querySelectorAll<HTMLButtonElement>('.menu-item[data-command]'));
     expect(items.length).toBe(menuBar.entries().length);
-    expect(items.every((item) => item.querySelector('svg'))).toBe(true);
+    // The icons are a lazy chunk (issue #231); each item keeps an icon-sized slot until it loads.
+    expect(items.every((item) => item.querySelector('[data-icon-slot]'))).toBe(true);
+    await menuBar.loadIcons();
+    expect(items.every((item) => item.querySelector('svg') && !item.querySelector('[data-icon-slot]'))).toBe(true);
     const settingsItem = items.find((item) => item.dataset.command === 'app.openSettings')!;
     expect(settingsItem.closest('.menu-root')?.getAttribute('data-menu-label')).toBe('Edit');
     settingsItem.click();

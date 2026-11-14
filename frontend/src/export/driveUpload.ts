@@ -1,7 +1,7 @@
 // Uploading an export to Google Drive. main.ts loads this file with import() the first time
 // someone exports to Drive, so it stays out of the initial bundle.
 import { StorageError } from '../storage/errors';
-import { EXPORTS_PROPERTY, FOLDER_MIME } from '../storage/providers/googleDrive';
+import { EXPORTS_PROPERTY, FOLDER_MIME } from '../storage/providers/driveShared';
 import { mimeType } from '../project/paths';
 import { throwIfAborted, type ExportFile } from './types';
 import type { ExportDestination, SaveRun, SavedExport } from './registry';

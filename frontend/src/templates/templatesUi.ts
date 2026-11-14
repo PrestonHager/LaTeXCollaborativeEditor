@@ -7,7 +7,8 @@ import type { ProjectContent, ProjectDoc } from '../project/projectDoc';
 import { STARTER_TEX } from '../project/projectIo';
 import { projectNameProblem } from '../ui/nameChecks';
 import { returnFocusOnClose } from '../ui/focusReturn';
-import { icon, keybindIcons } from '../ui/icons';
+import { X } from 'lucide';
+import { icon } from '../ui/icons';
 import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
 import { describeError } from '../storage/errors';
 import { localPlace } from '../app/desktopShell';
@@ -106,7 +107,7 @@ function modal(size: 'dialog-md' | 'dialog-lg', kind: string, title: string, des
   const footer = el('footer');
   const closeX = button('', 'ghost', 'icon-sm');
   closeX.setAttribute('aria-label', 'Close');
-  closeX.append(icon(keybindIcons.X));
+  closeX.append(icon(X));
   dialog.append(el('div', {}, header, body, footer, closeX));
   const focusReturn = returnFocusOnClose(dialog);
   const close = () => {

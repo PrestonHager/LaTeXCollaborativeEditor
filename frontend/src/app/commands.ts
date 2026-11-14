@@ -9,7 +9,7 @@ import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
 import { pathProblem, suggestFreeName } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
-import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
+import { LEGACY_PREFIX } from '../storage/providers/driveShared';
 import { describeError } from '../storage/errors';
 import type { BlobStore } from '../project/blobStore';
 import type { ProjectContent, ProjectDoc } from '../project/projectDoc';

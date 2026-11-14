@@ -2,7 +2,8 @@ import type { CommandId } from './menuBar';
 import { addRule, pickWinner, toggleBinding, type Binding, type Keymap, type KeybindSettings } from '../app/keymap';
 import { formatKeybind, isAssignableKeybind, keybindFromEvent } from './modifierShortcutLabels';
 import { scoreCommand } from './commandPalette';
-import { icon, keybindIcons } from './icons';
+import { Plus, TriangleAlert, X } from 'lucide';
+import { icon } from './icons';
 import { confirmDialog, type ConfirmOptions } from './dialogs';
 
 /** A command Settings can give keybinds to. */
@@ -78,7 +79,7 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
     button.setAttribute('aria-label', `${action} ${label(binding.keybind)} for ${command.label}`);
     button.title = action;
     if (binding.off) button.textContent = 'Turn on';
-    else button.append(icon(keybindIcons.X, 'size-3'));
+    else button.append(icon(X, 'size-3'));
     button.addEventListener('click', () => apply(toggleBinding(keymap.settings(), binding), `[data-command="${command.id}"] [data-keybind-add]`));
     item.append(button);
     return item;
@@ -93,7 +94,7 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
     const note = (text: string) => {
       const li = el('li', 'keybind-note');
       const body = el('span', '', text);
-      li.append(icon(keybindIcons.TriangleAlert, 'size-3'), body);
+      li.append(icon(TriangleAlert, 'size-3'), body);
       out.push(li);
       return body;
     };
@@ -208,7 +209,7 @@ export function createKeybindSettings(root: HTMLElement, options: KeybindSetting
       add.dataset.keybindAdd = '';
       add.title = 'Add a keybind';
       add.setAttribute('aria-label', `Add a keybind for ${command.label}`);
-      add.append(icon(keybindIcons.Plus));
+      add.append(icon(Plus));
       add.addEventListener('click', () => {
         recording = command.id;
         recordingHint = '';

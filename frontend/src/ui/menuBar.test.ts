@@ -396,7 +396,38 @@ describe('createMenuBar', () => {
     menuBar.destroy();
   });
 
-  it('uses Basecoat dropdown markup and shows the popover only while open', () => {
+  it('keeps an icon-sized slot for each item until the icons load, and retries a failed load', async () => {
+    const container = document.createElement('div');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    let fail = true;
+    const loadIcons = vi.fn(async () => {
+      if (fail) throw new Error('chunk gone');
+      return () => document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    });
+    const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New' }] }]), {
+      getCommandState: () => ({ enabled: true }),
+      onCommand: () => {},
+      loadIcons,
+    });
+    const item = container.querySelector('.menu-item') as HTMLButtonElement;
+    expect(item.querySelector('[data-icon-slot]')).toBeTruthy();
+    expect(loadIcons).not.toHaveBeenCalled();
+    // Reaching the menus starts the load.
+    container.querySelector('.menu-trigger')!.dispatchEvent(new Event('pointerover', { bubbles: true }));
+    await menuBar.loadIcons();
+    expect(warn).toHaveBeenCalledWith('Menu icons failed to load', expect.any(Error));
+    expect(item.querySelector('[data-icon-slot]')).toBeTruthy();
+    fail = false;
+    await menuBar.loadIcons();
+    expect(item.querySelector('svg')).toBeTruthy();
+    expect(item.querySelector('[data-icon-slot]')).toBeNull();
+    await menuBar.loadIcons();
+    expect(loadIcons).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+    menuBar.destroy();
+  });
+
+  it('uses Basecoat dropdown markup and shows the popover only while open', async () => {
     const container = document.createElement('div');
     const labels: Partial<Record<CommandId, string>> = { 'file.new': 'Ctrl+N' };
     const menuBar = createMenuBar(withMenus(container, [{ label: 'File', items: [{ commandId: 'file.new', label: 'New', shortcut: 'N' }] }]), {
@@ -413,7 +444,9 @@ describe('createMenuBar', () => {
     trigger.click();
     expect(popover.getAttribute('aria-hidden')).toBe('false');
     const item = container.querySelector('.menu-item') as HTMLButtonElement;
+    await menuBar.loadIcons();
     expect(item.querySelector('svg')).toBeTruthy();
+    expect(item.querySelector('[data-icon-slot]')).toBeNull();
     expect(item.querySelector('[data-shortcut]')?.textContent).toBe('Ctrl+N');
     expect(menuBar.entries()).toEqual([
       { commandId: 'file.new', label: 'New', section: 'File', shortcut: 'Ctrl+N', inPalette: true },
