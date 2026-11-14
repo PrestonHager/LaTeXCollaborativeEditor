@@ -152,6 +152,7 @@ Runtime architecture (summary)
 - The signed-in email comes from the Drive `about` endpoint, which works with the `drive.file` scope, so no extra scope is needed.
 - Pause Saving stops autosave and Save Now for the host. It's stored in the browser session under the old `saveNowEnabled` key (false means paused), so older saved sessions still load.
 - A project in Drive is a folder, tagged with an `appProperties` flag so the app can list its projects.
+  The folder's `appProperties` also hold the main file (`mainFile`) and the TeX engine (`texEngine`: `pdflatex`, `xelatex` or `lualatex`, issue #199). Projects in this browser keep the engine in their IndexedDB project row. Neither needs a new scope, host or CSP change.
   Each project file is a real Drive file inside it, with subfolders kept as they are.
 - The app still only asks for the `drive.file` scope. That's enough for every file and folder the app makes.
   It is not enough for files someone adds to a project folder from Drive itself.

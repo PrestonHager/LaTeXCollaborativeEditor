@@ -1,4 +1,5 @@
 import { projectToPreviewHtml, type ProjectPreviewInput, type ProjectPreviewResult } from '../compile/latexJsPreview';
+import { engineFromProgram } from '../project/texEngine';
 
 // NOTE: only compatCorpus.test.ts imports this, so production never ships the corpus (issue #197).
 const ROOT = '../../dev/corpus/';
@@ -93,7 +94,9 @@ export function runDocument(doc: CorpusDocument, compile: Compile = projectToPre
   // An empty project typesets to an empty page, which would read as a pass.
   if (!doc.texts.has(doc.mainPath)) return summarize(doc, failed('The main file is missing.'));
   try {
-    return summarize(doc, compile({ mainPath: doc.mainPath, texts: doc.texts, binaryPaths: [], imageUrls: new Map() }));
+    // The project's engine is set to the one Overleaf uses, as someone bringing it over would (#199).
+    const engine = engineFromProgram(doc.compiler.split(' ')[0]) ?? undefined;
+    return summarize(doc, compile({ mainPath: doc.mainPath, texts: doc.texts, binaryPaths: [], imageUrls: new Map(), engine }));
   } catch (error) {
     // The worker answers a throw with an error too, so count it as a failure, not a crash.
     return summarize(doc, failed(String(error)));

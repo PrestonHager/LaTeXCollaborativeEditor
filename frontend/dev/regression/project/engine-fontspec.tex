@@ -1,0 +1,11 @@
+% TeX engine test (issue #199). In the Files panel, use Set main file on this file, then compare
+% the editor markers and the footer with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+% Expect: with View > pdfLaTeX Engine checked, a warning marker on the next line saying fontspec needs
+% XeLaTeX or LuaLaTeX; pick View > XeLaTeX Engine (or LuaLaTeX) and only the info marker (own fonts) is left.
+% Put "% !TEX program = xelatex" as the first line instead and the warning goes away under any engine.
+\usepackage{fontspec}
+\begin{document}
+% Expect: this text shows under every engine. The preview looks the same; only the markers change.
+The engine only changes which notes show.
+\end{document}

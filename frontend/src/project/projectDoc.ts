@@ -1,5 +1,6 @@
 import * as Y from 'yjs';
 import { basename, dirname, guessMainFile, isInside, isSafePath, normalizePath, replacePrefix, uniquePath } from './paths';
+import { isTexEngine, type TexEngine } from './texEngine';
 
 export type EntryKind = 'text' | 'binary' | 'folder';
 
@@ -10,6 +11,8 @@ export type ProjectEntry = { id: string; path: string; kind: EntryKind; hash?: s
 export type ProjectContent = {
   name: string;
   mainPath?: string | null;
+  /** The engine picked for the project (issue #199). Missing means none was picked: pdfLaTeX. */
+  engine?: TexEngine | null;
   files: { path: string; kind: EntryKind; text?: string; hash?: string; size?: number }[];
 };
 
@@ -25,6 +28,8 @@ export const PROJECT_ORIGIN = 'project';
  * knows the old project is gone and drops its undo steps. Older peers ignore it.
  */
 export const GENERATION_KEY = 'generation';
+/** The `meta` key for the project's TeX engine (issue #199). */
+export const ENGINE_KEY = 'engine';
 /** Longest project name we show, in characters. */
 export const MAX_PROJECT_NAME_LENGTH = 200;
 const ENTRY_KINDS: readonly unknown[] = ['text', 'binary', 'folder'];
@@ -38,7 +43,8 @@ function newId(): string {
  * The shared project inside a Yjs doc.
  * - `files` maps a stable file id to its path and kind, so a rename is one write to one key.
  * - Each text file has its own top-level Y.Text named `file:<id>`.
- * - `meta` holds the project name and the main file id.
+ * - `meta` holds the project name, the main file id and the TeX engine (`engine`, issue #199).
+ *   Older peers ignore a key they don't read, so adding one doesn't change the protocol.
  */
 export class ProjectDoc {
   readonly doc: Y.Doc;
@@ -120,6 +126,21 @@ export class ProjectDoc {
 
   setMainFile(id: string) {
     this.doc.transact(() => this.meta.set('main', id), PROJECT_ORIGIN);
+  }
+
+  /** The engine picked for the project, or null when none was (then it's pdfLaTeX). A peer's bad value counts as none. */
+  getEngine(): TexEngine | null {
+    const value = this.meta.get(ENGINE_KEY);
+    return isTexEngine(value) ? value : null;
+  }
+
+  /** Pick the project's engine. Null goes back to the default. Peers get it with the rest of the project. */
+  setEngine(engine: TexEngine | null) {
+    if (engine === this.getEngine()) return;
+    this.doc.transact(() => {
+      if (engine) this.meta.set(ENGINE_KEY, engine);
+      else this.meta.delete(ENGINE_KEY);
+    }, PROJECT_ORIGIN);
   }
 
   createTextFile(rawPath: string, content = ''): string {
@@ -235,6 +256,7 @@ export class ProjectDoc {
         }
       }
       if (mainId) this.meta.set('main', mainId);
+      if (isTexEngine(content.engine)) this.meta.set(ENGINE_KEY, content.engine);
     }, PROJECT_ORIGIN);
   }
 

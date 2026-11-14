@@ -104,8 +104,10 @@ export function createPreviewCompile({
     const texts = project.textFiles();
     const binaries = project.entries().filter((entry) => entry.kind === 'binary');
     // Skip the compile when nothing it reads has changed.
+    const engine = project.getEngine() ?? undefined;
     const key = [
       main.path,
+      engine ?? '',
       ...[...texts].map(([path, text]) => `${path}:${textRev(text)}`),
       ...binaries.map((entry) => `${entry.path}:${entry.hash}:${entry.hash && blobs.has(entry.hash) ? 1 : 0}`),
     ].join('|');
@@ -119,7 +121,7 @@ export function createPreviewCompile({
     preview.setLoading(true);
     try {
       const binaryPaths = binaries.map((entry) => entry.path);
-      const input = { mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) };
+      const input = { mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl), engine };
       const withFigures = binaries.some((entry) => FIGURE_FILE.test(entry.path))
         ? await (figures ??= import('../compile/figureImages').then((module) => module.createFigureCompile(blobs, loadPdfRenderer)))
         : null;

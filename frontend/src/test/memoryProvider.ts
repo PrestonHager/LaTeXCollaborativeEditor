@@ -2,7 +2,7 @@ import type { ProjectListing, ProjectSummary, StorageProvider, WriteOptions } fr
 import { isInside, replacePrefix } from '../project/paths';
 import { ConflictError } from '../storage/conflicts';
 
-type MemoryProject = { name: string; mainPath: string | null; files: Map<string, Uint8Array | null>; versions: Map<string, number> };
+type MemoryProject = { name: string; mainPath: string | null; engine?: string | null; files: Map<string, Uint8Array | null>; versions: Map<string, number> };
 
 /** A storage provider kept in memory, so tests can check exactly what a save wrote. */
 export class MemoryProvider implements StorageProvider {
@@ -36,6 +36,7 @@ export class MemoryProvider implements StorageProvider {
       id: projectId,
       name: project.name,
       mainPath: project.mainPath,
+      engine: project.engine ?? null,
       entries: [...project.files].map(([path, data]) => ({ path, kind: data ? 'file' : 'folder' })),
     };
   }
@@ -132,6 +133,11 @@ export class MemoryProvider implements StorageProvider {
   async setMainFile(projectId: string, path: string | null) {
     this.get(projectId).mainPath = path;
     this.calls.push(`main ${path}`);
+  }
+
+  async setEngine(projectId: string, engine: string | null) {
+    this.get(projectId).engine = engine;
+    this.calls.push(`engine ${engine}`);
   }
 
   text(projectId: string, path: string) {
