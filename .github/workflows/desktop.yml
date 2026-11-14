@@ -8,7 +8,7 @@
 #   release exists. The publish job then attaches the installers, their .sig files, SHA256SUMS.txt
 #   and latest.json, which installed apps read to update (docs/desktop.md, "Updates").
 # - Actions > Desktop app > Run workflow, on main or a branch, optionally with a tag to build. That
-#   only makes workflow artifacts.
+#   only makes workflow artifacts, and runs without the Production environment (see the build job).
 name: Desktop app
 
 on:
@@ -47,7 +47,14 @@ jobs:
     # on purpose: Google blocks its sign-in inside an app's webview, so the app signs in through
     # the system browser with its own Desktop OAuth client, given to the Rust build below
     # (docs/desktop.md, "Google sign-in").
-    environment: Production
+    #
+    # Only a release (release.yml, release: true) runs in the Production environment. Production
+    # only allows deployments from main and tags, so a manual "Run workflow" on staging or another
+    # branch was refused before any runner started. A manual run is only a build check, so it uses
+    # no environment: no Production variables or secrets, unsigned installers, no updater, and
+    # Google Drive shows as not configured. An empty name means no environment.
+    environment:
+      name: ${{ inputs.release && 'Production' || '' }}
     env:
       VITE_DEPLOY_ENV: production
       VITE_P2P_APP_ID: ${{ vars.VITE_P2P_APP_ID }}
