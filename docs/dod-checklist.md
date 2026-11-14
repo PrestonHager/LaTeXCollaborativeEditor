@@ -10,6 +10,7 @@ Checklist
 - [x] Host reload with guests: a guest still connected while the host reloads keeps syncing in both directions, and edits it made while the host was away reach the host.
 - [x] Real-time collaboration: concurrent edits synchronize in both directions with acceptable latency.
 - [ ] Editor readiness: the editor shows LaTeX syntax highlighting and line numbers.
+- [ ] Autocompletion: `\sec` offers `\section{}` with tab stops for its arguments, and `\begin{it` offers `itemize` and adds `\end{itemize}`. The completion code and data load lazily (not in the initial load), work with collaborative editing and undo, and send nothing anywhere.
 - [x] Diagnostics: compile errors are parsed and highlighted inline on the correct editor lines.
 - [x] Preview: edits trigger an updated, correctly typeset preview using LaTeX.js.
 - [ ] Preview worker: the compile runs in a Web Worker, typing stays smooth on a big document, and a `picture` still renders (it compiles on the main thread).

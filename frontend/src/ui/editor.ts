@@ -1,10 +1,9 @@
 import { EditorState, Compartment, EditorSelection } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
+import { EditorView, keymap, type KeyBinding, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { bracketMatching } from '@codemirror/language';
-import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import type { EditorDiagnostic } from './diagnostics';
 import { diagnosticsExtensions, lintGutterPlaceholder, loadLintExtensions, setEditorDiagnostics } from './diagnostics';
@@ -20,9 +19,29 @@ type TextChangedHandler = (text: string, sync?: boolean) => void;
  */
 export const editorKeymap = [
   ...defaultKeymap.filter((binding) => binding.key !== 'Mod-Enter'),
-  ...closeBracketsKeymap,
   indentWithTab,
 ];
+
+/**
+ * The keys that open the completion list, from @codemirror/autocomplete's completionKeymap.
+ * That package loads lazily (see latexCompletion.ts), so they're copied here for editorKeybinds.
+ */
+export const completionOpenKeys: readonly KeyBinding[] = [
+  { key: 'Ctrl-Space' },
+  { mac: 'Alt-`' },
+  { mac: 'Alt-i' },
+];
+
+/**
+ * LaTeX autocompletion and closing brackets. @codemirror/autocomplete and the command list aren't
+ * needed to show the editor, so they load just after the page does.
+ */
+export async function loadCompletionExtensions(
+  load: () => Promise<Pick<typeof import('./latexCompletion'), 'latexCompletionExtensions'>> = () => import('./latexCompletion'),
+): Promise<Extension> {
+  const { latexCompletionExtensions } = await load();
+  return latexCompletionExtensions();
+}
 
 /**
  * The editor's own keys that use a modifier, written the app's way (like "Mod+Shift+K").
@@ -30,7 +49,7 @@ export const editorKeymap = [
  */
 export function editorKeybinds(platform: Platform): Set<string> {
   const keys = new Set<string>();
-  for (const binding of [...editorKeymap, ...yUndoManagerKeymap]) {
+  for (const binding of [...editorKeymap, ...yUndoManagerKeymap, ...completionOpenKeys]) {
     const key = (platform === 'mac' ? binding.mac : binding.win ?? binding.linux) ?? binding.key;
     // CodeMirror joins with "-", and a trailing "-" is the minus key itself.
     const keybind = key && normalizeKeybind(key.replace(/-(?!$)/g, '+'), platform);
@@ -52,6 +71,8 @@ export function createEditorPane(container: HTMLElement) {
   const editableCompartment = new Compartment();
   // Holds a placeholder until @codemirror/lint has loaded, then the real lint gutter and linter.
   const lintCompartment = new Compartment();
+  // Empty until latexCompletion.ts has loaded, then autocompletion and closing brackets.
+  const completionCompartment = new Compartment();
 
   const state = EditorState.create({
     doc: DEFAULT_DOC,
@@ -61,7 +82,7 @@ export function createEditorPane(container: HTMLElement) {
       highlightActiveLine(),
       highlightActiveLineGutter(),
       bracketMatching(),
-      closeBrackets(),
+      completionCompartment.of([]),
       lintCompartment.of(lintGutterPlaceholder),
       StreamLanguage.define(stex),
       latexSyntaxHighlighting,
@@ -86,6 +107,11 @@ export function createEditorPane(container: HTMLElement) {
     (extensions) => view.dispatch({ effects: lintCompartment.reconfigure(extensions) }),
     (error: unknown) => console.warn('Lint gutter failed to load', error),
   );
+  // Typing works without it, so if it can't load, just log that.
+  const completionReady = loadCompletionExtensions().then(
+    (extensions) => view.dispatch({ effects: completionCompartment.reconfigure(extensions) }),
+    (error: unknown) => console.warn('Autocompletion failed to load', error),
+  );
 
   return {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
@@ -93,6 +119,8 @@ export function createEditorPane(container: HTMLElement) {
     getView() { return view; },
     /** Resolves once the lint gutter is in (or failed to load). For tests. */
     lintReady() { return lintReady; },
+    /** Resolves once autocompletion is in (or failed to load). For tests. */
+    completionReady() { return completionReady; },
     setCollabExtensions(extensions: Extension[]) {
       view.dispatch({
         effects: collabCompartment.reconfigure(extensions),

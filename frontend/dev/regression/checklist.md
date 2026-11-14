@@ -13,6 +13,11 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Switching Settings > App and editor theme between Light and Dark recolors the syntax right away, and both stay readable.
 - [ ] The line number gutter matches the editor theme: light gutter with dark numbers on Light, dark gutter with light numbers on Dark. With Match system, it follows the OS (light or dark mode) and looks the same as picking that theme directly. The current line's number stays readable in all of them.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
+- [ ] Autocompletion: typing `\sec` on a new line shows a list with `\section` (with `{title}` and "Section heading") under the cursor. Enter puts in `\section{title}` with "title" selected, and typing replaces it.
+- [ ] Autocompletion: after `\frac`, Tab moves from the first placeholder to the second, and Shift+Tab back.
+- [ ] Autocompletion: typing `\begin{it` offers `itemize`. Enter gives `\begin{itemize}`, an indented `\item` line with the cursor on it, and `\end{itemize}`, with no extra `}` left over.
+- [ ] Autocompletion: Ctrl+Space (⌃Space on a Mac) opens the list, Escape closes it, and nothing shows inside a `%` comment or after `\\`. One Ctrl+Z takes back an accepted completion, and a peer in the room sees the completed text.
+- [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` only the first time the list opens.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
