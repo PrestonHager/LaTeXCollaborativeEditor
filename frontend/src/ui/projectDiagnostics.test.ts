@@ -132,7 +132,7 @@ describe('projectDiagnosticsExtension', () => {
       'main.tex': '\\ref{later}\n\\ref{sec:a}',
       'b.tex': '\\label{sec:a}',
     });
-    const completion = completionProjectFrom(doc, project, () => 'main.tex');
+    const completion = completionProjectFrom(doc, project, { activePath: () => 'main.tex' });
     const view = editor(() => completion, project.getText(project.entries().find((e) => e.path === 'main.tex')!.id).toString());
     await vi.advanceTimersByTimeAsync(0);
     expect(diagnosticsToLint(view).map((d) => [d.from, d.to])).toEqual([[5, 10]]);
@@ -162,7 +162,7 @@ describe('projectDiagnosticsExtension', () => {
     expect(diagnosticsToLint(view)).toHaveLength(1);
 
     const { doc, project } = projectWith({ 'main.tex': '\\ref{y}' });
-    const replaced = completionProjectFrom(doc, project, () => 'main.tex');
+    const replaced = completionProjectFrom(doc, project, { activePath: () => 'main.tex' });
     current = replaced;
     view.dispatch({ changes: { from: 0, insert: ' ' } });
     await vi.advanceTimersByTimeAsync(50);

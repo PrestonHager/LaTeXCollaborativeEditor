@@ -13,7 +13,17 @@ import type { CompletionProject } from './completionProject';
 export type ProjectGetter = () => CompletionProject | null;
 
 export interface LabelEntry { key: string; path: string; line: number; /** Where the key starts on its line, from 0. */ column?: number }
-export interface BibEntry { key: string; type: string; title?: string; author?: string; year?: string; path: string }
+export interface BibEntry {
+  key: string;
+  type: string;
+  title?: string;
+  author?: string;
+  year?: string;
+  path: string;
+  /** Where the key is, for going to the entry. */
+  line?: number;
+  column?: number;
+}
 
 /** Cuts each line at its comment, keeping `\%`. Line breaks stay, so line numbers still match. */
 export function stripComments(text: string): string {
@@ -172,6 +182,7 @@ function readFields(body: string): Record<string, string> {
 /** Every entry in a .bib file, with its key, type, and title, author and year when it has them. */
 export function extractBibEntries(text: string, path: string): BibEntry[] {
   const entries: BibEntry[] = [];
+  let starts: number[] | undefined;
   const start = /@([a-zA-Z]+)\s*([{(])\s*([^,\s{}()]+)\s*,/g;
   let match: RegExpExecArray | null;
   while ((match = start.exec(text))) {
@@ -193,7 +204,13 @@ export function extractBibEntries(text: string, path: string): BibEntry[] {
     }
     const fields = readFields(text.slice(start.lastIndex, end));
     const year = fields.year || /^\d{4}/.exec(fields.date ?? '')?.[0];
-    entries.push({ key: match[3], type, path, title: fields.title || undefined, author: fields.author || undefined, year: year || undefined });
+    const keyIndex = match.index + match[0].indexOf(match[3], match[0].indexOf(match[2]) + 1);
+    starts ??= lineStarts(text);
+    const line = lineAt(starts, keyIndex);
+    entries.push({
+      key: match[3], type, path, title: fields.title || undefined, author: fields.author || undefined, year: year || undefined,
+      line, column: keyIndex - starts[line - 1],
+    });
     start.lastIndex = Math.max(start.lastIndex, end);
   }
   return entries;
@@ -268,6 +285,8 @@ export interface Definition {
   text?: string;
   path: string;
   line: number;
+  /** Where its name starts on the line, from 0 (the backslash, for a command). */
+  column?: number;
 }
 
 // \newcommand{\name}[2][default], \newcommand\name, \renewcommand*{\name} and the like.
@@ -288,18 +307,23 @@ const NEW_THEOREM = /\\(newtheorem)\*?\s*\{\s*([a-zA-Z@*]+)\s*\}\s*(?:\[[^\]]*\]
 export function extractDefinitions(text: string, path: string): Definition[] {
   const stripped = stripComments(text);
   const starts = lineStarts(stripped);
-  const found: { index: number; def: Omit<Definition, 'path' | 'line'> }[] = [];
-  const add = (index: number, def: Omit<Definition, 'path' | 'line'>) => {
-    if (!def.name.includes('@')) found.push({ index, def });
+  const found: { index: number; at: number; def: Omit<Definition, 'path' | 'line' | 'column'> }[] = [];
+  const add = (index: number, def: Omit<Definition, 'path' | 'line' | 'column'>, match?: RegExpMatchArray) => {
+    if (def.name.includes('@')) return;
+    // The name, after the defining command: `\R` in `\newcommand{\R}`, or `proof` in `\newenvironment{proof}`.
+    const after = 1 + (match?.[1].length ?? 0);
+    const name = def.kind === 'command' ? `\\${def.name}` : def.name;
+    const offset = match ? match[0].indexOf(name, after) : -1;
+    found.push({ index, at: offset >= 0 ? index + offset : index, def });
   };
   for (const m of stripped.matchAll(NEW_COMMAND)) {
-    add(m.index, { kind: 'command', name: m[2] ?? m[3], args: m[4] ? Number(m[4]) : 0, optional: m[5], via: `\\${m[1]}` });
+    add(m.index, { kind: 'command', name: m[2] ?? m[3], args: m[4] ? Number(m[4]) : 0, optional: m[5], via: `\\${m[1]}` }, m);
   }
   for (const m of stripped.matchAll(MATH_OPERATOR)) {
-    add(m.index, { kind: 'command', name: m[2] ?? m[3], args: 0, via: `\\${m[1]}`, text: m[4].trim() || undefined });
+    add(m.index, { kind: 'command', name: m[2] ?? m[3], args: 0, via: `\\${m[1]}`, text: m[4].trim() || undefined }, m);
   }
   for (const m of stripped.matchAll(DEF)) {
-    add(m.index, { kind: 'command', name: m[2], args: (m[3].match(/#/g) ?? []).length, via: `\\${m[1]}` });
+    add(m.index, { kind: 'command', name: m[2], args: (m[3].match(/#/g) ?? []).length, via: `\\${m[1]}` }, m);
   }
   for (const m of stripped.matchAll(DOCUMENT_COMMAND)) {
     const spec = m[5].replace(/\{[^{}]*\}/g, '');
@@ -311,17 +335,22 @@ export function extractDefinitions(text: string, path: string): Definition[] {
       args: required + (optional ? 1 : 0),
       optional: optional ? '' : undefined,
       via: `\\${m[1]}`,
-    });
+    }, m);
   }
   for (const m of stripped.matchAll(NEW_ENVIRONMENT)) {
-    add(m.index, { kind: 'environment', name: m[2], args: m[3] ? Number(m[3]) : 0, optional: m[4], via: `\\${m[1]}` });
+    add(m.index, { kind: 'environment', name: m[2], args: m[3] ? Number(m[3]) : 0, optional: m[4], via: `\\${m[1]}` }, m);
   }
   for (const m of stripped.matchAll(NEW_THEOREM)) {
-    add(m.index, { kind: 'environment', name: m[2], args: 0, via: `\\${m[1]}`, text: m[3].trim() || undefined });
+    add(m.index, { kind: 'environment', name: m[2], args: 0, via: `\\${m[1]}`, text: m[3].trim() || undefined }, m);
   }
   return found
     .sort((a, b) => a.index - b.index)
-    .map(({ index, def }) => ({ ...def, path, line: lineAt(starts, index) }));
+    .map(({ index, at, def }) => {
+      const line = lineAt(starts, index);
+      // A definition's name is on its first line; if it isn't found there, point at the line's start.
+      const column = lineAt(starts, at) === line ? at - starts[line - 1] : 0;
+      return { ...def, path, line, column };
+    });
 }
 
 type FileCache<T> = Map<string, { text: string; items: T[] }>;

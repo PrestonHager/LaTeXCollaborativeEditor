@@ -79,7 +79,14 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
       enqueue: vi.fn((task: () => Promise<void>) => task()),
     },
     session: { broadcastMetadata: vi.fn() },
-    editor: { focus: vi.fn(), selectAll: vi.fn(), insertText: vi.fn(() => true) },
+    editor: {
+      focus: vi.fn(),
+      selectAll: vi.fn(),
+      insertText: vi.fn(() => true),
+      goToDefinition: vi.fn(async () => true),
+      findReferences: vi.fn(async () => true),
+      renameLabel: vi.fn(async (ask: (current: string, check: (name: string) => string | null) => Promise<string | null>) => (await ask('sec:a', (name) => (name === 'bad' ? 'no' : null))) !== null),
+    },
     keymap: options.keymap ?? createKeymap(shortcuts, () => 'other'),
     fileTree: { currentFolder: vi.fn(() => '') },
     projectsDialog: { open: vi.fn(), chooseProvider: vi.fn() },
@@ -829,6 +836,35 @@ describe('commands', () => {
       expect(app.editor.insertText).toHaveBeenCalledWith('\\section{Pasted}');
       expect(app.editor.selectAll).toHaveBeenCalled();
       expect(app.editor.focus).toHaveBeenCalledTimes(4);
+    });
+
+    it('runs go to definition, find references and rename label in the editor, asking for the new name', async () => {
+      const { app, run } = setup();
+      await run('edit.goToDefinition');
+      await run('edit.findReferences');
+      expect(app.editor.goToDefinition).toHaveBeenCalled();
+      expect(app.editor.findReferences).toHaveBeenCalled();
+      const prompt = vi.mocked(app.promptDialog);
+      prompt.mockResolvedValueOnce('sec:b');
+      await run('edit.renameLabel');
+      expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ title: 'Rename label', initialValue: 'sec:a', confirmLabel: 'Rename' }));
+      const { validate } = prompt.mock.calls[0][0];
+      expect(validate?.('bad')).toBe('no');
+      expect(validate?.('fine')).toBeNull();
+      await expect(app.editor.renameLabel.mock.results[0].value).resolves.toBe(true);
+    });
+
+    it('turns the navigation commands off with no file open, and gives them F12, Shift+F12 and F2', () => {
+      const { app, commands } = setup();
+      const ids = ['edit.goToDefinition', 'edit.findReferences', 'edit.renameLabel'] as CommandId[];
+      for (const id of ids) expect(commands.getCommandState(id).enabled).toBe(true);
+      app.activeFileId = null;
+      for (const id of ids) expect(commands.getCommandState(id).enabled).toBe(false);
+      expect(shortcuts.filter((s) => s.id.startsWith('edit.') && /F\d/.test(s.keybind)).map((s) => [s.id, s.keybind])).toEqual([
+        ['edit.goToDefinition', 'F12'],
+        ['edit.findReferences', 'Shift+F12'],
+        ['edit.renameLabel', 'F2'],
+      ]);
     });
 
     it('says so when the browser will not let Paste read the clipboard', async () => {

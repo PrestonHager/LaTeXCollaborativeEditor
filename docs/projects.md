@@ -31,6 +31,19 @@ They're also in the **File** menu.
 If the project has no files, the panel says "No files yet".
 If you joined someone else's room and haven't connected yet, it says "Waiting for the host" instead.
 
+## Outline
+
+Under the file tree, **Outline** lists the document's parts, chapters, sections, subsections and paragraphs, and its figures and tables, in the order they come in the document.
+Click **Outline** to open or close it. It's closed at first, and stays the way you left it in this browser.
+
+- It starts at the [main file](#main-file) and follows `\input`, `\include` and `\subfile` into the other files, so a chapter in `chapters/intro.tex` shows where it's included.
+- Each heading is indented under the one above it. A figure or table shows its caption, like **Figure: Results by year**, under the heading it's in.
+- Click a row to open its file and jump to that line. On a phone, the drawer closes and the editor shows the place.
+- It follows your edits and your collaborators', a moment after typing stops.
+- Commented-out headings, and anything in `verbatim`, `lstlisting` or `minted`, are left out. Without a main file, it says to set one.
+
+It's worked out in your browser from the project's files, and nothing is sent anywhere.
+
 ## New files and folders
 
 **New file** (**Ctrl+N**, or **Alt+N** in a browser tab) asks for a name and suggests `chapter.tex`.

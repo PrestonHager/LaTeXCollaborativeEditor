@@ -47,6 +47,19 @@ If you had turned **Ctrl+N** off, it stays off, now for **New File**. Keybinds y
 | **Select all** | **Ctrl+A** | **⌘A** |
 | Indent | **Tab** | **Tab** |
 
+## Labels and citations
+
+With the cursor on a `\ref` or `\cite` key, a `\label`, a `.bib` entry's key, or a command.
+See [Labels, citations and commands](editing-and-preview.md#labels-citations-and-commands).
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| **Go to definition** | **F12**, or **Ctrl**+click | **F12** (**fn+F12** on some keyboards), or **⌘**+click |
+| **Find references** | **Shift+F12** | **⇧F12** |
+| **Rename label…** | **F2** | **F2** |
+
+Each is in the command palette too, and you can change the keys in Settings.
+
 ## Autocompletion
 
 These work while you type in the editor. See [Autocompletion](editing-and-preview.md#autocompletion).

@@ -13,4 +13,6 @@ See~\eqref{eq:energy} and Listing~\ref{lst:loop}.
 % Expect: no marker on keys built from macros, or on \nocite{*}.
 \newcommand{\chapref}[1]{\ref{chap:#1}\label{dup:#1}}
 \ref{\jobname} \nocite{*}
+% Expect: F12 or Ctrl+click on \chapref here goes to its \newcommand a few lines up.
+See \chapref{intro}.
 % Expect: no marker for a commented-out reference: % \ref{commented}
