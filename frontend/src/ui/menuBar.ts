@@ -40,6 +40,9 @@ export type CommandId =
   | 'view.systemTheme'
   | 'view.togglePauseSaving'
   | 'view.compileNow'
+  | 'view.enginePdflatex'
+  | 'view.engineXelatex'
+  | 'view.engineLualatex'
   | 'view.focusEditor'
   | 'view.layoutSplit'
   | 'view.layoutEditorOnly'
@@ -367,8 +370,9 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
           label.dataset.label ??= label.textContent ?? '';
           label.textContent = state.label ?? label.dataset.label;
         }
-        // Checkbox items are marked in the HTML, we only flip their state.
-        if (button.getAttribute('role') === 'menuitemcheckbox') {
+        // Checkbox and radio items are marked in the HTML, we only flip their state.
+        const role = button.getAttribute('role');
+        if (role === 'menuitemcheckbox' || role === 'menuitemradio') {
           button.setAttribute('aria-checked', state.checked ? 'true' : 'false');
         }
       });
