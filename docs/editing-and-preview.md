@@ -323,6 +323,21 @@ If a file named in `\input`, `\includegraphics`, or `\bibliography` isn't in the
 
 If there are no problems, the footer is empty.
 
+### Project checks
+
+The editor also checks references, labels and citations across the whole project, not just what the preview compiles.
+It marks these with a yellow warning in the lint gutter of the open file, under the key itself:
+
+- A `\ref`, `\eqref`, `\autoref`, `\cref` (or `\Cref`, `\pageref`, `\nameref`, `\vref`) to a label no `.tex` file in the project defines.
+- A `\label` defined more than once. Each definition gets a warning that lists the others, with their file and line.
+  A listing's `label=` option, like `\begin{lstlisting}[label=lst:loop]`, counts as a label.
+- A `\cite` key (or `\citep`, `\parencite` and the other natbib and biblatex forms) that isn't in any `.bib` file in the project, or in a `\bibitem`.
+
+Keys built from macros, like `\ref{sec:\thechapter}` or `\label{#1}` in a `\newcommand`, are skipped, and so are `\nocite{*}` and anything in a comment.
+The checks run a moment after you stop typing, and again when a collaborator changes any file in the project, so a label a peer adds in another file clears your warning.
+When the preview already warns about the same missing citation on a line, you only see its warning.
+They load with autocompletion, run in your browser, and nothing is sent anywhere.
+
 ![A preview error in the footer and the editor](assets/screenshots/diagnostics-light.png#only-light)
 ![A preview error in the footer and the editor](assets/screenshots/diagnostics-dark.png#only-dark)
 

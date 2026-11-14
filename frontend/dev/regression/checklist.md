@@ -93,6 +93,9 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] The footer names the error, the file and the line, like `unknown macro: \foo (main.tex line 12)`.
 - [ ] Put the same thing in `chapters/text.tex`. The marker and footer point at that file instead.
 - [ ] Remove it again and the error clears.
+- [ ] Project checks: open `checks.tex` (it isn't in the main document, so the preview doesn't change). Each `% Expect:` comment matches: a yellow warning under `sec:refs` (defined twice, and `chapters/text.tex` line 47 has the matching warning), under `sec:nowhere` but not `sec:code` in the `\cref`, and under `ghost` but not `knuth` in the `\cite`. The macro keys, `\nocite{*}` and the commented-out `\ref` have no marker.
+- [ ] Project checks: add `\label{sec:nowhere}` to `chapters/math.tex`, and the `sec:nowhere` warning in `checks.tex` clears a moment later. In a shared room, it also clears when a peer adds the label. Remove it again and the warning comes back.
+- [ ] Project checks: with `styles/unknown.tex` as the main file, the `\cite{nosuchkey}` line has just the preview's warning, not two. Set `main.tex` back as the main file after.
 - [ ] Hover an error, warning and info marker (or the underlined text) with the editor theme on Dark, Light and Match system, in OS light and dark mode, and with the app theme set the other way from the OS. The tooltip matches the editor theme, and its text stays readable on its background and on the highlighted row under the pointer.
 
 ## Projects and files

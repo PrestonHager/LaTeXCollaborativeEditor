@@ -12,7 +12,7 @@ import type { CompletionProject } from './completionProject';
 
 export type ProjectGetter = () => CompletionProject | null;
 
-export interface LabelEntry { key: string; path: string; line: number }
+export interface LabelEntry { key: string; path: string; line: number; /** Where the key starts on its line, from 0. */ column?: number }
 export interface BibEntry { key: string; type: string; title?: string; author?: string; year?: string; path: string }
 
 /** Cuts each line at its comment, keeping `\%`. Line breaks stay, so line numbers still match. */
@@ -20,16 +20,88 @@ export function stripComments(text: string): string {
   return text.replace(/(^|[^\\])((?:\\\\)*)%.*$/gm, '$1$2');
 }
 
-/** Every `\label{key}` in a .tex file, with its line. Commented-out labels are left out. */
+// A listing's label is an option, like \begin{lstlisting}[caption=Loop, label=lst:loop].
+const LISTING_OPTIONS = /\\(?:begin\s*\{(?:lstlisting|minted)\}(?:\s*\{[^{}]*\})?|lstinputlisting|inputminted(?:\s*\{[^{}]*\})?)\s*\[([^\]]*)\]/g;
+const LABEL_OPTION = /(?:^|,)\s*label\s*=\s*\{?\s*([^,{}]*?)\s*\}?\s*(?=,|$)/g;
+
+/**
+ * Every `\label{key}` in a .tex file, and every `label=key` option of a `lstlisting` or `minted`
+ * listing, with its line and column. Commented-out labels are left out.
+ */
 export function extractLabels(text: string, path: string): LabelEntry[] {
   const labels: LabelEntry[] = [];
   stripComments(text).split('\n').forEach((line, index) => {
+    const found: { key: string; column: number }[] = [];
     for (const match of line.matchAll(/\\label\s*\{([^{}]*)\}/g)) {
       const key = match[1].trim();
-      if (key) labels.push({ key, path, line: index + 1 });
+      if (key) found.push({ key, column: match.index + match[0].indexOf(key, match[0].indexOf('{')) });
     }
+    for (const match of line.matchAll(LISTING_OPTIONS)) {
+      const optionsStart = match.index + match[0].length - match[1].length - 1;
+      for (const option of match[1].matchAll(LABEL_OPTION)) {
+        const key = option[1];
+        if (key) found.push({ key, column: optionsStart + option.index + option[0].lastIndexOf(key) });
+      }
+    }
+    found.sort((a, b) => a.column - b.column);
+    for (const { key, column } of found) labels.push({ key, path, line: index + 1, column });
   });
   return labels;
+}
+
+/** A use of a key: a `\\ref`-like command, a `\\cite`-like command, or a `\\bibitem` that defines one. */
+export interface ReferenceEntry {
+  kind: 'ref' | 'cite' | 'bibitem';
+  key: string;
+  /** The command, without the backslash, like `eqref`. */
+  command: string;
+  path: string;
+  line: number;
+  /** Where the key starts on its line, from 0. */
+  column: number;
+}
+
+export const REF_COMMAND_NAMES = /[cC]ref|[cC]pageref|labelcref|ref|eqref|autoref|pageref|vref|nameref|autopageref/;
+export const CITE_COMMAND_NAMES = /[a-zA-Z]*[cC]ite[a-zA-Z]*/;
+// Commands with "cite" in the name whose argument isn't a key.
+const NOT_CITATIONS = new Set(['citestyle', 'citeindextrue', 'citeindexfalse', 'citesetup', 'citeauthorstyle']);
+// The cleveref and biblatex forms take a list of keys; \ref and its kin take one key, commas and all.
+const KEY_LISTS = /^(?:[cC]ref|[cC]pageref|labelcref)$/;
+
+/** Whether a key is written out, not built from a macro or a parameter like `#1`. */
+export function isLiteralKey(key: string): boolean {
+  return key !== '' && !/[\\#{}~^$]/.test(key);
+}
+
+/**
+ * Every literal key a .tex file refers to with `\\ref`, `\\eqref`, `\\autoref`, `\\cref` and the
+ * like, cites with `\\cite` and its natbib and biblatex forms, or defines with `\\bibitem`, with its
+ * line and column. Commented-out commands, `\\\\ref` (a line break and the word), `\\nocite{*}`,
+ * and keys built from macros are left out.
+ */
+export function extractReferences(text: string, path: string): ReferenceEntry[] {
+  const out: ReferenceEntry[] = [];
+  const command = new RegExp(`(?<!\\\\)((?:\\\\\\\\)*)\\\\(${REF_COMMAND_NAMES.source}|${CITE_COMMAND_NAMES.source}|bibitem)\\*?\\s*((?:\\[[^\\]]*\\]\\s*){0,2})\\{([^{}]*)\\}`, 'g');
+  stripComments(text).split('\n').forEach((line, index) => {
+    for (const match of line.matchAll(command)) {
+      const name = match[2];
+      // The regex tries the ref names first, so check the whole name.
+      const kind: ReferenceEntry['kind'] = name === 'bibitem' ? 'bibitem'
+        : new RegExp(`^(?:${REF_COMMAND_NAMES.source})$`).test(name) ? 'ref' : 'cite';
+      if (kind === 'cite' && (NOT_CITATIONS.has(name) || !new RegExp(`^(?:${CITE_COMMAND_NAMES.source})$`).test(name))) continue;
+      const argStart = match.index + match[0].length - match[4].length - 1;
+      const parts = kind === 'cite' || KEY_LISTS.test(name) ? match[4].split(',') : [match[4]];
+      let offset = argStart;
+      for (const part of parts) {
+        const key = part.trim();
+        const column = offset + part.indexOf(key);
+        offset += part.length + 1;
+        if (!isLiteralKey(key) || key === '*') continue;
+        out.push({ kind, key, command: name, path, line: index + 1, column });
+      }
+    }
+  });
+  return out;
 }
 
 /** Reads a braced or quoted value from `start` (at the `{` or `"`). Returns it and where it ends. */
@@ -266,6 +338,9 @@ export class ProjectIndex {
   private bibCache: FileCache<BibEntry> = new Map();
   private packageCache: FileCache<string> = new Map();
   private definitionCache: FileCache<Definition> = new Map();
+  private referenceCache: FileCache<ReferenceEntry> = new Map();
+  private referenceList: ReferenceEntry[] = [];
+  private bibFileCount = 0;
   private labelList: LabelEntry[] = [];
   private bibList: BibEntry[] = [];
   private packageSet: ReadonlySet<string> = new Set();
@@ -299,6 +374,18 @@ export class ProjectIndex {
     return this.definitionList;
   }
 
+  /** The literal keys the project's .tex files refer to, cite, or define with `\\bibitem`. */
+  references(): readonly ReferenceEntry[] {
+    this.refresh();
+    return this.referenceList;
+  }
+
+  /** How many .bib files the project has. */
+  bibFiles(): number {
+    this.refresh();
+    return this.bibFileCount;
+  }
+
   private refresh() {
     const version = this.project.version();
     if (version === this.version) return;
@@ -313,7 +400,10 @@ export class ProjectIndex {
     const tex = files.filter((file) => file.ext === 'tex');
     const source = files.filter((file) => file.ext === 'tex' || file.ext === 'sty');
     this.labelList = update(this.labelCache, tex, extractLabels);
-    this.bibList = update(this.bibCache, files.filter((file) => file.ext === 'bib'), extractBibEntries);
+    const bib = files.filter((file) => file.ext === 'bib');
+    this.bibFileCount = bib.length;
+    this.bibList = update(this.bibCache, bib, extractBibEntries);
+    this.referenceList = update(this.referenceCache, tex, extractReferences);
     this.packageSet = new Set(update(this.packageCache, source, extractPackages));
     this.definitionList = update(this.definitionCache, source, extractDefinitions);
   }
@@ -370,8 +460,8 @@ function argumentBefore(context: CompletionContext, command: RegExp): { name: st
   return { name: match[1], from: context.pos - arg.length + keyStart + skip };
 }
 
-const REF_COMMANDS = /[cC]ref|[cC]pageref|labelcref|ref|eqref|autoref|pageref|vref|nameref|autopageref/;
-const CITE_COMMANDS = /[a-zA-Z]*[cC]ite[a-zA-Z]*/;
+const REF_COMMANDS = REF_COMMAND_NAMES;
+const CITE_COMMANDS = CITE_COMMAND_NAMES;
 const PATH_COMMANDS = /input|include|includegraphics|bibliography|addbibresource|subfile/;
 
 const GRAPHIC_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'pdf', 'eps']);
