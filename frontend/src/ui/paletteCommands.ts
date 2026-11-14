@@ -16,12 +16,17 @@ export const paletteOnlyCommands: PaletteOnlyCommand[] = [
   { id: 'view.focusEditor', section: 'View', label: 'Focus editor', description: 'Put the cursor back in the editor.' },
 ];
 
-/** Folders on this computer, in the desktop app only (#178). Pass whether this is the desktop app. */
+/**
+ * Desktop app only: folders on this computer (#178) and compiling with a local TeX Live (#264).
+ * Pass whether this is the desktop app.
+ */
 export const desktopPaletteCommands = (desktop: boolean): PaletteOnlyCommand[] =>
   desktop
     ? [
         { id: 'file.openFolder', section: 'File', label: 'Open Folder as Project', description: 'Open a folder on this computer as the project.' },
         { id: 'file.saveToFolder', section: 'File', label: 'Save to a Folder', description: 'Save the project to a folder on this computer from now on.' },
+        { id: 'file.compileLocalTex', section: 'File', label: 'Compile with Local TeX', description: 'Make a PDF with the TeX Live installed on this computer.' },
+        { id: 'app.localTexSetup', section: 'File', label: 'Set Up Local TeX', description: 'Turn compiling with the TeX Live on this computer on or off, and say where it is.' },
       ]
     : [];
 

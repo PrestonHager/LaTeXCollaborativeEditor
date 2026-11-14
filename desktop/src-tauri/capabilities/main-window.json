@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main-window",
-  "description": "The main window may open https links in the system browser, read and write only the folders the person picks in the system dialog (local folder projects, #178), and sign in to Google through the system browser, getting only short-lived access tokens (#177), check for and install signed app updates (#179), and run WebRTC data channels in the shell where the webview has none (#176). Add a permission only with the feature that needs it (docs/desktop.md, Security).",
+  "description": "The main window may open https links in the system browser, read and write only the folders the person picks in the system dialog (local folder projects, #178), and sign in to Google through the system browser, getting only short-lived access tokens (#177), check for and install signed app updates (#179), run WebRTC data channels in the shell where the webview has none (#176), and compile with a local TeX Live when the person turned that on (#264). Add a permission only with the feature that needs it (docs/desktop.md, Security).",
   "windows": [
     "main"
   ],
@@ -37,6 +37,7 @@
     "allow-rtc-set-description",
     "allow-rtc-add-ice-candidate",
     "allow-rtc-send",
-    "allow-rtc-close"
+    "allow-rtc-close",
+    "allow-tex-compile"
   ]
 }

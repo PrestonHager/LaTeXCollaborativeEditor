@@ -43,13 +43,17 @@ tauri-plugin-opener = "2"
 # Keeps the folders picked in the dialog in the fs scope across restarts, so the last project reopens.
 tauri-plugin-persisted-scope = "2"
 # The one-shot loopback listener for the sign-in redirect. Tauri already runs on tokio.
-tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros"] }
+tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros", "process"] }
 # WebRTC data channels for webviews without RTCPeerConnection (issue #176, src/native_rtc.rs):
 # pure Rust ICE, DTLS and SCTP, so Linux needs no extra system library. 0.17 is the stable
 # async API; 0.20+ is a rewrite.
 webrtc = "0.17"
 # Messages for the shell WebRTC (src/native_rtc.rs).
 bytes = "1"
+
+# Local TeX Live (#264, src/local_tex.rs): stop the whole TeX process group on a timeout.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # Only to turn on WebKitGTK's WebRTC setting (src/lib.rs). The same major version wry uses.
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -60,7 +64,7 @@ webkit2gtk = { version = "2.0", features = ["v2_38"] }
 tauri-plugin-updater = "2"
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros", "net", "io-util"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "net", "io-util", "process", "time"] }
 
 [profile.release]
 # Smaller installers. The shell is a thin wrapper, so speed of the Rust side barely matters.

@@ -24,6 +24,7 @@ import type { Keymap, Shortcut } from './keymap';
 import { formatKeybind, keybindFromEvent } from '../ui/modifierShortcutLabels';
 import { isLoadFailure } from './lazy';
 import type { FolderCommands } from './desktopFolders';
+import type { LocalTex } from './desktopLocalTex';
 import { DEFAULT_TEX_ENGINE, ENGINE_LABELS, resolveEngine, type TexEngine } from '../project/texEngine';
 
 /** The engine each View menu engine command picks (issue #199). */
@@ -81,6 +82,8 @@ export type CommandContext = {
   projectsDialog: { open(projects: ProjectSummary[], source?: ProviderId): void; chooseProvider(providers: ProviderId[]): void };
   /** Folders on this computer (desktopFolders.ts), in the desktop app only. null on the web. */
   folders?: Promise<FolderCommands | null> | null;
+  /** Compiling with a local TeX Live (desktopLocalTex.ts), in the desktop app only (#264). */
+  localTex?: (() => Promise<LocalTex>) | null;
   /** The Accounts panel (ui/accountsPanel.ts), which loads on first use. */
   accountsPanel: { open(): void };
   uploadDialog: { open(folder?: string): void };
@@ -338,6 +341,9 @@ export function createCommands(app: CommandContext) {
     'file.openFolder': async () => {
       if (!isClient && app.folders && (await confirmReplace('open'))) await openFromProvider('localFolder');
     },
+    // Guests can compile too: it only reads the project they already have.
+    'file.compileLocalTex': async () => (await app.localTex?.())?.compile(),
+    'app.localTexSetup': async () => (await app.localTex?.())?.setUp(),
     'file.saveToFolder': async () => {
       if (!isClient) await (await app.folders)?.saveTo();
     },

@@ -488,6 +488,19 @@ describe('commands', () => {
       expect(commands.getCommandState('file.openFolder').enabled).toBe(true);
     });
 
+    it('runs local TeX commands in the desktop app only, guests included (#264)', async () => {
+      const { app, run, commands } = setup({ isClient: true });
+      await run('file.compileLocalTex');
+      const tex = { compile: vi.fn(async () => {}), setUp: vi.fn(async () => {}) };
+      (app as { localTex?: unknown }).localTex = async () => tex;
+      (app as { folders?: unknown }).folders = Promise.resolve(null);
+      await run('file.compileLocalTex');
+      await run('app.localTexSetup');
+      expect(tex.compile).toHaveBeenCalledTimes(1);
+      expect(tex.setUp).toHaveBeenCalledTimes(1);
+      expect(commands.buildPaletteCommands().map((c) => c.id)).toEqual(expect.arrayContaining(['file.compileLocalTex', 'app.localTexSetup']));
+    });
+
     it("doesn't run folder commands in a guest tab", async () => {
       const { app, run, commands } = setup({ isClient: true });
       const folders = { open: vi.fn(), saveTo: vi.fn(), reopen: vi.fn() };
