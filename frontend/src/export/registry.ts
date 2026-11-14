@@ -1,13 +1,13 @@
 import { flattenedTexExporter, projectZipExporter, singleFileExporter } from './sourceExporters';
 import { htmlExporter, previewPdfExporter } from './htmlExporters';
+import { compiledPdfExporter } from './pdfExporters';
 import { throwIfAborted, type ExportFile, type ExportOptionValues, type ExportOutput, type ExportRun, type ExportSource, type Exporter } from './types';
 
 /**
  * Every export format, in the order the Export dialog lists them. To add a format, write an
- * Exporter (see types.ts) and put it here. The real TeX PDF goes here once the in-browser
- * compiler (#43) lands.
+ * Exporter (see types.ts) and put it here. The real TeX PDF comes from Compile PDF (#242).
  */
-export const exporters: readonly Exporter[] = [projectZipExporter, previewPdfExporter, htmlExporter, flattenedTexExporter, singleFileExporter];
+export const exporters: readonly Exporter[] = [projectZipExporter, compiledPdfExporter, previewPdfExporter, htmlExporter, flattenedTexExporter, singleFileExporter];
 
 export function findExporter(id: string, list: readonly Exporter[] = exporters): Exporter | undefined {
   return list.find((exporter) => exporter.id === id);

@@ -31,6 +31,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 - **TeX engine per project.** View > pdfLaTeX, XeLaTeX and LuaLaTeX Engine pick the engine a project compiles with, like Overleaf's Compiler setting. It's saved with the project and everyone in the room gets it. A `% !TEX program = xelatex` comment at the top of the main file wins over it, and `% !TEX root = ...` points the main file guess at the right file. The preview looks the same either way; for now the engine only changes the notes, so `fontspec` is expected under XeLaTeX and gets a warning under pdfLaTeX.
 
+- **Compile PDF (not available yet).** View > Compile PDF (Ctrl+Shift+Enter) will make the real PDF with a TeX engine that runs in your browser, using the project's engine. The first time, it shows the download size and asks first; then it shows progress, opens the PDF in a page viewer with Download, lists the TeX log's errors on the right file and line, and File > Export can save the PDF. It says plainly when a device has too little memory. Until the engine files are hosted on the site, the command says it isn't available yet.
+
 ### Changed
 
 - **Desktop app polish.** Links in the desktop app (help, bug reports, What's new, and links in the preview) open in your system browser, and only `https` ones; the app window can no longer be navigated away from the app. Settings, the File menu and the Google Drive "sign-in expired" notice say "this app" instead of "this browser". If the system browser can't open a link, a notice says so and shows the link to copy. The app now carries LaTeX.js's styles and fonts, so its preview works offline without jsDelivr. The website still loads them from jsDelivr.

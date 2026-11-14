@@ -94,6 +94,13 @@ Everything here uses the regression test project, so compare each section with i
 
 Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref` of its own (the preview stands in for the first three), footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio`, plus `page`, `trim`, `viewport` and `clip` for PDF figures (a height relative to `\textheight` is ignored, and `trim` or `viewport` always clips). EPS figures are boxes, not drawings.
 
+## Compile PDF
+
+- [ ] In a normal `npm run dev` (no `VITE_COMPILE_PDF`), View > Compile PDF, the palette's **Compile PDF** and Ctrl+Shift+Enter (⇧⌘↩ on a Mac) each show **Compile PDF isn't available yet**, and the Network panel shows no `compilePdf` or `texEngine.worker` file loading.
+- [ ] With `VITE_COMPILE_PDF=1 npm run dev` and no `public/tex/manifest.json`, Compile PDF opens a dialog that says the engine files aren't hosted here, and the Network panel shows only the manifest request (a 404).
+- [ ] With engine files hosted (once the asset-hosting issue lands): the first Compile PDF shows **Download the TeX engine?** with the size, and nothing downloads before you click Download. Progress shows the download and each pass, then a viewer shows every page of the PDF with **Download PDF**. A second Compile PDF doesn't ask or download again. Put `\foo` in `main.tex`: the dialog lists the error, clicking it opens `main.tex` at that line, and the editor shows the marker. File > Export lists **PDF (Compile PDF)** and saves the same PDF; after an edit it warns the project changed.
+- [ ] In Chrome's dev tools, emulate a device with `navigator.deviceMemory` 1 (Sensors, or `Object.defineProperty(navigator, 'deviceMemory', { value: 1 })`): Compile PDF says there isn't enough memory.
+
 ## Diagnostics
 
 - [ ] Type `\foo{` on a new line in `main.tex`. An error marker shows on that line.

@@ -63,6 +63,8 @@ import {
 } from './state/appSession';
 import { clearHostRoomId, readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
+import { NOT_AVAILABLE_MESSAGE, NOT_AVAILABLE_TITLE, isCompilePdfEnabled } from './compile/pdf/compilePdfFlag';
+import type { ProjectDiagnostic } from './compile/projectSource';
 import { BlobStore } from './project/blobStore';
 import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
@@ -500,6 +502,45 @@ function useProvider(provider: StorageProvider, id: string | null, loaded: Saved
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
 
+// Compile PDF (#242): the TeX log's diagnostics, shown with the preview's until the next Compile PDF.
+let texLogDiagnostics: ProjectDiagnostic[] = [];
+const compilePdfModule = lazyModule(() => import('./app/compilePdf'));
+let compilePdfRunner: { run(): Promise<void> } | null = null;
+
+/** View > Compile PDF. Off (no VITE_COMPILE_PDF=1), it only says why, without loading anything. */
+async function runCompilePdf() {
+  if (!isCompilePdfEnabled()) {
+    await noticeDialog({ title: NOT_AVAILABLE_TITLE, message: NOT_AVAILABLE_MESSAGE });
+    return;
+  }
+  try {
+    const { createCompilePdf, browserCompilePdfDeps } = await compilePdfModule.get();
+    compilePdfRunner ??= createCompilePdf(
+      browserCompilePdfDeps({
+        getProject: () => project,
+        blobs,
+        notice: (title, message) => noticeDialog({ title, message }),
+        setDiagnostics: (diagnostics) => {
+          texLogDiagnostics = diagnostics;
+          compile.compileNow();
+        },
+        openAt: (path, line) => {
+          const entry = project.findByPath(path);
+          if (!entry) return;
+          openFile(entry.id);
+          editor.reveal(line);
+        },
+        download: (bytes, name) => localDownload.download(name, bytes, 'application/pdf'),
+        setStatus,
+      }),
+    );
+    await compilePdfRunner.run();
+  } catch (error) {
+    if (isLoadFailure(error)) lazyLoadFailed('Compile PDF', error);
+    else showNotice(describeError(error), true);
+  }
+}
+
 // The Compile PDF asset cache (#241), its own chunk. Only Settings and Compile PDF load it.
 const texAssetCacheModule = lazyModule(() => import('./compile/pdf/texAssetCache'));
 const loadTexAssetCache = async () => (await texAssetCacheModule.get()).browserTexAssetCache();
@@ -577,6 +618,7 @@ const compile = createPreviewCompile({
   onChanges: (changes) => previewChanges.setChanges(changes),
   // With drive.file we can't see files added to the folder from Drive, so point at the fix.
   missingHint: () => (!isClient && projectState.isDrive() ? DRIVE_MISSING_HINT : ''),
+  extraDiagnostics: () => texLogDiagnostics,
   onCompiled: () => {
     if (noticeKind !== 'compile') return;
     notice.clear();
@@ -1342,6 +1384,7 @@ const commands = createCommands({
   openFeatureForm: () => openExternal(featureRequestUrl()),
   startTour: () => tour.start(),
   openAbout: () => aboutDialog.open(),
+  compilePdf: () => runCompilePdf(),
 });
 const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, listCommands, handleKeydown, setSavingPaused } = commands;
 

@@ -149,6 +149,8 @@ export type CommandContext = {
   openFeatureForm(): void;
   startTour(): void;
   openAbout(): void;
+  /** View > Compile PDF (#242). main.ts loads its code on first use. */
+  compilePdf(): Promise<void> | void;
 };
 
 /**
@@ -186,6 +188,8 @@ export const shortcuts: Shortcut[] = [
   // Not Ctrl+Shift+C, which opens the element inspector in Chrome and Edge (#21).
   // The editor's own Ctrl+Enter (insert a blank line) is turned off in ui/editor.ts so this one works there too.
   { id: 'view.compileNow', keybind: 'Mod+Enter' },
+  // Compile PDF (#242) runs a real TeX engine, so it's Compile Now with Shift. Checked in Chromium on Linux: the page gets it.
+  { id: 'view.compilePdf', keybind: 'Mod+Shift+Enter' },
   // As in VS Code. F12 and Shift+F12 reach the page in Chromium (see reservedKeys.ts), and so does F2.
   { id: 'edit.goToDefinition', keybind: 'F12' },
   { id: 'edit.findReferences', keybind: 'Shift+F12' },
@@ -533,6 +537,7 @@ export function createCommands(app: CommandContext) {
     'file.rename': () => renameProject(),
     'share.copyLink': () => copyShareLink(),
     'view.compileNow': () => compile.compileNow(),
+    'view.compilePdf': () => app.compilePdf(),
     'view.enginePdflatex': () => pickEngine('pdflatex'),
     'view.engineXelatex': () => pickEngine('xelatex'),
     'view.engineLualatex': () => pickEngine('lualatex'),

@@ -1,4 +1,4 @@
-import { FileArchive, FileCode, FileDown, FileText, Printer, type IconNode } from 'lucide';
+import { FileArchive, FileCheck, FileCode, FileDown, FileText, Printer, type IconNode } from 'lucide';
 import { icon } from './icons';
 import { returnFocusOnClose } from './focusReturn';
 import { exporters as defaultExporters, findExporter, runExport, type ExportDestination, type ExportResult } from '../export/registry';
@@ -9,6 +9,7 @@ import './exportDialog.css';
 /** Icons for the formats, by the name an exporter gives (see src/export/types.ts). */
 const exportIcons: Record<string, IconNode> = {
   'file-archive': FileArchive,
+  'file-check': FileCheck,
   'file-code': FileCode,
   'file-down': FileDown,
   'file-text': FileText,

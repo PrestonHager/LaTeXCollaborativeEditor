@@ -45,6 +45,7 @@ export type CommandId =
   | 'view.systemTheme'
   | 'view.togglePauseSaving'
   | 'view.compileNow'
+  | 'view.compilePdf'
   | 'view.enginePdflatex'
   | 'view.engineXelatex'
   | 'view.engineLualatex'

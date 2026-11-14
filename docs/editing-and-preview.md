@@ -361,6 +361,21 @@ They load with autocompletion, run in your browser, and nothing is sent anywhere
 
 For help fixing errors, see [Preview errors](troubleshooting.md#preview-errors).
 
+## Compile PDF
+
+**View > Compile PDF** (**Ctrl+Shift+Enter**, **⇧⌘↩** on a Mac) makes the real PDF with a TeX engine that runs in your browser, the way Overleaf's Recompile does. The live preview stays as it is; Compile PDF is for when you want the exact pages TeX makes.
+
+!!! note "Not available yet"
+    Compile PDF needs the TeX engine files hosted on this site. Until they are, the command says it isn't available yet. The live preview and the preview-quality PDF export still work.
+
+- It uses the project's [TeX engine](projects.md#tex-engine): pdfLaTeX, XeLaTeX or LuaLaTeX.
+- The first time, it shows how much it will download (the engine and its packages, from this site only) and asks first. The files stay in this browser, so later compiles start right away. **Settings** shows how much they take, with **Remove**.
+- A dialog shows the download and each TeX pass. TeX runs again while references are still settling, up to three passes.
+- The PDF opens in a viewer with every page and **Download PDF**. **File > Export… > PDF (Compile PDF)** saves it too.
+- Errors and warnings from the TeX log show in the editor next to the preview's, on the right file and line. Click one in the dialog or the viewer to go to it.
+- Your document never leaves the browser: the engine works on a copy of the project in memory. Each person in a room compiles on their own.
+- It needs a lot of memory. On a device with less than 2 GB it doesn't start, and if it runs out of memory it says so. Phones often can't run it; use a computer.
+
 ## PDF export
 
 **File > Export…** and then **PDF** makes a PDF from the preview.
@@ -376,7 +391,7 @@ It's a preview-quality PDF, so expect it to look like the preview, not like a Te
 - Anything the preview can't show, like an EPS figure, shows the same way in the PDF.
 
 The PDF is made in a hidden frame that can't run scripts, so nothing in the document runs while it prints.
-A full PDF from a real TeX engine, with bookmarks and metadata, needs an in-browser TeX compiler, which is planned.
+For the PDF a real TeX engine makes, use [Compile PDF](#compile-pdf).
 For a file to send to a journal, export **Flattened .tex** or **Project .zip** and build it with LaTeX.
 
 The same export menu has an **HTML** format: the preview as a standalone web page. See [Export](saving-and-storage.md#export).

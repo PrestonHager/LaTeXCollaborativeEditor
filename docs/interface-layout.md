@@ -66,6 +66,7 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Toggle Preview Theme | | Cycles the preview theme the same way. |
 | Pause Saving | | Stops autosave and Save Now until you turn it off. A check means saving is paused. |
 | Compile Now | Ctrl+Enter | Rebuilds the preview right away. |
+| Compile PDF | Ctrl+Shift+Enter | Makes the real PDF with a TeX engine in the browser. See [Compile PDF](editing-and-preview.md#compile-pdf). |
 | pdfLaTeX Engine, XeLaTeX Engine, LuaLaTeX Engine | | Picks the project's [TeX engine](projects.md#tex-engine). The checked one is in use. |
 | Split View | | Editor and preview side by side. |
 | Editor Only | | Hides the preview. |
