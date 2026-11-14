@@ -458,6 +458,42 @@ label.settings-row { justify-content: flex-start; }
 .pane:last-child { border-right: 0; }
 .splitter { background: var(--surface-2); border-left: 1px solid var(--panel-border); border-right: 1px solid var(--panel-border); cursor: col-resize; }
 .splitter:hover { background: var(--surface-3); }
+/* Dragged with pointer events (app/layout.ts). touch-action: none keeps a finger drag from scrolling the page instead (#188). */
+.splitter { position: relative; z-index: 5; touch-action: none; }
+.splitter::before { content: ""; position: absolute; inset: 0; }
+
+/* Right-click and long-press menu for file tree rows (#188, ui/contextMenu.ts). As wide as the menu bar's dropdowns. */
+.context-menu { position: fixed; z-index: 390; min-width: var(--popover-menu); max-width: calc(100vw - var(--viewport-gutter)); padding: 0.25rem; display: flex; flex-direction: column; background: var(--popover); color: var(--popover-foreground); border: 1px solid var(--panel-border); border-radius: var(--radius-lg); box-shadow: 0 12px 32px rgb(0 0 0 / 0.25); }
+.context-menu[hidden] { display: none; }
+.context-menu:focus { outline: none; }
+.context-menu-item { display: flex; align-items: center; gap: 0.5rem; min-height: 2rem; padding: 0.375rem 0.5rem; border: 0; border-radius: var(--radius-sm); background: none; color: inherit; font: inherit; font-size: 0.875rem; text-align: left; cursor: pointer; }
+.context-menu-item svg { width: 1rem; height: 1rem; flex-shrink: 0; color: var(--muted-text); }
+.context-menu-item:hover, .context-menu-item:focus-visible { background: var(--surface-3); outline: none; }
+.context-menu-item[data-variant="destructive"], .context-menu-item[data-variant="destructive"] svg { color: var(--destructive); }
+
+/*
+ * Touch screens (#188, docs/ui-sizing.md): everything you can tap is at least 44 x 44px (2.75rem). Only for a
+ * coarse primary pointer, so mouse layouts don't change.
+ */
+@media (pointer: coarse) {
+  .btn, .doc-title, .file-row-main, .context-menu-item, .menu-list > *, .command-palette-list [role="menuitem"], select, .select, input:not([type="checkbox"], [type="radio"], [type="range"]) { min-height: 2.75rem; }
+  .btn[data-size^="icon"] { min-width: 2.75rem; }
+  .legal-nav a, .footer a, .share-link, .diagnostics-area a, .app-notice a { display: inline-flex; align-items: center; min-height: 2.75rem; min-width: 2.75rem; }
+  .menu-list > *, .context-menu-item { padding-block: 0.625rem; }
+  /* The 8px bar keeps its look, but the area you can grab is 44px wide. */
+  .splitter::before { inset: 0 -18px; }
+  /* No hover on touch: a long-press opens the row's menu instead (ui/fileTree.ts). The buttons still show for keyboard focus. */
+  .file-row:hover .file-row-actions, .file-row:focus-within .file-row-actions { display: none; }
+  .file-row:has(:focus-visible) .file-row-actions { display: inline-flex; }
+  /* iPadOS lifts a draggable button on long-press, and both iOS and Android select text or open a callout: the menu gets the hold instead. */
+  .file-row-main { -webkit-user-drag: none; -webkit-touch-callout: none; user-select: none; }
+}
+
+/* Tooltips need hover. A tap would leave one stuck on, so touch screens only show one on long-press (ui/longPress.ts). */
+@media (hover: none) {
+  [data-tooltip]:not([data-touch-tooltip])::before { display: none; }
+  [data-tooltip][data-touch-tooltip]::before { visibility: visible; opacity: 1; --tw-scale-x: 100%; --tw-scale-y: 100%; --tw-translate-y: 0; }
+}
 
 /*
  * Phones (issue #185): under 640px (Tailwind's sm, docs/ui-sizing.md) show one pane at a time and the file
@@ -483,6 +519,8 @@ label.settings-row { justify-content: flex-start; }
   .split > .splitter { display: none !important; }
   .split > .pane { display: flex !important; flex-direction: column; min-width: 0; border-right: 0; }
   #app[data-phone-pane="editor"] .split > .preview-pane, #app[data-phone-pane="preview"] .split > .editor-pane { display: none !important; }
+  /* A file's menu is a full-width list at the bottom of the window, in easy reach of a thumb (docs/ui-sizing.md, menus on phones). */
+  .context-menu { left: 1rem !important; right: 1rem; top: auto !important; bottom: calc(1rem + var(--keyboard-inset, 0px)); }
 }
 @media (width < 40rem) and (prefers-reduced-motion: reduce) {
   .file-pane, #app.is-files-open .file-pane { transition: none; }

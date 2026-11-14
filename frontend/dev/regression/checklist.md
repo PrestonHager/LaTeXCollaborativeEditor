@@ -256,6 +256,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Opening a menu with Enter or the arrow keys and resting on an item shows the same card, and arrowing on moves it. Enter hides the card and runs the item. Opening a menu with a click doesn't show a card until you hover an item.
 - [ ] Toolbar buttons show their tooltip at once, then after about a second the preview card replaces it, under the button. Share shows the link being copied. Tabbing into the toolbar shows it too. Near the right edge of a narrow window the card stays on screen, and it reads well in the light and dark app themes.
 - [ ] On a phone or tablet (touch), tapping a menu item or toolbar button never shows the preview card.
+- [ ] Right-clicking a file or folder in the Files panel opens a menu beside the pointer with its actions (Set as main file only on a `.tex` file that isn't main, Rename or move, Delete in red). Arrow keys move, Enter runs, Escape closes and puts focus back on the row. With a row focused, the Menu key or Shift+F10 opens it under the row. Clicking anywhere else closes it.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
@@ -299,6 +300,18 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] In a fresh private window, the first-run tour shows once. Skip tour and Esc close it, and Help > Show Tour runs it again.
 - [ ] Each tour card sits next to what it points at without covering it: beside the file list, editor and preview, below the menus and toolbar. In a small window the card stays fully on screen and covers as little of the highlighted part as it can.
 - [ ] The page works at phone width without scrolling sideways.
+
+### Touch pass
+
+Use a real phone or tablet, or DevTools device mode with touch (a tablet like iPad Mini at 768 x 1024, and a phone at 390 x 844). Reload after switching device mode, so `pointer: coarse` applies.
+
+- [ ] Every button, menu item, file row, palette entry and footer link is at least 44px tall (icon buttons 44 x 44). With a mouse at 1280 x 800, the same buttons are their usual size.
+- [ ] Holding a finger on a file in the Files panel for half a second opens its menu without opening the file. Tapping still opens the file, and scrolling the list with a finger never opens the menu. On a phone, the menu is a full-width list at the bottom of the window, over the drawer.
+- [ ] The menu's items run: Rename or move asks for the new name, Delete asks first, Set as main file moves the main badge. Tapping outside closes it.
+- [ ] Holding a file doesn't select its name, show the browser's own menu, or start dragging it (iPad). The star, pencil and trash buttons don't show on the row after a tap.
+- [ ] At tablet width, a finger drags the splitter between editor and preview, also when it lands a little to either side of the thin bar. The page doesn't scroll while dragging, and the new split survives a reload. A second finger on the screen doesn't move it.
+- [ ] Tapping a toolbar button runs it and leaves no tooltip behind. Holding a finger on one shows its name and shortcut for a moment, without running it.
+- [ ] No preview card ever shows for a tap or a hold, on menu items or toolbar buttons.
 
 ### Phone pass (under 640px)
 

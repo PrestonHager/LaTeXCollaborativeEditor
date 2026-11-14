@@ -10,6 +10,7 @@ import type { ExportDialog } from './ui/exportDialog';
 import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
 import { createHoverPreview } from './ui/hoverPreview';
+import { attachTouchTooltips } from './ui/longPress';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
@@ -1288,6 +1289,8 @@ const hoverPreview = createHoverPreview(document.getElementById('hover-preview')
 });
 hoverPreview.attach(document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right');
 hoverPreview.attach(document.getElementById('toolbar')!, 'button[data-command]', 'bottom');
+// Touch has no hover: holding a finger on a toolbar button or other tooltip shows its name instead (#188).
+attachTouchTooltips(document.body);
 
 const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, {
   version: BUILD_INFO.version,

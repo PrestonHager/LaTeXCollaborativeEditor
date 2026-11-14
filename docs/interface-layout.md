@@ -17,7 +17,7 @@ Rest the mouse on a menu item, or reach it with the arrow keys, and after a mome
 It shows what the command does: a small picture where one helps (the layouts show how the panes are arranged, Share shows the link being copied, New File shows the new file in the list), and a sentence about it.
 The card closes as soon as the mouse leaves, focus moves on, or you press a key or click.
 Hovering only shows the card. The command runs only when you click it or press **Enter**.
-On a touch screen there's no hover, so there's no preview card.
+On a touch screen there's no hover, so there's no preview card. The [command palette](#command-palette) shows the same description under each command.
 
 ![The preview card for View > Split View](assets/screenshots/hover-preview-light.png#only-light)
 ![The preview card for View > Split View](assets/screenshots/hover-preview-dark.png#only-dark)
@@ -100,6 +100,7 @@ Include the version when you report a problem. The bug form fills it in for you.
 The row of icon buttons under the menus covers the things you do most: new file, upload, save now, compile now, share, the three layout modes, the command palette, and the docs.
 Hover a button (or focus it) to see what it does and its shortcut.
 Keep the mouse there a little longer, or stay on it with the keyboard, and the tooltip turns into the same preview card as the menus, under the button.
+On a touch screen, hold your finger on a button to see its name and shortcut. Holding doesn't run it.
 They run the same commands as the menus, so they're disabled in the same cases.
 
 With the keyboard, Tab moves into the toolbar, then the arrow keys move between buttons, and Home and End jump to the first and last.
@@ -176,7 +177,7 @@ Guests can change themes, layout and shortcuts, but the saving options are turne
 
 Under **View**:
 
-- **Split View**: editor and preview side by side. Drag the splitter between them to resize, from 20% to 80%. You can also focus the splitter with **Tab** and use the left and right arrow keys.
+- **Split View**: editor and preview side by side. Drag the splitter between them to resize, from 20% to 80%, with the mouse or a finger. You can also focus the splitter with **Tab** and use the left and right arrow keys.
 - **Editor Only**: hides the preview.
 - **Preview Only**: hides the editor.
 
@@ -199,6 +200,16 @@ Tablets and wider windows keep the layout above.
 | Editor | Preview | Files |
 |--------|---------|-------|
 | ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/phone-layout/after-390x844-editor.png) | ![The preview on a phone](assets/phone-layout/after-390x844-preview.png) | ![The file list open as a drawer over the editor](assets/phone-layout/after-390x844-files.png) |
+
+## On a touch screen
+
+On phones and tablets (anything with a finger or stylus as its main pointer):
+
+- Buttons, menu items, file rows and links are at least 44px tall, so they're easy to tap.
+- Hold a finger on a file or folder for half a second to open its menu: **Set as main file**, **Rename or move** and **Delete**. On a phone the menu opens at the bottom of the screen.
+- Hold a finger on a toolbar button to see its name and shortcut. Tapping runs it, and leaves no tooltip behind.
+- The splitter between the editor and the preview drags with a finger, and you don't have to hit the thin bar exactly.
+- There are no hover preview cards. The [command palette](#command-palette) lists each command with what it does.
 
 ## Header status pills
 
