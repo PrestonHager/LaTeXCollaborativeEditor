@@ -1,0 +1,26 @@
+% Overleaf compiler: pdfLaTeX, with Biber
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{csquotes}
+\usepackage[backend=biber,style=authoryear]{biblatex}
+\addbibresource{references.bib}
+
+\title{A Short Literature Review}
+\author{A. Reviewer}
+
+\begin{document}
+\maketitle
+
+\section{Background}
+Typesetting with \TeX{} goes back to \textcite{knuth1984}. \LaTeX{} added a
+markup layer on top \parencite{lamport1994}, and later work described the
+packages people use most \parencite[ch.~2]{mittelbach2004}.
+
+\section{Discussion}
+As \citeauthor{knuth1984} put it, \enquote{the separation of content and form}
+is the point. Several works agree \cite{lamport1994,mittelbach2004}.
+
+\printbibliography
+
+\end{document}
