@@ -105,8 +105,8 @@ Pages to Coolify too (issue #249, `docs/deployment.md`), which lifts the Pages l
    content-hashed path (for example `tex/<hash>/pdftex.wasm` and `tex/<hash>/texlive-basic.data`).
    They fall under `connect-src 'self'` with no CSP change, and the files never change once
    published, so they cache well.
-   On Coolify the bundles live in a MinIO bucket that the app's nginx proxies and caches under
-   `/tex/` (issue #244, `docs/deployment.md`, "Compile PDF engine on MinIO"), so they're
+   On Coolify the bundles live in an S3 bucket (SeaweedFS) that the app's nginx proxies and caches under
+   `/tex/` (issue #244, `docs/deployment.md`, "Compile PDF engine on S3 storage"), so they're
    still same-origin.
 3. **Per-file lazy loading from our own origin** (a file index plus one request per `.sty`, like
    texlive.js or typeward's FetchFS). Good for a large tree without a large first download. It

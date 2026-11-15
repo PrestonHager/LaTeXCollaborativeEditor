@@ -4,12 +4,12 @@
 #
 # - TEX_ASSETS_UPSTREAM unset or empty: serve the image's own tex/ folder (tex-assets.local.conf),
 #   the same as static hosting.
-# - TEX_ASSETS_UPSTREAM=http://minio:9000/tex-assets (scheme, host[:port], bucket[/prefix]): a
+# - TEX_ASSETS_UPSTREAM=http://tex-assets:8333/tex-assets (scheme, host[:port], bucket[/prefix]): a
 #   caching proxy to that bucket (tex-assets.proxy.conf.template), with its disk cache in
-#   conf.d/tex-assets-cache.conf. See docs/deployment.md, "Compile PDF engine on MinIO".
+#   conf.d/tex-assets-cache.conf. See docs/deployment.md, "Compile PDF engine on S3 storage".
 #
 # Optional: TEX_ASSETS_CACHE_MAX (default 20g) caps the disk cache; TEX_ASSETS_RESOLVER (default
-# 127.0.0.11, Docker's DNS) is the resolver for the MinIO host name.
+# 127.0.0.11, Docker's DNS) is the resolver for the store's host name.
 set -eu
 
 out=/etc/nginx/tex-assets.conf
@@ -32,7 +32,7 @@ refuse() {
 
 # scheme://host[:port]/path, with a conservative character set: it goes into nginx's config.
 if ! printf '%s' "$upstream" | grep -Eq '^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._-]+)+/?$'; then
-  refuse "TEX_ASSETS_UPSTREAM must look like http://minio:9000/tex-assets"
+  refuse "TEX_ASSETS_UPSTREAM must look like http://tex-assets:8333/tex-assets"
 fi
 upstream="${upstream%/}"
 rest="${upstream#*://}"

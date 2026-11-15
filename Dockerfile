@@ -42,7 +42,7 @@ RUN python3 scripts/set_mkdocs_site_url.py && mkdocs build --site-dir /out/docs
 
 FROM nginx:1.27-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-# /tex/ (Compile PDF engine files): this image's own folder, or a caching proxy to MinIO when
+# /tex/ (Compile PDF engine files): this image's own folder, or a caching proxy to the S3 bucket when
 # TEX_ASSETS_UPSTREAM is set. tex-assets.sh picks one when the container starts.
 COPY deploy/tex-assets.local.conf deploy/tex-assets.proxy.conf.template /etc/nginx/
 COPY --chmod=755 deploy/tex-assets.sh /docker-entrypoint.d/40-tex-assets.sh
