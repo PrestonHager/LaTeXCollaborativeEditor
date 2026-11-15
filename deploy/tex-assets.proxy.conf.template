@@ -1,0 +1,86 @@
+# Compile PDF engine files from the MinIO bucket (#244), proxied through this nginx so they stay
+# on the app's own origin: the manifest refuses other origins (texAssetManifest.ts), and the glue
+# module needs script-src 'self'. deploy/tex-assets.sh fills in the ${TEX_*} values from
+# TEX_ASSETS_UPSTREAM (the bucket on Coolify's internal network, like http://minio:9000/tex-assets).
+#
+# Caching, outermost first:
+# - Browsers: every file is under a versioned, content-hashed path (docs/wasm-tex-engine.md), so
+#   it's `immutable` for a year. The app also keeps each file in its Cache API cache by SHA-256.
+# - This nginx: a disk cache (tex_assets in conf.d/tex-assets-cache.conf), so a file leaves MinIO
+#   once per container, and proxy_cache_lock makes concurrent first requests share that fetch.
+# - The manifest: browsers revalidate it every time, and this cache keeps it for 60 seconds, so
+#   an upload goes live within a minute.
+#
+# The upstream is a variable, so nginx looks MinIO up when a request needs it, not at start-up:
+# if MinIO is down, only Compile PDF fails, and the rest of the site still serves.
+resolver ${TEX_ASSETS_RESOLVER} valid=30s ipv6=off;
+resolver_timeout 5s;
+
+location = /tex/manifest.json {
+    limit_except GET { deny all; }
+    set $tex_upstream "${TEX_ASSETS_ORIGIN}${TEX_ASSETS_PREFIX}/manifest.json";
+    proxy_pass $tex_upstream;
+    proxy_cache_valid 200 60s;
+    proxy_cache_valid 404 10s;
+    proxy_cache tex_assets;
+    proxy_cache_key "manifest";
+    proxy_cache_lock on;
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_cache_background_update on;
+    proxy_ignore_headers Cache-Control Expires Set-Cookie;
+    proxy_http_version 1.1;
+    proxy_set_header Host "${TEX_ASSETS_HOST}";
+    proxy_set_header Connection "";
+    proxy_set_header Cookie "";
+    proxy_set_header Authorization "";
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header Cache-Control;
+    proxy_hide_header Expires;
+    proxy_hide_header X-Amz-Request-Id;
+    proxy_hide_header X-Amz-Id-2;
+    proxy_hide_header X-Minio-Deployment-Id;
+    proxy_hide_header Strict-Transport-Security;
+    proxy_hide_header Server;
+    proxy_connect_timeout 10s;
+    add_header Cache-Control "no-cache" always;
+    add_header X-Cache-Status $upstream_cache_status always;
+}
+
+# Only plain file paths: no "..", no empty segments, no trailing slash (no bucket listings), and
+# no query string goes upstream (the variable URI replaces it).
+location ~ "^/tex/(?<tex_path>[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9_-][A-Za-z0-9._-]*)*)$" {
+    limit_except GET { deny all; }
+    set $tex_upstream "${TEX_ASSETS_ORIGIN}${TEX_ASSETS_PREFIX}/$tex_path";
+    proxy_pass $tex_upstream;
+    proxy_cache_valid 200 90d;
+    proxy_cache_valid 404 1m;
+    proxy_cache tex_assets;
+    proxy_cache_key "$tex_path";
+    proxy_cache_lock on;
+    proxy_cache_lock_timeout 10m;
+    proxy_cache_lock_age 10m;
+    proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+    proxy_ignore_headers Cache-Control Expires Set-Cookie;
+    proxy_http_version 1.1;
+    proxy_set_header Host "${TEX_ASSETS_HOST}";
+    proxy_set_header Connection "";
+    proxy_set_header Cookie "";
+    proxy_set_header Authorization "";
+    proxy_hide_header Set-Cookie;
+    proxy_hide_header Cache-Control;
+    proxy_hide_header Expires;
+    proxy_hide_header X-Amz-Request-Id;
+    proxy_hide_header X-Amz-Id-2;
+    proxy_hide_header X-Minio-Deployment-Id;
+    proxy_hide_header Strict-Transport-Security;
+    proxy_hide_header Server;
+    proxy_connect_timeout 10s;
+    proxy_read_timeout 300s;
+    add_header Cache-Control "public, max-age=31536000, immutable";
+    add_header X-Cache-Status $upstream_cache_status always;
+}
+
+# Anything else under /tex/ (listings, odd paths) is a plain 404.
+location /tex/ {
+    return 404;
+}
