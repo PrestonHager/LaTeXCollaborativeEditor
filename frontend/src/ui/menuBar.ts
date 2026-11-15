@@ -1,14 +1,20 @@
-import { commandIcon } from './icons';
+import { iconSlot } from './icons';
+import { keepOnScreen } from './keepOnScreen';
 
 export type CommandId =
   | 'app.commandPalette'
   | 'app.openSettings'
   | 'app.editProfile'
+  | 'app.accounts'
   | 'file.new'
   | 'file.rename'
   | 'file.saveAsTemplate'
   | 'file.openLocal'
   | 'file.openDrive'
+  | 'file.openFolder'
+  | 'file.saveToFolder'
+  | 'file.compileLocalTex'
+  | 'app.localTexSetup'
   | 'file.download'
   | 'file.connectDrive'
   | 'file.disconnectDrive'
@@ -31,6 +37,9 @@ export type CommandId =
   | 'edit.copy'
   | 'edit.paste'
   | 'edit.selectAll'
+  | 'edit.goToDefinition'
+  | 'edit.findReferences'
+  | 'edit.renameLabel'
   | 'view.toggleEditorTheme'
   | 'view.togglePreviewTheme'
   | 'view.darkMode'
@@ -38,6 +47,10 @@ export type CommandId =
   | 'view.systemTheme'
   | 'view.togglePauseSaving'
   | 'view.compileNow'
+  | 'view.compilePdf'
+  | 'view.enginePdflatex'
+  | 'view.engineXelatex'
+  | 'view.engineLualatex'
   | 'view.focusEditor'
   | 'view.layoutSplit'
   | 'view.layoutEditorOnly'
@@ -77,44 +90,135 @@ type MenuBarOptions = {
   onCommand: (commandId: CommandId) => void;
   /** The keybind label to show for a command, if it has one. */
   shortcutLabel?: (commandId: CommandId) => string | undefined;
+  /**
+   * True on a phone, where CSS shows only the one-button menu (`[data-collapsed-menu]`) instead of
+   * File, Edit, View and Help (#186). Left and Right then only step between the triggers that show.
+   */
+  isCollapsed?: () => boolean;
+  /** False for a lone dropdown, like the toolbar's More menu, so Left and Right go to the toolbar instead. */
+  arrowsBetweenMenus?: boolean;
+  /** Loads the items' icons (commandIcons.ts, a lazy chunk). Tests pass their own. */
+  loadIcons?: () => Promise<(commandId: CommandId) => SVGElement>;
 };
+
+/**
+ * Fill the one-button phone menu with a copy of every other menu's items, grouped under its name.
+ * Called before the items are wired, so the copies get the same icons, state and keys as the originals.
+ */
+function fillCollapsedMenu(root: HTMLElement) {
+  const collapsed = root.querySelector<HTMLElement>('.menu-root[data-collapsed-menu]');
+  const list = collapsed?.querySelector<HTMLElement>('[role="menu"]');
+  if (!collapsed || !list || list.childElementCount) return;
+  root.querySelectorAll<HTMLElement>('.menu-root:not([data-collapsed-menu])').forEach((menuRoot, index) => {
+    const label = menuRoot.dataset.menuLabel ?? '';
+    const source = menuRoot.querySelector('[role="menu"]');
+    if (!source) return;
+    if (index > 0) {
+      const separator = document.createElement('hr');
+      separator.setAttribute('role', 'separator');
+      list.append(separator);
+    }
+    const group = document.createElement('div');
+    group.setAttribute('role', 'group');
+    group.className = 'menu-group';
+    const heading = document.createElement('div');
+    heading.className = 'menu-group-heading';
+    heading.id = `${collapsed.id || 'menu-collapsed'}-${label.toLowerCase()}`;
+    heading.textContent = label;
+    // Screen readers say "File group" on the first item of each group, like moving into the File menu.
+    heading.setAttribute('role', 'presentation');
+    group.setAttribute('aria-labelledby', heading.id);
+    group.append(heading);
+    Array.from(source.children).forEach((child) => group.append(child.cloneNode(true)));
+    list.append(group);
+  });
+}
 
 /**
  * Wire up the Basecoat dropdown menus already in the page (see index.html).
  * Each `.menu-root` holds a `.menu-trigger` and a `[data-popover]` of `.menu-item[data-command]` buttons.
  */
 export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
+  const isCollapsed = options.isCollapsed ?? (() => false);
+  const arrowsBetweenMenus = options.arrowsBetweenMenus ?? true;
+  fillCollapsedMenu(root);
+  // The root can be one menu on its own, like the toolbar's More menu, or a bar of them.
+  const menuRoots = root.matches('.menu-root') ? [root] : Array.from(root.querySelectorAll<HTMLElement>('.menu-root'));
   const commandButtons = new Map<CommandId, HTMLButtonElement[]>();
   const triggerButtons: HTMLButtonElement[] = [];
   const menuItemByLabel = new Map<string, HTMLButtonElement[]>();
   const entries: MenuEntry[] = [];
   const shortcutEls: { commandId: CommandId; el: HTMLElement }[] = [];
   let openMenuLabel: string | null = null;
+  // Each item's icon goes in an empty slot of the same size until commandIcons.ts loads (issue #231).
+  // It loads when the browser is idle (main.ts), or when the pointer or focus reaches the menus, so
+  // it's in before a menu opens. If it can't load, the slots stay empty and the next visit tries again.
+  const iconSlots: { slot: HTMLElement; commandId: CommandId }[] = [];
+  let iconsLoading: Promise<void> | null = null;
+  let iconsLoaded = false;
+  const loadIcons = (): Promise<void> => {
+    if (iconsLoaded) return Promise.resolve();
+    iconsLoading ??= (options.loadIcons ?? (() => import('./commandIcons').then((module) => module.commandIcon)))().then(
+      (commandIcon) => {
+        iconsLoaded = true;
+        for (const { slot, commandId } of iconSlots.splice(0)) slot.replaceWith(commandIcon(commandId));
+      },
+      (error: unknown) => {
+        iconsLoading = null;
+        console.warn('Menu icons failed to load', error);
+      },
+    );
+    return iconsLoading;
+  };
 
   const focusFirstEnabledItem = (menuLabel: string) => {
     const items = menuItemByLabel.get(menuLabel) ?? [];
     const target = items.find((item) => !item.disabled);
-    target?.focus();
+    // placeMenu has already put the menu on screen, so don't let focus scroll anything to reach the item.
+    // Without this, opening More right after Menu scrolled #app sideways on a phone (#191).
+    target?.focus({ preventScroll: true });
+  };
+
+  /** The triggers on screen: the one Menu button on a phone, File to Help everywhere else. */
+  const shownTriggers = () => {
+    const collapsed = isCollapsed();
+    return triggerButtons.filter((trigger) => (trigger.closest('[data-collapsed-menu]') !== null) === collapsed);
   };
 
   const moveTriggerFocus = (offset: number, currentTrigger: HTMLButtonElement) => {
-    const index = triggerButtons.indexOf(currentTrigger);
+    const triggers = shownTriggers();
+    const index = triggers.indexOf(currentTrigger);
     if (index < 0) return;
-    const nextIndex = (index + offset + triggerButtons.length) % triggerButtons.length;
-    triggerButtons[nextIndex]?.focus();
+    const nextIndex = (index + offset + triggers.length) % triggers.length;
+    triggers[nextIndex]?.focus();
   };
 
-  const moveMenuItemFocus = (menuLabel: string, currentItem: HTMLButtonElement, offset: number) => {
+  /** Move focus within a menu: by `offset` from the current item, or to the first or last item. */
+  const moveMenuItemFocus = (menuLabel: string, currentItem: HTMLButtonElement, offset: number | 'first' | 'last') => {
     const items = menuItemByLabel.get(menuLabel) ?? [];
     const enabled = items.filter((item) => !item.disabled);
     const index = enabled.indexOf(currentItem);
     if (index < 0 || !enabled.length) return;
-    const nextIndex = (index + offset + enabled.length) % enabled.length;
+    const nextIndex = offset === 'first' ? 0 : offset === 'last' ? enabled.length - 1 : (index + offset + enabled.length) % enabled.length;
     enabled[nextIndex]?.focus();
   };
 
+  /**
+   * Keep an open menu inside the window (#186: at 390px the File menu ran 54px past the right edge).
+   * The phone menu is a full-width sheet (style.css) that starts just under its button.
+   */
+  const placeMenu = (menuRoot: HTMLElement, popover: HTMLElement) => {
+    if (menuRoot.hasAttribute('data-collapsed-menu')) {
+      const trigger = menuRoot.querySelector<HTMLElement>('.menu-trigger');
+      const bottom = trigger?.getBoundingClientRect().bottom ?? 0;
+      popover.style.setProperty('--menu-top', `${Math.round(bottom + 4)}px`);
+      return;
+    }
+    keepOnScreen(popover);
+  };
+
   const updateOpenState = () => {
-    root.querySelectorAll<HTMLElement>('.menu-root').forEach((menuRoot) => {
+    menuRoots.forEach((menuRoot) => {
       const label = menuRoot.dataset.menuLabel ?? '';
       const isOpen = label === openMenuLabel;
       menuRoot.classList.toggle('is-open', isOpen);
@@ -122,7 +226,10 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
       if (trigger) trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
       // Basecoat shows and hides the popover from aria-hidden.
       const popover = menuRoot.querySelector<HTMLElement>('[data-popover]');
-      if (popover) popover.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      if (popover) {
+        popover.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+        if (isOpen) placeMenu(menuRoot, popover);
+      }
     });
   };
 
@@ -137,6 +244,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
    */
   const openMenu = (menuLabel: string, focus: 'firstItem' | 'trigger') => {
     openMenuLabel = menuLabel;
+    void loadIcons();
     updateOpenState();
     if (focus === 'firstItem') {
       focusFirstEnabledItem(menuLabel);
@@ -159,7 +267,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
     if (wasOpen && nextLabel !== undefined) openMenu(nextLabel, 'firstItem');
   };
 
-  root.querySelectorAll<HTMLElement>('.menu-root').forEach((menuRoot) => {
+  menuRoots.forEach((menuRoot) => {
     const menuLabel = menuRoot.dataset.menuLabel ?? '';
     const trigger = menuRoot.querySelector<HTMLButtonElement>('.menu-trigger');
     if (!trigger) return;
@@ -177,7 +285,7 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
       openMenu(menuLabel, 'trigger');
     });
     trigger.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      if (arrowsBetweenMenus && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
         event.preventDefault();
         stepMenu(event.key === 'ArrowRight' ? 1 : -1, trigger);
         return;
@@ -195,7 +303,9 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
       const commandId = itemButton.dataset.command as CommandId;
 
       // First, fill in what the HTML leaves to us: the icon and a place for the shortcut text.
-      itemButton.prepend(commandIcon(commandId));
+      const slot = iconSlot();
+      iconSlots.push({ slot, commandId });
+      itemButton.prepend(slot);
       let shortcutEl = itemButton.querySelector<HTMLElement>('[data-shortcut]');
       if (!shortcutEl) {
         shortcutEl = document.createElement('span');
@@ -204,7 +314,8 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
         itemButton.append(shortcutEl);
       }
       shortcutEls.push({ commandId, el: shortcutEl });
-      entries.push({
+      // The phone menu's items are copies, so the palette lists each command once.
+      if (!menuRoot.hasAttribute('data-collapsed-menu')) entries.push({
         commandId,
         label: itemButton.querySelector('.menu-item-label')?.textContent?.trim() ?? commandId,
         section: menuLabel,
@@ -230,7 +341,12 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
           moveMenuItemFocus(menuLabel, itemButton, event.key === 'ArrowDown' ? 1 : -1);
           return;
         }
-        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+        if (event.key === 'Home' || event.key === 'End') {
+          event.preventDefault();
+          moveMenuItemFocus(menuLabel, itemButton, event.key === 'Home' ? 'first' : 'last');
+          return;
+        }
+        if (arrowsBetweenMenus && (event.key === 'ArrowRight' || event.key === 'ArrowLeft')) {
           event.preventDefault();
           stepMenu(event.key === 'ArrowRight' ? 1 : -1, trigger);
         }
@@ -262,8 +378,9 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
           label.dataset.label ??= label.textContent ?? '';
           label.textContent = state.label ?? label.dataset.label;
         }
-        // Checkbox items are marked in the HTML, we only flip their state.
-        if (button.getAttribute('role') === 'menuitemcheckbox') {
+        // Checkbox and radio items are marked in the HTML, we only flip their state.
+        const role = button.getAttribute('role');
+        if (role === 'menuitemcheckbox' || role === 'menuitemradio') {
           button.setAttribute('aria-checked', state.checked ? 'true' : 'false');
         }
       });
@@ -279,12 +396,19 @@ export function createMenuBar(root: HTMLElement, options: MenuBarOptions) {
 
   refresh();
   refreshShortcuts();
+  const preloadIcons = () => void loadIcons();
+  root.addEventListener('pointerover', preloadIcons, { passive: true });
+  root.addEventListener('focusin', preloadIcons);
 
   return {
     refresh,
     refreshShortcuts,
+    /** Load the items' icons now. Resolves once they're in, or failed to load. */
+    loadIcons,
     /** Every menu item in page order, for building the command palette. */
     entries: (): MenuEntry[] => entries.map((entry) => ({ ...entry, shortcut: options.shortcutLabel?.(entry.commandId) })),
+    /** Close any open menu, since the window crossed the phone breakpoint and the other set of triggers shows now. */
+    closeMenus,
     destroy() {
       document.removeEventListener('click', onDocumentClick);
       document.removeEventListener('keydown', onDocumentKeyDown);

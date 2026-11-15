@@ -13,8 +13,27 @@ Then run **Open regression checklist** to get this page with checkboxes.
 - [ ] Switching Settings > App and editor theme between Light and Dark recolors the syntax right away, and both stay readable.
 - [ ] The line number gutter matches the editor theme: light gutter with dark numbers on Light, dark gutter with light numbers on Dark. With Match system, it follows the OS (light or dark mode) and looks the same as picking that theme directly. The current line's number stays readable in all of them.
 - [ ] Typing in the editor updates the preview a moment later, without pressing anything.
+- [ ] Autocompletion: typing `\sec` on a new line shows a list with `\section` (with `{title}` and "Section heading") under the cursor. Enter puts in `\section{title}` with "title" selected, and typing replaces it.
+- [ ] Autocompletion: after `\frac`, Tab moves from the first placeholder to the second, and Shift+Tab back.
+- [ ] Autocompletion: typing `\begin{it` offers `itemize`. Enter gives `\begin{itemize}`, an indented `\item` line with the cursor on it, and `\end{itemize}`, with no extra `}` left over.
+- [ ] Autocompletion: Ctrl+Space (⌃Space on a Mac) opens the list, Escape closes it, and nothing shows inside a `%` comment or after `\\`. One Ctrl+Z takes back an accepted completion, and a peer in the room sees the completed text.
+- [ ] Autocompletion: in the dev tools Network tab, `latexCompletion` loads just after the editor shows, and `latexCompletionData` and `latexPackageData` only the first time the list opens.
+- [ ] Package completion: in `main.tex`, `\cref` and `\includegraphics` show in the list (it loads cleveref and graphicx), but `\dfrac` and `\begin{align` don't. Add `\usepackage{amsmath}` to the preamble, and both show.
+- [ ] Package completion: add `\newcommand{\RR}{\mathbb{R}}` and `\DeclareMathOperator{\Tr}{Tr}` to the preamble, and `\RR` and `\Tr` show, with "\newcommand in main.tex" and the line in the info box. `\begin{theorem` shows the theorem from `\newtheorem`. In a shared room, a command a peer defines shows up in your list too, and deleting a definition takes it out.
+- [ ] Project completion: in `main.tex`, typing `\ref{sec` lists `sec:citations`, `sec:refs`, `sec:packages` and `sec:code`, each with the file and line it's on. `\eqref{`, `\autoref{` and `\cref{` list the same labels, and after `\cref{sec:refs,` it completes a second key.
+- [ ] Project completion: `\cite{` lists the keys in `refs.bib`, like `knuth` with "Knuth, 1984" beside it and "The TeXbook", the author and the year in its info box. `\citep{`, `\parencite[p.~4]{` and `\textcite{` list them too.
+- [ ] Project completion: `\input{` lists `chapters/text.tex` and the other `.tex` files (not `main.tex`), `\include{` the same without `.tex`, `\includegraphics{` the files in `figures/`, and `\bibliography{` lists `refs`.
+- [ ] Go to definition: in `chapters/text.tex`, put the cursor in `\ref{sec:refs}` and press F12 (or Ctrl+click it, ⌘+click on a Mac). The cursor lands on `sec:refs` in its `\label`, selected. Ctrl+click a `\cite` key in `styles/citations.tex` and `refs.bib` opens with the entry's key selected. In `checks.tex`, F12 on `sec:refs` alternates between its two definitions, and on the `\chapref` in `See \chapref{intro}` it goes to its `\newcommand`. F12 on `\section` says it isn't defined in the project. Plain Ctrl+click on text still adds a cursor.
+- [ ] Find references: Shift+F12 on `sec:refs` in `chapters/text.tex` lists its two definitions (bold) and its uses, each with file and line. Clicking a row (or Enter on it) opens that file at that place, and the list stays until Escape or Close. On `knuth` it lists the `refs.bib` entry and every `\cite` of it. The list looks right in light and dark themes and doesn't run off a 390px-wide phone.
+- [ ] Rename label: F2 on `sec:code` in `chapters/code.tex` (or in the `\cref` in `checks.tex`) asks for a new name, with "sec:code" filled in. A name with a space, or `sec:refs` (taken), gets a message under the box. Renaming to `sec:listings` changes the `\label` in `chapters/code.tex` and the `\cref` in `checks.tex`, and a notice says how many places in how many files, with Undo. Undo puts every file back. In a shared room, the peer sees the rename in every file.
+- [ ] Hover docs: rest the mouse on `\section` in `main.tex`. After a moment a card shows `\section{title}` and "Section heading". On `\includegraphics` it shows its arguments, on `align` in `\begin{align}` the environment, and on a `\newcommand` you add, where it's defined. Plain text, `%` comments and unknown commands show nothing. The card is readable in light and dark themes and no wider than the hover preview cards.
+- [ ] Outline: under the file tree, click **Outline**. It lists `main.tex`'s sections in order, with the sections from `chapters/*.tex` where they're `\input`, subsections indented, and figures and tables as **Figure: caption** under their section. Nothing from `checks.tex` (not included) or from verbatim blocks shows. Clicking a row opens its file at that line. Add a `\section{New}` and it shows a moment later; in a shared room, a peer's new section shows too. Reload: the outline stays open.
+- [ ] Outline on a phone (under 640px): Files opens the drawer with Outline under the tree. Tapping a row closes the drawer and shows the editor at that line, and rows are at least 44px tall.
+- [ ] Project completion: add `\label{sec:new}` to `chapters/math.tex`, then `\ref{` in `main.tex` lists `sec:new`. In a shared room, a label or `.bib` entry a peer adds shows up in your list too.
 - [ ] Undo (Ctrl+Z) and Redo (Ctrl+Shift+Z and Ctrl+Y) step through your typing.
 - [ ] Cut, Copy, Paste and Select All work from the Edit menu and from their shortcuts. The first Edit > Paste asks to read the clipboard, and if you block it, a notice says to press Ctrl+V instead.
+- [ ] Soft keyboard (a phone, or dev tools device mode with touch): tapping a line near the bottom of `main.tex` opens the keyboard, and the cursor line stays visible above it and the key bar.
+- [ ] Key bar: while the editor has focus on a touch screen, a bar with `\` `{` `}` `$` `%` `[` `]` `&` shows just above the keyboard. Each key types its character at the cursor without closing the keyboard, `\` opens autocompletion, one undo takes a key back, and a peer in the room sees it. The bar hides when the editor loses focus, and never shows with a mouse.
 - [ ] Clicking a file in the Files panel opens it, and the header shows its name.
 - [ ] The main file shows a "main" marker in the header and in the Files panel.
 
@@ -34,6 +53,7 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] References: "This is section 1.5" in the Text section shows 1.5, not `??`.
 - [ ] References: clicking the 4 in "Jump to section 4" scrolls the preview to the Citations section, and clicking the 1.5 there scrolls back up.
 - [ ] References: the missing label shows `??` as plain text, not a link.
+- [ ] Zoom (desktop): the preview bar shows Fit width (↔), Zoom out, the level (100%) and Zoom in. Zoom in and out step through 110%, 125%… and 90%, 80%… down to 50% and up to 300%, where that button greys out. The text grows and shrinks and the page reflows, with no sideways scrollbar. Fit width shows pressed and goes back to 100%. Ctrl + scroll wheel (or a trackpad pinch) over the preview zooms the preview, not the app. Type in the editor: the preview keeps its zoom when it updates.
 - [ ] Scroll the preview halfway down, then type in the editor. After the preview updates it stays at the same place instead of jumping to the top.
 - [ ] Verbatim: the `\verb` text shows exactly as typed, nothing from the comment block shows, and the "Preview is approximate" list (the ⓘ button above the preview) doesn't mention `\vspace` or `\addcontentsline`.
 - [ ] Code: in the Code section, each `verbatim`, `lstlisting`, `minted` and `\lstinputlisting` block shows as a monospaced box with the text exactly as typed (indents, tabs, `%`, `<b>`, and `\ { } $ & # ^ _ ~`), in both the light and dark preview themes. Captions, line numbers, `firstline`/`lastline` and `\ref` to listings match the `% Expect:` comments, and the ⓘ list says listings have no syntax highlighting.
@@ -55,9 +75,12 @@ Everything here uses the regression test project, so compare each section with i
 - [ ] Citations (plain): the References list has five entries in the `% Expect:` order, including the `\nocite` one. "Literate programming" is lowercased after its first word, and the TeX and LaTeX logos render in the book titles.
 - [ ] Bibliography styles: set each file in `styles/` as the main file (`unsrt`, `alpha`, `abbrv`, `ieeetr`, `apalike`, `natbib`, `biblatex`) and check the labels, order and names against its `% Expect:` comments. Set `main.tex` back as the main file after.
 - [ ] Bibliography styles: with `styles/unknown.tex` as the main file, the footer shows 2 diagnostics, the cite shows [?] with a warning on its line, and the `\bibliographystyle{nature}` line has an info note saying it uses plain.
+- [ ] TeX engine: with `engine-fontspec.tex` as the main file and View > pdfLaTeX Engine checked, the `fontspec` line has an info marker and a warning that it needs XeLaTeX or LuaLaTeX. Pick View > XeLaTeX Engine: it's checked, the status says `TeX engine: XeLaTeX`, and only the info marker is left. A second peer in the room sees XeLaTeX checked too, and reopening the project (local and Drive) keeps it. Put `% !TEX program = lualatex` on the first line, pick pdfLaTeX, and a notice says the comment picks LuaLaTeX; the warning stays away. Set `main.tex` back as the main file and pdfLaTeX after.
+- [ ] Packages: with `unsupported-packages.tex` as the main file, the `geometry` line has an info marker, the `tikz` line a warning that says a `tikzpicture` stops the preview, and only the `amssymb` half of the two-line `\usepackage{xcolor, amssymb}` has one. `\RequirePackage{hyperref}` gets no marker and no error. The footer leads with the tikz warning (`3 diagnostic(s)`), the text shows with "blue" in blue, and the ⓘ list says which packages were removed. Set `main.tex` back as the main file after.
+- [ ] Packages: add `\begin{tikzpicture}\end{tikzpicture}` to its body. The footer shows the `unknown environment` error first, and the tikz warning is still on its line.
 - [ ] Compile Now (Ctrl+Enter, ⌘↩ on a Mac) refreshes the preview, from the editor too. Ctrl+Shift+C does nothing in the app, so the browser keeps it for the inspector.
 - [ ] The preview iframe has `sandbox="allow-scripts"` and nothing else (inspect it in dev tools).
-- [ ] The footer says Compiled, with no diagnostics.
+- [ ] The footer says Compiled. Its only diagnostics are the 7 info notes on `main.tex`'s `\usepackage` lines, from listings to cleveref, and hovering one says what the stand-in does.
 - [ ] The rendered document has no "Preview is approximate" note at the top.
 - [ ] The preview bar has a small ⓘ button with a count, next to the `?` help link. Hovering it shows "Preview is approximate: N changes", and a screen reader reads the same name.
 - [ ] Clicking it opens a popover that lists the changes, including showing figures in place and footnotes inline, with a "What's supported" link that opens the docs page in a new tab.
@@ -71,12 +94,23 @@ Everything here uses the regression test project, so compare each section with i
 
 Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `equation`, `tabular` or `\pageref` of its own (the preview stands in for the first three), footnotes show inline, and `\includegraphics` reads only `width`, `height`, `totalheight`, `scale` and `keepaspectratio`, plus `page`, `trim`, `viewport` and `clip` for PDF figures (a height relative to `\textheight` is ignored, and `trim` or `viewport` always clips). EPS figures are boxes, not drawings.
 
+## Compile PDF
+
+- [ ] In a normal `npm run dev` (no `VITE_COMPILE_PDF`), View > Compile PDF, the palette's **Compile PDF** and Ctrl+Shift+Enter (⇧⌘↩ on a Mac) each show **Compile PDF isn't available yet**, and the Network panel shows no `compilePdf` or `texEngine.worker` file loading.
+- [ ] With `VITE_COMPILE_PDF=1 npm run dev` and no `public/tex/manifest.json`, Compile PDF opens a dialog that says the engine files aren't hosted here, and the Network panel shows only the manifest request (a 404).
+- [ ] With engine files hosted (once the asset-hosting issue lands): the first Compile PDF shows **Download the TeX engine?** with the size, and nothing downloads before you click Download. Progress shows the download and each pass, then a viewer shows every page of the PDF with **Download PDF**. A second Compile PDF doesn't ask or download again. Put `\foo` in `main.tex`: the dialog lists the error, clicking it opens `main.tex` at that line, and the editor shows the marker. File > Export lists **PDF (Compile PDF)** and saves the same PDF; after an edit it warns the project changed.
+- [ ] In Chrome's dev tools, emulate a device with `navigator.deviceMemory` 1 (Sensors, or `Object.defineProperty(navigator, 'deviceMemory', { value: 1 })`): Compile PDF says there isn't enough memory.
+
 ## Diagnostics
 
 - [ ] Type `\foo{` on a new line in `main.tex`. An error marker shows on that line.
 - [ ] The footer names the error, the file and the line, like `unknown macro: \foo (main.tex line 12)`.
 - [ ] Put the same thing in `chapters/text.tex`. The marker and footer point at that file instead.
 - [ ] Remove it again and the error clears.
+- [ ] Project checks: open `checks.tex` (it isn't in the main document, so the preview doesn't change). Each `% Expect:` comment matches: a yellow warning under `sec:refs` (defined twice, and `chapters/text.tex` line 47 has the matching warning), under `sec:nowhere` but not `sec:code` in the `\cref`, and under `ghost` but not `knuth` in the `\cite`. The macro keys, `\nocite{*}` and the commented-out `\ref` have no marker.
+- [ ] Project checks: add `\label{sec:nowhere}` to `chapters/math.tex`, and the `sec:nowhere` warning in `checks.tex` clears a moment later. In a shared room, it also clears when a peer adds the label. Remove it again and the warning comes back.
+- [ ] Project checks: with `styles/unknown.tex` as the main file, the `\cite{nosuchkey}` line has just the preview's warning, not two. Set `main.tex` back as the main file after.
+- [ ] Hover an error, warning and info marker (or the underlined text) with the editor theme on Dark, Light and Match system, in OS light and dark mode, and with the app theme set the other way from the OS. The tooltip matches the editor theme, and its text stays readable on its background and on the highlighted row under the pointer.
 
 ## Projects and files
 
@@ -145,8 +179,9 @@ Known gaps, so don't count these as regressions: LaTeX.js has no `verbatim`, `eq
 - [ ] With Google Drive connected, type and close the tab within 4 seconds. The "Leave site?" box shows.
 - [ ] An error from a library in the background (dev tools console: `Promise.reject(new Error('test'))`) only shows in the console. No red notice replaces the one in the header. A failed command (like a Drive action with the network blocked) still shows its red notice.
 - [ ] Resuming saves the edits made while paused, and the paused setting survives a reload.
-- [ ] Open Local Project (Ctrl+O) lists saved projects and opens the one you pick.
+- [ ] File > Open Project… (Ctrl+O) asks where the project is (This browser, Google Drive). This browser lists saved projects and opens the one you pick; Choose another place goes back. On a site with no Google keys it goes straight to the list.
 - [ ] Clear Local Projects asks first, then removes the saved projects. Templates saved in this browser stay.
+- [ ] Compile PDF engine files (issue #241): Settings has no **Compile PDF engine** row on a fresh browser. In the dev tools console run `(await caches.open('tex-assets-v1')).put('/__tex-asset/test', new Response('x'.repeat(2000)))`, then open Settings: the row says `2.0 kB stored in this browser` with **Remove**. Remove says the files were removed, the row says Not downloaded, and reopening Settings hides it again.
 
 ## Templates and profile
 
@@ -175,8 +210,10 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 
 - [ ] Connect Google Drive opens a sign-in popup and the status says Drive is connected.
 - [ ] Settings, and hovering the save status, show which Google account is signed in.
-- [ ] Reloading the tab stays signed in, but a new tab asks you to connect again.
-- [ ] The Drive token is in `sessionStorage` only, never `localStorage` (check in dev tools).
+- [ ] Reloading the tab stays signed in. A new tab tries to sign in quietly; when the browser blocks it, Accounts shows Google Drive as Expired with your email and Connect, and edits save in the browser until you connect.
+- [ ] The Drive token is in `sessionStorage` only, never `localStorage` (check in dev tools). `localStorage` `storage_accounts` has only `connected`, the email and `keepSignedIn`.
+- [ ] Accounts > Keep me signed in on this browser shows the shared-computer warning. With it on, the token is also in IndexedDB `latex-editor-sign-ins`, and a new tab (within the hour) comes back signed in, saving to the same Drive project. Unticking it removes the IndexedDB row.
+- [ ] Log out (or Disconnect Google Drive) removes `storage_accounts`, the `sessionStorage` token and the IndexedDB row; the next new tab shows Google Drive as Not connected.
 - [ ] Disconnect Google Drive signs out and switches saving to the browser, without losing edits.
 - [ ] A blocked popup shows a message saying to allow popups.
 - [ ] Save to Google Drive makes a project folder in Drive with the same files and subfolders.
@@ -193,27 +230,43 @@ These need Google dev keys in `.env.development.local` and a Google sign-in.
 - [ ] A full Drive shows "Google Drive is full" and stops retrying.
 - [ ] After the sign-in expires (about an hour), the app renews it or shows a notice and saves to the browser.
 
+## Accounts
+
+- [ ] Edit > Accounts… (also in the palette) lists This browser (Connected, no buttons) and Google Drive with its status and capabilities.
+- [ ] On a site with no Google keys, Google Drive says Not configured and its Connect button is turned off. Log out of everything is turned off.
+- [ ] Not signed in: Google Drive says Not connected with Connect. Connect opens Google's sign-in, then the row says Connected and "Signed in as" your account, with Log out. Saving moves to Drive, the same as File > Connect Google Drive.
+- [ ] Log out on Google Drive signs out, switches saving to the browser without losing edits, and the row goes back to Connect. Log out of everything does the same for every signed-in account.
+- [ ] Let the Drive sign-in run out (or wait an hour): the row says Expired with both Connect and Log out, and the status bar badge gets a coloured border.
+- [ ] The status bar badge says This browser or Google Drive for the open project, with the account in its tooltip. Clicking it opens Accounts. In a guest tab it says "Host: Google Drive" (or "Host: local storage") and does nothing on click; Accounts is turned off.
+- [ ] At 360 x 640 the panel is a full-screen sheet, buttons sit under each account, and nothing scrolls sideways.
+
 ## Sharing and collaboration
 
 Use two browser windows, or a normal and a private window, so each has its own storage.
 
-- [ ] Before sharing, the connection badge says Not shared.
-- [ ] Share copies a `?room=` link and shows it next to the button, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
+- [ ] Before sharing, the connection badge says Not sharing. With the Network tab open (WS filter), loading the app, hovering Share and opening the Share popover make no tracker connection.
+- [ ] Share opens a popover that explains sharing, with **Start sharing**. Escape or a click outside closes it, and focus goes back to Share after Escape. No link exists yet.
+- [ ] Start sharing copies a `?room=` link and shows it in the popover with Copy, New link and Stop sharing, and the badge says Shared, waiting for others. The console shows no `TypeError` (a Trystero API change once broke Share with "object is not iterable").
+- [ ] The palette's **Copy share link** opens the Share popover when not sharing, and copies the link while sharing.
+- [ ] On a phone-width window (390px), the Share popover fits on screen with no sideways scroll.
 - [ ] Opening the link in the second window joins as a guest, and both badges say Connected with 1 other person.
 - [ ] The guest gets the whole file tree, the text and the image.
 - [ ] Edits show up in the other window within a couple of seconds, both ways.
 - [ ] A new file or folder from either side shows up on the other.
 - [ ] An image uploaded on one side shows up in the other's preview, with a progress bar while it transfers.
-- [ ] Reloading the host rejoins the same room, and the guest keeps syncing.
+- [ ] Reloading the host doesn't rejoin: the badge says Not sharing and no tracker connection is made. The Share popover offers **Resume sharing (same link)**, which rejoins the same room, and the guest keeps syncing. Start sharing instead makes a new link.
+- [ ] Stop sharing with a guest connected asks in a **Stop sharing?** dialog (Keep sharing focused, red Stop sharing). Stopping says "Stopped sharing", the host badge says Not sharing, the guest loses the host, and a reload doesn't offer Resume sharing. With nobody connected it stops without asking.
+- [ ] A guest's Share popover shows the room link with Copy only, no New link or Stop sharing.
 - [ ] Text the guest typed while the host was reloading shows up on the host.
 - [ ] New link asks in a **Start a new link?** dialog with Keep current link (focused) and a red Start new link. Start new link starts a different room, and the old link stops working.
 - [ ] Closing the guest window makes the host badge go back to Shared, waiting for others.
 - [ ] Closing the host window makes the guest badge say Can't reach the host, with a notice that has help links.
-- [ ] Guests can't use New Project, Open Local Project, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
+- [ ] No WebRTC (issue #205): in a window where `RTCPeerConnection` is missing (Firefox with `media.peerconnection.enabled` off in `about:config`, or the Linux desktop app), the badge says Can't connect in this window. Share opens **Can't share from this window** with "This window can't make peer-to-peer connections, so it can't share or join a room." and a supported-browser suggestion, and no link shows. Opening a `?room=` link shows **Can't join from this window**, and the Files panel says so instead of Waiting for the host. The Network tab shows no `p2pTransport` chunk and no tracker connection, even after hovering Share.
+- [ ] Guests can't use New Project, Open Project…, Accounts…, Open from Google Drive, Upload .zip, or the Drive commands (Add Files from Drive included), from the menus, the palette or shortcuts. The upload dialog's Add Files from Drive button is off and says only the host can use it.
 - [ ] Guests can still add, edit and upload files in the host's project.
-- [ ] With a guest connected, the host's Open Local Project, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
+- [ ] With a guest connected, the host's Open Project…, Open from Google Drive, and Upload .zip as New Project ask first in an in-app dialog with a red button (Choose a project, Choose a .zip), saying it replaces the project for everyone in the room. Cancel opens no dialog or file picker and leaves both windows unchanged.
 - [ ] With a guest connected, New Project's Start new project button is red and focus starts on Cancel.
-- [ ] With a guest connected, Choose a project on Open Local Project and then Upload .zip in that dialog asks only once and opens the file picker.
+- [ ] With a guest connected, Choose a project on Open Project…, then This browser, and then Upload .zip in that dialog asks only once and opens the file picker.
 - [ ] With nobody connected, those three open straight away without asking.
 - [ ] With a guest connected, leaving the Upload .zip dialog open for more than 5 seconds and then clicking Choose a .zip (or Tab to it and Enter) still opens the file picker. If the browser ever blocks it, a notice says so and the next Upload .zip opens the picker without asking.
 - [ ] The guest's header shows the project name and where the host saves.
@@ -242,6 +295,11 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Arrow keys move through menu items and between menus, and Escape closes them.
 - [ ] With one menu open, moving the mouse over another menu (File, Edit, View, Help) switches to it without clicking. Hovering never runs a command, and with no menu open hovering does nothing.
 - [ ] After switching menus by hover, arrow keys still move between menus and Escape closes the menu.
+- [ ] Resting the mouse on a menu item for about a second opens a preview card beside the menu (never on top of its items), with the item's name, its shortcut, and what it does. View > Split View, Editor Only and Preview Only show the pane layout; New File, New Folder, Upload, Save Now, Export, Compile Now, Command Palette and the theme toggles show a small picture too; Help > Documentation shows only text. Moving to the next item swaps the card after a short wait. Moving off the menu closes it at once, and hovering never runs the command.
+- [ ] Opening a menu with Enter or the arrow keys and resting on an item shows the same card, and arrowing on moves it. Enter hides the card and runs the item. Opening a menu with a click doesn't show a card until you hover an item.
+- [ ] Toolbar buttons show their tooltip at once, then after about a second the preview card replaces it, under the button. Share shows the link being copied. Tabbing into the toolbar shows it too. Near the right edge of a narrow window the card stays on screen, and it reads well in the light and dark app themes.
+- [ ] On a phone or tablet (touch), tapping a menu item or toolbar button never shows the preview card.
+- [ ] Right-clicking a file or folder in the Files panel opens a menu beside the pointer with its actions (Set as main file only on a `.tex` file that isn't main, Rename or move, Delete in red). Arrow keys move, Enter runs, Escape closes and puts focus back on the row. With a row focused, the Menu key or Shift+F10 opens it under the row. Clicking anywhere else closes it.
 - [ ] Disabled items are greyed out and don't run.
 - [ ] Ctrl+P opens the command palette. Typing filters it, and Enter runs the command.
 - [ ] Each palette entry has a description, and searching a word from one finds it (typing "github" finds Report a Bug).
@@ -263,6 +321,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] With site data blocked for the page, Settings shows the note that settings only last for this tab, and changing them still works.
 - [ ] The Settings dialog scrolls inside when the window is short, so Done and the footer stay on screen, also at phone width.
 - [ ] Dialog sizes follow `docs/ui-sizing.md`: confirm and name dialogs (delete a file, New File) are small, Upload, Export, About, Open a project and the conflict dialog are medium, and Settings is large. At 1024px and wider, Settings shows two columns with Keyboard shortcuts on the right. At 1280, 1024 and 768 wide, no dialog, popover or card runs past the window edge or scrolls sideways, and every footer's buttons fit (Open a project's Close button included).
+- [ ] At phone width (DevTools at 360 x 640), Upload, Export, About, Open a project, the conflict dialog and Settings fill the whole screen with square corners: the title and X at the top, the buttons at the bottom, and only the middle scrolls. Nothing scrolls sideways, and Settings is one column. Confirm and name dialogs (New File, delete a file) stay a small centred card. At 640px and wider they all look as before.
 - [ ] On Windows and Linux every shortcut label (menus, toolbar tooltips, palette, first tour step) says Ctrl, and the Windows key plus P does not open the palette.
 - [ ] On a Mac (or with DevTools > Sensors set to a Mac user agent) the same labels use ⌘ and the Mac symbols, like ⇧⌘O and ⌘↩, and never say Ctrl or "Cmd".
 - [ ] Toggle Editor Theme and Toggle Preview Theme switch light and dark.
@@ -286,6 +345,42 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] Each tour card sits next to what it points at without covering it: beside the file list, editor and preview, below the menus and toolbar. In a small window the card stays fully on screen and covers as little of the highlighted part as it can.
 - [ ] The page works at phone width without scrolling sideways.
 
+### Touch pass
+
+Use a real phone or tablet, or DevTools device mode with touch (a tablet like iPad Mini at 768 x 1024, and a phone at 390 x 844). Reload after switching device mode, so `pointer: coarse` applies.
+
+- [ ] Every button, menu item, file row, palette entry and footer link is at least 44px tall (icon buttons 44 x 44). With a mouse at 1280 x 800, the same buttons are their usual size.
+- [ ] Holding a finger on a file in the Files panel for half a second opens its menu without opening the file. Tapping still opens the file, and scrolling the list with a finger never opens the menu. On a phone, the menu is a full-width list at the bottom of the window, over the drawer.
+- [ ] The menu's items run: Rename or move asks for the new name, Delete asks first, Set as main file moves the main badge. Tapping outside closes it.
+- [ ] Holding a file doesn't select its name, show the browser's own menu, or start dragging it (iPad). The star, pencil and trash buttons don't show on the row after a tap.
+- [ ] At tablet width, a finger drags the splitter between editor and preview, also when it lands a little to either side of the thin bar. The page doesn't scroll while dragging, and the new split survives a reload. A second finger on the screen doesn't move it.
+- [ ] Tapping a toolbar button runs it and leaves no tooltip behind. Holding a finger on one shows its name and shortcut for a moment, without running it.
+- [ ] No preview card ever shows for a tap or a hold, on menu items or toolbar buttons.
+- [ ] At tablet sizes (768 x 1024 and 1024 x 768) with touch, File, Edit, View and Help each stop above the bottom of the window and scroll to their last item. In split view the preview's right edge (its scrollbar and zoom buttons) isn't cut off.
+- [ ] The `mobile-layout` Playwright check passes (`cd e2e && npx playwright test --project=mobile-layout`), or its CI job `e2e-mobile-layout` is green. For real mobile Safari and Chrome, do "Mobile browsers" in `docs/qa-runbook.md`.
+
+### Phone pass (under 640px)
+
+Use DevTools device mode at 360 x 640 and 390 x 844, or a real phone.
+
+- [ ] The editor and preview never show side by side. A bar under the toolbar has Files, Editor and Preview, each at least 44px tall, and the Split, Editor only and Preview only toolbar buttons are hidden.
+- [ ] Tapping Preview shows only the preview, and Editor shows only the editor. The pressed one is highlighted. Reloading the tab keeps the choice, and a new tab starts on the editor.
+- [ ] Files opens the file list as a drawer over the editor, with a dimmed backdrop. Picking a file closes the drawer and opens that file in the editor, even if the preview was showing.
+- [ ] Tapping the backdrop, tapping Files again or pressing Esc closes the drawer, and focus goes back to Files.
+- [ ] With a keyboard, Tab reaches Files, Editor and Preview, and Enter switches. With the drawer open, Tab stays out of the editor and preview behind it. A screen reader reads Editor and Preview as toggle buttons (pressed or not) and Files as expanded or collapsed.
+- [ ] View > Editor Only and Preview Only switch the pane on a phone.
+- [ ] The header shows one Menu button instead of File, Edit, View and Help. Its menu is the window's width minus 1rem on each side, starts under the button, and has every item from the four menus under File, Edit, View and Help headings. It scrolls to About at 360 x 640, and nothing runs past the edge.
+- [ ] Items in Menu work like the desktop menus: grayed out when they don't apply, the check marks on Pause Saving and the layout items, the keybinds on the right, and a tap runs the command and closes the menu.
+- [ ] With a keyboard, Enter or Down on Menu opens it on New Project. Up and Down move through every group, skipping grayed-out items, Home and End jump to the ends, and Escape closes it with focus back on Menu. A screen reader reads the File, Edit, View and Help headings as groups.
+- [ ] The toolbar shows only Compile now, Share and the More actions (⋯) button at the right. More actions has New file, Upload files, Save now, Export, Command palette and Documentation, with their keybinds, and stays inside the window. Its tooltip doesn't cover the open menu.
+- [ ] In the toolbar, Left and Right move between Compile now, Share and More actions. Down on More actions opens it, and Escape goes back to the button.
+- [ ] Share sits beside Menu in the header. Its popover opens fully inside the window at 360 and 390 wide, 1rem from the right edge, with Start sharing in view.
+- [ ] Widening the window past 640px with Menu or More actions open closes it and brings back File, Edit, View and Help and the full toolbar. Tab still lands on a toolbar button that shows.
+- [ ] Preview zoom on a phone: the preview opens at Fit width (↔ pressed, about 120%), with narrow side margins and body text easy to read at 360px wide, and no sideways scrolling. The zoom buttons are finger-sized. Pinching the preview zooms only the preview (the bars and the toolbar stay the same size) and the level follows; Fit width brings it back. Pinching the toolbar or bars doesn't zoom the preview.
+- [ ] Nothing scrolls sideways with the editor, the preview or the drawer showing.
+- [ ] Open Menu, close it with Esc, then open More actions: the page stays put and More actions opens fully on screen under its button.
+- [ ] Widening the window past 640px with the drawer open brings back the normal three-pane layout, and the drawer doesn't come back when you narrow it again. At 768 and 1280 wide the layout looks the same as before.
+
 ## Build
 
 - [ ] `npm run build` passes and reports the gzipped size under the budget.
@@ -293,7 +388,7 @@ Use two browser windows, or a normal and a private window, so each has its own s
 - [ ] `dist/` has `privacy.html` and `tos.html`, and no `regression.html` and no regression test files. `npm run build` checks this and fails if it's wrong.
 - [ ] In `npm run preview`, the Privacy and ToS links in the footer and in Help > About open the policy pages, not a 404.
 - [ ] The build's lazy chunks list `p2pTransport`, `commandPalette`, `settingsDialog`, `keybindSettings`, `tour`, `projectsDialog`, `uploadDialog`, `aboutDialog`, `conflictDialog`, `driveAddFiles`, `googlePicker` and `zip` chunks, and the initial load is under the budget it prints.
-- [ ] In `npm run preview` with the Network tab open and nothing touched, `p2pTransport` doesn't load until you hover or focus Share (or open a `?room=` link, where it loads right away). Ctrl+P, Ctrl+, (Settings), Help > Tour, File > Open Local Project and File > Upload Files each open on the first press, right after a reload too. The lint gutter shows a marker on a broken line, and the editor text doesn't jump sideways when the page finishes loading.
+- [ ] In `npm run preview` with the Network tab open and nothing touched, `p2pTransport` doesn't load until you hover or focus Share (or open a `?room=` link, where it loads right away). Ctrl+P, Ctrl+, (Settings), Help > Tour, File > Open Project… and File > Upload Files each open on the first press, right after a reload too. The lint gutter shows a marker on a broken line, and the editor text doesn't jump sideways when the page finishes loading.
 - [ ] In `npm run preview`, block the `commandPalette-*.js` request in dev tools (Network > Block request URL), reload, and press Ctrl+P: a red notice says the command palette couldn't load and to check your connection, then reload. No update card shows, since `version.json` still names this build. Unblock it and reload: Ctrl+P works.
 - [ ] Same as above, but first edit `dist/version.json` to another commit: now the update card says part of the app couldn't load because a new version is live, and offers Reload to update.
 - [ ] In `npm run preview`, open the app, set dev tools to Offline (Network > No throttling > Offline) and press Ctrl+Shift+E. A notice says "You're offline. Export will load when you're back online." and no update card shows. Go back online: the notice clears and the Export dialog opens by itself. Help > About and Ctrl+P also work after going back online.
@@ -319,4 +414,22 @@ Needs the desktop build (`npm run build` in `desktop/`, or an artifact from the 
 - [ ] The File menu shows Ctrl+N for New File and Ctrl+Shift+N for New Project (⌘N and ⇧⌘N on a Mac), and both work. Settings > Keyboard shortcuts says "Keys shown are for the desktop app".
 - [ ] Ctrl+W (⌘W on a Mac) doesn't close the window when it's bound to a command. On a Mac, ⌘Q still quits and ⌘C, ⌘V and ⌘Z work in the editor.
 - [ ] Projects made in the app are still there after quitting and opening it again, and are separate from the browser's.
-- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways. On Linux, check what Share does when the system WebKitGTK has no WebRTC.
+- [ ] On Windows and macOS, Share in the app and join from a browser with the link: text and an uploaded image sync both ways.
+- [ ] Linux WebRTC (issue #176), on a distro whose WebKitGTK has no WebRTC (Ubuntu): Share in the app and join from Chrome and from Firefox on another machine: the status shows the peers, text and an uploaded image sync both ways, and the guest's cursor shows. Join a browser's room from the app with its link. Leave and rejoin. In the dev tools, `RTCPeerConnection` is still undefined, and the offer in the tracker traffic has `.local` host candidates, not the machine's IP address. A 20 MB PDF arrives.
+- [ ] If the shell can't do it either (an old build), Share opens **Can't share from this window** with **Open in browser** and **Not now**. Open in browser opens the web app in the system browser. A build without an https `VITE_DOCS_BASE_URL` only explains, with a Close button.
+- [ ] Links (issue #181): Help > Documentation, Help > Report a Bug, a help link in a notice, a link in What's new, and an `\href{https://...}` clicked in the preview each open in the system browser, and the app window stays on the editor. An `\href{http://...}` link opens nothing. The Privacy and ToS links in the footer open the website's pages in the browser. Dragging a link or file onto the window doesn't replace the app.
+- [ ] Wording (issue #181): Settings says "Shortcuts are saved in this app only…" and "Themes, layout, shortcuts and your profile are saved in this app.", the reset list has "Profile (this app only)", Edit profile says "Saved in this app", Document language and Paper size offer "Match this computer", and File > Open Local Project's description says "saved in this app". None of them say "browser". In a browser tab they still say "this browser".
+- [ ] Notices (issue #235): connected to Google Drive in the app, revoke the app's access (or wait for the token to lapse with no network) until saves fall back: the notice says "Google Drive sign-in expired, so edits are saving in this app." In a browser tab it says "this browser". When the system browser can't open a clicked https link (for example with no default browser set), a notice says "Couldn't open https://… in your browser. Copy the link and open it there." and the app stays on the editor.
+- [ ] Updates (issue #179), with an app from release N installed and release N+1 published with `latest.json`: within a minute of starting, the update card says "A new version of the app is available." with **Restart to update**. With an unsaved edit, it saves first, installs and the app reopens on N+1 with the edit. A held conflict blocks it with the reason, and **Restart anyway** goes ahead. A build without the updater key never shows the card, and Help > About shows the same version as the release.
+- [ ] Release assets (issue #179): the GitHub release for N+1 has the AppImage, `.deb`, `.rpm`, `.msi`, `-setup.exe`, `.dmg` and `.app.tar.gz`, a `.sig` next to each update bundle, `SHA256SUMS.txt` (check one with `sha256sum -c`), and `latest.json` naming N+1 with a URL for every platform that opens the right file.
+- [ ] Google sign-in (issue #177), in a build with `GOOGLE_DESKTOP_CLIENT_ID` and `GOOGLE_DESKTOP_CLIENT_SECRET`: Accounts shows Google Drive as Not connected, with no "Keep me signed in" option. Connect opens Google's page in the system browser (the status says to finish signing in there); after allowing, the tab says "Signed in" and the app shows Connected with the email. Close the browser tab without signing in, then press Connect again: a new page opens. Deny access: the status says access was denied.
+- [ ] Staying signed in (issue #177): quit and reopen the app: Drive is connected again without a browser. The OS keychain (Keychain Access, Credential Manager, Seahorse) has one item for the app, and no token shows in the dev tools' Local Storage or IndexedDB. Log out removes the item, and the next start shows Drive as Not connected. Revoke the app at myaccount.google.com, then restart: Drive shows Expired with Connect.
+- [ ] Drive without the Picker (issue #177): File > Open from Google Drive lists the projects the app saved in Drive and opens the picked one. Add Files from Drive and Move Project Folder say the picker doesn't work in the desktop app. A build without the two variables shows Drive as Not configured.
+- [ ] Local folders (issue #178): File > Open Project lists **Folder on this computer**; pick a folder holding a LaTeX project with a `.git` folder, an image and a `main.aux`. The project opens named after the folder, with the image and without `.git` or `main.aux`. Edit and wait for the save: the file on disk changes and `main.aux` and `.git` are untouched. Rename a file, make a folder and delete a file in the app: the folder on disk follows. The status bar badge says **Folder on this computer**.
+- [ ] Outside edits (issue #178): with the folder project open and no unsaved edits, change `main.tex` in another editor: the app reloads it within a second or so ("Loaded main.tex from the project folder"). Type in the app, then change the same file outside before the save: the conflict dialog asks, and each choice (keep mine, theirs, save a copy) does what it says. Add a file outside: a notice says to open the folder again. Saving in the app doesn't open the dialog.
+- [ ] Save to a Folder (issue #178): from Accounts (or the palette), on a browser-stored project, pick an empty folder: every file is written there and later edits save there. Pick a folder with files: it asks first, and Cancel leaves saving where it was. Quit and reopen the app: it saves to the same folder. Rename or delete that folder while the app is closed, then open it: it saves in the app and says to open the folder again.
+- [ ] Folder access (issue #178): in a room, a guest's status bar says **Host: computer folder**, with no path. In a browser tab, File > Open Project, Accounts and the palette show no folder option.
+- [ ] WebAssembly CSP (issue #240): in the desktop app's dev tools console, `await WebAssembly.compile(new Uint8Array([0,97,115,109,1,0,0,0]))` returns a module, and `eval('1')` throws a CSP error. Do the same in the web app.
+- [ ] Local TeX Live (issue #264), with TeX Live installed: the palette has **Compile with Local TeX** and **Set Up Local TeX** in the app and neither in a browser tab. Compile before setting up: a notice says it's off. Set it up (leave the folder empty), then compile the regression test project: the status says it's compiling, then the PDF opens in the file viewer and Download saves it. Add `\foo` to the main file and compile: the notice names the file and line. Add `\immediate\write18{touch /tmp/pwned}` and compile: `/tmp/pwned` doesn't appear. Set a TeX folder that doesn't exist: the notice says the program isn't installed there. Set Up Local TeX again turns it off.
+- [ ] Local TeX limits (issue #264): a project with `\loop\iftrue\repeat` is stopped after 3 minutes with a notice, and no `latex-editor-tex-*` folder is left in the temp folder. A project whose main file is named `my thesis.tex` gets a notice asking for a plain name. Add a file named `pdflatex.bat` (or `pdflatex`) to the project's root, or any `.exe` in a subfolder: compiling is refused with a notice naming the file, and nothing runs. Guests in a room can compile too, with their own TeX.
+- [ ] Offline preview (issue #181): turn off the network (or block `cdn.jsdelivr.net`) and open the app. The preview still renders with the Computer Modern fonts and KaTeX math, the dev tools Network panel (where available) shows the styles and fonts from `/latexjs/`, and the console has no CORS or CSP errors. HTML export with Work offline still bundles the fonts; with it off, the saved file links the jsDelivr styles, not `tauri://localhost`.

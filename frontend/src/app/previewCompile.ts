@@ -7,6 +7,7 @@ import type { ProjectDoc } from '../project/projectDoc';
 import { mimeType } from '../project/paths';
 import type { createEditorPane } from '../ui/editor';
 import type { createPreviewPane } from '../ui/preview';
+import type { ProjectDiagnostic } from '../compile/projectSource';
 
 export const COMPILE_DEBOUNCE_MS = 500;
 export const COMPILE_MIN_INTERVAL_MS = 900;
@@ -36,12 +37,16 @@ type PreviewCompileOptions = {
   onCompileError?: () => void;
   /** Extra words after "Not found in the project", like where to look for the missing files. */
   missingHint?: () => string;
+  /** More diagnostics to show in the editor with the preview's, like the TeX log's from Compile PDF (#242). */
+  extraDiagnostics?: () => ProjectDiagnostic[];
 };
 
 /** Files the preview needs figureImages.ts for: PDF and EPS figures. */
 const FIGURE_FILE = /\.(?:pdf|eps)$/i;
 
 export type DiagnosticsTopic = 'diagnostics' | 'previewErrors';
+
+const SEVERITY_RANK = { error: 0, warning: 1, info: 2 } as const;
 
 /** Compile the project into the preview, debounced while typing and throttled so it can't run back to back. */
 export function createPreviewCompile({
@@ -60,6 +65,7 @@ export function createPreviewCompile({
   onCompileError,
   missingHint,
   loadPdfRenderer,
+  extraDiagnostics,
 }: PreviewCompileOptions) {
   let compileTimer: ReturnType<typeof setTimeout> | null = null;
   let throttleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,8 +108,10 @@ export function createPreviewCompile({
     const texts = project.textFiles();
     const binaries = project.entries().filter((entry) => entry.kind === 'binary');
     // Skip the compile when nothing it reads has changed.
+    const engine = project.getEngine() ?? undefined;
     const key = [
       main.path,
+      engine ?? '',
       ...[...texts].map(([path, text]) => `${path}:${textRev(text)}`),
       ...binaries.map((entry) => `${entry.path}:${entry.hash}:${entry.hash && blobs.has(entry.hash) ? 1 : 0}`),
     ].join('|');
@@ -117,7 +125,7 @@ export function createPreviewCompile({
     preview.setLoading(true);
     try {
       const binaryPaths = binaries.map((entry) => entry.path);
-      const input = { mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl) };
+      const input = { mainPath: main.path, texts, binaryPaths, imageUrls: collectImageUrls(binaryPaths, imageUrl), engine };
       const withFigures = binaries.some((entry) => FIGURE_FILE.test(entry.path))
         ? await (figures ??= import('../compile/figureImages').then((module) => module.createFigureCompile(blobs, loadPdfRenderer)))
         : null;
@@ -133,12 +141,13 @@ export function createPreviewCompile({
       }
       const activeFileId = getActiveFileId();
       const activePath = activeFileId ? project.get(activeFileId)?.path : undefined;
-      editor.setDiagnostics(errors.filter((error) => error.path === activePath));
+      editor.setDiagnostics([...errors, ...(extraDiagnostics?.() ?? [])].filter((error) => error.path === activePath));
       lastCompiledKey = key;
       compileStatusEl.textContent = 'Compiled';
       onCompiled?.();
-      if (errors.length) {
-        const first = errors[0];
+      // Lead with the worst one. Info notes, like a package the preview leaves out, don't hide missing files.
+      const first = [...errors].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])[0];
+      if (first && (first.severity !== 'info' || !missing.length)) {
         setDiagnostics(`${errors.length} diagnostic(s). ${first.message} (${first.path} line ${first.line})`);
       } else {
         const hint = missing.length ? missingHint?.() : '';

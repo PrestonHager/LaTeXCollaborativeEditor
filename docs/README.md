@@ -4,7 +4,7 @@
 
 The **built documentation** is the **user guide**: getting started, editing, collaboration, storage, interface, and shortcuts. Those pages are listed in `mkdocs.yml` under `nav`.
 
-`mkdocs build` (and the deploy workflows, `staging.yml` and `release.yml`) **exclude** some Markdown from the published site (see `exclude_docs` in `mkdocs.yml`) so the public site stays end-user focused. Excluded files remain in this folder for **contributors and operators** (protocol, deployment checklist, DoD, internal notes).
+`mkdocs build` (and the deploys, `release.yml` and the staging `Dockerfile`) **exclude** some Markdown from the published site (see `exclude_docs` in `mkdocs.yml`) so the public site stays end-user focused. Excluded files remain in this folder for **contributors and operators** (protocol, deployment checklist, DoD, internal notes).
 
 ## Maintainer references (not in the MkDocs nav)
 
@@ -15,6 +15,9 @@ The **built documentation** is the **user guide**: getting started, editing, col
 | `dod-checklist.md` | v1 definition of done. |
 | `site-plan.md` | Internal planning notes. |
 | `ui-sizing.md` | Dialog and popover size scale (`dialog-sm`, `dialog-md`, `dialog-lg`, `dialog-palette`), height and scroll rules, breakpoints, and the mobile plan for #123. Read it before adding a dialog. |
+| `compatibility-baseline.md` | How the preview copes with the Overleaf-style corpus in `frontend/dev/corpus/` (#197). Rerun with `npm run test:corpus` in `frontend/`; update with `npm run corpus:update` when engine work moves a result. |
+| `wasm-tex-engine.md` | Spike on a WASM TeX engine for a full "Compile PDF" (#198): engines compared, where package files come from, caching, risks and the follow-up issues. |
+| `lsp-in-browser.md` | Spike on a LaTeX language server in the browser (#195): TexLab on WASM, Digestif on wasmoon and `@codemirror/lsp-client` compared with the built-in completion sources, the recommendation and the follow-up issues. |
 
 ## Local preview
 

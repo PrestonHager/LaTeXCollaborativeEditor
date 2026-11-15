@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tex-compile"
+description = "Enables the tex_compile command without any pre-configured scope."
+commands.allow = ["tex_compile"]
+
+[[permission]]
+identifier = "deny-tex-compile"
+description = "Denies the tex_compile command without any pre-configured scope."
+commands.deny = ["tex_compile"]

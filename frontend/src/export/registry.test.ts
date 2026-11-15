@@ -9,7 +9,7 @@ const run = (signal = new AbortController().signal): ExportRun => ({ signal, onP
 describe('exporter registry', () => {
   it('lists each format once, with what the dialog needs', () => {
     const ids = exporters.map((exporter) => exporter.id);
-    expect(ids).toEqual(['zip', 'pdf-preview', 'html', 'flat-tex', 'file']);
+    expect(ids).toEqual(['zip', 'pdf-compiled', 'pdf-preview', 'html', 'flat-tex', 'file']);
     expect(new Set(ids).size).toBe(ids.length);
     for (const exporter of exporters) {
       expect(exporter.label).toBeTruthy();
@@ -76,6 +76,9 @@ describe('browser export services', () => {
   it('only fetches the LaTeX.js assets', async () => {
     expect(isBundleableAsset(`${LATEX_JS_ASSET_BASE}css/base.css`)).toBe(true);
     expect(isBundleableAsset('https://example.com/x.css')).toBe(false);
+    // The desktop build's own copy (issue #181).
+    expect(isBundleableAsset('tauri://localhost/latexjs/css/base.css', 'tauri://localhost/latexjs/')).toBe(true);
+    expect(isBundleableAsset('tauri://localhost/other.css', 'tauri://localhost/latexjs/')).toBe(false);
     const services = createBrowserExportServices();
     await expect(services.fetch('https://example.com/x.css', new AbortController().signal)).rejects.toThrow("preview's own styles");
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('css'));

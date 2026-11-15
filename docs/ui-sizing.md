@@ -2,7 +2,7 @@
 
 How wide and tall dialogs, popovers and floating cards are, and how to pick a size for a new one.
 This is a contributor reference. It isn't in the published user site (see `exclude_docs` in `mkdocs.yml`).
-It came from issue #141, and it sets the rules the mobile work in issue #123 builds on.
+It came from issue #141, and it sets the rules the mobile work in issue #123 builds on. Phone sheets for `dialog-md` and `dialog-lg` came in #187.
 
 The tokens and classes live at the top of the "Dialog and popover size scale" block in `frontend/src/style.css`.
 
@@ -13,7 +13,7 @@ Put one size class on the `<dialog class="dialog ...">` element. It sizes the bo
 | Class | Token | Width | Use it for | Used by |
 |-------|-------|-------|------------|---------|
 | `dialog-sm` | `--dialog-sm` | 28rem (448px) | One question with one or two buttons: confirm, prompt, notice. | `confirmDialog`, `promptDialog` and `noticeDialog` in `frontend/src/ui/dialogs.ts` |
-| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Conflict |
+| `dialog-md` | `--dialog-md` | 36rem (576px) | Short forms, info, a short list, or three or more footer buttons. | Upload, Export, About, Open a project, Accounts, Conflict |
 | `dialog-lg` | `--dialog-lg` | 52rem (832px) | Dense content: long lists, sections side by side, long text to read. | Settings, What's new (changelog, #140) |
 | `dialog-palette` | `--dialog-palette` | 40rem (640px) | The command palette. | `.command-palette` uses the token. The palette is a `div`, not a `<dialog>`. |
 
@@ -21,7 +21,7 @@ Floating UI that isn't a dialog uses two more tokens:
 
 | Token | Width | Used by |
 |-------|-------|---------|
-| `--popover-card` | 22rem (352px) | The tour card, the update prompt and the preview-changes popover. |
+| `--popover-card` | 22rem (352px) | The tour card, the update prompt, the preview-changes popover and the hover preview card (#89). |
 | `--popover-menu` | 15rem minimum | The menu bar's dropdowns. They grow to fit their longest item. |
 
 Every size is capped at `calc(100vw - var(--viewport-gutter))`. `--viewport-gutter` is 2rem, so there's 1rem on each side and nothing scrolls sideways.
@@ -73,25 +73,32 @@ The breakpoints match Tailwind's defaults, which Basecoat already uses:
 
 | Name | Width | Today | Planned in #123 |
 |------|-------|-------|-----------------|
-| Phone | under 640px (`sm`) | Every dialog is the window width minus 2rem. Footer buttons stack. | Dialogs become full-screen sheets (below). |
+| Phone | under 640px (`sm`) | `dialog-md` and `dialog-lg` are full-screen sheets (#187). `dialog-sm` is the window width minus 2rem. Footer buttons stack. One pane at a time (Editor or Preview) with a pane switcher, and the file tree is a drawer (`--popover-card` wide, #185). | The palette, popover cards and menus (below). One Menu button instead of File, Edit, View and Help, and a More actions menu in the toolbar (#186). |
 | Tablet | 640px to 1023px | Dialogs use the scale. `dialog-lg` is capped by the window, so Settings is one column. | Same as today. |
 | Desktop | 1024px (`lg`) and up | The full scale. Settings is two columns. | Same as today. |
 
 The smallest supported window is **360 x 640** (the smallest size in #123). At 768px wide nothing may scroll sideways.
+`e2e/tests/mobile-layout.spec.ts` (the `mobile-layout` Playwright project, #191) checks this at 360 x 640, 390 x 844, 768 x 1024 and 1024 x 768 with touch: no sideways scrolling, every `dialog-md` and `dialog-lg` inside the window, and the menus and Share popover on screen. Menus get `--popover-room` from `keepOnScreen` as their max-height, so a long menu with 44px touch rows scrolls instead of running off the bottom.
 
 ### What each size does on phones (#123)
 
-This PR doesn't build it, but this is the plan, so new dialogs shouldn't fight it:
+The dialog sizes are built (#187). The palette, popover cards and menus are still the plan, so new UI shouldn't fight it:
 
 - `dialog-sm`: stays a centered box, the window width minus 2rem. Confirm and prompt dialogs are short, so a sheet would be too much.
-- `dialog-md`, `dialog-lg`: full-screen sheets below 640px. The box fills the window (`100dvw` by `100dvh`, no rounded corners), the header sticks to the top and the footer to the bottom, and the body scrolls. The rules above for header, body and footer already give this shape, so a sheet only changes the box size.
+- `dialog-md`, `dialog-lg` (built in #187): full-screen sheets below 640px, in the `@media (max-width: 39.99rem)` block after the scale in `style.css`. The box fills the window (`100%` by `100dvh`, with a `100vh` fallback, no rounded corners) and its padding grows to the safe-area insets so a notch or home bar doesn't cover it. The header stays at the top, the footer is pushed to the bottom (`margin-top: auto`, so a dialog with no `<section>`, like Conflict, works too), and the body scrolls between them with its rows packed at the top (`align-content: start`). The changelog drops its own `max-height` and fills the sheet. Settings is already one column below 1024px. Nothing else changes, so a new `dialog-md` or `dialog-lg` gets the sheet for free: keep the `header`, `section`, `footer` shape and don't give the box its own width or height.
 - `dialog-palette`: full width, pinned to the top, so the soft keyboard doesn't cover the list.
 - Popover cards (`--popover-card`): full width minus the gutter, pinned to the bottom of the window. The tour card already shrinks to the window, but still covers part of each pane (#123).
-- Menus (`--popover-menu`): today a dropdown can run past the right edge of a phone-width window, because it opens under its menu button. On phones the menu bar becomes one menu button (#123), and its menu should be a sheet or a full-width list.
+- Menus (`--popover-menu`): on phones (#186) File, Edit, View and Help are one **Menu** button whose menu is a full-width list (the window minus `--viewport-gutter`), starting just under the button and scrolling inside itself. The toolbar's **More actions** menu opens under its button at the right edge. At every width, `keepOnScreen()` (`frontend/src/ui/keepOnScreen.ts`) moves a dropdown, and the Share popover, left when it would run past the right edge, so it stays 1rem inside the window. Both are capped at the window width minus `--viewport-gutter`. Before #186, File ran 54px past the edge at 390px.
 
 ### Touch targets
 
-On touch screens (`@media (pointer: coarse)`), anything you can tap should be at least **44 x 44px**, including the space around it. Today's buttons are smaller (Basecoat's `sm` buttons are 32px, `icon-xs` 24px), which is fine with a mouse. #123 will raise them for coarse pointers. Don't make new controls smaller than the existing ones.
+On touch screens (`@media (pointer: coarse)`), anything you can tap should be at least **44 x 44px**, including the space around it. With a mouse, buttons stay smaller (Basecoat's `sm` buttons are 32px, `icon-xs` 24px).
+
+The coarse-pointer block next to the splitter rules in `style.css` (#188) raises `.btn` (and icon buttons' width), menu items, palette entries, file rows, the context menu, form fields and footer links to 2.75rem. A new control that isn't one of those needs its own coarse rule. Don't make new controls smaller than the existing ones.
+
+- The splitter keeps its 8px bar, but on coarse pointers a transparent `::before` makes it 44px wide to grab. With a mouse the bar alone is the target, so the extra area doesn't cover the editor's scrollbar.
+- Touch has no hover or right-click. Hover-only UI needs another way in: the file tree's row buttons are in a menu that a long-press opens (`ui/longPress.ts`, `ui/contextMenu.ts`). CSS tooltips are hidden under `(hover: none)`, because a tap leaves them stuck on, and a long-press shows them instead. The hover preview cards (#89) never show for touch.
+- The file row menu (`.context-menu`) is `--popover-menu` wide beside the pointer, and on phones a full-width list pinned to the bottom of the window, as planned for menus above.
 
 ## How to check a change
 
@@ -100,7 +107,7 @@ Screenshot every dialog and popover you touched, at deviceScaleFactor 1, in thes
 - 1920 x 1080 and 1280 x 800 (desktop)
 - 1024 x 768 (the two-column Settings breakpoint)
 - 768 x 1024 (tablet: nothing may scroll sideways)
-- 390 x 844 (phone: must still fit, even before #123)
+- 390 x 844 and 360 x 640 (phone: `dialog-md` and `dialog-lg` are sheets, `dialog-sm` is a card)
 
 Build and serve the app (`npm run build && npx vite preview --port <port>` in `frontend/`) and drive it with Playwright. For each one, check:
 
@@ -118,3 +125,15 @@ These screenshots are from #141, at 1280 x 800:
 | ![Open a project before: the Close button runs past the edge](assets/ui-sizing/projects-before-1280x800.png) | ![Open a project after: the footer fits](assets/ui-sizing/projects-after-1280x800.png) |
 
 Settings at 768 x 1024 is one column at the full `dialog-lg` cap: ![Settings at 768px](assets/ui-sizing/settings-after-768x1024.png)
+
+These are from #187, at 360 x 640: Upload, About, Open a project, Conflict, Export, Settings, and New File (`dialog-sm`, still a card).
+
+| Before | After |
+|--------|-------|
+| ![Phone dialogs before: cards with a 1rem gutter](assets/ui-sizing/phone-dialogs-before-360x640.png) | ![Phone dialogs after: full-screen sheets, New File still a card](assets/ui-sizing/phone-dialogs-after-360x640.png) |
+
+The hover preview card (#89) is `--popover-card` wide. It sits beside a menu (flipping to the left side at the window edge) or under a toolbar button, and stays 12px inside the window:
+
+| Toolbar, 1280 x 800 | Menu, 1280 x 800 | 390 x 844 |
+|---------------------|------------------|-----------|
+| ![Share's preview card under the toolbar](assets/hover-preview/toolbar-share.png) | ![New File's preview card beside the File menu](assets/hover-preview/menu-new-file.png) | ![The card at phone width, inside the window](assets/hover-preview/narrow-390.png) |

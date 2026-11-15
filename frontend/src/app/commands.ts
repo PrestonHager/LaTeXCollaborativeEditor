@@ -1,14 +1,16 @@
+import { isDesktopShell, localPlace } from './desktopShell';
 import type { CommandId, CommandState, MenuEntry } from '../ui/menuBar';
 import type { PaletteCommand } from '../ui/commandPalette';
 import type { KeybindCommand } from '../ui/keybindSettings';
-import { devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
+import { desktopPaletteCommands, devPaletteCommands, paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
 import type { ThemeMode } from '../state/appSession';
 import { canRunCommand, replaceProjectDialog, type ReplaceAction } from '../state/guestCommands';
 import type { ConfirmOptions, PromptOptions } from '../ui/dialogs';
 import { pathProblem, suggestFreeName } from '../ui/nameChecks';
 import type { StorageProvider, ProjectSummary } from '../storage/providers/types';
 import type { openGooglePicker } from '../storage/providers/googlePicker';
-import { LEGACY_PREFIX } from '../storage/providers/googleDrive';
+import { LEGACY_PREFIX } from '../storage/providers/driveShared';
+import type { ProviderId, ProviderRegistry } from '../storage/providers/registry';
 import { describeError } from '../storage/errors';
 import type { BlobStore } from '../project/blobStore';
 import type { ProjectContent, ProjectDoc } from '../project/projectDoc';
@@ -21,6 +23,12 @@ import type { PreviewCompile } from './previewCompile';
 import type { Keymap, Shortcut } from './keymap';
 import { formatKeybind, keybindFromEvent } from '../ui/modifierShortcutLabels';
 import { isLoadFailure } from './lazy';
+import type { FolderCommands } from './desktopFolders';
+import type { LocalTex } from './desktopLocalTex';
+import { DEFAULT_TEX_ENGINE, ENGINE_LABELS, resolveEngine, type TexEngine } from '../project/texEngine';
+
+/** The engine each View menu engine command picks (issue #199). */
+const ENGINE_COMMANDS = { 'view.enginePdflatex': 'pdflatex', 'view.engineXelatex': 'xelatex', 'view.engineLualatex': 'lualatex' } as const satisfies Partial<Record<CommandId, TexEngine>>;
 
 export type CommandHandler = () => Promise<void> | void;
 
@@ -41,6 +49,8 @@ export type CommandContext = {
   driveProvider: StorageProvider & {
     moveProject(projectId: string, folderId: string): Promise<void>;
     isSignedIn(): boolean;
+    /** Connected on an earlier visit and not logged out (#201), so Log out has something to clear. */
+    wasConnected?(): boolean;
     disconnect(): Promise<void>;
   };
   blobs: BlobStore;
@@ -59,11 +69,27 @@ export type CommandContext = {
     selectAll(): void;
     /** Put text in place of the selection. False when no file is open for editing. */
     insertText(text: string): boolean;
+    /** Label and citation navigation (issue #247). Each tells the user itself when there's nothing to do. */
+    goToDefinition(): Promise<unknown>;
+    findReferences(): Promise<unknown>;
+    renameLabel(ask: (current: string, check: (name: string) => string | null) => Promise<string | null>): Promise<boolean>;
   };
   /** The resolved keybinds, for labels and key presses. */
   keymap: Keymap;
   fileTree: { currentFolder(): string };
-  projectsDialog: { open(projects: ProjectSummary[]): void };
+  /** Every storage provider (storage/providers/registry.ts), for File > Open Project and Accounts. */
+  storageProviders: ProviderRegistry;
+  /**
+   * The Open a project dialog. With more than one provider set up, chooseProvider asks where the
+   * project is first, and the dialog calls back openFromProvider (below) with the choice.
+   */
+  projectsDialog: { open(projects: ProjectSummary[], source?: ProviderId): void; chooseProvider(providers: ProviderId[]): void };
+  /** Folders on this computer (desktopFolders.ts), in the desktop app only. null on the web. */
+  folders?: Promise<FolderCommands | null> | null;
+  /** Compiling with a local TeX Live (desktopLocalTex.ts), in the desktop app only (#264). */
+  localTex?: (() => Promise<LocalTex>) | null;
+  /** The Accounts panel (ui/accountsPanel.ts), which loads on first use. */
+  accountsPanel: { open(): void };
   uploadDialog: { open(folder?: string): void };
   /**
    * The template dialogs (templates/templatesUi.ts), which load on first use. Each resolves once its
@@ -71,7 +97,8 @@ export type CommandContext = {
    */
   templates: { openNew(): Promise<void>; saveAsTemplate(): Promise<void>; editProfile(): Promise<void> };
   zipInput: HTMLInputElement;
-  shareButtonEl: HTMLElement;
+  /** Copy the share link, or open the Share popover to start sharing. */
+  copyShareLink: () => void;
   // These get swapped out or made later, so we read them each time we need them.
   readonly project: ProjectDoc;
   /**
@@ -125,6 +152,8 @@ export type CommandContext = {
   openFeatureForm(): void;
   startTour(): void;
   openAbout(): void;
+  /** View > Compile PDF (#242). main.ts loads its code on first use. */
+  compilePdf(): Promise<void> | void;
 };
 
 /**
@@ -162,6 +191,12 @@ export const shortcuts: Shortcut[] = [
   // Not Ctrl+Shift+C, which opens the element inspector in Chrome and Edge (#21).
   // The editor's own Ctrl+Enter (insert a blank line) is turned off in ui/editor.ts so this one works there too.
   { id: 'view.compileNow', keybind: 'Mod+Enter' },
+  // Compile PDF (#242) runs a real TeX engine, so it's Compile Now with Shift. Checked in Chromium on Linux: the page gets it.
+  { id: 'view.compilePdf', keybind: 'Mod+Shift+Enter' },
+  // As in VS Code. F12 and Shift+F12 reach the page in Chromium (see reservedKeys.ts), and so does F2.
+  { id: 'edit.goToDefinition', keybind: 'F12' },
+  { id: 'edit.findReferences', keybind: 'Shift+F12' },
+  { id: 'edit.renameLabel', keybind: 'F2' },
 ];
 
 /** The command registry, its menu and palette state, and the keyboard shortcuts. */
@@ -181,9 +216,10 @@ export function createCommands(app: CommandContext) {
     editor,
     fileTree,
     projectsDialog,
+    storageProviders,
     uploadDialog,
     zipInput,
-    shareButtonEl,
+    copyShareLink,
     guestCount,
     projectName,
     setStatus,
@@ -239,7 +275,47 @@ export function createCommands(app: CommandContext) {
     zipInput.click();
   }
 
+  /** Signed in to Drive in this tab, or remembered from an earlier visit. */
+  function driveSignInKept() {
+    return driveProvider.isSignedIn() || Boolean(driveProvider.wasConnected?.());
+  }
+
+  /** Pick a project folder or .tex file in Drive and open it. Pass alreadyConfirmed when the host just OK'd replacing the project. */
+  async function openFromDrive(alreadyConfirmed: boolean) {
+    if (isClient) return;
+    // The desktop app has no Picker (it needs a web origin, #177): it lists the Drive projects the app made.
+    if (isDesktopShell()) {
+      if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
+      if (!(await ensureDriveConnected())) return;
+      projectsDialog.open(await driveProvider.listProjects(), 'googleDrive');
+      return;
+    }
+    if (!ensureDrivePickerConfig()) return;
+    if (!alreadyConfirmed && !(await confirmReplace('open'))) return;
+    if (!(await ensureDriveConnected())) return;
+    setStatus('Drive: Opening picker...');
+    const picked = await pickFromDrive('project');
+    if (picked === undefined) return;
+    if (!picked) {
+      setStatus('Drive: Selection canceled');
+      return;
+    }
+    // A folder is a project. A single file opens as a one-file project, like before projects.
+    await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
+  }
+
+  /** The Open a project dialog's provider choice. File > Open Project already asked about guests. */
+  async function openFromProvider(id: ProviderId) {
+    if (isClient) return;
+    if (id === 'googleDrive') return openFromDrive(true);
+    if (id === 'localFolder') return void (await app.folders)?.open();
+    projectsDialog.open(await localAppProvider.listProjects());
+  }
+
   const commandRegistry: Record<CommandId, CommandHandler> = {
+    'app.accounts': () => {
+      if (!isClient) app.accountsPanel.open();
+    },
     'app.commandPalette': () => {
       app.commandPalette.toggle();
     },
@@ -268,22 +344,20 @@ export function createCommands(app: CommandContext) {
       openDialogConfirmed = false;
       if (!(await confirmReplace('open'))) return;
       openDialogConfirmed = asked;
-      projectsDialog.open(await localAppProvider.listProjects());
+      // Ask where the project is first. A site with only browser storage goes straight to its list.
+      const providers = storageProviders.list().filter((entry) => entry.configured());
+      if (providers.length > 1) projectsDialog.chooseProvider(providers.map((entry) => entry.id));
+      else projectsDialog.open(await localAppProvider.listProjects());
     },
-    'file.openDrive': async () => {
-      if (isClient) return;
-      if (!ensureDrivePickerConfig()) return;
-      if (!(await confirmReplace('open'))) return;
-      if (!(await ensureDriveConnected())) return;
-      setStatus('Drive: Opening picker...');
-      const picked = await pickFromDrive('project');
-      if (picked === undefined) return;
-      if (!picked) {
-        setStatus('Drive: Selection canceled');
-        return;
-      }
-      // A folder is a project. A single file opens as a one-file project, like before projects.
-      await openStoredProject(driveProvider, picked.isFolder ? picked.id : `${LEGACY_PREFIX}${picked.id}`);
+    'file.openDrive': () => openFromDrive(false),
+    'file.openFolder': async () => {
+      if (!isClient && app.folders && (await confirmReplace('open'))) await openFromProvider('localFolder');
+    },
+    // Guests can compile too: it only reads the project they already have.
+    'file.compileLocalTex': async () => (await app.localTex?.())?.compile(),
+    'app.localTexSetup': async () => (await app.localTex?.())?.setUp(),
+    'file.saveToFolder': async () => {
+      if (!isClient) await (await app.folders)?.saveTo();
     },
     'file.importZip': () => importZip(false),
     'file.newFile': async () => {
@@ -338,13 +412,13 @@ export function createCommands(app: CommandContext) {
       if (app.project.getName()) autosave.markDirty();
     },
     'file.disconnectDrive': async () => {
-      if (isClient || !driveProvider.isSignedIn()) return;
+      if (isClient || !driveSignInKept()) return;
       // First, point saves at this browser, so the next save keeps every edit.
       if (projectState.isDrive()) useProvider(localAppProvider, null);
       // Then let a Drive save that's already running finish before the token goes away.
       await autosave.enqueue(() => driveProvider.disconnect());
       showDriveAccount();
-      showNotice('Disconnected Google Drive. Edits now save in this browser.');
+      showNotice(`Disconnected Google Drive. Edits now save in ${localPlace()}.`);
       await autosave.saveNow();
     },
     'file.saveToDrive': async () => {
@@ -405,7 +479,7 @@ export function createCommands(app: CommandContext) {
       }
       const deleteAll = await confirmDialog({
         title: 'Delete all local projects?',
-        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in this browser. Your templates and projects on Google Drive stay. This cannot be undone.`,
+        message: `This deletes ${count === 1 ? 'the 1 project' : `all ${count} projects`} saved in ${localPlace()}. Your templates and projects on Google Drive stay. This cannot be undone.`,
         confirmLabel: count === 1 ? 'Delete 1 project' : `Delete ${count} projects`,
         destructive: true,
       });
@@ -455,10 +529,24 @@ export function createCommands(app: CommandContext) {
     'view.systemTheme': () => setAllThemes('system'),
     'view.togglePauseSaving': () => setSavingPaused(!projectState.savingPaused),
     'view.focusEditor': () => editor.focus(),
+    'edit.goToDefinition': async () => { await editor.goToDefinition(); },
+    'edit.findReferences': async () => { await editor.findReferences(); },
+    'edit.renameLabel': async () => { await editor.renameLabel((current, check) => promptDialog({
+      title: 'Rename label',
+      message: `Renames \\label{${current}} and every reference to it, in every file.`,
+      label: 'New name',
+      initialValue: current,
+      confirmLabel: 'Rename',
+      validate: check,
+    })); },
     'app.openSettings': () => app.settingsDialog.open(),
     'file.rename': () => renameProject(),
-    'share.copyLink': () => shareButtonEl.click(),
+    'share.copyLink': () => copyShareLink(),
     'view.compileNow': () => compile.compileNow(),
+    'view.compilePdf': () => app.compilePdf(),
+    'view.enginePdflatex': () => pickEngine('pdflatex'),
+    'view.engineXelatex': () => pickEngine('xelatex'),
+    'view.engineLualatex': () => pickEngine('lualatex'),
     'view.layoutSplit': () => {
       layout.setMode('split');
       app.menuBar.refresh();
@@ -516,9 +604,10 @@ export function createCommands(app: CommandContext) {
 
   /**
    * Run a command and report any error it throws, then refresh the menus.
-   * Every menu, palette, and shortcut path goes through here.
+   * Every menu, palette, and shortcut path goes through here. The promise settles once the
+   * command is done, for callers that wait on it (the Accounts panel).
    */
-  function executeCommand(commandId: CommandId) {
+  function executeCommand(commandId: CommandId): Promise<void> | void {
     const report = (error: unknown) => {
       if (isLoadFailure(error) && app.loadFailed) {
         const label = app.menuBar.entries().find((entry) => entry.commandId === commandId)?.label ?? 'That command';
@@ -539,8 +628,24 @@ export function createCommands(app: CommandContext) {
       refreshCommands();
       return;
     }
-    if (result instanceof Promise) void result.catch(report).finally(refreshCommands);
-    else refreshCommands();
+    if (result instanceof Promise) return result.catch(report).finally(refreshCommands);
+    refreshCommands();
+  }
+
+  /**
+   * Set the project's TeX engine (issue #199). It goes to peers with the project and is saved with
+   * it. A `% !TEX program` comment in the main file still wins, so say so when it does.
+   */
+  function pickEngine(engine: TexEngine) {
+    const { project } = app;
+    project.setEngine(engine);
+    const mainId = project.getMainFileId();
+    const resolved = resolveEngine(engine, mainId ? project.getText(mainId).toString() : undefined);
+    if (resolved.source === 'magic' && resolved.engine !== engine) {
+      showNotice(`The main file's "% !TEX program" comment picks ${ENGINE_LABELS[resolved.engine]}, so the project uses that instead of ${ENGINE_LABELS[engine]}.`);
+    } else {
+      setStatus(`TeX engine: ${ENGINE_LABELS[engine]}`);
+    }
   }
 
   // Menus and palette entries depend on app state (theme, save mode), so rebuild both after changes.
@@ -553,10 +658,13 @@ export function createCommands(app: CommandContext) {
   const getCommandState = (commandId: CommandId): CommandState => {
     switch (commandId) {
       case 'file.new':
+      case 'app.accounts':
       case 'file.saveAsTemplate':
       case 'file.openLocal':
       case 'file.openDrive':
       case 'file.importZip':
+      case 'file.openFolder':
+      case 'file.saveToFolder':
       case 'file.connectDrive':
       case 'file.saveToDrive':
       case 'file.renameDrive':
@@ -568,13 +676,17 @@ export function createCommands(app: CommandContext) {
       case 'file.addFromDrive':
         return { enabled: !isClient && projectState.isDrive() };
       case 'file.disconnectDrive':
-        return { enabled: !isClient && driveProvider.isSignedIn() };
+        return { enabled: !isClient && driveSignInKept() };
       case 'file.newFile':
       case 'file.newFolder':
       case 'file.upload':
         // Guests can add files too, once they have the host's project.
         return { enabled: !(isClient && app.project.isEmpty()) };
       case 'file.downloadFile':
+        return { enabled: Boolean(app.activeFileId) };
+      case 'edit.goToDefinition':
+      case 'edit.findReferences':
+      case 'edit.renameLabel':
         return { enabled: Boolean(app.activeFileId) };
       case 'file.saveNow':
         return { enabled: !isClient && !projectState.savingPaused };
@@ -588,6 +700,11 @@ export function createCommands(app: CommandContext) {
       }
       case 'view.togglePauseSaving':
         return { enabled: !isClient, checked: projectState.savingPaused };
+      case 'view.enginePdflatex':
+      case 'view.engineXelatex':
+      case 'view.engineLualatex':
+        // Guests can pick it too, like the main file: it's part of the shared project.
+        return { enabled: !app.project.isEmpty(), checked: (app.project.getEngine() ?? DEFAULT_TEX_ENGINE) === ENGINE_COMMANDS[commandId] };
       case 'view.layoutSplit':
         return { enabled: true, checked: layout.mode === 'split' };
       case 'view.layoutEditorOnly':
@@ -620,7 +737,7 @@ export function createCommands(app: CommandContext) {
     const themes = themeSwitchCommands
       .filter(({ theme }) => !(themeState.editorTheme === theme && themeState.previewTheme === theme))
       .map(({ id, section, label, description }) => ({ id, section, label, description, shortcut: app.keymap.labelFor(id), enabled: true }));
-    const extras = [...paletteOnlyCommands, ...devPaletteCommands].map((command) => ({
+    const extras = [...paletteOnlyCommands, ...desktopPaletteCommands(Boolean(app.folders)), ...devPaletteCommands].map((command) => ({
       ...command,
       shortcut: app.keymap.labelFor(command.id),
       enabled: getCommandState(command.id).enabled,
@@ -636,7 +753,7 @@ export function createCommands(app: CommandContext) {
         byId.set(entry.commandId, { id: entry.commandId, label: entry.label, section: entry.section, description: entry.description });
       }
     }
-    for (const { id, label, section, description } of [...themeSwitchCommands, ...paletteOnlyCommands, ...devPaletteCommands]) {
+    for (const { id, label, section, description } of [...themeSwitchCommands, ...paletteOnlyCommands, ...desktopPaletteCommands(Boolean(app.folders)), ...devPaletteCommands]) {
       if (!byId.has(id)) byId.set(id, { id, label, section, description });
     }
     return [...byId.values()];
@@ -670,6 +787,7 @@ export function createCommands(app: CommandContext) {
     commandRegistry,
     executeCommand,
     importZipFromOpenDialog,
+    openFromProvider,
     refreshCommands,
     getCommandState,
     buildPaletteCommands,

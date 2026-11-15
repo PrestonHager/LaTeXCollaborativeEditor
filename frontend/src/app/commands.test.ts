@@ -18,6 +18,7 @@ import { createKeymap, type Keymap } from './keymap';
 import { normalizeKeybind } from '../ui/modifierShortcutLabels';
 import { createEditorPane } from '../ui/editor';
 import { paletteOnlyCommands, themeSwitchCommands } from '../ui/paletteCommands';
+import { createProviderRegistry, googleDriveEntry, localStorageEntry } from '../storage/providers/registry';
 
 class FakeLocal extends MemoryProvider {
   clear = vi.fn(async () => {
@@ -40,13 +41,18 @@ class FakeDrive extends MemoryProvider {
   legacyProjectId() {
     return null;
   }
+  accountLabel() {
+    return this.signedIn ? 'ada@example.com' : null;
+  }
 }
 
-function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Keymap } = {}) {
+function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Keymap; driveClientId?: string } = {}) {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => undefined }));
   const local = new FakeLocal();
   const drive = new FakeDrive();
   const projectState = new ProjectState(local, drive as DriveLike);
+  // Drive is only set up when a test passes a client id, so Open goes straight to the browser's list.
+  const storageProviders = createProviderRegistry([localStorageEntry(local), googleDriveEntry(drive, options.driveClientId)]);
   const themeState = createThemeController();
   const div = () => document.createElement('div');
   const layout = createLayout({ splitRoot: div(), splitter: div(), editorPane: div(), previewPane: div() });
@@ -73,14 +79,23 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
       enqueue: vi.fn((task: () => Promise<void>) => task()),
     },
     session: { broadcastMetadata: vi.fn() },
-    editor: { focus: vi.fn(), selectAll: vi.fn(), insertText: vi.fn(() => true) },
+    editor: {
+      focus: vi.fn(),
+      selectAll: vi.fn(),
+      insertText: vi.fn(() => true),
+      goToDefinition: vi.fn(async () => true),
+      findReferences: vi.fn(async () => true),
+      renameLabel: vi.fn(async (ask: (current: string, check: (name: string) => string | null) => Promise<string | null>) => (await ask('sec:a', (name) => (name === 'bad' ? 'no' : null))) !== null),
+    },
     keymap: options.keymap ?? createKeymap(shortcuts, () => 'other'),
     fileTree: { currentFolder: vi.fn(() => '') },
-    projectsDialog: { open: vi.fn() },
+    projectsDialog: { open: vi.fn(), chooseProvider: vi.fn() },
+    storageProviders,
+    accountsPanel: { open: vi.fn() },
     uploadDialog: { open: vi.fn() },
     templates: { openNew: vi.fn(async () => {}), saveAsTemplate: vi.fn(async () => {}), editProfile: vi.fn(async () => {}) },
     zipInput: { click: vi.fn() } as unknown as HTMLInputElement,
-    shareButtonEl: { click: vi.fn() } as unknown as HTMLElement,
+    copyShareLink: vi.fn(),
     project,
     undo,
     activeFileId: project.getMainFileId() as string | null,
@@ -124,6 +139,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     openFeatureForm: vi.fn(),
     startTour: vi.fn(),
     openAbout: vi.fn(),
+    compilePdf: vi.fn(),
   } satisfies CommandContext;
   const commands = createCommands(app);
   // Run a command and let its promise settle.
@@ -131,7 +147,7 @@ function setup(options: { isClient?: boolean; entries?: MenuEntry[]; keymap?: Ke
     commands.executeCommand(id);
     await settle();
   };
-  return { app, commands, run, local, drive, projectState, themeState, layout, project, undo, palette: () => palette };
+  return { app, commands, run, local, drive, storageProviders, projectState, themeState, layout, project, undo, palette: () => palette };
 }
 
 /** Let pending promises (like a dialog's answer) settle. */
@@ -245,11 +261,39 @@ describe('commands', () => {
       expect(commands.getCommandState('help.about').enabled).toBe(true);
     });
 
+    it('picks the project TeX engine, checks it, and says when a magic comment wins (#199)', async () => {
+      const { commands, app, run, project } = setup({ isClient: true });
+      expect(commands.getCommandState('view.enginePdflatex')).toEqual({ enabled: true, checked: true });
+      await run('view.engineXelatex');
+      expect(project.getEngine()).toBe('xelatex');
+      expect(app.setStatus).toHaveBeenLastCalledWith('TeX engine: XeLaTeX');
+      expect(commands.getCommandState('view.engineXelatex').checked).toBe(true);
+      expect(commands.getCommandState('view.enginePdflatex').checked).toBe(false);
+      const main = project.getMainFileId()!;
+      project.getText(main).insert(0, '% !TEX program = lualatex\n');
+      await run('view.enginePdflatex');
+      expect(project.getEngine()).toBe('pdflatex');
+      expect(app.showNotice).toHaveBeenLastCalledWith(expect.stringContaining('picks LuaLaTeX'));
+      await run('view.engineLualatex');
+      expect(app.setStatus).toHaveBeenLastCalledWith('TeX engine: LuaLaTeX');
+      project.replaceAll({ name: '', files: [] });
+      expect(commands.getCommandState('view.engineLualatex').enabled).toBe(false);
+    });
+
     it('turns on Disconnect Google Drive only while signed in', () => {
       const { commands, drive } = setup();
       expect(commands.getCommandState('file.disconnectDrive').enabled).toBe(true);
       drive.signedIn = false;
       expect(commands.getCommandState('file.disconnectDrive').enabled).toBe(false);
+    });
+
+    it('lets you log out of a Drive account remembered from an earlier visit (#201)', async () => {
+      const { commands, drive, run } = setup();
+      drive.signedIn = false;
+      const remembered = Object.assign(drive, { wasConnected: () => true });
+      expect(commands.getCommandState('file.disconnectDrive').enabled).toBe(true);
+      await run('file.disconnectDrive');
+      expect(remembered.disconnect).toHaveBeenCalled();
     });
 
     it('checks Pause Saving while saving is paused', () => {
@@ -408,6 +452,113 @@ describe('commands', () => {
       expect(app.zipInput.click).toHaveBeenCalled();
     });
 
+    it('asks which provider first when more than one is set up (#200)', async () => {
+      const { app, run, commands, local, drive } = setup({ driveClientId: 'client' });
+      await local.createProject('Old');
+      await run('file.openLocal');
+      expect(app.projectsDialog.chooseProvider).toHaveBeenCalledWith(['local', 'googleDrive']);
+      expect(app.projectsDialog.open).not.toHaveBeenCalled();
+      // Browser storage shows its list in the same dialog.
+      await commands.openFromProvider('local');
+      expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Old' })]);
+      // Drive goes to its picker without asking about guests again.
+      app.guestCount.mockReturnValue(1);
+      await commands.openFromProvider('googleDrive');
+      expect(app.confirmDialog).not.toHaveBeenCalled();
+      expect(app.pickFromDrive).toHaveBeenCalledWith('project');
+      expect(app.openStoredProject).toHaveBeenCalledWith(drive, 'f1');
+    });
+
+    it('opens and saves to folders on this computer, in the desktop app only (#178)', async () => {
+      const { app, run, commands } = setup();
+      const ids = () => commands.buildPaletteCommands().map((command) => command.id);
+      // The website has no folder commands.
+      expect(ids()).not.toContain('file.openFolder');
+      await run('file.openFolder');
+      await run('file.saveToFolder');
+      expect(app.confirmDialog).not.toHaveBeenCalled();
+
+      const folders = { open: vi.fn(async () => {}), saveTo: vi.fn(async () => {}), reopen: vi.fn() };
+      (app as { folders?: unknown }).folders = Promise.resolve(folders);
+      expect(ids()).toEqual(expect.arrayContaining(['file.openFolder', 'file.saveToFolder']));
+      expect(commands.listCommands().map((command) => command.id)).toContain('file.saveToFolder');
+      await run('file.saveToFolder');
+      expect(folders.saveTo).toHaveBeenCalled();
+      // Opening asks about guests first, like any open, then goes straight to the folder dialog.
+      app.guestCount.mockReturnValue(1);
+      app.confirmDialog.mockResolvedValueOnce(false);
+      await run('file.openFolder');
+      expect(folders.open).not.toHaveBeenCalled();
+      await run('file.openFolder');
+      expect(folders.open).toHaveBeenCalledTimes(1);
+      await commands.openFromProvider('localFolder');
+      expect(folders.open).toHaveBeenCalledTimes(2);
+      expect(commands.getCommandState('file.openFolder').enabled).toBe(true);
+    });
+
+    it('runs local TeX commands in the desktop app only, guests included (#264)', async () => {
+      const { app, run, commands } = setup({ isClient: true });
+      await run('file.compileLocalTex');
+      const tex = { compile: vi.fn(async () => {}), setUp: vi.fn(async () => {}) };
+      (app as { localTex?: unknown }).localTex = async () => tex;
+      (app as { folders?: unknown }).folders = Promise.resolve(null);
+      await run('file.compileLocalTex');
+      await run('app.localTexSetup');
+      expect(tex.compile).toHaveBeenCalledTimes(1);
+      expect(tex.setUp).toHaveBeenCalledTimes(1);
+      expect(commands.buildPaletteCommands().map((c) => c.id)).toEqual(expect.arrayContaining(['file.compileLocalTex', 'app.localTexSetup']));
+    });
+
+    it("doesn't run folder commands in a guest tab", async () => {
+      const { app, run, commands } = setup({ isClient: true });
+      const folders = { open: vi.fn(), saveTo: vi.fn(), reopen: vi.fn() };
+      (app as { folders?: unknown }).folders = Promise.resolve(folders);
+      await run('file.openFolder');
+      await run('file.saveToFolder');
+      await commands.openFromProvider('localFolder');
+      expect(folders.open).not.toHaveBeenCalled();
+      expect(folders.saveTo).not.toHaveBeenCalled();
+      expect(commands.getCommandState('file.saveToFolder').enabled).toBe(false);
+    });
+
+    it("doesn't open from a provider in a guest tab", async () => {
+      const { app, commands } = setup({ isClient: true, driveClientId: 'client' });
+      await commands.openFromProvider('local');
+      await commands.openFromProvider('googleDrive');
+      expect(app.projectsDialog.open).not.toHaveBeenCalled();
+      expect(app.pickFromDrive).not.toHaveBeenCalled();
+    });
+
+    it('opens Accounts for the host only', async () => {
+      const host = setup();
+      await host.run('app.accounts');
+      expect(host.app.accountsPanel.open).toHaveBeenCalled();
+      const guest = setup({ isClient: true });
+      await guest.run('app.accounts');
+      expect(guest.app.accountsPanel.open).not.toHaveBeenCalled();
+      expect(guest.commands.getCommandState('app.accounts').enabled).toBe(false);
+    });
+
+    it("runs Accounts' Connect and Log out through the registry's commands, and waits for them", async () => {
+      const { app, commands, projectState, local, drive, storageProviders } = setup({ driveClientId: 'client' });
+      const entry = storageProviders.get('googleDrive');
+      await commands.executeCommand(entry.connectCommand!);
+      expect(app.ensureDriveConnected).toHaveBeenCalled();
+      expect(projectState.activeProvider).toBe(drive);
+      // The returned promise settles after the command, so the panel can redraw with the new state.
+      await commands.executeCommand(entry.logOutCommand!);
+      expect(drive.disconnect).toHaveBeenCalled();
+      expect(projectState.activeProvider).toBe(local);
+      expect(app.menuBar.refresh).toHaveBeenCalled();
+      // A failure still becomes a notice, and the promise doesn't reject.
+      drive.signedIn = true;
+      drive.disconnect.mockRejectedValueOnce(new Error('revoke failed'));
+      await commands.executeCommand('file.disconnectDrive');
+      expect(app.showNotice).toHaveBeenCalledWith(expect.stringContaining('revoke failed'), true);
+      // Browser storage has no account to connect or log out of.
+      expect(storageProviders.get('local').connectCommand).toBeUndefined();
+    });
+
     it('opens and imports without asking when no guest is in the room', async () => {
       const { app, run } = setup();
       const confirm = app.confirmDialog;
@@ -418,6 +569,34 @@ describe('commands', () => {
       expect(app.projectsDialog.open).toHaveBeenCalled();
       expect(app.openStoredProject).toHaveBeenCalled();
       expect(app.zipInput.click).toHaveBeenCalled();
+    });
+
+    it('lists Drive projects instead of opening the Picker in the desktop app (#177)', async () => {
+      const { app, run, commands, drive } = setup({ driveClientId: 'desktop' });
+      await drive.createProject('Thesis');
+      vi.stubGlobal('__TAURI_INTERNALS__', {});
+      try {
+        await run('file.openDrive');
+        expect(app.ensureDrivePickerConfig).not.toHaveBeenCalled();
+        expect(app.pickFromDrive).not.toHaveBeenCalled();
+        expect(app.ensureDriveConnected).toHaveBeenCalled();
+        expect(app.projectsDialog.open).toHaveBeenCalledWith([expect.objectContaining({ name: 'Thesis' })], 'googleDrive');
+        // From the Open dialog's provider step, it doesn't ask about guests again.
+        app.guestCount.mockReturnValue(1);
+        await commands.openFromProvider('googleDrive');
+        expect(app.confirmDialog).not.toHaveBeenCalled();
+        expect(app.projectsDialog.open).toHaveBeenCalledTimes(2);
+        // Not signed in: nothing opens.
+        app.ensureDriveConnected.mockResolvedValueOnce(false);
+        await commands.openFromProvider('googleDrive');
+        expect(app.projectsDialog.open).toHaveBeenCalledTimes(2);
+        // From the menu with a guest in the room, Cancel stops it.
+        app.confirmDialog.mockResolvedValueOnce(false);
+        await run('file.openDrive');
+        expect(app.projectsDialog.open).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
 
     it('asks the host before opening or importing while guests are in the room', async () => {
@@ -673,6 +852,35 @@ describe('commands', () => {
       expect(app.editor.focus).toHaveBeenCalledTimes(4);
     });
 
+    it('runs go to definition, find references and rename label in the editor, asking for the new name', async () => {
+      const { app, run } = setup();
+      await run('edit.goToDefinition');
+      await run('edit.findReferences');
+      expect(app.editor.goToDefinition).toHaveBeenCalled();
+      expect(app.editor.findReferences).toHaveBeenCalled();
+      const prompt = vi.mocked(app.promptDialog);
+      prompt.mockResolvedValueOnce('sec:b');
+      await run('edit.renameLabel');
+      expect(prompt).toHaveBeenCalledWith(expect.objectContaining({ title: 'Rename label', initialValue: 'sec:a', confirmLabel: 'Rename' }));
+      const { validate } = prompt.mock.calls[0][0];
+      expect(validate?.('bad')).toBe('no');
+      expect(validate?.('fine')).toBeNull();
+      await expect(app.editor.renameLabel.mock.results[0].value).resolves.toBe(true);
+    });
+
+    it('turns the navigation commands off with no file open, and gives them F12, Shift+F12 and F2', () => {
+      const { app, commands } = setup();
+      const ids = ['edit.goToDefinition', 'edit.findReferences', 'edit.renameLabel'] as CommandId[];
+      for (const id of ids) expect(commands.getCommandState(id).enabled).toBe(true);
+      app.activeFileId = null;
+      for (const id of ids) expect(commands.getCommandState(id).enabled).toBe(false);
+      expect(shortcuts.filter((s) => s.id.startsWith('edit.') && /F\d/.test(s.keybind)).map((s) => [s.id, s.keybind])).toEqual([
+        ['edit.goToDefinition', 'F12'],
+        ['edit.findReferences', 'Shift+F12'],
+        ['edit.renameLabel', 'F2'],
+      ]);
+    });
+
     it('says so when the browser will not let Paste read the clipboard', async () => {
       const { app, run } = setup();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -774,8 +982,10 @@ describe('commands', () => {
       expect(layout.mode).toBe('split');
       await run('view.compileNow');
       expect(app.compile.compileNow).toHaveBeenCalled();
+      await run('view.compilePdf');
+      expect(app.compilePdf).toHaveBeenCalled();
       await run('share.copyLink');
-      expect(app.shareButtonEl.click).toHaveBeenCalled();
+      expect(app.copyShareLink).toHaveBeenCalled();
       await run('app.openSettings');
       expect(app.settingsDialog.open).toHaveBeenCalled();
       await run('file.renameDrive');

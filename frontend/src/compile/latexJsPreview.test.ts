@@ -72,7 +72,9 @@ describe('latexSourceToPreviewHtml', () => {
         '\\end{document}',
       ].join('\n'),
     );
-    expect(errors).toEqual([]);
+    expect(errors).toEqual([
+      { line: 2, severity: 'info', message: 'The preview leaves out the geometry package. The preview uses its own page size and margins.' },
+    ]);
     expect(changes).toHaveLength(2);
     expect(changes[0]).toBe("Removed packages the preview can't load: geometry.");
     expect(html).not.toContain('Preview is approximate');
@@ -95,6 +97,20 @@ describe('latexSourceToPreviewHtml', () => {
     const failed = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: [], imageUrls: new Map() });
     expect(failed.html).toBeNull();
     expect(failed.changes).toEqual(["Removed packages the preview can't load: geometry."]);
+  });
+
+  it('puts package notes on the file and line that load the package, after the parse error', () => {
+    const texts = new Map([
+      ['main.tex', '\\documentclass{article}\n\\input{preamble}\n\\begin{document}\n\\begin{tikzpicture}\\end{tikzpicture}\n\\end{document}'],
+      ['preamble.tex', '% packages\n\\usepackage{xcolor}\n\\usepackage{tikz}'],
+    ]);
+    const { html, errors } = projectToPreviewHtml({ mainPath: 'main.tex', texts, binaryPaths: [], imageUrls: new Map() });
+    expect(html).toBeNull();
+    expect(errors.map((e) => [e.path, e.line, e.severity])).toEqual([
+      ['main.tex', 4, 'error'],
+      ['preamble.tex', 3, 'warning'],
+    ]);
+    expect(errors[1].message).toContain('tikzpicture');
   });
 
   it('returns structured error when parse fails', () => {

@@ -17,6 +17,23 @@ const BASE_URL = `http://127.0.0.1:${PORT}/`;
 const VIEWPORT = { width: 1280, height: 800 };
 const THEMES = (process.env.SCREENSHOT_THEMES ?? 'light,dark').split(',');
 
+// Which window sizes to shoot (issue #191). `desktop` is the full set of docs shots at 1280x800 and is the default.
+// `phone` (390x844), `small-phone` (360x640) and `tablet` (768x1024) take the mobile set, named `<size>-<shot>-<theme>.png`.
+// For example SCREENSHOT_VIEWPORTS=desktop,phone,tablet does all three.
+const VIEWPORT_PRESETS = {
+  desktop: { name: 'desktop', width: VIEWPORT.width, height: VIEWPORT.height },
+  phone: { name: 'phone', width: 390, height: 844 },
+  'small-phone': { name: 'small-phone', width: 360, height: 640 },
+  tablet: { name: 'tablet', width: 768, height: 1024 },
+};
+const VIEWPORTS = (process.env.SCREENSHOT_VIEWPORTS ?? 'desktop').split(',').map((raw) => {
+  const preset = VIEWPORT_PRESETS[raw.trim()];
+  if (!preset) throw new Error(`Unknown SCREENSHOT_VIEWPORTS entry "${raw}". Use ${Object.keys(VIEWPORT_PRESETS).join(', ')}.`);
+  return preset;
+});
+// Under 640px the app uses its phone layout (frontend/src/app/phoneLayout.ts).
+const PHONE_MAX_WIDTH = 639;
+
 const MAIN_TEX = String.raw`\documentclass{article}
 \usepackage{graphicx}
 \title{Field Notes}
@@ -327,6 +344,21 @@ async function shootTheme(browser, theme) {
   await shot(page, 'file-menu', theme);
   await page.keyboard.press('Escape');
 
+  // The hover preview card (#89): rest the mouse on View > Split View.
+  await page.mouse.move(VIEWPORT.width - 10, VIEWPORT.height - 10);
+  await page.click('.menu-trigger[aria-controls="menu-view"]');
+  await page.waitForSelector('#menu-view[aria-hidden="false"]');
+  await page.hover('#menu-view [data-command="view.layoutSplit"]');
+  await page.waitForSelector('#hover-preview:not([hidden]) .hover-preview-mock');
+  const card = await page.locator('#hover-preview').boundingBox();
+  const menu = await page.locator('#menu-view').boundingBox();
+  const clipX = Math.max(0, menu.x - 16);
+  await shot(page, 'hover-preview', theme, {
+    clip: { x: clipX, y: 0, width: card.x + card.width + 16 - clipX, height: Math.max(menu.y + menu.height, card.y + card.height) + 16 },
+  });
+  await page.mouse.move(VIEWPORT.width - 10, VIEWPORT.height - 10);
+  await page.keyboard.press('Escape');
+
   // The command palette.
   await page.keyboard.press('ControlOrMeta+P');
   await page.waitForSelector('#command-palette[aria-hidden="false"]');
@@ -353,8 +385,12 @@ async function shootTheme(browser, theme) {
   await shot(page, 'settings', theme);
   await page.click('#settings-done');
 
-  // Share, which joins a room and shows the link. Do this last since it starts networking.
+  // Share opens a popover, and Start sharing joins a room and shows the link (issue #224).
+  // Do this last since it starts networking.
   await page.click('#share-btn');
+  await page.waitForTimeout(300);
+  await shot(page, 'share-start', theme, { clip: { x: 300, y: 0, width: 520, height: 260 } });
+  await page.click('#share-start-btn');
   await page.waitForFunction(() => (document.getElementById('share-link')?.textContent ?? '').includes('room='));
   await page.waitForTimeout(500);
   // Keep the room id out of the picture, since it's random every time.
@@ -363,22 +399,105 @@ async function shootTheme(browser, theme) {
     if (link) link.textContent = link.textContent.replace(/room=[^&]+/, 'room=...');
   });
   await annotate(page, [
-    { selector: '#share-btn', label: 'Share copies the link', side: 'below', dy: 20 },
-    { selector: '#new-link-btn', label: 'New link drops everyone', side: 'below', dy: 60 },
-    { selector: '#share-link', label: 'The link to send', side: 'below', dy: 100 },
-    { selector: '#connection-status', label: 'Connection status', side: 'below', dx: -100 },
+    { selector: '#share-link', label: 'The link to send', side: 'right', dx: 12 },
+    { selector: '#new-link-btn', label: 'New link drops everyone', side: 'below', dy: 40 },
+    { selector: '#share-stop-btn', label: 'Stop sharing leaves the room', side: 'below', dy: 80 },
+    { selector: '#connection-status', label: 'Connection status', side: 'below', dx: 60, dy: 8 },
   ]);
   await shot(page, 'share', theme);
+  // Close the popover so the header shows for the status picture.
+  await page.keyboard.press('Escape');
 
   // The status pills and notice, cropped to the header.
   await annotate(page, [
-    // The pills wrap under the share link at 1280px, so the notice label goes beside it, not below.
-    { selector: '#app-notice', label: 'Notices', side: 'right' },
+    // The notice and the pills share one row at 1280px, so the notice label goes below the others.
+    { selector: '#app-notice', label: 'Notices', side: 'below', dy: 116 },
     { selector: '#connection-status', label: 'Connection', side: 'below', dy: 8 },
     { selector: '#compile-status', label: 'Compile', side: 'below', dy: 44 },
     { selector: '#autosave-status', label: 'Autosave', side: 'below', dy: 80 },
   ]);
   await shot(page, 'status', theme, { clip: { x: 480, y: 0, width: 800, height: 180 } });
+
+  await context.close();
+}
+
+/**
+ * The phone and tablet shots (issue #191): a touch screen at the given size, with no callouts.
+ * Phones get the editor, preview, Files drawer, Menu, More actions, a dialog as a sheet and Share.
+ * Tablets keep the split, so they get the main screen, a dialog and Share.
+ * These are at 2x so they stay sharp in the docs' narrow table cells.
+ */
+async function shootMobileTheme(browser, theme, viewport) {
+  const phone = viewport.width <= PHONE_MAX_WIDTH;
+  console.log(`${theme} theme, ${viewport.name} ${viewport.width}x${viewport.height}`);
+  const context = await browser.newContext({
+    viewport: { width: viewport.width, height: viewport.height },
+    colorScheme: theme,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  // Skip the tour so it doesn't cover the screen.
+  await context.addInitScript(() => {
+    localStorage.setItem('latex-editor.settings', JSON.stringify({ version: 1, values: { tourSeen: true }, updatedAt: {} }));
+  });
+  const page = await context.newPage();
+  page.on('dialog', (dialog) => dialog.accept());
+  const name = (shotName) => `${viewport.name}-${shotName}`;
+
+  await page.goto(BASE_URL);
+  await page.waitForSelector('#app-loading:not(.is-active)', { state: 'attached' });
+  await page.waitForSelector('.cm-content');
+  await clickAndAnswer(page, '#doc-title', 'Field Notes');
+  // No figure or chapter here, so the main file stands on its own.
+  const text = MAIN_TEX.replace('\\input{chapters/intro}', INTRO_TEX.trim()).replace(/\\includegraphics[^\n]*\n\n/, '');
+  await setEditorText(page, text);
+  await waitForCompile(page);
+  await page.waitForFunction(() => /Saved/.test(document.getElementById('autosave-status')?.textContent ?? ''), null, { timeout: 30_000 });
+  // Put the cursor at the top and drop focus, so the soft keyboard's key bar isn't showing.
+  await page.keyboard.press('ControlOrMeta+Home');
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  await page.waitForTimeout(300);
+
+  if (phone) {
+    await shot(page, name('editor'), theme);
+    await page.click('#phone-show-preview');
+    await page.waitForTimeout(800);
+    await shot(page, name('preview'), theme);
+    await page.click('#phone-show-editor');
+    await page.click('#phone-files');
+    await page.waitForTimeout(400);
+    await shot(page, name('files'), theme);
+    await page.keyboard.press('Escape');
+
+    await page.click('#menu-collapsed-root > .menu-trigger');
+    await page.waitForSelector('#menu-all[aria-hidden="false"]');
+    await page.waitForTimeout(300);
+    await shot(page, name('menu'), theme);
+    await page.keyboard.press('Escape');
+
+    await page.click('.toolbar-more > .menu-trigger');
+    await page.waitForSelector('#toolbar-more-menu[aria-hidden="false"]');
+    await page.waitForTimeout(300);
+    await shot(page, name('more'), theme);
+    await page.keyboard.press('Escape');
+  } else {
+    await shot(page, name('overview'), theme);
+  }
+
+  // Settings is dialog-lg, so on a phone it's a full-screen sheet (#187).
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.waitForSelector('#settings-dialog[open] #settings-editor-theme');
+  await page.waitForTimeout(400);
+  await shot(page, name('settings'), theme);
+  await page.click('#settings-done');
+
+  // Share before it starts, so nothing connects.
+  await page.click('#share-btn');
+  await page.waitForSelector('#share-popover[aria-hidden="false"]');
+  await page.waitForTimeout(300);
+  await shot(page, name('share'), theme);
+  await page.keyboard.press('Escape');
 
   await context.close();
 }
@@ -401,7 +520,12 @@ async function main() {
     executablePath: process.env.SCREENSHOT_CHROMIUM || undefined,
   });
   try {
-    for (const theme of THEMES) await shootTheme(browser, theme);
+    for (const viewport of VIEWPORTS) {
+      for (const theme of THEMES) {
+        if (viewport.name === 'desktop') await shootTheme(browser, theme);
+        else await shootMobileTheme(browser, theme, viewport);
+      }
+    }
   } finally {
     await browser.close();
     server.kill();

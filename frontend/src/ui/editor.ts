@@ -1,16 +1,17 @@
 import { EditorState, Compartment, EditorSelection } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
+import { EditorView, keymap, type KeyBinding, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from '@codemirror/view';
 import { defaultKeymap, indentWithTab } from '@codemirror/commands';
 import { StreamLanguage } from '@codemirror/language';
 import { stex } from '@codemirror/legacy-modes/mode/stex';
 import { bracketMatching } from '@codemirror/language';
-import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import type { Extension } from '@codemirror/state';
 import type { EditorDiagnostic } from './diagnostics';
 import { diagnosticsExtensions, lintGutterPlaceholder, loadLintExtensions, setEditorDiagnostics } from './diagnostics';
 import { latexSyntaxHighlighting } from './syntaxHighlight';
 import { yUndoManagerKeymap } from 'y-codemirror.next';
 import { isAssignableKeybind, normalizeKeybind, type Platform } from './modifierShortcutLabels';
+import type { CompletionProject } from './completionProject';
+import type { TouchKeyBar } from './touchKeyBar';
 
 type TextChangedHandler = (text: string, sync?: boolean) => void;
 
@@ -20,9 +21,30 @@ type TextChangedHandler = (text: string, sync?: boolean) => void;
  */
 export const editorKeymap = [
   ...defaultKeymap.filter((binding) => binding.key !== 'Mod-Enter'),
-  ...closeBracketsKeymap,
   indentWithTab,
 ];
+
+/**
+ * The keys that open the completion list, from @codemirror/autocomplete's completionKeymap.
+ * That package loads lazily (see latexCompletion.ts), so they're copied here for editorKeybinds.
+ */
+export const completionOpenKeys: readonly KeyBinding[] = [
+  { key: 'Ctrl-Space' },
+  { mac: 'Alt-`' },
+  { mac: 'Alt-i' },
+];
+
+/**
+ * LaTeX autocompletion and closing brackets. @codemirror/autocomplete and the command list aren't
+ * needed to show the editor, so they load just after the page does.
+ */
+export async function loadCompletionExtensions(
+  load: () => Promise<Pick<typeof import('./latexCompletion'), 'latexCompletionExtensions'>> = () => import('./latexCompletion'),
+  getProject: () => CompletionProject | null = () => null,
+): Promise<Extension> {
+  const { latexCompletionExtensions } = await load();
+  return latexCompletionExtensions(undefined, getProject);
+}
 
 /**
  * The editor's own keys that use a modifier, written the app's way (like "Mod+Shift+K").
@@ -30,7 +52,7 @@ export const editorKeymap = [
  */
 export function editorKeybinds(platform: Platform): Set<string> {
   const keys = new Set<string>();
-  for (const binding of [...editorKeymap, ...yUndoManagerKeymap]) {
+  for (const binding of [...editorKeymap, ...yUndoManagerKeymap, ...completionOpenKeys]) {
     const key = (platform === 'mac' ? binding.mac : binding.win ?? binding.linux) ?? binding.key;
     // CodeMirror joins with "-", and a trailing "-" is the minus key itself.
     const keybind = key && normalizeKeybind(key.replace(/-(?!$)/g, '+'), platform);
@@ -41,7 +63,29 @@ export function editorKeybinds(platform: Platform): Set<string> {
 
 const DEFAULT_DOC = '\\documentclass{article}\n\\begin{document}\nHello, collaborative LaTeX!\n\\end{document}\n';
 
-export function createEditorPane(container: HTMLElement) {
+/** Only phones and tablets get the touch key bar, so its code loads only there (issue #231). */
+export const COARSE_POINTER = '(pointer: coarse)';
+
+type Navigation = Pick<typeof import('./latexCompletion'), 'goToDefinition' | 'findReferences' | 'renameLabel'>;
+
+type EditorPaneOptions = {
+  /** Where go to definition, find references and rename come from (the completion chunk). Tests pass their own. */
+  loadNavigation?: () => Promise<Navigation>;
+  /** Where the touch key bar's code comes from. Tests pass their own. */
+  loadTouchKeyBar?: () => Promise<typeof import('./touchKeyBar')>;
+  /** Whether this device has a coarse pointer now, and tells of changes. Defaults to matchMedia. */
+  coarsePointer?: Pick<MediaQueryList, 'matches' | 'addEventListener' | 'removeEventListener'> | null;
+};
+
+function coarsePointerQuery() {
+  try {
+    return typeof window.matchMedia === 'function' ? window.matchMedia(COARSE_POINTER) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function createEditorPane(container: HTMLElement, options: EditorPaneOptions = {}) {
   const host = document.createElement('div');
   host.className = 'editor';
   container.appendChild(host);
@@ -52,6 +96,10 @@ export function createEditorPane(container: HTMLElement) {
   const editableCompartment = new Compartment();
   // Holds a placeholder until @codemirror/lint has loaded, then the real lint gutter and linter.
   const lintCompartment = new Compartment();
+  // Empty until latexCompletion.ts has loaded, then autocompletion and closing brackets.
+  const completionCompartment = new Compartment();
+  // The project that \ref, \cite and \input complete from (issue #193). Set with setCompletionProject.
+  let completionProject: CompletionProject | null = null;
 
   const state = EditorState.create({
     doc: DEFAULT_DOC,
@@ -61,7 +109,7 @@ export function createEditorPane(container: HTMLElement) {
       highlightActiveLine(),
       highlightActiveLineGutter(),
       bracketMatching(),
-      closeBrackets(),
+      completionCompartment.of([]),
       lintCompartment.of(lintGutterPlaceholder),
       StreamLanguage.define(stex),
       latexSyntaxHighlighting,
@@ -81,18 +129,74 @@ export function createEditorPane(container: HTMLElement) {
   });
 
   const view = new EditorView({ state, parent: host });
+  // LaTeX keys above the on-screen keyboard, on touch devices while the editor has focus. The code
+  // loads once the device has a coarse pointer, now or later (a tablet whose keyboard comes off).
+  // Typing works without it, so if it can't load, just log that and try on the next change.
+  let touchKeyBar: TouchKeyBar | null = null;
+  let touchKeyBarReady: Promise<void> = Promise.resolve();
+  const coarse = options.coarsePointer === undefined ? coarsePointerQuery() : options.coarsePointer;
+  const loadTouchKeyBar = () => {
+    if (touchKeyBar) return;
+    touchKeyBarReady = (options.loadTouchKeyBar ?? (() => import('./touchKeyBar')))().then(
+      ({ createTouchKeyBar }) => {
+        if (touchKeyBar) return;
+        touchKeyBar = createTouchKeyBar(view, container);
+        touchKeyBar.refresh();
+        coarse?.removeEventListener('change', onCoarseChange);
+      },
+      (error: unknown) => console.warn('Touch key bar failed to load', error),
+    );
+  };
+  const onCoarseChange = () => {
+    if (coarse?.matches) loadTouchKeyBar();
+  };
+  if (coarse?.matches) loadTouchKeyBar();
+  else coarse?.addEventListener?.('change', onCoarseChange);
   // Lines with problems are highlighted without it, so if it can't load, just log that.
   const lintReady = loadLintExtensions().then(
     (extensions) => view.dispatch({ effects: lintCompartment.reconfigure(extensions) }),
     (error: unknown) => console.warn('Lint gutter failed to load', error),
   );
+  // Typing works without it, so if it can't load, just log that.
+  const completionReady = loadCompletionExtensions(undefined, () => completionProject).then(
+    (extensions) => view.dispatch({ effects: completionCompartment.reconfigure(extensions) }),
+    (error: unknown) => console.warn('Autocompletion failed to load', error),
+  );
+
+  const loadNavigation = options.loadNavigation ?? (() => import('./latexCompletion'));
+  const getProject = () => completionProject;
+  /** Runs a navigation command once its code is in. False when it couldn't load. */
+  const navigate = async <T>(run: (nav: Navigation) => T | Promise<T>): Promise<T | false> => {
+    try {
+      return await run(await loadNavigation());
+    } catch (error) {
+      console.warn('Label navigation failed to load', error);
+      return false;
+    }
+  };
 
   return {
     onTextChanged(handler: TextChangedHandler) { handlers.push(handler); },
+    /** Jumps to the definition of the label, citation or command at the cursor (issue #247). */
+    goToDefinition() { return navigate((nav) => nav.goToDefinition(view, getProject)); },
+    /** Lists where the label or citation at the cursor is defined and used, under the editor. */
+    findReferences() { return navigate((nav) => nav.findReferences(view, getProject)); },
+    /** Renames the label at the cursor everywhere, after `ask` gets the new name. */
+    renameLabel(ask: (current: string, check: (name: string) => string | null) => Promise<string | null>) {
+      return navigate((nav) => nav.renameLabel(view, getProject, ask)).then((done) => done === true);
+    },
     getText() { return view.state.doc.toString(); },
     getView() { return view; },
+    /** The bar of LaTeX keys shown above the on-screen keyboard, once its code has loaded (touch devices only). */
+    getTouchKeyBar(): HTMLElement | null { return touchKeyBar?.element ?? null; },
+    /** Resolves once a touch key bar that started loading is in (or failed to load). For tests. */
+    touchKeyBarReady() { return touchKeyBarReady; },
     /** Resolves once the lint gutter is in (or failed to load). For tests. */
     lintReady() { return lintReady; },
+    /** Resolves once autocompletion is in (or failed to load). For tests. */
+    completionReady() { return completionReady; },
+    /** The project that labels, citations and paths complete from, or null for none. */
+    setCompletionProject(project: CompletionProject | null) { completionProject = project; },
     setCollabExtensions(extensions: Extension[]) {
       view.dispatch({
         effects: collabCompartment.reconfigure(extensions),
@@ -108,8 +212,17 @@ export function createEditorPane(container: HTMLElement) {
           EditorState.readOnly.of(!isEditable),
         ]),
       });
+      touchKeyBar?.refresh();
     },
     focus() { view.focus(); },
+    /** Selects `length` characters at a line (from 1) and column (from 0), scrolled into view, like for the outline. */
+    reveal(line: number, column = 0, length = 0, focus = true) {
+      const doc = view.state.doc;
+      const target = doc.line(Math.min(Math.max(line, 1), doc.lines));
+      const from = Math.min(target.from + column, target.to);
+      view.dispatch({ selection: { anchor: from, head: Math.min(from + length, target.to) }, effects: EditorView.scrollIntoView(from, { y: 'start', yMargin: 48 }) });
+      if (focus) view.focus();
+    },
     selectAll() {
       view.dispatch({
         selection: EditorSelection.range(0, view.state.doc.length),

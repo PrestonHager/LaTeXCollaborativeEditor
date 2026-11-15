@@ -2,13 +2,14 @@ import type { ProjectListing, ProjectSummary, StorageProvider } from './types';
 import { StorageError, isQuotaError } from '../errors';
 import { FILES_STORE, PROJECTS_STORE, requestToPromise, withTransaction } from '../idb';
 import { isInside, normalizePath, replacePrefix } from '../../project/paths';
+import type { TexEngine } from '../../project/texEngine';
 
 // Where single documents lived before projects. They get moved into IndexedDB on first use.
 export const LEGACY_STORAGE_KEY = 'latex_editor_docs';
 
 // A template (#74) is a project row marked template: true. It lives next to the projects, opens and
 // saves like one, and stays out of the project list.
-type ProjectRow = { id: string; name: string; mainPath: string | null; updatedAt: number; legacyFileName?: string; template?: boolean };
+type ProjectRow = { id: string; name: string; mainPath: string | null; engine?: TexEngine | null; updatedAt: number; legacyFileName?: string; template?: boolean };
 type FileRow = { projectId: string; path: string; kind: 'file' | 'folder'; data?: Uint8Array };
 
 const encoder = new TextEncoder();
@@ -158,6 +159,7 @@ export class LocalAppStorageProvider implements StorageProvider {
           id: project.id,
           name: project.name,
           mainPath: project.mainPath,
+          engine: project.engine ?? null,
           entries: files.map((file) => ({ path: file.path, kind: file.kind })).sort((a, b) => a.path.localeCompare(b.path)),
         };
       });
@@ -221,6 +223,12 @@ export class LocalAppStorageProvider implements StorageProvider {
   async setMainFile(projectId: string, path: string | null): Promise<void> {
     await this.update(projectId, 'set the main file', (_files, project) => {
       project.mainPath = path;
+    });
+  }
+
+  async setEngine(projectId: string, engine: TexEngine | null): Promise<void> {
+    await this.update(projectId, 'set the TeX engine', (_files, project) => {
+      project.engine = engine;
     });
   }
 

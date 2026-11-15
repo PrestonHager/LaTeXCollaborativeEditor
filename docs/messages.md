@@ -18,7 +18,7 @@ The app shows messages in a few places:
 
 | Text | What it means |
 | --- | --- |
-| Not shared | You haven't clicked Share and you're not in a room. |
+| Not sharing | You haven't started sharing (or you stopped), so you're not in a room. |
 | Shared, waiting for others | You're the host and nobody else has joined yet. |
 | Looking for the host | You opened a link and the host hasn't shown up yet. |
 | Connected with 2 other people | Peers are connected directly. The number is how many. |
@@ -78,8 +78,10 @@ More: [Saving and storage](saving-and-storage.md#autosave-and-save-now).
 | Drive: Connecting... | The Google sign-in is open or loading. |
 | Drive: Connected | Signed in. Saves go to Drive. |
 | Drive: Connected (name the project to save) | Signed in, but the project needs a name before it can save. |
-| Drive: Session restored | After a reload, your Drive sign-in was still good. |
-| Drive needs you to reconnect; saving locally. Use File > Connect Google Drive. | You were saving to Drive, but this tab has no good sign-in. That happens in a new tab, a restarted browser, or a reload after the sign-in ran out. Saves go to this browser for now. |
+| Drive: Session restored | After a reload or on a new visit, your Drive sign-in was still good, or a quiet sign-in brought it back. |
+| Drive: Signing in... | On a new visit, the app is signing you back in to Drive without asking. Saving starts once it's done. |
+| Google Drive sign-in expired, so edits save in this browser. Use File > Connect Google Drive to sign in again. | You were saving to Drive on your last visit, but the quiet sign-in didn't work (usually the browser blocked Google's popup). Nothing is broken: click Connect once. |
+| Drive needs you to reconnect; saving locally. Use File > Connect Google Drive. | You were saving to Drive, but this tab has no good sign-in. That happens when this browser doesn't remember Drive (for example, you logged out in another tab). Saves go to this browser for now. |
 | Drive: Saving... / Drive: Saved name | **Save to Google Drive** is running, then done. |
 | Drive: Opening picker... | The Drive picker is loading. |
 | Drive: Selection canceled | You closed the picker without picking. |
@@ -186,7 +188,7 @@ Buttons for things you can't easily undo are red, and focus starts on **Cancel**
 | Title | Buttons | From |
 | --- | --- | --- |
 | Replace the whole project? | Cancel, **Start new project** | **New Project**. Always asks, starts on Cancel so Enter does nothing, and says every file and folder closes and to use **New File** to add one file. Red while a guest is connected, and it says it's for everyone in the room. |
-| Open another project? | Cancel, **Choose a project** | **Open Local Project** or **Open from Google Drive**, while a guest is connected. Says it replaces the project for everyone in the room. |
+| Open another project? | Cancel, **Choose a project** | **Open Project…** or **Open from Google Drive**, while a guest is connected. Says it replaces the project for everyone in the room. |
 | Upload a .zip as a new project? | Cancel, **Choose a .zip** | **Upload .zip as New Project**, while a guest is connected. |
 | Name this project | Cancel, **Save project** | **Save Now** or **Save to Google Drive** on an unnamed project. |
 | Rename project | Cancel, **Rename project** | Clicking the title, or **Rename Project**. |

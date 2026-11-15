@@ -1,16 +1,20 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:desktop": "node scripts/with-bundled-latexjs.mjs dev",
     "build": "tsc && vite build && node scripts/check-build-pages.mjs && node scripts/check-bundle-size.mjs",
+    "build:desktop": "node scripts/with-bundled-latexjs.mjs build",
     "check:pages": "node scripts/check-build-pages.mjs",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:corpus": "vitest run src/dev/compatCorpus.test.ts",
+    "corpus:update": "UPDATE_CORPUS_BASELINE=1 vitest run src/dev/compatCorpus.test.ts",
     "check:size": "node scripts/check-bundle-size.mjs",
     "basecoat:subset": "node scripts/basecoat-subset.mjs"
   },
@@ -21,7 +25,7 @@
     "jsdom": "^31.0.0",
     "tailwindcss": "^4.3.5",
     "typescript": "~7.0.2",
-    "vite": "^8.3.7",
+    "vite": "^8.3.8",
     "vitest": "^5.1.0"
   },
   "dependencies": {
@@ -33,10 +37,13 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.41.1",
     "@lezer/highlight": "^1.2.5",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/plugin-dialog": "2.8.4",
+    "@tauri-apps/plugin-fs": "2.7.1",
     "@trystero-p2p/torrent": "^0.26.0",
     "basecoat-css": "^1.1.0",
     "latex.js": "^0.12.6",
-    "lucide": "^1.71.0",
+    "lucide": "^1.72.0",
     "pdfjs-dist": "^6.5.438",
     "y-codemirror.next": "^0.3.6",
     "yjs": "^13.6.33"

@@ -43,8 +43,8 @@ jobs:
           git switch -q -c staging origin/staging
           if git merge --no-edit -m "Merge main into staging" origin/main; then
             git push -q origin staging
-            # A push made with GITHUB_TOKEN doesn't start other workflows, so start the staging deploy and tests here.
-            gh workflow run staging.yml --ref staging
+            # A push made with GITHUB_TOKEN doesn't start other workflows, so start the tests here.
+            # Coolify's webhook still sees the push and deploys staging.
             gh workflow run test.yml --ref staging
             echo "::notice title=Synced::Merged main (${GITHUB_SHA::7}) into staging."
           else

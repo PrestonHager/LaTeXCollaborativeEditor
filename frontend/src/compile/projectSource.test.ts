@@ -108,7 +108,7 @@ describe('expandProjectSource', () => {
     const out = expandProjectSource('main.tex', texts, []);
     expect(out.source.split('\n')[2]).toBe('[1, ?]');
     expect(out.diagnostics).toEqual([
-      { path: 'body.tex', line: 2, severity: 'warning', message: 'Citation "ghost" isn\'t in the bibliography.' },
+      { path: 'body.tex', line: 2, severity: 'warning', message: 'Citation "ghost" isn\'t in the bibliography.', subject: 'cite:ghost' },
       expect.objectContaining({ path: 'main.tex', line: 2, severity: 'info', message: expect.stringContaining('"fancy"') }),
     ]);
   });

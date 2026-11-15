@@ -1,5 +1,6 @@
 // Checks the editor theme colors in style.css: every theme has a full set, the two light
-// copies match, and line numbers keep at least 4.5:1 contrast against the gutter (#81).
+// copies match, line numbers keep at least 4.5:1 contrast against the gutter (#81), and diagnostic
+// tooltips and lint panel rows stay readable on hover, focus and while active (#228).
 
 async function readStyleCss(): Promise<string> {
   // Vitest turns CSS imports into empty strings, so we read the file. The app has no Node types.
@@ -43,6 +44,12 @@ const REQUIRED = [
   '--editor-number',
   '--editor-comment',
   '--editor-operator',
+  '--editor-tooltip-bg',
+  '--editor-tooltip-text',
+  '--editor-tooltip-border',
+  '--editor-diag-hover-bg',
+  '--editor-diag-selected-bg',
+  '--editor-diag-active-bg',
 ];
 
 describe('editor theme colors in style.css', () => {
@@ -77,5 +84,28 @@ describe('editor theme colors in style.css', () => {
     const vars = editorVars(await readStyleCss(), selector);
     expect(contrast(vars['--editor-line-number'], vars['--editor-gutter-bg'])).toBeGreaterThanOrEqual(4.5);
     expect(contrast(vars['--editor-line-number-active'], vars['--editor-gutter-active-bg'])).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each([
+    ['dark', ':root,\n[data-editor-theme="dark"]'],
+    ['light', '\n[data-editor-theme="light"]'],
+  ])('keeps %s diagnostic text at least 4.5:1 at rest, on hover, when selected and while active', async (_name, selector) => {
+    const vars = editorVars(await readStyleCss(), selector);
+    const text = vars['--editor-tooltip-text'];
+    for (const bg of ['--editor-tooltip-bg', '--editor-diag-hover-bg', '--editor-diag-selected-bg']) {
+      expect(contrast(text, vars[bg]), bg).toBeGreaterThanOrEqual(4.5);
+    }
+    // The range under an open tooltip keeps its syntax colors, so check every token color on it.
+    for (const token of ['--editor-text', '--editor-keyword', '--editor-string', '--editor-number', '--editor-comment', '--editor-operator']) {
+      expect(contrast(vars[token], vars['--editor-diag-active-bg']), token).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('styles the lint tooltip and panel from the editor tokens instead of CodeMirror\'s light defaults', async () => {
+    const css = await readStyleCss();
+    expect(css).toMatch(/\.cm-editor \.cm-tooltip \{ background: var\(--editor-tooltip-bg\); color: var\(--editor-tooltip-text\)/);
+    expect(css).toMatch(/\.cm-tooltip-lint \.cm-diagnostic:hover \{ background: var\(--editor-diag-hover-bg\)/);
+    expect(css).toMatch(/ul:focus \[aria-selected\],[^{]*\{ background: var\(--editor-diag-selected-bg\)/);
+    expect(css).toMatch(/\.cm-lintRange-active \{ background-color: var\(--editor-diag-active-bg\)/);
   });
 });

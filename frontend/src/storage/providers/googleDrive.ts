@@ -3,6 +3,28 @@ import { StorageError } from '../errors';
 import { ConflictError } from '../conflicts';
 import { loadScript } from './scriptLoader';
 import { basename, dirname, isInside, joinPath, mimeType, replacePrefix } from '../../project/paths';
+import {
+  EXPORTS_PROPERTY,
+  FOLDER_MIME,
+  forgetLegacyFile,
+  LEGACY_PREFIX,
+  legacyProjectId,
+  readStoredToken,
+  removeOldToken,
+  TEMPLATES_FOLDER_PROPERTY,
+  TOKEN_EXPIRY_SLACK_MS,
+  TOKEN_STORAGE_KEY,
+  type StoredToken,
+} from './driveShared';
+import { forgetAccount, keepsSignedIn, rememberAccount, rememberedAccount, setKeepSignedInChoice, wasConnected } from './accountMemory';
+import { deleteToken, loadToken, saveToken } from './tokenVault';
+import type { TexEngine } from '../../project/texEngine';
+import { isDesktopShell } from '../../app/desktopShell';
+
+// The desktop app signs in through the system browser instead of GIS (#177). Its own small chunk.
+const loadDesktopAuth = () => import('./desktopGoogleAuth');
+
+export { EXPORTS_PROPERTY, FOLDER_MIME, LEGACY_PREFIX, TEMPLATE_PROPERTY, TEMPLATES_FOLDER_PROPERTY } from './driveShared';
 
 type GoogleTokenResponse = {
   access_token?: string;
@@ -11,9 +33,6 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 type GoogleTokenError = { type?: string; message?: string };
-// The single Drive file an old session was saving to, from before projects.
-type DriveFileRef = { id: string; name: string; documentId?: string };
-type StoredToken = { accessToken: string; expiresAt: number; account?: string };
 type TokenResult = { ok: true } | { ok: false; reason: string };
 type DriveItem = { id: string; name: string; mimeType?: string; parents?: string[]; appProperties?: Record<string, string>; modifiedTime?: string; version?: string; md5Checksum?: string };
 
@@ -40,31 +59,20 @@ const DRIVE_API = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
 // The about endpoint tells us who's signed in, and works with the drive.file scope we already have.
 const DRIVE_ABOUT_API = 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)';
-export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 // What we ask Drive for to tell if a file changed under us.
 const VERSION_FIELDS = 'version,md5Checksum';
 // Project folders are tagged so "list projects" can find them without seeing the rest of Drive.
 const PROJECT_PROPERTY = 'latexProject';
-// The exports folder the Export dialog makes inside a project folder. openProject skips it, so
-// exports never become project files.
-export const EXPORTS_PROPERTY = 'latexExports';
-// The Templates folder (#74) at the top of My Drive, and each template folder in it. Templates aren't
-// tagged as projects, so they stay out of the project list; see templates/driveTemplates.ts.
-export const TEMPLATES_FOLDER_PROPERTY = 'latexTemplates';
-export const TEMPLATE_PROPERTY = 'latexTemplate';
-// Old single-file projects use ids like "file:<drive file id>".
-export const LEGACY_PREFIX = 'file:';
-const LEGACY_FILE_KEY = 'drive_active_file_ref';
-// Treat the token as expired a minute early so a save doesn't race the expiry.
-const TOKEN_EXPIRY_SLACK_MS = 60_000;
 // Give up on a silent refresh after this long, so a stuck popup can't stall autosave forever.
 const TOKEN_REFRESH_TIMEOUT_MS = 20_000;
 // Drive error reasons that mean "slow down and try again".
 const RATE_LIMIT_REASONS = new Set(['rateLimitExceeded', 'userRateLimitExceeded']);
 // Don't hold up a disconnect for long if Google never answers the revoke call.
 const TOKEN_REVOKE_TIMEOUT_MS = 5_000;
-// Old builds kept the token here, where any script on the page could read it.
-const OLD_TOKEN_KEY = 'drive_access_token';
+// A silent sign-in on page load gets less time, since saving waits on it.
+const SILENT_SIGN_IN_TIMEOUT_MS = 8_000;
+// The registry id, for what accountMemory.ts and tokenVault.ts keep.
+const PROVIDER_ID = 'googleDrive';
 
 /**
  * Projects in Google Drive. A project is a Drive folder and every project file is a real
@@ -90,8 +98,6 @@ export class GoogleDriveProvider implements StorageProvider {
   // What remove() put in the Drive trash this visit, by Drive id, so an undone delete untrashes the
   // same file instead of making a copy. Paths inside a trashed folder are kept relative to it.
   private readonly trashed = new Map<string, { projectId: string; parentId?: string; item: IndexItem; inside: [string, IndexItem][] }>();
-  // NOTE: the token lives in sessionStorage, so it survives a reload but not a new tab or a closed browser.
-  private static readonly tokenStorageKey = 'drive_session_token';
 
   constructor() {
     removeOldToken();
@@ -121,25 +127,12 @@ export class GoogleDriveProvider implements StorageProvider {
    * Sessions from before document ids only match by file name.
    */
   legacyProjectId(documentId: string | undefined, fileName: string): string | null {
-    let ref: DriveFileRef | null = null;
-    try {
-      const raw = localStorage.getItem(LEGACY_FILE_KEY);
-      ref = raw ? (JSON.parse(raw) as DriveFileRef) : null;
-    } catch {
-      ref = null;
-    }
-    if (!ref?.id || !ref.name) return null;
-    const matches = ref.documentId ? ref.documentId === documentId : ref.name === fileName;
-    return matches ? `${LEGACY_PREFIX}${ref.id}` : null;
+    return legacyProjectId(documentId, fileName);
   }
 
   /** Forget the old single-file link, once the session has moved on to projects. */
   forgetLegacyFile() {
-    try {
-      localStorage.removeItem(LEGACY_FILE_KEY);
-    } catch {
-      // Nothing to do if storage is locked down.
-    }
+    forgetLegacyFile();
   }
 
   /** The email (or name) of the signed-in Google account, if we know it. */
@@ -164,6 +157,8 @@ export class GoogleDriveProvider implements StorageProvider {
       if (!account || this.accessToken !== token) return null;
       this.account = account;
       this.writeStoredToken();
+      rememberAccount(PROVIDER_ID, account);
+      if (keepsSignedIn(PROVIDER_ID)) await this.keepToken();
       return account;
     } catch (error) {
       console.warn('Could not look up the Drive account', error);
@@ -182,7 +177,19 @@ export class GoogleDriveProvider implements StorageProvider {
     this.indexes.clear();
     this.aliases.clear();
     this.forgetLegacyFile();
+    // Log out forgets everything kept for Drive: the account, "Keep me signed in" and its token.
+    forgetAccount(PROVIDER_ID);
+    await deleteToken(PROVIDER_ID);
     this.currentStatus = 'Drive: Disconnected';
+    // The desktop app: the shell forgets the keychain's refresh token and revokes it (#177).
+    if (isDesktopShell()) {
+      try {
+        await (await loadDesktopAuth()).desktopSignOut();
+      } catch (error) {
+        console.warn('Could not sign out of Google in the desktop app', error);
+      }
+      return;
+    }
     if (!token) return;
     try {
       await loadScript(GIS_SCRIPT, 'Google sign-in');
@@ -216,6 +223,7 @@ export class GoogleDriveProvider implements StorageProvider {
       return true;
     }
     this.clearAccessToken();
+    if (isDesktopShell()) return this.connectDesktop();
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!clientId) {
       this.currentStatus = 'Drive config missing';
@@ -240,6 +248,67 @@ export class GoogleDriveProvider implements StorageProvider {
       this.currentStatus = 'Drive: Connection failed';
       return false;
     }
+  }
+
+  /**
+   * Sign back in on page load without asking (#201), for an account connected on an earlier visit and
+   * not logged out since: first the token "Keep me signed in" kept, then a GIS token request with
+   * prompt 'none'. False when neither works, so the person is asked to connect only then.
+   * NOTE: GIS still needs a popup for prompt 'none', and browsers block those outside a click, so in
+   * practice the kept token is what makes a new tab come back signed in.
+   */
+  async restoreSession(): Promise<boolean> {
+    if (this.hasUsableToken()) return true;
+    if (!wasConnected(PROVIDER_ID)) return false;
+    // The desktop app: a new access token from the refresh token in the OS keychain, no browser.
+    if (isDesktopShell()) {
+      const ok = await this.desktopToken();
+      this.currentStatus = ok ? 'Drive: Session restored' : 'Drive: Sign-in expired';
+      return ok;
+    }
+    const signOuts = this.signOuts;
+    if (keepsSignedIn(PROVIDER_ID)) {
+      const kept = await loadToken(PROVIDER_ID, TOKEN_EXPIRY_SLACK_MS);
+      if (signOuts !== this.signOuts) return false;
+      if (kept) {
+        this.accessToken = kept.accessToken;
+        this.tokenExpiresAt = kept.expiresAt;
+        this.account = kept.account ?? rememberedAccount(PROVIDER_ID)?.account ?? null;
+        this.writeStoredToken();
+        this.currentStatus = 'Drive: Session restored';
+        return true;
+      }
+    }
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId) {
+      try {
+        await loadScript(GIS_SCRIPT, 'Google sign-in');
+        const oauth2 = window.google?.accounts?.oauth2;
+        if (oauth2?.initTokenClient) {
+          const result = await withTimeout(this.requestAccessToken(oauth2, clientId, 'none'), SILENT_SIGN_IN_TIMEOUT_MS);
+          if (result.ok) {
+            this.currentStatus = 'Drive: Session restored';
+            return true;
+          }
+        }
+      } catch (error) {
+        console.warn('Silent Drive sign-in failed', error);
+      }
+    }
+    this.currentStatus = 'Drive: Sign-in expired';
+    return false;
+  }
+
+  /** Whether "Keep me signed in on this browser" is on. */
+  keepSignedIn(): boolean {
+    return keepsSignedIn(PROVIDER_ID);
+  }
+
+  /** Turn "Keep me signed in on this browser" on (keeps the current token) or off (deletes it). */
+  async setKeepSignedIn(on: boolean): Promise<void> {
+    setKeepSignedInChoice(PROVIDER_ID, on);
+    if (!on) await deleteToken(PROVIDER_ID);
+    else if (this.hasUsableToken()) await this.keepToken();
   }
 
   async listProjects(): Promise<ProjectSummary[]> {
@@ -298,7 +367,7 @@ export class GoogleDriveProvider implements StorageProvider {
     this.indexes.set(projectId, index);
     this.indexes.set(id, index);
     this.currentStatus = `Drive: Opened ${folder.name}`;
-    return { id, name: folder.name, mainPath: folder.appProperties?.mainFile ?? null, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
+    return { id, name: folder.name, mainPath: folder.appProperties?.mainFile ?? null, engine: folder.appProperties?.texEngine ?? null, entries: entries.sort((a, b) => a.path.localeCompare(b.path)) };
   }
 
   async readFile(projectId: string, path: string): Promise<Uint8Array> {
@@ -457,6 +526,13 @@ export class GoogleDriveProvider implements StorageProvider {
     const index = await this.ensureIndex(projectId);
     if (index.legacy) return;
     await this.patchMetadata(index.rootId, { appProperties: { mainFile: path } }, 'set the main file');
+  }
+
+  /** Kept in the folder's appProperties next to the main file, so other devices get it too. */
+  async setEngine(projectId: string, engine: TexEngine | null): Promise<void> {
+    const index = await this.ensureIndex(projectId);
+    if (index.legacy) return;
+    await this.patchMetadata(index.rootId, { appProperties: { texEngine: engine } }, 'set the TeX engine');
   }
 
   /** Move the project folder into another Drive folder. */
@@ -678,18 +754,21 @@ export class GoogleDriveProvider implements StorageProvider {
    */
   private async trySilentRefresh(): Promise<boolean> {
     if (!this.isSignedIn()) return false;
+    if (isDesktopShell()) {
+      if (await this.desktopToken()) {
+        this.currentStatus = 'Drive: Connected';
+        return true;
+      }
+      this.endSession();
+      return false;
+    }
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (clientId) {
       try {
         await loadScript(GIS_SCRIPT, 'Google sign-in');
         const oauth2 = window.google?.accounts?.oauth2;
         if (oauth2?.initTokenClient) {
-          let timer: ReturnType<typeof setTimeout> | undefined;
-          const timeout = new Promise<TokenResult>((resolve) => {
-            timer = setTimeout(() => resolve({ ok: false, reason: 'Timed out' }), TOKEN_REFRESH_TIMEOUT_MS);
-          });
-          const result = await Promise.race([this.requestAccessToken(oauth2, clientId), timeout]);
-          clearTimeout(timer);
+          const result = await withTimeout(this.requestAccessToken(oauth2, clientId), TOKEN_REFRESH_TIMEOUT_MS);
           if (result.ok) {
             this.currentStatus = 'Drive: Connected';
             return true;
@@ -707,6 +786,9 @@ export class GoogleDriveProvider implements StorageProvider {
   private endSession() {
     const wasSignedIn = this.isSignedIn();
     this.clearAccessToken();
+    // An expired token is no use to anyone, so a kept one goes too. The account stays remembered, so
+    // the Accounts panel says "Expired" and the next visit can try a silent sign-in.
+    void deleteToken(PROVIDER_ID);
     this.currentStatus = 'Drive: Session expired';
     if (wasSignedIn) this.sessionLostHandler?.();
   }
@@ -715,12 +797,15 @@ export class GoogleDriveProvider implements StorageProvider {
    * Ask Google for a token. We only make one request: GIS shows the consent screen on its own
    * when needed, and a second popup after an await gets blocked since it's no longer a user click.
    */
-  private requestAccessToken(oauth2: any, clientId: string): Promise<TokenResult> {
+  private requestAccessToken(oauth2: any, clientId: string, prompt: '' | 'none' = ''): Promise<TokenResult> {
     const signOuts = this.signOuts;
+    // The remembered account, so Google skips the account chooser. It's an email, never a token.
+    const hint = this.account ?? rememberedAccount(PROVIDER_ID)?.account ?? undefined;
     return new Promise((resolve) => {
       const tokenClient = oauth2.initTokenClient({
         client_id: clientId,
         scope: 'https://www.googleapis.com/auth/drive.file',
+        ...(hint ? { login_hint: hint } : {}),
         callback: (resp: GoogleTokenResponse) => {
           if (signOuts !== this.signOuts) {
             resolve({ ok: false, reason: 'Disconnected' });
@@ -739,21 +824,67 @@ export class GoogleDriveProvider implements StorageProvider {
           resolve({ ok: false, reason: describeTokenError(err?.type, err?.message) });
         },
       });
-      tokenClient.requestAccessToken({ prompt: '' });
+      tokenClient.requestAccessToken({ prompt });
     });
+  }
+
+  /**
+   * Sign in through the system browser, in the desktop app (#177). The shell keeps the refresh token
+   * in the OS keychain; this page only gets the access token.
+   */
+  private async connectDesktop(): Promise<boolean> {
+    const signOuts = this.signOuts;
+    this.currentStatus = 'Drive: Finish signing in in your browser...';
+    try {
+      const { desktopSignIn } = await loadDesktopAuth();
+      const token = await desktopSignIn(rememberedAccount(PROVIDER_ID)?.account);
+      if (signOuts !== this.signOuts) {
+        this.currentStatus = 'Drive: Disconnected';
+        return false;
+      }
+      this.setAccessToken(token.accessToken, token.expiresAt);
+      this.currentStatus = 'Drive: Connected';
+      return true;
+    } catch (error) {
+      console.warn('Desktop Google sign-in failed', error);
+      this.currentStatus = `Drive: ${error instanceof Error && error.message ? error.message : 'Connection failed'}`;
+      return false;
+    }
+  }
+
+  /** A new access token from the shell, with no browser (desktop app only). False when signed out or offline. */
+  private async desktopToken(): Promise<boolean> {
+    const signOuts = this.signOuts;
+    try {
+      const token = await (await loadDesktopAuth()).desktopAccessToken();
+      if (signOuts !== this.signOuts) return false;
+      this.setAccessToken(token.accessToken, token.expiresAt);
+      return true;
+    } catch (error) {
+      console.warn('Could not get a Drive token from the desktop app', error);
+      return false;
+    }
   }
 
   private setAccessToken(accessToken: string, expiresAt: number) {
     this.accessToken = accessToken;
     this.tokenExpiresAt = expiresAt;
     this.writeStoredToken();
+    // Remember that Drive is connected (never the token) so the next visit can sign in silently.
+    rememberAccount(PROVIDER_ID, this.account);
+    if (keepsSignedIn(PROVIDER_ID)) void this.keepToken();
+  }
+
+  /** "Keep me signed in": the token goes to IndexedDB (tokenVault.ts) too. */
+  private keepToken() {
+    return saveToken(PROVIDER_ID, { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt, ...(this.account ? { account: this.account } : {}) });
   }
 
   private writeStoredToken() {
     try {
       const stored: StoredToken = { accessToken: this.accessToken, expiresAt: this.tokenExpiresAt };
       if (this.account) stored.account = this.account;
-      sessionStorage.setItem(GoogleDriveProvider.tokenStorageKey, JSON.stringify(stored));
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(stored));
     } catch (error) {
       console.warn('Could not keep the Drive token for this tab; you will need to reconnect after reload', error);
     }
@@ -764,37 +895,31 @@ export class GoogleDriveProvider implements StorageProvider {
     this.tokenExpiresAt = 0;
     this.account = null;
     try {
-      sessionStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     } catch {
       // Nothing else to do if storage is locked down.
     }
   }
 
   private readStoredAccessToken() {
-    try {
-      const raw = sessionStorage.getItem(GoogleDriveProvider.tokenStorageKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as StoredToken;
-      if (!parsed?.accessToken || !parsed?.expiresAt) return;
-      if (parsed.expiresAt <= Date.now() + TOKEN_EXPIRY_SLACK_MS) {
-        sessionStorage.removeItem(GoogleDriveProvider.tokenStorageKey);
-        return;
-      }
-      this.accessToken = parsed.accessToken;
-      this.tokenExpiresAt = parsed.expiresAt;
-      this.account = parsed.account ?? null;
-    } catch {
-      // Corrupt cache, just start signed out.
-    }
+    const stored = readStoredToken();
+    if (!stored) return;
+    this.accessToken = stored.accessToken;
+    this.tokenExpiresAt = stored.expiresAt;
+    this.account = stored.account ?? null;
   }
 }
 
-/** Drop a token an old build left in localStorage. */
-function removeOldToken() {
+/** A token request that gives up after ms, so a popup that never answers can't hold things up. */
+async function withTimeout(request: Promise<TokenResult>, ms: number): Promise<TokenResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<TokenResult>((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, reason: 'Timed out' }), ms);
+  });
   try {
-    localStorage.removeItem(OLD_TOKEN_KEY);
-  } catch {
-    // Nothing to do if storage is locked down.
+    return await Promise.race([request, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -805,6 +930,11 @@ function describeTokenError(code?: string, message?: string): string {
       return 'Sign-in popup was blocked. Allow popups for this site and try again.';
     case 'popup_closed':
       return 'Sign-in was canceled.';
+    // A silent sign-in (prompt 'none') that Google needs the person for. The sign-in ran out, it isn't broken.
+    case 'interaction_required':
+    case 'login_required':
+    case 'consent_required':
+      return 'Sign-in expired. Connect Google Drive to sign in again.';
     case 'access_denied':
       return 'Access was denied. Grant Drive access to save files.';
     case undefined:

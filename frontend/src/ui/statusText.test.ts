@@ -2,7 +2,7 @@ import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from 
 
 describe('connectionText', () => {
   it('says who is connected', () => {
-    expect(connectionText({ isHost: true, inRoom: false, state: 'Not sharing', peers: 0 })).toBe('Not shared');
+    expect(connectionText({ isHost: true, inRoom: false, state: 'Not sharing', peers: 0 })).toBe('Not sharing');
     expect(connectionText({ isHost: true, inRoom: true, state: 'Connected', peers: 1 })).toBe('Connected with 1 other person');
     expect(connectionText({ isHost: false, inRoom: true, state: 'Connected', peers: 3 })).toBe('Connected with 3 other people');
     expect(connectionText({ isHost: false, inRoom: true, state: 'Relayed', peers: 2 })).toBe('Connected with 2 other people (relayed)');
@@ -23,6 +23,14 @@ describe('connectionText', () => {
     expect(connectionText({ ...info, state: 'Waiting for peers' })).toBe('Looking for the host');
     expect(connectionFailed({ ...info, state: 'Waiting for peers' })).toBe(false);
     expect(connectionFailed({ ...info, peers: 1 })).toBe(false);
+  });
+});
+
+describe('connectionText without WebRTC', () => {
+  it("says this window can't connect, for hosts and guests (issue #205)", () => {
+    expect(connectionText({ isHost: true, inRoom: false, state: 'Not sharing', peers: 0, noWebRtc: true })).toBe("Can't connect in this window");
+    expect(connectionText({ isHost: false, inRoom: false, state: 'Not sharing', peers: 0, noWebRtc: true })).toBe("Can't connect in this window");
+    expect(connectionFailed({ isHost: false, inRoom: false, state: 'Not sharing', peers: 0, noWebRtc: true })).toBe(false);
   });
 });
 

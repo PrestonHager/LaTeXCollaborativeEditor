@@ -68,13 +68,17 @@ describe('adaptLatexSourceForLatexJs', () => {
     ].join('\n');
     const { html, errors } = latexSourceToPreviewHtml(src);
     expect(html).toBeNull();
-    expect(errors).toHaveLength(1);
-    expect(errors[0].line).toBe(7);
+    // The parse error first, then a note on each package line.
+    expect(errors.map((e) => [e.line, e.severity])).toEqual([
+      [7, 'error'],
+      [2, 'info'],
+      [3, 'info'],
+    ]);
   });
 
   it('previews a typical academic paper without parse errors', () => {
     const { html, errors } = latexSourceToPreviewHtml(academicPaperTex);
-    expect(errors).toEqual([]);
+    expect(errors.filter((e) => e.severity === 'error')).toEqual([]);
     expect(html).toBeTruthy();
     expect(html).toContain('Crimson Comet');
   });
@@ -83,13 +87,79 @@ describe('adaptLatexSourceForLatexJs', () => {
 // Wrap a body in a small document, so line 1 is the \documentclass.
 const doc = (...body: string[]) => ['\\documentclass{article}', ...body].join('\n');
 
+describe('adaptLatexSource package diagnostics', () => {
+  it('warns about tikz on the line that loads it, and says what goes missing', () => {
+    const { diagnostics } = adaptLatexSource(doc('\\usepackage{xcolor}', '\\usepackage{tikz}', '\\begin{document}x\\end{document}'));
+    expect(diagnostics).toEqual([
+      {
+        line: 3,
+        severity: 'warning',
+        message: "The preview can't load the tikz package. The preview can't draw TikZ pictures; the first tikzpicture stops it with an error.",
+      },
+    ]);
+  });
+
+  it('gives packages that are safe to leave out an info note that says what looks different', () => {
+    const { diagnostics } = adaptLatexSource(doc('\\usepackage[margin=1in]{geometry}'));
+    expect(diagnostics).toEqual([
+      { line: 2, severity: 'info', message: 'The preview leaves out the geometry package. The preview uses its own page size and margins.' },
+    ]);
+  });
+
+  it('says when the preview uses a stand-in', () => {
+    const [note] = adaptLatexSource(doc('\\usepackage{siunitx}')).diagnostics;
+    expect(note).toEqual({ line: 2, severity: 'info', message: 'The preview uses a stand-in for the siunitx package. Numbers and units show as plain text.' });
+  });
+
+  it('warns about a package it knows nothing about', () => {
+    const [note] = adaptLatexSource(doc('\\usepackage{made-up}')).diagnostics;
+    expect(note.severity).toBe('warning');
+    expect(note.message).toMatch(/^The preview can't load the made-up package\. What it adds is missing/);
+  });
+
+  it('keeps the packages LaTeX.js has, with their options, and notes each one it removes on its own line', () => {
+    const src = doc('\\usepackage[dvipsnames]{xcolor, amsmath,', '  % symbols too', '  amssymb}[2020/01/01]', 'After.');
+    const { source, diagnostics } = adaptLatexSource(src);
+    expect(source).toBe(doc('\\usepackage[dvipsnames]{xcolor}', '', '', 'After.'));
+    expect(diagnostics.map((d) => [d.line, d.message.split('.')[0]])).toEqual([
+      [2, 'The preview uses a stand-in for the amsmath package'],
+      [4, 'The preview leaves out the amssymb package'],
+    ]);
+  });
+
+  it('turns \\RequirePackage into \\usepackage, which LaTeX.js knows, and drops the options comment', () => {
+    const src = doc('\\RequirePackage[hidelinks, % no boxes', '  final]{hyperref}', '\\RequirePackage{float}');
+    const { source, diagnostics } = adaptLatexSource(src);
+    expect(source).toBe(doc('\\usepackage[hidelinks, final]{hyperref}', '', ''));
+    expect(diagnostics.map((d) => [d.line, d.severity])).toEqual([[4, 'info']]);
+    expect(latexSourceToPreviewHtml(`${src}\n\\begin{document}Hi\\end{document}`).html).toContain('Hi');
+  });
+
+  it('notes a package each time it is loaded, but lists it once in the changes', () => {
+    const { changes, diagnostics } = adaptLatexSource(doc('\\usepackage{tikz}', '\\usepackage{tikz}'));
+    expect(diagnostics.map((d) => d.line)).toEqual([2, 3]);
+    expect(changes).toEqual(["Removed packages the preview can't load: tikz."]);
+  });
+
+  it('leaves alone packages in comments and verbatim text, and macros that only start like \\usepackage', () => {
+    const src = doc('% \\usepackage{tikz}', '\\begin{verbatim}', '\\usepackage{tikz}', '\\end{verbatim}', '\\usepackagex{tikz}');
+    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [], diagnostics: [] });
+  });
+
+  it('ignores empty entries in a package list', () => {
+    const { source, diagnostics } = adaptLatexSource(doc('\\usepackage{graphicx,,}'));
+    expect(source).toBe(doc('\\usepackage{graphicx,,}'));
+    expect(diagnostics).toEqual([]);
+  });
+});
+
 describe('adaptLatexSource rewrites', () => {
   it('strips each unsupported package and lists them in one note', () => {
     const { source, changes } = adaptLatexSource(
       doc('\\usepackage[margin=1in]{geometry}', '\\usepackage{float} % for [H]', '\\usepackage{amsmath}'),
     );
-    expect(source).toBe(doc('', '', '\\usepackage{amsmath}'));
-    expect(changes).toEqual(["Removed packages the preview can't load: geometry, float."]);
+    expect(source).toBe(doc('', ' % for [H]', ''));
+    expect(changes).toEqual(["Removed packages the preview can't load: geometry, float, amsmath."]);
   });
 
   it('strips fancyhdr and nomencl setup lines', () => {
@@ -178,8 +248,8 @@ describe('adaptLatexSource rewrites', () => {
   });
 
   it('makes no notes for a document that needs no changes', () => {
-    const src = doc('\\usepackage{amsmath}', '\\begin{document}', 'Hi.', '\\end{document}');
-    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [] });
+    const src = doc('\\usepackage{xcolor,graphicx}', '\\begin{document}', 'Hi.', '\\end{document}');
+    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [], diagnostics: [] });
   });
 });
 
@@ -200,7 +270,7 @@ describe('adaptLatexSource protected text', () => {
 
   it('keeps a trailing comment on a stripped package line from blocking the strip', () => {
     const { source } = adaptLatexSource(doc('\\usepackage{geometry} % margins {'));
-    expect(source).toBe(doc(''));
+    expect(source).toBe(doc(' % margins {'));
   });
 
   it('ignores braces inside comments when matching groups', () => {
@@ -363,6 +433,6 @@ describe('adaptLatexSource user-defined verbatim environments', () => {
       '\\verb|\\caption{x}|',
       '\\end{pycode}',
     );
-    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [] });
+    expect(adaptLatexSource(src)).toEqual({ source: src, changes: [], diagnostics: [] });
   });
 });

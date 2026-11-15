@@ -1,8 +1,8 @@
 
 # Deployment
 
-Frontend deployment (GitHub Pages)
-- Configure the repository Pages source to trigger via GitHub Actions.
+Frontend deployment
+- Production is moving from GitHub Pages to Coolify (issue #249, "Production on Coolify" below). Until the Coolify secrets are set, a release still deploys to GitHub Pages, so keep the repository Pages source on GitHub Actions until then.
 - Set Actions secrets/variables as needed for runtime configuration, for example:
   - `VITE_P2P_APP_ID`
   - `VITE_P2P_RENDEZVOUS` (comma-separated WebTorrent tracker URLs, see below)
@@ -10,14 +10,17 @@ Frontend deployment (GitHub Pages)
   - `VITE_TURN_URL` (optional)
   - `VITE_TURN_USERNAME` (optional)
   - `VITE_TURN_CREDENTIAL` (optional; public once built, see "TURN credentials are public" below)
-  - `VITE_GOOGLE_CLIENT_ID`
+  - `VITE_GOOGLE_CLIENT_ID` (without it, Google Drive shows as **Not configured** in Accounts and File > Open Project only offers this browser)
   - `VITE_GOOGLE_API_KEY`
   - `VITE_GOOGLE_APP_ID` (Google Cloud project number; needed so the Picker grants `drive.file` access to files the app didn't create)
   - `VITE_DOCS_BASE_URL` (optional; leave it unset to use the same-origin `docs/` path)
   - `VITE_DISABLE_CSP` (optional; `1` ships without the Content Security Policy, see "Turning the CSP off" below)
-  - `VITE_DEPLOY_ENV` (set by the deploy workflows: `production` or `staging`, see "Staging and production" below)
-- The deploy workflows (`release.yml` for production, `staging.yml` for staging) read `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` and `VITE_DISABLE_CSP` from variables (the repository, or the **Production** or **staging** environment). Both build with the `.github/actions/build-site` action.
-  The rendezvous and TURN values aren't passed to the build yet, so production uses the defaults in `bootstrapConfig.ts`.
+  - `VITE_COMPILE_PDF` (optional; `1` turns on View > Compile PDF once the TeX engine files are hosted under `tex/`, see "Compile PDF engine" below. Off, the command says it isn't available yet)
+  - `VITE_DEPLOY_ENV` (`production` from `release.yml` or the production Coolify app, `staging` from the staging Dockerfile, see "Staging and production" below)
+- `release.yml` (production) reads `VITE_GOOGLE_CLIENT_ID` and `VITE_GOOGLE_API_KEY` from secrets, and `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP` and `VITE_COMPILE_PDF` from variables (the repository, or the **Production** environment). It builds with the `.github/actions/build-site` action, for GitHub Pages only. On Coolify the production app has the same values as build variables (see "Production on Coolify" below).
+  The rendezvous and TURN values aren't passed to the production build yet, so production uses the defaults in `bootstrapConfig.ts`.
+  Staging builds in Coolify from the repo-root `Dockerfile` instead, and takes every `VITE_*` value above, rendezvous and TURN included, as a build variable (see "Staging on Coolify" below).
+- Storage providers are listed once in `frontend/src/storage/providers/registry.ts` (#200): each has an id, name, icon, capabilities, and a `configured()` check against its build variables. The Accounts panel, File > Open Project and the status bar read the registry. A provider whose keys are missing stays listed as **Not configured**, so a deployment never has to hide it. Adding a provider (#202, #203, #204) means a registry entry plus its own build variables and app registration, documented here. Tokens stay in the browser tab that signed in and are never sent to peers.
 - The frontend bundle is pure TypeScript/Vite (no Rust wasm); LaTeX preview uses LaTeX.js in the browser.
 - The UI is Basecoat (shadcn-style components for plain HTML) on Tailwind CSS v4, with Lucide icons. Tailwind runs as a Vite plugin, so there's no extra build step.
 - The app shell (menus, dialogs, command palette) is Basecoat markup in `frontend/index.html`. The TypeScript under `frontend/src/ui/` only attaches behavior to it.
@@ -33,75 +36,147 @@ Frontend deployment (GitHub Pages)
     The script finds these from `dist/index.html` and the Vite manifest (`dist/.vite/manifest.json`, turned on with `build.manifest` in `vite.config.ts`).
     The budget is **225 kB gzipped**, and going over it fails the build.
     That's the initial load after the trim pass (208.6 kB) plus about 15 kB of headroom, under the 250 kB ceiling below, so the bundle doesn't creep back up unnoticed.
-  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js` or `pdf.worker.min-*.js`. They load on demand and in parallel from the GitHub Pages CDN, so there's no total cap.
+  - **Lazy chunks**: dynamic imports and workers, like `compile.worker-*.js` or `pdf.worker.min-*.js`. They load on demand and in parallel from the production host, so there's no total cap.
     Each one warns above 1 MB gzipped and fails the build above 5 MB.
     The build also fails if a lazy chunk ended up in the initial load, either because a module that's imported dynamically is also imported statically, or because initial code statically imports a chunk outside the initial graph.
   - Where the 250 kB ceiling comes from: the goal is an editor you can type in within a few hundred milliseconds.
     Assume 10 Mbps (typical broadband or fast 4G, about 1.25 MB/s) and about 300 ms in total.
     Take off about 100 ms for latency and for parsing and running the script, which leaves about 200 ms of transfer, or 250 kB at 1.25 MB/s.
-    GitHub Pages serves gzip, so gzip size is what goes over the wire.
+    GitHub Pages and the Caddy proxy in front of Coolify serve gzip, so gzip size is what goes over the wire.
   - What loads later: sharing (Trystero and the P2P transport) loads on the first join, which is right away for a `?room=` guest or a host that had shared, and when the pointer or focus reaches Share.
-    The lint gutter loads just after the editor shows. The command palette, Settings and its keybind editor, About, the Open, Upload and conflict dialogs and the tour load when the page is idle, or when the pointer or focus reaches the menus or toolbar.
+    The lint gutter and autocompletion (`@codemirror/autocomplete`, with closing brackets) load just after the editor shows, and the command and environment list loads the first time it completes something. The command palette, Settings and its keybind editor, About, the Open, Upload and conflict dialogs and the tour load when the page is idle, or when the pointer or focus reaches the menus or toolbar.
     Export, the changelog, Add Files from Drive, the Google Picker, conflict resolution and the zip code load on first use.
+    Issue #231 moved more out, bringing the initial load from 225.0 kB to 214.9 kB:
+    - The Google Drive provider (`googleDrive-*.js`, sign-in and the Drive API) sits behind `storage/providers/lazyGoogleDrive.ts`, which answers startup questions (signed in? which account?) from `sessionStorage` and loads the provider on the first call that talks to Google. It's preloaded when the page is idle, when the pointer reaches the menus or toolbar, and right away in a tab that's already signed in. If it can't load, Connect says so in the status and the other calls fail with a `StorageError`, like any Drive failure. The shared constants and the token reader are in `driveShared.ts`.
+    - The Share popover, the hover preview cards, the menus' icons (`commandIcons-*.js`), the confirm, prompt and notice dialogs, and the image and PDF viewer load when the page is idle or on intent (the pointer or focus reaching Share, the menus or the toolbar), and otherwise on first use. Until the icons arrive, each menu item keeps an icon-sized slot.
+    - The touch key bar loads only on a device with a coarse pointer.
+    - The CSS for the Share popover, hover cards, command palette, Settings, tour, touch key bar and Export dialog is imported by their modules, so it comes with them.
+    A lazy module shouldn't statically import a module from the initial load that isn't already shared (like `ui/editor.ts`): Rolldown then splits the shared graph (Yjs, CodeMirror) out of the entry into separate files, which compress worse and cost about 1.5 kB.
     The helpers are in `src/app/lazy.ts` and `src/app/lazyUi.ts`. Browsers keep a failed chunk failed until the page reloads, even once the network is back, so while `navigator.onLine` is false no chunk load is started at all (`whenOnline`, `lazyModule`): the app says you're offline and opens what was asked for on the `online` event.
     A chunk that fails while online is checked against `version.json`. If it names a newer build, the old chunk was removed by a deploy and the update prompt offers "Reload to update". If not, it's the network, and a notice says to check the connection and reload. Any other failure shows a "couldn't load" notice.
   - The check prints each file with an estimated load time at 10 Mbps and a 50 ms round trip. In CI, warnings and errors show up as annotations on the run.
   - To measure real time to interactive on a throttled connection, run `npm run test:load-time` from the repo root (see `docs/qa-runbook.md`). The build doesn't run it.
 - We only pull in the Basecoat components we use. `src/styles/basecoat-vega.css` is generated from Basecoat's Vega style. When you start using a new component, add it to `COMPONENTS` in `scripts/basecoat-subset.mjs` and the imports in `src/style.css`, then run `npm run basecoat:subset`. A test fails if the generated file is out of date.
-- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder: to staging on every push to the `staging` branch, to production on a release (see "Staging and production" below).
+- The deploy builds the Vite app into `frontend/dist`, runs MkDocs into `frontend/dist/docs`, and deploys that folder to GitHub Pages on a release. Staging, and production on Coolify, run the same two builds inside the `Dockerfile` on every push to the `staging` branch (see "Staging and production" below).
 - Documentation is served at **`/docs/`** (for example `https://latex.prestonhager.com/docs/` when using a custom domain, or `https://<owner>.github.io/<repo>/docs/` on the default GitHub Pages host).
 - **MkDocs `site_url`:** `mkdocs.yml` uses a plain string (for local `mkdocs serve`). In CI, **`DOCS_SITE_URL`** (repository, or **Production** or **staging** environment) is resolved and **`scripts/set_mkdocs_site_url.py`** rewrites `site_url` before `mkdocs build`. Use the full public docs URL including path and trailing slash (e.g. `https://latex.prestonhager.com/docs/`). If unset, CI falls back to the default `github.io` project URL under `/docs/` (for staging, the staging site's URL under `/docs/`). Align with the Pages site URL after deploy (`environment.url` is the **site root**; MkDocs needs the **docs** subtree URL).
 
 Staging and production
-- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site (`.github/workflows/staging.yml`). A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. How to cut one is in [`docs/versioning.md`](versioning.md).
-- **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the staging deploy and tests. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
+- **The `staging` branch is staging. Releases are production.** PRs merge into the long-lived `staging` branch, and every push to it deploys to the staging site on Coolify. A release merges `staging` into `main` through a `release/vX.Y.Z` PR, and production (https://latex.prestonhager.com/) only deploys from that `vX.Y.Z` tag on `main` (`.github/workflows/release.yml`), so every production deploy is a version. The production Coolify app has auto-deploy off; only the release starts it. How to cut one is in [`docs/versioning.md`](versioning.md).
+- **`main` flows back into `staging`.** After every push to `main` (a release, or a rare hotfix PR into `main`), `.github/workflows/sync-staging.yml` merges `main` into `staging`, then starts the tests. Coolify picks up that push like any other. If the merge conflicts, it opens a PR from `main` into `staging` instead. Never delete the `staging` branch: protect it in **Settings > Branches** so it can't be deleted or force-pushed.
 - **Staging is on its own origin.** If it were a path on the production site, it would share localStorage and IndexedDB with production, so a staging build's migration could damage real users' projects, and Google OAuth only allows exact origins anyway.
-  GitHub Pages has one site per repo, so staging lives in a second repo, `PrestonHager/LaTeXCollaborativeEditor-staging`, served at `https://staging.latex.prestonhager.com/`.
-  `staging.yml` builds the site and force-pushes it as one commit to that repo's `gh-pages` branch, with a `.nojekyll` file and a `CNAME` for the custom domain. Pages in the staging repo publishes it a minute or two later.
-- **Skipped until it's set up.** Without the `STAGING_REPO` variable and the `STAGING_DEPLOY_TOKEN` secret, the Deploy staging run passes with a notice saying staging was skipped, so forks and a fresh setup don't fail on every push.
+  Staging is served at `https://staging.latex.apps.prestonhager.com/` from Coolify (https://coolify.prestonhager.com/). Production is a separate app in the same Coolify project's `production` environment (see "Production on Coolify"), on its own origin, and shares nothing with staging.
 - **Its own peers.** Peers only meet peers with the same `VITE_P2P_APP_ID`. A staging build always uses an app id with `staging` in it: the staging value as is if it already has one, else that value (or the default) plus `-staging`. So staging peers never meet production peers, even if staging inherits production's app id from a repository variable.
-- **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. The deploy workflows set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
+- **`VITE_DEPLOY_ENV`** says where a build is going: `production`, `staging` or `dev`. `release.yml` and the staging `Dockerfile` set it. Left unset, `npm run dev` is `dev` and `npm run build` is `production`, and any other value fails the build.
   It goes in `dist/version.json` as `env`. A staging build also shows a small **Staging** badge next to the project name, adds `<meta name="robots" content="noindex">` to every page, and ships a `robots.txt` that blocks every crawler (that covers the docs too). Production and dev builds have none of these.
   It's all done at build time by `deployEnvPlugin` in `frontend/scripts/build-info.mjs`, which replaces the `<!-- deploy-env-badge -->` comment in `index.html`. No app code reads it.
-- **Environments.** The production build runs in the **Production** environment, and its deploy in **github-pages**. The staging build runs in the **staging** environment. Each one's variables and secrets override the repository's, so put values that differ in the environment:
 
-  | Name | Kind | Staging | Production |
-  | --- | --- | --- | --- |
-  | `STAGING_REPO` | variable | `PrestonHager/LaTeXCollaborativeEditor-staging` | (not used) |
-  | `STAGING_DOMAIN` | variable | `staging.latex.prestonhager.com` (leave unset to use `https://<owner>.github.io/<repo>/`) | (not used) |
-  | `STAGING_DEPLOY_TOKEN` | secret | Fine-grained token, see below | (not used) |
-  | `VITE_P2P_APP_ID` | variable | Something with `staging` in it, like `latex-collaborative-editor-staging` | As today |
-  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY` | secrets | The same client ID and key as production | As today |
-  | `VITE_GOOGLE_APP_ID` | variable | The same project number | As today |
-  | `DOCS_SITE_URL` | variable | `https://staging.latex.prestonhager.com/docs/` | `https://latex.prestonhager.com/docs/` |
-  | `VITE_DOCS_BASE_URL` | variable | Unset (same-origin `docs/`), or the staging docs URL | As today |
-  | `VITE_STUN_URL` | variable | As production, unless staging should test another | As today |
+Staging on Coolify
+- Everything staging lives in the Coolify project **LaTeX Collaborative Editor**, in its `staging` environment, on the `mars` server.
+  Our own tooling for testing (WebTorrent trackers, TURN or forwarding servers, and so on) goes in that environment too, as separate resources.
+  Never point production at anything in it. Production lives in the project's `production` environment (see "Production on Coolify").
+- The site itself is the `staging-latex` application, built from this repo's `staging` branch (as a public repository) with the **Dockerfile** build pack.
+  The `Dockerfile` builds the app (with `VITE_DEPLOY_ENV=staging`), builds the docs with MkDocs, and serves both from nginx on port 80 (`deploy/nginx.conf`).
+  A GitHub webhook on this repo (Coolify's **Webhooks > Manual Git webhooks > GitHub** URL and secret, push events only) tells Coolify about each push, so there's no deploy workflow for staging.
+- Like the other apps on `mars`, its domain is `http://` in Coolify, and the Caddy proxy in front of it serves HTTPS for `*.apps.prestonhager.com`.
+- There's no `.git` in the build, so the commit in `version.json` comes from Coolify's `SOURCE_COMMIT` build arg. Keep **Advanced > Source commit availability** on **Available during build**, or the version shows `dev`.
+- Build variables (Application > Environment Variables, **Buildtime** on, **Runtime** off):
 
+  | Name | Value |
+  | --- | --- |
+  | `VITE_P2P_APP_ID` | Something with `staging` in it, like `latex-collaborative-editor-staging` (the build adds `-staging` if it's missing) |
+  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY`, `VITE_GOOGLE_APP_ID` | The same as production |
+  | `DOCS_SITE_URL` | `https://staging.latex.apps.prestonhager.com/docs/` |
+  | `VITE_P2P_RENDEZVOUS` | Optional. Our own trackers in the staging project, comma separated |
+  | `VITE_STUN_URL`, `VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL` | Optional. Our own STUN/TURN in the staging project |
+  | `VITE_DOCS_BASE_URL`, `VITE_DISABLE_CSP`, `VITE_COMPILE_PDF` | Optional, as in production |
+
+  Empty values are dropped before the build, so the defaults in `bootstrapConfig.ts` still apply.
 - **One-time setup** (a maintainer, once):
-  1. Create the public repo `PrestonHager/LaTeXCollaborativeEditor-staging`, with nothing in it. Pages on a free plan needs it public.
-  2. Make a fine-grained personal access token: **Settings > Developer settings > Fine-grained tokens**, resource owner PrestonHager, **Only select repositories**: the staging repo, **Repository permissions > Contents: Read and write**, and nothing else. Give it an expiry and a calendar reminder to renew it.
-  3. In this repo, **Settings > Environments > New environment** `staging`. Add the secret `STAGING_DEPLOY_TOKEN` (the token) and the variables in the table above. Restrict its deployment branches to `staging`.
-  4. Run **Deploy staging** (Actions, Run workflow, on `staging`) once, so the staging repo gets a `gh-pages` branch.
-  5. In the staging repo, **Settings > Pages**: Source **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`. Set the custom domain to `staging.latex.prestonhager.com` and tick **Enforce HTTPS** once the certificate is ready.
-  6. DNS: add `CNAME staging.latex.prestonhager.com -> prestonhager.github.io`. Verifying the domain for the account (**Settings > Pages > Verified domains**) keeps anyone else from claiming it.
-  7. Google Cloud console, the production OAuth client: add `https://staging.latex.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
-  8. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
-  9. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
-  10. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
-- **Why production deploys from `main`, not from the tag.** The github-pages environment only lets `main` deploy, and that's the setting most likely to be left as it is. A tag pushed with `GITHUB_TOKEN` doesn't start other workflows either.
+  1. In Coolify, make the project **LaTeX Collaborative Editor** with a `staging` environment.
+  2. Add a **Public Git Repository** application on `mars`: `https://github.com/PrestonHager/LaTeXCollaborativeEditor/tree/staging`, build pack **Dockerfile**, ports exposes `80`, domain `http://staging.latex.apps.prestonhager.com` (Noindex). The `*.apps` wildcard DNS already points at the proxy, so there's no DNS to add.
+  3. Add the build variables above, and set **Source commit availability** to **Available during build**.
+  4. In Coolify's **Webhooks**, generate the GitHub webhook secret. In this repo, **Settings > Webhooks > Add webhook** with that URL and secret, content type `application/json`, push events only. Then deploy once by hand.
+  5. Google Cloud console, the production OAuth client: add `https://staging.latex.apps.prestonhager.com` to **Authorized JavaScript origins**. If the API key has website restrictions, add `https://staging.latex.apps.prestonhager.com/*` there too. The Picker and Drive sign-in fail on staging until both are in.
+  6. In this repo, **Settings > Actions > General > Workflow permissions**: tick **Allow GitHub Actions to create and approve pull requests**, so Prepare release can open the release PR.
+  7. **Settings > Environments > github-pages > Deployment branches and tags**: it allows `main` by default, and the release runs on `main` (see below), so nothing has to change. To also deploy from a tag you push by hand, add a tag rule `v*`. Check the **Production** environment has no branch rule that leaves `main` out.
+  8. If a tag ruleset protects `v*` tags, let GitHub Actions bypass it, or tag-release.yml can't create the tag.
+- **Why production deploys from `main`, not from the tag.** Coolify's production app builds `main`, and the github-pages environment only lets `main` deploy, and that's the setting most likely to be left as it is. A tag pushed with `GITHUB_TOKEN` doesn't start other workflows either.
   So when a release PR merges, `tag-release.yml` (a push to `main`) tags the merge commit and then calls `release.yml` as a reusable workflow. That run's ref is still `main`, so the deploy passes the default rule, and the code it builds is the tag's.
-  Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 9's `v*` rule is in.
+  Running **Release** by hand on `main` with a tag works the same way, and is how to redeploy or retry a release. A tag pushed by hand runs `release.yml` on the tag, which only deploys once step 7's `v*` rule is in.
 - **Transition.** Once this setup merges, production stops updating from `main`, and stays on the last build from `main` until the first release. The first one is **v0.2.0**: the Trystero protocol break in Unreleased is a breaking change, which before 1.0 is a minor bump (`docs/versioning.md`). Cut it with Prepare release, version `0.2.0`.
+
+Compile PDF engine on S3 storage
+- Issue #244. The TeX engine and package bundles (50 to 400 MB per engine) are too big to bake into every image, so on Coolify they live in an S3 bucket on `mars`: the `tex-assets` service, a single SeaweedFS server (`chrislusf/seaweedfs`), in the project's `production` environment and shared by staging and production. Any S3-compatible store works the same; we use SeaweedFS because MinIO no longer publishes free images, and the homelab already runs it. The app's nginx proxies `/tex/` to it over Coolify's internal network. The store has no public domain, and the browser only ever sees our own origin, so the manifest's same-origin check, `connect-src 'self'` and the glue module's `script-src 'self'` all hold with no CSP change.
+- **The store.** One bucket, `tex-assets`, created on start-up. Anonymous requests may only read objects in it (`Read:tex-assets`: no listing, no writes, no other buckets). An `uploader` identity may read, write and list `tex-assets` only; its access key and secret are Coolify's generated `SERVICE_USER_S3UPLOADER` and `SERVICE_PASSWORD_64_S3UPLOADER` on the service. Data is in the `tex-assets-data` volume.
+- **The switch.** The image's start-up script `deploy/tex-assets.sh` (installed as `/docker-entrypoint.d/40-tex-assets.sh`) reads one runtime variable:
+  - `TEX_ASSETS_UPSTREAM` unset or empty: `/tex/` is the image's own `tex/` folder (`deploy/tex-assets.local.conf`), like static hosting.
+  - `TEX_ASSETS_UPSTREAM=http://<store container>:8333/tex-assets[/<prefix>]`: `/tex/` is a caching proxy to that bucket (`deploy/tex-assets.proxy.conf.template`). It's a normal (runtime) environment variable in Coolify, not a build variable, so changing it only needs a restart.
+  - A malformed value logs a `tex-assets: WARNING` line and falls back to the image's folder, so a typo can't take the site down.
+  - Optional: `TEX_ASSETS_CACHE_MAX` (default `20g`) caps nginx's disk cache, and `TEX_ASSETS_RESOLVER` (default `127.0.0.11`, Docker's DNS) resolves the store's host name.
+- **Caching, outermost first.**
+  1. The browser keeps each file in its Cache API cache, keyed by SHA-256 (see "Compile PDF engine" above), and the HTTP response is `immutable` for a year, so a returning user downloads nothing.
+  2. nginx keeps a disk cache (`/var/cache/nginx/tex-assets`, entries kept 90 days), so each file leaves the store once per container. `proxy_cache_lock` makes the first users to ask for a file share one fetch, and when the store is down, files and the manifest nginx already has are still served (`proxy_cache_use_stale`). A file nginx never fetched fails with 504, and only Compile PDF notices: the upstream is looked up per request, so nginx starts and the rest of the site serves even with the store down. The `X-Cache-Status` header says `HIT` or `MISS`.
+  3. `manifest.json` is `no-cache` for browsers and kept by nginx for 60 seconds, so a new upload goes live within a minute.
+  4. Optional: a CDN in front of the Caddy proxy (Cloudflare's free plan caches files up to 512 MB) would keep the downloads off the homelab's upload link. The headers above already allow it, and nothing in the app needs to change.
+- **What's proxied.** Only `GET` (and `HEAD`), only plain file paths (letters, digits, `.`, `_`, `-`, no `..`, no empty segments). The query string is dropped, and nothing from the request (cookies, `Authorization`) goes to the store. `/tex/` itself and anything else under it is a 404, so the bucket can't be listed through the site. The store's own headers (`X-Amz-*`, `Seaweed-X-Amz-*`, `Server`) are stripped.
+- **Uploading a build.** Put the versioned files under their content-hashed paths first, then `manifest.json` last, so the manifest never points at a file that isn't there yet, with any S3 client and the uploader's keys (for example `aws s3 cp --endpoint-url http://<store>:8333`). The store is only on the internal network, so uploads run on `mars` (or a CI job gets a separate, authenticated route later, #243). Old versions can stay; browsers and nginx drop them once the manifest stops listing them. Then turn on `VITE_COMPILE_PDF=1` as a build variable.
+- **Setting it up again from scratch.** In the project's `production` environment, add a Docker Compose service named `tex-assets` from the compose file in issue #244 (SeaweedFS with the identities above), with no domain and **Connect to predefined network** on, and deploy it. On the staging and production apps, set `TEX_ASSETS_UPSTREAM` to `http://<the service's container name>:8333/tex-assets` and restart. The log line `tex-assets: proxying tex/ to ...` confirms it.
+
+Production on Coolify
+- Issue #249 moves production (https://latex.prestonhager.com/) from GitHub Pages to Coolify, next to staging. Same domain, so users, the Google OAuth origin and everyone's local projects (localStorage and IndexedDB are per origin) stay as they are.
+- **The app.** A `production-latex` application in the `production` environment of the Coolify project **LaTeX Collaborative Editor**, on `mars`. It builds the same repo-root `Dockerfile` as staging, from the `main` branch, with `VITE_DEPLOY_ENV=production`, and nginx serves it on port 80 (`deploy/nginx.conf`, which sends `version.json`, `index.html` and `CHANGELOG.md` uncached).
+  **Auto-deploy is off**, and there's no webhook for it. Production only changes when `release.yml` asks for a deploy, so it still only ships releases. Nothing in it points at the `staging` environment.
+- **How a release deploys it.** `.github/workflows/release.yml` checks and tests the tag as before. When the secrets below are all set in the **Production** environment, the `deploy-coolify` job then:
+  1. refuses to deploy unless `main`'s head is the tagged commit, since Coolify builds `main`'s head, not a tag;
+  2. calls Coolify's API, `POST $COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_PRODUCTION_APP_UUID&force=false` with `Authorization: Bearer $COOLIFY_API_TOKEN`, and reads the `deployment_uuid` it queued;
+  3. polls `GET /api/v1/deployments/{uuid}` and the live `version.json` every 15 seconds, fails at once if the deployment ends `failed` or cancelled, and passes when `version.json` shows the release's version and commit with `env` `production`. It fails after 30 minutes otherwise. A build with any other `env` fails it too, since that means `VITE_DEPLOY_ENV` isn't set in Coolify.
+  The token reaches curl on stdin, never on a command line or in the log, and the job only has `contents: read`.
+  If any of the three secrets is missing, the release deploys to GitHub Pages as before (it warns if only some are set). Once production is on Coolify, a follow-up removes the Pages path.
+- **Secrets** (**Settings > Environments > Production > Environment secrets**):
+
+  | Name | Value |
+  | --- | --- |
+  | `COOLIFY_URL` | `https://coolify.prestonhager.com` (must be `https://`) |
+  | `COOLIFY_API_TOKEN` | A Coolify API token with the `deploy` and `read` permissions, nothing more |
+  | `COOLIFY_PRODUCTION_APP_UUID` | The production application's UUID, from its URL in Coolify |
+
+  The optional **Production** variable `PRODUCTION_URL` changes the site the job polls (default `https://latex.prestonhager.com/`).
+- **Build variables** (Application > Environment Variables, **Buildtime** on, **Runtime** off), the values `release.yml` takes from the Production environment today:
+
+  | Name | Value |
+  | --- | --- |
+  | `VITE_DEPLOY_ENV` | `production` (the `Dockerfile` defaults to `staging`, and the deploy check fails without it) |
+  | `VITE_P2P_APP_ID`, `VITE_STUN_URL`, `VITE_GOOGLE_APP_ID`, `VITE_DOCS_BASE_URL` | The Production environment's variables |
+  | `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_API_KEY` | The Production environment's secrets |
+  | `DOCS_SITE_URL` | `https://latex.prestonhager.com/docs/` |
+  | `VITE_DISABLE_CSP` | Only to roll back the CSP (see "Turning the CSP off") |
+  | `VITE_COMPILE_PDF` | `1` once the TeX engine files are hosted (see "Compile PDF engine"); leave it unset until then |
+
+  Don't set the staging values here: production's `VITE_P2P_APP_ID` must not have `staging` in it, or production peers stop meeting the desktop app's. Keep **Advanced > Source commit availability** on **Available during build**, or `version.json` shows commit `dev` and the deploy check never passes.
+- **One-time setup** (a maintainer, once; nothing here can do it):
+  1. In Coolify, in the project's `production` environment, add a **Public Git Repository** application on `mars`: `https://github.com/PrestonHager/LaTeXCollaborativeEditor/tree/main`, build pack **Dockerfile**, ports exposes `80`, domain `http://latex.prestonhager.com` (the Caddy proxy in front of `mars` serves HTTPS, as for the other apps). Turn **Auto Deploy** off, and don't add a webhook.
+  2. Add the build variables above and set **Source commit availability** to **Available during build**. Deploy it once by hand and check it on the server before DNS moves.
+  3. Add the Caddy site for `latex.prestonhager.com` on the proxy (it isn't under the `*.apps` wildcard), pointing at the app, with its own certificate.
+  4. DNS: point `latex.prestonhager.com` at the Caddy proxy instead of GitHub Pages. Once the site answers from Coolify, remove the custom domain in **Settings > Pages** (or unpublish the Pages site), so Pages stops claiming it.
+  5. In Coolify, **Keys & Tokens > API tokens**: create a token with only `deploy` and `read`. Add it and the other two secrets to the **Production** environment here. Do this after DNS moves: from then on releases go to Coolify, and the job checks the live site at `latex.prestonhager.com`.
+  6. Google Cloud console: nothing changes. The origin `https://latex.prestonhager.com` is already in the OAuth client and the API key's website restrictions.
+  7. Run Actions > **Release** > Run workflow on `main` with the current tag. It deploys to Coolify and waits for the live `version.json` (if `main` has moved past that tag, cut the next release instead).
+- **Redeploying and rolling back.** Running **Release** on `main` with the tag at `main`'s head redeploys it, for example after changing a build variable. An older tag can't be redeployed this way, since Coolify always builds `main`. To go back, use the application's **Deployments** list in Coolify to redeploy an earlier image (rollback), then release a fix as the next patch.
 
 Desktop app (experimental, issue #122)
 - The plan, the webview and WebRTC findings, Google sign-in, signing and the updater are in [`docs/desktop.md`](desktop.md).
 - **What it is.** `desktop/` is a Tauri 2 shell that bundles `frontend/dist`, the same static build the website deploys, and loads it from inside the app, never from a URL. The website is unchanged and stays the main product.
-- **Building it.** `npm ci` in `frontend/` and `desktop/`, then `npm run build` in `desktop/`. Tauri runs the frontend build first (`beforeBuildCommand`), so the bundle size check still applies. It also needs Rust 1.90 or newer and, on Linux, the WebKitGTK 4.1 development packages listed in `docs/desktop.md`. `npm run check` in `desktop/` checks the version, CSP and permission settings.
-- **CI.** `.github/workflows/desktop.yml` builds **unsigned** Linux, Windows and macOS installers as workflow artifacts, kept for 14 days. Start it with Actions > **Desktop app** > Run workflow (optionally with a tag), or push a `vX.Y.Z` tag by hand. Releases tagged by `tag-release.yml` don't start it yet, so run it by hand after a release. Nothing is attached to the GitHub release or deployed.
-- **Settings it uses.** Its jobs run in the **Production** environment and read `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL` from there, so the app's peers meet the website's. It builds with `VITE_DEPLOY_ENV=production`. The Google variables are left out on purpose: Google blocks sign-in inside an app's webview, so Drive shows as not set up in the app until the desktop sign-in flow lands.
+- **Building it.** `npm ci` in `frontend/` and `desktop/`, then `npm run build` in `desktop/`. Tauri runs the frontend build first (`beforeBuildCommand`, `npm run build:desktop`), so the bundle size check still applies. That build is the web build plus LaTeX.js's styles and fonts in `dist/latexjs/`, so the app's preview works offline; the website's build doesn't include them and keeps using jsDelivr. It also needs Rust 1.90 or newer and, on Linux, the WebKitGTK 4.1 development packages listed in `docs/desktop.md`. `npm run check` in `desktop/` checks the version, CSP and permission settings.
+- **CI and releases (#179).** `release.yml` calls `.github/workflows/desktop.yml` for every release, after it creates the GitHub release. It builds Linux, Windows and macOS installers and attaches them to the release with their updater `.sig` files, `SHA256SUMS.txt` and `latest.json`, which installed apps read from `https://github.com/PrestonHager/LaTeXCollaborativeEditor/releases/latest/download/latest.json` (pre-releases are skipped). The website deploy doesn't wait on it. Actions > **Desktop app** > Run workflow still builds workflow artifacts only (14 days), with no environment, so it works from `staging` or any branch even though Production only allows `main` and tags; those builds have no Production variables or secrets. Pushing a `vX.Y.Z` tag no longer starts it on its own; release.yml does.
+- **Updater key (maintainer, once).** Make a Tauri updater key pair with `npx tauri signer generate` in `desktop/`. Save the private key as the secret `TAURI_SIGNING_PRIVATE_KEY`, its password as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and the public key as the **variable** `TAURI_UPDATER_PUBKEY`, in the Production environment. Back the private key up outside GitHub: without it, installed apps can't update. Without these, releases still get the installers and checksums, but no `latest.json`, and the apps have no updater. Steps: `docs/desktop.md`, "Updates".
+- **Settings it uses.** Its jobs run in the **Production** environment and read `VITE_P2P_APP_ID`, `VITE_STUN_URL` and `VITE_DOCS_BASE_URL` from there, so the app's peers meet the website's. It builds with `VITE_DEPLOY_ENV=production`. The web's `VITE_GOOGLE_*` variables are left out on purpose: Google blocks sign-in inside an app's webview.
+- **Google Drive in the app (#177).** The app signs in through the system browser with a separate **Desktop app** OAuth client in the same Google Cloud project. Save its client ID and secret as the Actions secrets `GOOGLE_DESKTOP_CLIENT_ID` and `GOOGLE_DESKTOP_CLIENT_SECRET`; `desktop.yml` passes them to the Rust build only, never to the frontend build. Without them the app still builds and shows Drive as **Not configured**. For a local build, set the same two variables in the shell. The refresh token is kept in the OS keychain, the page only gets access tokens, and the app lists its Drive projects instead of using the Picker, so it needs no API key. Steps: `docs/desktop.md`, "Google sign-in".
 - **Storage.** The app keeps its own IndexedDB and localStorage, separate from any browser. They're tied to the bundle identifier and, on Windows, to `useHttpsScheme`. Never change either in `tauri.conf.json`: that would lose every local project.
-- **Known gap.** On Linux, Ubuntu's WebKitGTK has no WebRTC, so the app can't share a room there yet (`docs/desktop.md`, "Linux: WebKitGTK").
-- **Signing (maintainer, later):** Apple Developer ID and notarization secrets, a Windows code-signing certificate or Azure Trusted Signing, and a Tauri updater key. The secret names and steps are in `docs/desktop.md`, "Releases and signing".
+- **Local folders (#178).** The app can also open a folder on the computer as a project, or save to one (File > Open Project > Folder on this computer, and Save to a Folder). It needs no build variable or setup. The Rust side adds `tauri-plugin-dialog`, `tauri-plugin-fs` (with `watch`) and `tauri-plugin-persisted-scope`; the frontend's lazy folder chunk uses `@tauri-apps/plugin-fs` and `@tauri-apps/plugin-dialog`, which the website build includes as unused lazy chunks only. The app keeps the folders it may reach in `.persisted-scope` in its data folder, the project names and main files in `localStorage` (`latex_editor_folder_projects`), and the open folder in the session. Permissions and behavior: `docs/desktop.md`, "Storage: local folders".
+- **Local TeX Live (#264).** The app can compile with a TeX Live installed on the computer, once the person turns it on with Set Up Local TeX. It needs no build variable; the people using it install TeX Live themselves. Limits and guarantees: `docs/desktop.md`, "Local TeX Live".
+- **WebRTC on Linux (#176).** Ubuntu's WebKitGTK has no WebRTC, so on Linux the app runs its peer connections in the Rust shell (`webrtc` crate) behind Trystero's `rtcPolyfill`. It needs no setup, server or build variable, and it uses the same trackers, STUN and TURN settings as the website. The desktop workflow runs `cargo test` on Linux, which connects two native peers; `desktop/scripts/rtc-interop.mjs` checks the Rust side against Chromium by hand (`docs/desktop.md`, "WebRTC in the shell").
+- **Code signing (maintainer, later):** Apple Developer ID and notarization secrets, and a Windows code-signing certificate or Azure Trusted Signing. The secret names and steps are in `docs/desktop.md`, "Releases and signing".
 
 Local development
 - The dev server always runs on `http://localhost:5173`. It won't pick another port if that one is taken, since Google OAuth only allows exact origins.
@@ -129,14 +204,27 @@ Runtime architecture (summary)
 - The compile runs in a module worker, built to its own `dist/assets/compile.worker-*.js` file.
   It's a plain static file, so static hosting still works. It's a lazy chunk, so it has the per-chunk limit but doesn't count toward the initial-load budget.
 - PDF figures in the preview are drawn with pdf.js (`pdfjs-dist`), which loads only when a document uses one. Its code is the lazy `dist/assets/pdfRender-*.js` chunk, and its own module worker is bundled to `dist/assets/pdf.worker.min-*.js`.
-  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so the CSP still needs no `'wasm-unsafe-eval'`. Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
+  Both come from our own origin, not a CDN, so CSP `worker-src 'self'` and `script-src 'self'` cover them, and static hosting still works. pdf.js's WebAssembly decoders are turned off (`useWasm: false`), so pdf.js doesn't depend on `'wasm-unsafe-eval'` (which the policy now has for Compile PDF, see Content Security Policy below). Drawn pages reach the preview as `data:` PNGs, which `img-src data:` allows.
+- Compile PDF engine (issue #241, see `docs/wasm-tex-engine.md`): the worker is `src/compile/pdf/texEngine.worker.ts`, its own lazy chunk apart from the LaTeX.js compile worker, started only by the first Compile PDF through `texEngineClient.ts`. It never runs on page load.
+  - **Assets** live on our own origin under `<base>/tex/`: a `manifest.json` (`src/compile/pdf/texAssetManifest.ts`) lists a `version`, the engine `glue` module, and each file's `name`, `path`, `sha256` and `size`, plus which files each engine (`pdflatex`, `xelatex`, `lualatex`) needs. Paths resolve against the manifest, and any that leave our origin make the whole manifest invalid, so nothing is fetched from a TeX Live server or CDN. Files are at most 100 MB each (the GitHub Pages limit).
+  - **No assets yet is a normal state.** Until the asset-hosting issue publishes them, `tex/manifest.json` is a 404 and Compile PDF says it isn't available on this site. Nothing else in a deploy changes. A host that answers unknown paths with `index.html` (an HTML response) counts the same, and the staging nginx (`deploy/nginx.conf`) returns a real 404 under `/tex/`.
+  - **Where they're hosted (issue #244).** On Coolify, the files live in an S3 bucket (SeaweedFS), and the app's own nginx serves them under `/tex/`, so they stay on our origin (see "Compile PDF engine on S3 storage" below). Static hosts (GitHub Pages) publish them in the site's `tex/` folder instead. Either way, every file except `manifest.json` is under a versioned, content-hashed path and is sent with `Cache-Control: public, max-age=31536000, immutable`, and `manifest.json` with `no-cache`.
+  - **Cache:** the files go in the Cache API cache `tex-assets-v1`, keyed by SHA-256 (under a synthetic `/__tex-asset/<sha256>` URL that's never fetched). Each download is checked against its hash before it's stored. After the first download the app asks for `navigator.storage.persist()`. Entries the current manifest doesn't list, and caches in older formats (`tex-assets-*`), are deleted after a compile loads the engine. Settings shows how much is stored, with Remove, once anything is.
+  - **The glue module** is imported from its own URL (`script-src 'self'`; never a `blob:` URL). It exports `createTexEngine()`, returning the small `TexEngineBackend` interface in `src/compile/pdf/engine.ts` (load assets, write files, run a pass, read the PDF and log). Swapping BusyTeX for another engine means shipping another glue module and manifest.
+  - **The command** (issue #242): View > Compile PDF (Ctrl+Shift+Enter) loads `app/compilePdf.ts`, `ui/compilePdfDialog.ts` and the worker client as lazy chunks (`compilePdf-*.js`, about 5 kB gzipped, and `texEngine.worker-*.js`). With `VITE_COMPILE_PDF` unset it loads nothing and shows a notice. pdf.js (`pdfRender-*.js`) loads only to draw the compiled PDF's pages. Devices that report under 2 GB in `navigator.deviceMemory` are refused, under 4 GB get a warning, and out-of-memory errors show a plain message.
+  - The compiled PDF stays in the tab's memory for the PDF view and File > Export (**PDF (Compile PDF)**). It isn't stored or sent to peers; each peer compiles on its own, and the P2P protocol doesn't change.
+  - **Document content** goes to the worker by `postMessage` and into the engine's in-memory filesystem only. The worker's only network requests are the manifest and the asset files, on our origin, with no project data in them.
 - Google Drive access tokens last about an hour. The app asks Google Identity Services for a new one (`prompt: ''`, no consent screen) when it runs out. If that fails, it shows a notice and saves to browser storage until you reconnect Drive.
 - The Drive access token is kept in `sessionStorage` (`drive_session_token`), so it lasts for one tab and survives a reload, but not a new tab.
   Older builds kept it in `localStorage` as `drive_access_token`; the app deletes that key on load.
-- **File > Disconnect Google Drive** calls `google.accounts.oauth2.revoke` and clears the token.
+- Remembered sign-ins (#201): `localStorage` key `storage_accounts` holds, per provider, only whether it's connected, the account's email and the "Keep me signed in on this browser" choice, never a token (`storage/providers/accountMemory.ts`, in the initial load). When it says Drive was connected, the page preloads the Drive chunk and, before autosave starts, tries `restoreSession()`: first a kept token, then a GIS token request with `prompt: 'none'` and the email as `login_hint` (8 s timeout). GIS needs a popup even for that, so outside a click browsers usually block it, and the account then shows **Expired** with Connect.
+- "Keep me signed in on this browser" is opt-in per provider. It stores the token, its expiry and the email in a separate IndexedDB database, `latex-editor-sign-ins` (store `tokens`, keyed by provider id; `storage/providers/tokenVault.ts`, a lazy chunk with the Drive provider). It's separate from the projects database so it never needs a schema upgrade there. An expired token is deleted when it's read or when a refresh fails. GIS's token model has no refresh tokens, so a kept token only lasts its hour.
+- **File > Disconnect Google Drive** (and Log out in Accounts) calls `google.accounts.oauth2.revoke`, clears the token from `sessionStorage` and IndexedDB, and removes the provider from `storage_accounts`. If the Drive chunk can't load, it still clears `sessionStorage` and `storage_accounts` and deletes the `latex-editor-sign-ins` database.
+- No new CSP host: the silent sign-in uses the same `accounts.google.com/gsi/` script and frames, and IndexedDB isn't covered by CSP. Tokens only go in `Authorization` headers and GIS calls, never in a URL, a log line or a peer message.
 - The signed-in email comes from the Drive `about` endpoint, which works with the `drive.file` scope, so no extra scope is needed.
 - Pause Saving stops autosave and Save Now for the host. It's stored in the browser session under the old `saveNowEnabled` key (false means paused), so older saved sessions still load.
 - A project in Drive is a folder, tagged with an `appProperties` flag so the app can list its projects.
+  The folder's `appProperties` also hold the main file (`mainFile`) and the TeX engine (`texEngine`: `pdflatex`, `xelatex` or `lualatex`, issue #199). Projects in this browser keep the engine in their IndexedDB project row. Neither needs a new scope, host or CSP change.
   Each project file is a real Drive file inside it, with subfolders kept as they are.
 - The app still only asks for the `drive.file` scope. That's enough for every file and folder the app makes.
   It is not enough for files someone adds to a project folder from Drive itself.
@@ -191,13 +279,18 @@ Content Security Policy
 - `privacy.html` and `tos.html` have their own much tighter policy (`default-src 'none'`, only the inline body style and the favicon), since they're static.
 - The sandboxed preview iframe uses `srcdoc`, so it inherits the same policy. That's why `style-src` has `'unsafe-inline'` (our theme and KaTeX font `<style>` tags, and LaTeX.js's `style` attributes), `img-src` has `data:` (project images), and `base-uri` allows the LaTeX.js CDN path (its `<base>` tag).
   `script-src` has no `'unsafe-inline'` or `'unsafe-eval'`, so a peer's document can't run inline script in the preview, and an injected `<img>` to another host is blocked, so it can't ping a tracker either.
-  The one inline script we add to the preview, `PREVIEW_LINK_SCRIPT` in `src/ui/preview.ts`, is allowed by its `sha256-` hash in `script-src`. It's a fixed string (the scroll position goes in a `data-scroll` attribute), so if you edit it, `cspPolicy.test.ts` fails and prints the new hash to put in `index.html`.
+  The one inline script we add to the preview, `PREVIEW_LINK_SCRIPT` in `src/ui/preview.ts`, is allowed by its `sha256-` hash in `script-src`. It's a fixed string (the scroll position and the zoom go in `data-scroll` and `data-zoom` attributes), so if you edit it, `cspPolicy.test.ts` fails and prints the new hash to put in `index.html`.
+- `script-src` has `'wasm-unsafe-eval'` (issue #240) so Compile PDF can compile its WebAssembly TeX engine (`docs/wasm-tex-engine.md`).
+  It allows `WebAssembly.compile` and `instantiate` only, not JavaScript `eval` or `new Function`, so the preview's protection above is unchanged; `cspPolicy.test.ts` checks it's there and that `'unsafe-eval'` never is.
+  The engine and its package files come from our own origin, under `connect-src 'self'` and `worker-src 'self'`, never from a TeX Live server.
+  Workers: a dedicated worker started from a same-origin URL uses the CSP of its own response, not the page's meta tag. GitHub Pages, the Coolify nginx (`deploy/nginx.conf`) and the desktop app send no CSP header, so the engine worker needs nothing more. If a host ever adds a CSP header, it needs `'wasm-unsafe-eval'` too.
+  Browsers that don't know the keyword (before Chrome 97, Firefox 102, Safari 16) block WebAssembly under this policy, so Compile PDF says it isn't available there. The live preview doesn't use WebAssembly (pdf.js runs with `useWasm: false`).
 - `frame-src` and `img-src` allow `blob:` for the PDF and image viewer, and `object-src` allows `blob:` too, because Chrome's PDF viewer in that iframe counts as a plugin.
 - `connect-src` lists the default trackers. If `VITE_P2P_RENDEZVOUS` lists others, the `csp` plugin in `vite.config.ts` adds their origins at build time.
   STUN and TURN aren't covered by CSP, so `VITE_STUN_URL` and `VITE_TURN_URL` need no change.
 - A meta tag can't set `frame-ancestors`, `report-uri`/`report-to` or `sandbox`; browsers ignore them there.
   So the CSP doesn't stop other sites from framing the app (clickjacking), and GitHub Pages can't send `X-Frame-Options` either.
-  If the site moves behind a host or proxy that can set headers (Cloudflare, Netlify, a custom server), send the same policy as a header and add `frame-ancestors 'none'`.
+  Production on Coolify is behind nginx (`deploy/nginx.conf`), which can set headers, so a follow-up can send the same policy as a header and add `frame-ancestors 'none'`.
 - `upgrade-insecure-requests` is left out on purpose: it would break `npm run dev` and `vite preview` on `http://localhost`.
 - After changing the policy, check the browser console on the live site for "violates the following Content Security Policy directive" while signing in to Google, opening the Picker, sharing a room and compiling.
 
@@ -218,6 +311,10 @@ Domain and security
 - File > Export… needs no server. Under the CSP, HTML export with Work offline fetches the LaTeX.js styles and fonts from `https://cdn.jsdelivr.net/npm/latex.js@0.12.6/dist/` (`connect-src`), downloads use `blob:` URLs, and the PDF export prints from a `srcdoc` frame with no scripts. Saving an export to Google Drive uses `https://www.googleapis.com/upload/drive/v3/files`, which `connect-src` already allows (`src/security/cspPolicy.test.ts` checks it).
 - The Export dialog, the exporters and the Drive upload are lazy chunks (`exportDialog`, `registry`, `destinations`, `driveUpload` in the build report), loaded the first time someone opens Export.
 
+Phone and tablet layout check
+- `.github/workflows/test.yml` has an `e2e-mobile-layout` job next to `e2e-sync`. It runs the `mobile-layout` Playwright project (`e2e/tests/mobile-layout.spec.ts`, issue #191) in Chromium with touch at 360x640, 390x844, 768x1024 and 1024x768, and checks for sideways scrolling, that the panes can be reached, that each `dialog-md` and `dialog-lg` dialog fits, and that the Menu, More and Share popovers stay on screen.
+- It installs only Chromium, uses the same `dist-e2e` build and local tracker setup as `e2e-sync`, and uploads `e2e-report-mobile-layout`. It's non-blocking (`continue-on-error`) until it has a track record. See `docs/qa-runbook.md`.
+
 Documentation
 - The user docs are MkDocs Material, built from `docs/` by `mkdocs.yml`. Run `mkdocs build --strict` before a PR, it fails on broken links and missing images.
 - Diagrams are Mermaid, in ```` ```mermaid ```` fences. `pymdownx.superfences` has a `mermaid` custom fence, and Material loads Mermaid from a CDN in the browser. There's no build step for them.
@@ -232,6 +329,7 @@ Screenshots
 - Set `SCREENSHOT_PORT` if 4183 is taken (pick a port browsers allow, 4190 is on their blocked list), `SCREENSHOT_THEMES=light` to do one theme, `SCREENSHOT_CHANNEL=msedge` (or `chrome`) to use an installed browser instead of downloading Chromium, or `SCREENSHOT_CHROMIUM=/path/to/chrome` to use a Chromium binary already on the machine (for when the download is blocked).
 - The script builds a small sample project, opens each dialog, and draws numbered callouts over the buttons each docs page talks about. The PNGs are palette-compressed with `sharp` to keep them small.
 - The Share shot joins a real room through the public trackers, so it needs a network connection. The room id is blanked out of the picture.
+- `SCREENSHOT_VIEWPORTS` picks the window sizes, comma-separated. `desktop` (1280x800, the full set above) is the default. `phone` (390x844), `small-phone` (360x640) and `tablet` (768x1024) take the mobile set at 2x with touch turned on, as `<size>-<shot>-<theme>.png`: the editor, preview, Files drawer, Menu and More actions on a phone (the main screen on a tablet), Settings, and Share before it starts. The docs use `phone` and `tablet` in the "On a phone" and "On a tablet" sections of `interface-layout.md`, so run `SCREENSHOT_VIEWPORTS=desktop,phone,tablet npm run screenshots` to redo them all.
 - Rerun it when the UI changes, and before a release. It's not in CI yet.
 
 Security
@@ -245,9 +343,9 @@ Security
 Versions and releases
 - How to version, write the changelog, tag and release is in [`docs/versioning.md`](versioning.md).
 - Every merge to `staging` deploys to staging. Production only deploys a release: a `vX.Y.Z` tag on a commit that's already on `main`, which only gets `staging` through a release PR.
-- Prepare release (`.github/workflows/prepare-release.yml`) opens the release PR. When it merges, `tag-release.yml` tags it and calls `release.yml`, which checks the tag against both `package.json` files and the changelog, runs the tests, builds with `VITE_DEPLOY_ENV=production`, deploys to Pages, and creates the GitHub release from the `CHANGELOG.md` section.
-  The release workflows need no secrets beyond the build's own: the default `GITHUB_TOKEN` is enough. Only staging needs `STAGING_DEPLOY_TOKEN`.
-- `dist/version.json` is served with GitHub Pages' default caching (about 10 minutes), so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
+- Prepare release (`.github/workflows/prepare-release.yml`) opens the release PR. When it merges, `tag-release.yml` tags it and calls `release.yml`, which checks the tag against both `package.json` files and the changelog, runs the tests, deploys it to production (Coolify, or GitHub Pages until the Coolify secrets are set, see "Production on Coolify"), and creates the GitHub release from the `CHANGELOG.md` section.
+  Besides the build's own, the release workflows only need the three Coolify secrets for a Coolify deploy, and the default `GITHUB_TOKEN`. Only staging needs `STAGING_DEPLOY_TOKEN`.
+- `dist/version.json` is served with `Cache-Control: no-cache` by nginx on Coolify, but with GitHub Pages' default caching (about 10 minutes) on Pages, so anything that polls it adds a cache-busting query and `cache: 'no-store'`.
   The app's update check (`frontend/src/app/updateCheck.ts`) does both. It fetches `version.json` next to `index.html` on load, every 15 minutes, and when the tab gets focus or becomes visible (at most once a minute). A different build shows the "new version" card. Failed checks back off up to an hour, a 404 stops checking, and `npm run dev` never checks.
   Other static hosts need to serve `version.json` from the same folder as `index.html`. Without it the app works, it just never offers updates.
 

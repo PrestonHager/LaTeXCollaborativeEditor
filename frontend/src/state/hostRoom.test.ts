@@ -1,4 +1,4 @@
-import { readHostRoomId, writeHostRoomId } from './hostRoom';
+import { clearHostRoomId, readHostRoomId, writeHostRoomId } from './hostRoom';
 
 describe('hostRoom', () => {
   beforeEach(() => {
@@ -17,6 +17,12 @@ describe('hostRoom', () => {
     expect(readHostRoomId()).toBe('room-2');
   });
 
+  it('forgets the room when sharing stops', () => {
+    writeHostRoomId('room-1');
+    clearHostRoomId();
+    expect(readHostRoomId()).toBeNull();
+  });
+
   it('ignores a blank stored value', () => {
     sessionStorage.setItem('latex_editor_host_room_v1', '  ');
     expect(readHostRoomId()).toBeNull();
@@ -27,8 +33,9 @@ describe('hostRoom', () => {
     const blocked = () => {
       throw new Error('blocked');
     };
-    vi.stubGlobal('sessionStorage', { getItem: blocked, setItem: blocked });
+    vi.stubGlobal('sessionStorage', { getItem: blocked, setItem: blocked, removeItem: blocked });
     expect(() => writeHostRoomId('room-1')).not.toThrow();
+    expect(() => clearHostRoomId()).not.toThrow();
     expect(warn).toHaveBeenCalled();
     expect(readHostRoomId()).toBeNull();
     vi.unstubAllGlobals();

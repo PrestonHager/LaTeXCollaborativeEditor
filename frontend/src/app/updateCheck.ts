@@ -131,15 +131,20 @@ export function createUpdateChecker(options: UpdateCheckerOptions) {
 export type UpdateReason = 'deploy' | 'peer' | 'stale-chunk';
 
 /** What the prompt says, depending on why it's up and whether we're in a room. */
-export function updatePromptText(reason: UpdateReason, room: { isHost: boolean; inRoom: boolean }): { message: string; detail: string } {
+/**
+ * The update card's words. `app` is the desktop app (#179), where an update installs and restarts
+ * the app instead of reloading the page.
+ */
+export function updatePromptText(reason: UpdateReason, room: { isHost: boolean; inRoom: boolean }, app = false): { message: string; detail: string } {
+  const verb = app ? 'Restart' : 'Reload';
   const message =
     reason === 'peer'
-      ? 'A collaborator is on a newer version of the app. Reload to update so you can keep editing together.'
+      ? `A collaborator is on a newer version of the app. ${verb} to update so you can keep editing together.`
       : reason === 'stale-chunk'
         ? "Part of the app couldn't load because a new version is live. Reload to update."
         : 'A new version of the app is available.';
   let detail = 'Your changes are saved first.';
-  if (room.inRoom) detail += room.isHost ? ' Guests are disconnected for a moment and rejoin on their own.' : " You'll rejoin the room after the reload.";
+  if (room.inRoom) detail += room.isHost ? " Sharing pauses until you pick Resume sharing (same link) under Share, then guests reconnect on their own." : ` You'll rejoin the room after the ${verb.toLowerCase()}.`;
   return { message, detail };
 }
 

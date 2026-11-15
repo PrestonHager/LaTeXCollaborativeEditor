@@ -13,6 +13,15 @@ Click a menu to open it, or focus it with **Tab** and use the arrow keys.
 **Escape** closes it.
 Items that don't apply right now are grayed out, for example host-only items when you're a guest.
 
+Rest the mouse on a menu item, or reach it with the arrow keys, and after a moment a preview card opens beside the menu.
+It shows what the command does: a small picture where one helps (the layouts show how the panes are arranged, Share shows the link being copied, New File shows the new file in the list), and a sentence about it.
+The card closes as soon as the mouse leaves, focus moves on, or you press a key or click.
+Hovering only shows the card. The command runs only when you click it or press **Enter**.
+On a touch screen there's no hover, so there's no preview card. The [command palette](#command-palette) shows the same description under each command.
+
+![The preview card for View > Split View](assets/screenshots/hover-preview-light.png#only-light)
+![The preview card for View > Split View](assets/screenshots/hover-preview-dark.png#only-dark)
+
 ### File
 
 ![The File menu](assets/screenshots/file-menu-light.png#only-light)
@@ -21,7 +30,7 @@ Items that don't apply right now are grayed out, for example host-only items whe
 | Item | Shortcut | What it does |
 | --- | --- | --- |
 | New Project | Ctrl+Shift+N (Alt+Shift+N in a browser tab) | Starts a fresh project after you confirm. Host only. |
-| Open Local Project | Ctrl+O | Lists projects saved in this browser. Host only. |
+| Open Project… | Ctrl+O | Asks where the project is saved (this browser or a connected account), then lists or picks it. Host only. |
 | Open from Google Drive | Ctrl+Shift+O | Opens the Drive picker. Host only. |
 | Upload .zip as New Project | | Makes a new project from a `.zip`. Host only. |
 | New File | Ctrl+N (Alt+N in a browser tab) | Adds a text file to the current folder. |
@@ -57,6 +66,8 @@ Details: [Projects and files](projects.md) and [Saving and storage](saving-and-s
 | Toggle Preview Theme | | Cycles the preview theme the same way. |
 | Pause Saving | | Stops autosave and Save Now until you turn it off. A check means saving is paused. |
 | Compile Now | Ctrl+Enter | Rebuilds the preview right away. |
+| Compile PDF | Ctrl+Shift+Enter | Makes the real PDF with a TeX engine in the browser. See [Compile PDF](editing-and-preview.md#compile-pdf). |
+| pdfLaTeX Engine, XeLaTeX Engine, LuaLaTeX Engine | | Picks the project's [TeX engine](projects.md#tex-engine). The checked one is in use. |
 | Split View | | Editor and preview side by side. |
 | Editor Only | | Hides the preview. |
 | Preview Only | | Hides the editor. |
@@ -90,6 +101,8 @@ Include the version when you report a problem. The bug form fills it in for you.
 
 The row of icon buttons under the menus covers the things you do most: new file, upload, save now, compile now, share, the three layout modes, the command palette, and the docs.
 Hover a button (or focus it) to see what it does and its shortcut.
+Keep the mouse there a little longer, or stay on it with the keyboard, and the tooltip turns into the same preview card as the menus, under the button.
+On a touch screen, hold your finger on a button to see its name and shortcut. Holding doesn't run it.
 They run the same commands as the menus, so they're disabled in the same cases.
 
 With the keyboard, Tab moves into the toolbar, then the arrow keys move between buttons, and Home and End jump to the first and last.
@@ -166,12 +179,65 @@ Guests can change themes, layout and shortcuts, but the saving options are turne
 
 Under **View**:
 
-- **Split View**: editor and preview side by side. Drag the splitter between them to resize, from 20% to 80%. You can also focus the splitter with **Tab** and use the left and right arrow keys.
+- **Split View**: editor and preview side by side. Drag the splitter between them to resize, from 20% to 80%, with the mouse or a finger. You can also focus the splitter with **Tab** and use the left and right arrow keys.
 - **Editor Only**: hides the preview.
 - **Preview Only**: hides the editor.
 
 The active layout has a check mark in the menu.
 The layout and the splitter position are remembered in this browser, like your other [settings](saving-and-storage.md#your-settings).
+
+## On a phone
+
+When the window is narrower than 640px, like on most phones, the app shows one pane at a time instead of the split:
+
+- A bar under the toolbar has **Files**, then **Editor** and **Preview**. Tap Editor or Preview to switch. The pane you picked stays picked when you reload, until you close the tab.
+- **Files** opens the file list as a drawer over the editor, with the [Outline](projects.md#outline) under it. Picking a file or an outline row closes the drawer and shows that place in the editor. Tap outside the drawer, tap Files again, or press **Esc** to close it without picking.
+- **View > Editor Only** and **Preview Only** pick the pane too. The Split View, Editor Only and Preview Only toolbar buttons are hidden, since the bar does their job.
+- The buttons in the bar are 44px tall, so they're easy to tap.
+- **File**, **Edit**, **View** and **Help** become one **Menu** button. Its menu fills the width of the window and has every item from the four menus, in the same order, under a **File**, **Edit**, **View** or **Help** heading. It scrolls if it's taller than the window.
+- The toolbar keeps **Compile now** and **Share and copy link**. **New file**, **Upload files**, **Save now**, **Export**, **Command palette** and **Documentation** move into the **More actions** menu (the **⋯** button at the right end of the toolbar). The toolbar buttons and menu items are 44px tall.
+
+With a keyboard, **Tab** reaches Files, Editor and Preview, and Enter or Space presses them. Screen readers announce Editor and Preview as toggle buttons, and Files as expanded or collapsed.
+
+**Menu** and **More actions** work like the menus on a wider screen. Enter, Space or **Down** opens one on its first item. **Up** and **Down** move through the items, skipping grayed-out ones, and **Home** and **End** jump to the first and last. **Escape** closes the menu and puts focus back on its button. In the toolbar, **Left** and **Right** move between Compile now, Share and More actions. Screen readers announce each part of **Menu** as a group named File, Edit, View or Help when you move into it.
+
+Tablets and wider windows keep the layout above.
+
+- Dialogs like Settings, Upload, Export and Open a project fill the screen as a sheet: the title at the top, the buttons at the bottom, and the middle scrolls. Short questions stay a small card.
+
+| Editor | Preview | Files |
+|--------|---------|-------|
+| ![The editor on a phone, with the Files, Editor and Preview bar above it](assets/screenshots/phone-editor-light.png#only-light)![The editor on a phone, with the Files, Editor and Preview bar above it](assets/screenshots/phone-editor-dark.png#only-dark) | ![The preview on a phone, at Fit width](assets/screenshots/phone-preview-light.png#only-light)![The preview on a phone, at Fit width](assets/screenshots/phone-preview-dark.png#only-dark) | ![The file list open as a drawer over the editor](assets/screenshots/phone-files-light.png#only-light)![The file list open as a drawer over the editor](assets/screenshots/phone-files-dark.png#only-dark) |
+
+| Menu | More actions | Settings |
+|------|--------------|----------|
+| ![The Menu button's menu on a phone, with File, Edit, View and Help items under headings](assets/screenshots/phone-menu-light.png#only-light)![The Menu button's menu on a phone, with File, Edit, View and Help items under headings](assets/screenshots/phone-menu-dark.png#only-dark) | ![The toolbar's More actions menu on a phone](assets/screenshots/phone-more-light.png#only-light)![The toolbar's More actions menu on a phone](assets/screenshots/phone-more-dark.png#only-dark) | ![Settings as a full-screen sheet on a phone](assets/screenshots/phone-settings-light.png#only-light)![Settings as a full-screen sheet on a phone](assets/screenshots/phone-settings-dark.png#only-dark) |
+
+| Share |
+|-------|
+| ![The Share popover on a phone, before sharing starts](assets/screenshots/phone-share-light.png#only-light)![The Share popover on a phone, before sharing starts](assets/screenshots/phone-share-dark.png#only-dark) |
+
+## On a tablet
+
+From 640px wide, like a tablet in either orientation, the app keeps the desktop layout: File, Edit, View and Help, the full toolbar, and the files, editor and preview side by side.
+With a finger as the pointer, menu items and buttons are 44px tall (see [On a touch screen](#on-a-touch-screen)), so a long menu stops above the bottom of the screen and scrolls.
+Dialogs are cards, and Settings is one column below 1024px wide.
+
+| Main screen | Settings | Share |
+|-------------|----------|-------|
+| ![The app on a 768 by 1024 tablet, with files, editor and preview side by side](assets/screenshots/tablet-overview-light.png#only-light)![The app on a 768 by 1024 tablet, with files, editor and preview side by side](assets/screenshots/tablet-overview-dark.png#only-dark) | ![Settings on a tablet](assets/screenshots/tablet-settings-light.png#only-light)![Settings on a tablet](assets/screenshots/tablet-settings-dark.png#only-dark) | ![The Share popover on a tablet](assets/screenshots/tablet-share-light.png#only-light)![The Share popover on a tablet](assets/screenshots/tablet-share-dark.png#only-dark) |
+
+An automated check opens every dialog and menu at 360×640, 390×844, 768×1024 and 1024×768 and fails if anything runs off the screen or the page scrolls sideways.
+
+## On a touch screen
+
+On phones and tablets (anything with a finger or stylus as its main pointer):
+
+- Buttons, menu items, file rows and links are at least 44px tall, so they're easy to tap.
+- Hold a finger on a file or folder for half a second to open its menu: **Set as main file**, **Rename or move** and **Delete**. On a phone the menu opens at the bottom of the screen.
+- Hold a finger on a toolbar button to see its name and shortcut. Tapping runs it, and leaves no tooltip behind.
+- The splitter between the editor and the preview drags with a finger, and you don't have to hit the thin bar exactly.
+- There are no hover preview cards. The [command palette](#command-palette) lists each command with what it does.
 
 ## Header status pills
 

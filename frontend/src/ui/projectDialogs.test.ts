@@ -2,6 +2,8 @@ import { mountAppShell } from '../test/appShell';
 import { createUploadDialog } from './uploadDialog';
 import { createProjectsDialog } from './projectsDialog';
 import { createFileViewer } from './fileViewer';
+import { MemoryProvider } from '../test/memoryProvider';
+import { createProviderRegistry, googleDriveEntry, localStorageEntry, type DriveAccountSource } from '../storage/providers/registry';
 
 // jsdom has no showModal, so stand in for it.
 beforeAll(() => {
@@ -97,7 +99,7 @@ describe('projects dialog', () => {
     expect(items[0].querySelector('p')!.textContent).toContain('Edited');
     expect((document.getElementById('projects-empty') as HTMLElement).hidden).toBe(true);
     items[0].click();
-    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }));
+    expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), 'local');
     expect(dialogEl.open).toBe(false);
 
     dialog.open([]);
@@ -106,6 +108,117 @@ describe('projects dialog', () => {
     expect(onImportZip).toHaveBeenCalled();
     dialog.open([]);
     (document.getElementById('projects-close') as HTMLButtonElement).click();
+    expect(dialogEl.open).toBe(false);
+  });
+});
+
+describe('projects dialog provider step (#200)', () => {
+  class FakeDrive extends MemoryProvider implements DriveAccountSource {
+    token = false;
+    account: string | null = null;
+    expired = false;
+    hasUsableToken() {
+      return this.token;
+    }
+    isSignedIn() {
+      return this.token || this.expired;
+    }
+    accountLabel() {
+      return this.account;
+    }
+  }
+
+  function setup() {
+    mountAppShell();
+    const drive = new FakeDrive();
+    const registry = createProviderRegistry([localStorageEntry(new MemoryProvider()), googleDriveEntry(drive, 'client')]);
+    const dialogEl = document.getElementById('projects-dialog') as HTMLDialogElement;
+    const onProvider = vi.fn();
+    const dialog = createProjectsDialog(dialogEl, { onPick: vi.fn(), onImportZip: vi.fn(), registry, onProvider });
+    const providers = document.getElementById('projects-providers')!;
+    const back = document.getElementById('projects-back') as HTMLButtonElement;
+    const list = document.getElementById('projects-list')!;
+    const row = (id: string) => providers.querySelector<HTMLButtonElement>(`[data-provider="${id}"]`)!;
+    return { dialog, dialogEl, drive, onProvider, providers, back, list, row };
+  }
+
+  it('asks where the project is, then shows browser projects with a way back', () => {
+    const { dialog, dialogEl, onProvider, providers, back, list, row } = setup();
+    dialog.chooseProvider(['local', 'googleDrive']);
+    expect(dialogEl.open).toBe(true);
+    expect(providers.hidden).toBe(false);
+    expect(list.hidden).toBe(true);
+    expect(document.getElementById('projects-dialog-description')!.textContent).toBe('Where is the project saved?');
+    expect(row('local').textContent).toContain('This browser');
+    expect(row('local').textContent).toContain('Projects saved on this device');
+    expect(row('googleDrive').textContent).toContain("Not connected. You'll be asked to sign in.");
+    expect(row('googleDrive').querySelector('svg')).not.toBeNull();
+
+    row('local').click();
+    expect(onProvider).toHaveBeenCalledWith('local');
+    // Browser storage swaps to its list in the same dialog.
+    expect(dialogEl.open).toBe(true);
+    dialog.open([{ id: 'p1', name: 'Paper' }]);
+    expect(providers.hidden).toBe(true);
+    expect(list.hidden).toBe(false);
+    expect(back.hidden).toBe(false);
+    expect(document.activeElement).toBe(list.querySelector('button'));
+    back.click();
+    expect(providers.hidden).toBe(false);
+    expect(back.hidden).toBe(true);
+
+    // Opened straight to the list (one provider), there's nothing to go back to.
+    dialogEl.close();
+    dialog.open([]);
+    expect(back.hidden).toBe(true);
+  });
+
+  it('closes for a provider with its own picker, and shows who is signed in', () => {
+    const { dialog, dialogEl, drive, onProvider, row } = setup();
+    drive.token = true;
+    drive.account = 'ada@example.com';
+    dialog.chooseProvider(['local', 'googleDrive']);
+    expect(row('googleDrive').textContent).toContain('Signed in as ada@example.com');
+    row('googleDrive').click();
+    expect(dialogEl.open).toBe(false);
+    expect(onProvider).toHaveBeenCalledWith('googleDrive');
+    drive.account = null;
+    dialog.chooseProvider(['googleDrive']);
+    expect(row('googleDrive').textContent).toContain('Signed in');
+  });
+
+  it('closes for a folder on this computer, which opens the system dialog (#178)', () => {
+    const { dialogEl, onProvider, row } = setup();
+    // The desktop app adds its folder entry to the registry later, from a lazy chunk.
+    const registry = createProviderRegistry([localStorageEntry(new MemoryProvider())]);
+    registry.add({ ...localStorageEntry(new MemoryProvider()), id: 'localFolder', name: 'Folder on this computer', icon: 'folder' });
+    const folderDialog = createProjectsDialog(dialogEl, { onPick: vi.fn(), onImportZip: vi.fn(), registry, onProvider });
+    folderDialog.chooseProvider(['local', 'localFolder']);
+    expect(row('localFolder').textContent).toContain('Pick a folder on this computer');
+    row('localFolder').click();
+    expect(dialogEl.open).toBe(false);
+    expect(onProvider).toHaveBeenCalledWith('localFolder');
+  });
+
+  it("lists the desktop app's Drive projects and opens the pick from Drive (#177)", () => {
+    mountAppShell();
+    const dialogEl = document.getElementById('projects-dialog') as HTMLDialogElement;
+    const onPick = vi.fn();
+    const dialog = createProjectsDialog(dialogEl, { onPick, onImportZip: vi.fn() });
+    dialog.open([{ id: 'drive-1', name: 'Thesis' }], 'googleDrive');
+    expect(document.getElementById('projects-dialog-description')!.textContent).toBe('Projects this app saved in your Google Drive.');
+    document.querySelector<HTMLButtonElement>('#projects-list button')!.click();
+    expect(onPick).toHaveBeenCalledWith({ id: 'drive-1', name: 'Thesis' }, 'googleDrive');
+    dialog.open([{ id: 'p1', name: 'Paper' }]);
+    expect(document.getElementById('projects-dialog-description')!.textContent).toBe('Projects saved in this browser.');
+    document.querySelector<HTMLButtonElement>('#projects-list button')!.click();
+    expect(onPick).toHaveBeenLastCalledWith({ id: 'p1', name: 'Paper' }, 'local');
+  });
+
+  it('does nothing without a registry', () => {
+    mountAppShell();
+    const dialogEl = document.getElementById('projects-dialog') as HTMLDialogElement;
+    createProjectsDialog(dialogEl, { onPick: vi.fn(), onImportZip: vi.fn() }).chooseProvider(['local']);
     expect(dialogEl.open).toBe(false);
   });
 });

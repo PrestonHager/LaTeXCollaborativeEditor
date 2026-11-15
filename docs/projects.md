@@ -22,11 +22,27 @@ Hover a row to see its buttons:
 - **Pencil**: rename or move it.
 - **Trash**: delete it.
 
+The same actions are in a menu: right-click a row, or focus it and press the Menu key or **Shift+F10**.
+On a phone or tablet, hold your finger on a row for half a second to open it.
+
 The three buttons at the top of the panel are **New file**, **New folder**, and **Upload files**.
 They're also in the **File** menu.
 
 If the project has no files, the panel says "No files yet".
 If you joined someone else's room and haven't connected yet, it says "Waiting for the host" instead.
+
+## Outline
+
+Under the file tree, **Outline** lists the document's parts, chapters, sections, subsections and paragraphs, and its figures and tables, in the order they come in the document.
+Click **Outline** to open or close it. It's closed at first, and stays the way you left it in this browser.
+
+- It starts at the [main file](#main-file) and follows `\input`, `\include` and `\subfile` into the other files, so a chapter in `chapters/intro.tex` shows where it's included.
+- Each heading is indented under the one above it. A figure or table shows its caption, like **Figure: Results by year**, under the heading it's in.
+- Click a row to open its file and jump to that line. On a phone, the drawer closes and the editor shows the place.
+- It follows your edits and your collaborators', a moment after typing stops.
+- Commented-out headings, and anything in `verbatim`, `lstlisting` or `minted`, are left out. Without a main file, it says to set one.
+
+It's worked out in your browser from the project's files, and nothing is sent anywhere.
 
 ## New files and folders
 
@@ -95,6 +111,19 @@ It's the `.tex` file with `\documentclass` unless you pick another one.
 The preview follows `\input` and `\include` from the main file, so you only need one main file even for a big project.
 See [Editing and preview](editing-and-preview.md#live-preview) for what the preview can read.
 
+If no main file was picked and the guess is a file that starts with `% !TEX root = ../thesis.tex`, the main file is the one that comment names, the way TeXShop and TeXstudio read it.
+
+## TeX engine
+
+Each project compiles with one TeX engine: **pdfLaTeX** (the default), **XeLaTeX** or **LuaLaTeX**, the same choice as Overleaf's Compiler setting.
+
+- Pick it in the **View** menu (or the command palette, "Engine"). The checked one is the project's engine.
+- It's saved with the project, in this browser or in Google Drive, and everyone in the room gets it.
+- A `% !TEX program = xelatex` comment in the first 20 lines of the main file wins over the setting. `lualatex`, `pdflatex`, `xetex`, `luatex` and `latex` work too.
+
+The live preview looks the same for every engine. For now the engine only changes which notes show:
+packages that need XeLaTeX or LuaLaTeX, like `fontspec`, `unicode-math` and `polyglossia`, get a warning under pdfLaTeX, and LuaLaTeX-only ones, like `luacode`, under the others.
+
 ## Viewing images and PDFs
 
 Clicking a binary file opens it in the viewer instead of the editor.
@@ -122,7 +151,7 @@ It's host only, and if you're sharing, it clears the project for everyone in the
 
 ## Opening a project
 
-- **File > Open Local Project** (**Ctrl+O**) opens a dialog listing projects saved in this browser, newest first. Click one to open it.
+- **File > Open Project…** (**Ctrl+O**) asks where the project is saved: **This browser** lists the projects saved here, newest first, and **Google Drive** opens the Drive picker. Click one to open it.
 - **File > Open from Google Drive** (**Ctrl+Shift+O**) opens the Drive picker. Pick a project folder, or an old single `.tex` file.
 - **File > Upload .zip as New Project** makes a new project from a `.zip`, like one downloaded from Overleaf. The **Upload .zip** button in the open dialog does the same.
 

@@ -6,8 +6,10 @@ import type { EpsBox } from './epsBoundingBox';
 import { addKatexFontFallbacks } from './katexFonts';
 import { extractVerbatim, insertVerbatimBlocks, type VerbatimBlock } from './verbatimBlocks';
 import type { EditorDiagnostic } from '../ui/diagnostics';
+import type { TexEngine } from '../project/texEngine';
+import { engineDiagnostics } from './engineDiagnostics';
 
-import { LATEX_JS_ASSET_BASE } from './latexJsAssets';
+import { LATEX_JS_ASSET_BASE, latexJsAssetBase } from './latexJsAssets';
 
 export { LATEX_JS_ASSET_BASE };
 
@@ -80,6 +82,8 @@ export function latexSourceToPreviewHtml(source: string): { html: string | null;
 /**
  * Typeset LaTeX into a document, with dangerous URLs stripped. `changes` lists what the adapter
  * removed or rewrote; the preview pane shows it next to the preview, not inside the document.
+ * `errors` has the parse error first, if there is one, then a note for each package the preview
+ * couldn't load.
  */
 function typeset(
   source: string,
@@ -92,18 +96,18 @@ function typeset(
     const generator = parse(adapted.source, {
       generator: new HtmlGenerator({ hyphenate: false, documentClass: 'article' }),
     });
-    const doc = generator.htmlDocument(LATEX_JS_ASSET_BASE);
+    const doc = generator.htmlDocument(latexJsAssetBase());
     // Peers can put any URL into \href or \url, so we strip script-capable ones before rendering.
     stripDangerousUrls(doc);
     unlinkMissingRefs(doc);
     markPageBreaks(doc);
     addKatexFontFallbacks(doc);
     insertVerbatimBlocks(doc, blocks);
-    return { doc, errors: [], changes };
+    return { doc, errors: adapted.diagnostics, changes };
   } catch (err) {
     return {
       doc: null,
-      errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }],
+      errors: [{ line: errorLine(err, source), severity: 'error', message: String(err) }, ...adapted.diagnostics],
       changes,
     };
   }
@@ -135,6 +139,11 @@ export type ProjectPreviewInput = {
   pdfImages?: Map<string, RenderedPdfFigure>;
   /** The %%BoundingBox of each EPS file by path, or null when it has none. Missing: no bytes yet. */
   epsBoxes?: Map<string, EpsBox | null>;
+  /**
+   * The project's engine setting (issue #199). A `% !TEX program` comment in the main file wins
+   * over it. The preview looks the same for every engine; only the diagnostics change.
+   */
+  engine?: TexEngine;
 };
 
 /** A PDF page the document shows as a figure, for the main thread to draw (see figureImages.ts). */
@@ -160,13 +169,14 @@ export function projectToPreviewHtml(input: ProjectPreviewInput): ProjectPreview
   const expanded = expandProjectSource(input.mainPath, verbatim.texts, input.binaryPaths);
   expanded.missing.push(...verbatim.missing.filter((name) => !expanded.missing.includes(name)));
   const { doc, errors: sourceErrors, changes } = typeset(expanded.source, verbatim.blocks, verbatim.changes);
-  // LaTeX.js errors come first, since they stop the preview. Bibliography notes follow.
+  // LaTeX.js errors come first, since they stop the preview. Package and bibliography notes follow.
   const errors: ProjectDiagnostic[] = [
     ...sourceErrors.map((error) => {
       const origin = expanded.lineMap[error.line - 1] ?? { path: input.mainPath, line: 1 };
       return { ...error, path: origin.path, line: origin.line };
     }),
     ...expanded.diagnostics,
+    ...engineDiagnostics(input.mainPath, input.texts.get(input.mainPath), input.engine, expanded.source, expanded.lineMap),
   ];
   if (!doc) return { html: null, errors, missing: expanded.missing, changes };
 

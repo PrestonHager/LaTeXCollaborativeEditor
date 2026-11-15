@@ -1,0 +1,17 @@
+% Unsupported packages test. In the Files panel, use Set main file on this file, then compare
+% the editor markers and the footer with the Expect comments. Set main.tex back as the main file after.
+\documentclass{article}
+% Expect: an info marker on the next line: the preview leaves out geometry and uses its own page size and margins.
+\usepackage[margin=1in]{geometry}
+% Expect: a warning marker on the next line: the preview can't load tikz, and the first tikzpicture stops it.
+\usepackage{tikz}
+% Expect: no marker on the next line, since the preview has xcolor, and an info marker for amssymb on the line after.
+\usepackage{xcolor,
+  amssymb}
+% Expect: no marker on the next line. \RequirePackage loads hyperref like \usepackage, with no error.
+\RequirePackage{hyperref}
+\begin{document}
+% Expect: the footer says "3 diagnostic(s). The preview can't load the tikz package. ..." (line 7), and this text
+% shows, with "blue" in blue. Hovering a marker shows its note.
+The preview still shows this text, in \textcolor{blue}{blue}.
+\end{document}

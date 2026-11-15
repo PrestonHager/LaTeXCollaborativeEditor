@@ -2,20 +2,20 @@ import './style.css';
 import * as Y from 'yjs';
 import { createEditorPane } from './ui/editor';
 import { createPreviewPane } from './ui/preview';
+import { bindPreviewZoomControls, createPreviewZoomState } from './ui/previewZoom';
 import { createMenuBar, type CommandId } from './ui/menuBar';
-import { setupShareButton } from './ui/shareButton';
-import { renderStaticIcons } from './ui/icons';
+import { icon, renderStaticIcons, storageIcons } from './ui/icons';
 import { createFileTree } from './ui/fileTree';
 import type { ExportDialog } from './ui/exportDialog';
-import { createFileViewer } from './ui/fileViewer';
 import { createToolbar } from './ui/toolbar';
+import { attachTouchTooltips } from './ui/longPress';
 import { renderFooterVersion } from './ui/footerVersion';
 import { createChangelogDialog } from './ui/changelogDialog';
 import { BUILD_INFO, formatVersion } from './app/buildInfo';
 import { flushBeforeReload } from './app/updateCheck';
 import { setupUpdateFlow } from './app/updateFlow';
-import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle } from './app/lazy';
-import { lazyAboutDialog, lazyCommandPalette, lazyProjectsDialog, lazySettings, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
+import { browserOnline, classifyLoadFailure, createOnlineRetry, isLoadFailure, lazyModule, loadFailureMessage, preloadOnIntent, whenIdle, whenOnline } from './app/lazy';
+import { lazyAboutDialog, lazyAccountsPanel, lazyCommandPalette, lazyDialogs, lazyFileViewer, lazyProjectsDialog, lazySettings, lazyShareButton, lazyTemplates, lazyTour, lazyUploadDialog } from './app/lazyUi';
 import { shouldConfirmLeave } from './app/leaveGuard';
 import { createNotice, helpForMessage, type NoticeHelp } from './ui/notices';
 import { documentationBaseUrl, docsUrl, wireHelpLinks } from './ui/helpLinks';
@@ -24,13 +24,15 @@ import { connectionFailed, connectionText, isSavedStatus, saveStatusText } from 
 import type { TransportState } from './net/p2pTransport';
 import { SessionController } from './collab/session';
 import { LocalDownloadStorage } from './storage/localDownload';
-import { GoogleDriveProvider } from './storage/providers/googleDrive';
+import { LazyGoogleDriveProvider } from './storage/providers/lazyGoogleDrive';
 import { AutosaveController } from './storage/autosave';
 import { LocalAppStorageProvider } from './storage/providers/localAppStorage';
+import { createProviderRegistry, googleDriveEntry, localStorageEntry } from './storage/providers/registry';
 import type { StorageProvider } from './storage/providers/types';
 import { DRIVE_MISSING_HINT, DRIVE_PICK_CONFLICT, addFromDriveNote } from './app/driveNotes';
 import { createThemeController } from './app/theme';
 import { createLayout } from './app/layout';
+import { createPhoneLayout, PHONE_QUERY } from './app/phoneLayout';
 import { ProjectState, toTexName } from './app/projectState';
 import { createPreviewCompile } from './app/previewCompile';
 import { createCommands, shortcuts } from './app/commands';
@@ -44,7 +46,8 @@ import { createPreviewChanges, previewChangesElements } from './ui/previewChange
 import { manifestFromProject, saveProject, type SavedManifest } from './storage/projectSaver';
 import type { ConflictChoice, FileConflict } from './storage/conflicts';
 import type { createConflictDialog } from './ui/conflictDialog';
-import { confirmDialog, promptDialog } from './ui/dialogs';
+import { explainNoWebRtc, hasWebRtc, noWebRtcAdvice, noWebRtcTitle, webAppUrl, webRoomLink, type P2pAction } from './app/p2pSupport';
+import { desktopGoogleClient, desktopNativeRtc, driveSessionLostNotice, isDesktopShell, openInSystemBrowser } from './app/desktopShell';
 import { pathProblem, projectNameProblem, suggestFreeName } from './ui/nameChecks';
 import { createCollabUndo } from './collab/undo';
 import { createPresenceFlow } from './app/presenceFlow';
@@ -58,14 +61,20 @@ import {
   decodeYjsState,
   type PersistedYjsState,
 } from './state/appSession';
-import { readHostRoomId, writeHostRoomId } from './state/hostRoom';
+import { clearHostRoomId, readHostRoomId, writeHostRoomId } from './state/hostRoom';
 import { describeError } from './storage/errors';
+import { NOT_AVAILABLE_MESSAGE, NOT_AVAILABLE_TITLE, isCompilePdfEnabled } from './compile/pdf/compilePdfFlag';
+import type { ProjectDiagnostic } from './compile/projectSource';
 import { BlobStore } from './project/blobStore';
 import { createFileHistory } from './project/fileHistory';
 import { LEGACY_TEXT_ID, ProjectDoc, type ProjectContent } from './project/projectDoc';
+import { completionProjectFrom, type CompletionProject, type TextLocation } from './ui/completionProject';
+import { createOutlineSection } from './app/outlineSection';
 import { loadProject, projectFromZip, starterProject } from './project/projectIo';
 import { MAX_FILE_BYTES, basename, dirname, isTextPath, joinPath, mimeType, normalizePath } from './project/paths';
 
+// Confirm, prompt and notice dialogs load on first use (issue #231). See lazyDialogs for a failed load.
+const { confirmDialog, promptDialog, noticeDialog, preload: preloadAppDialogs } = lazyDialogs((feature, error) => lazyLoadFailed(feature, error));
 const app = document.querySelector<HTMLDivElement>('#app');
 if (!app) throw new Error('Missing #app root');
 
@@ -74,13 +83,13 @@ renderStaticIcons();
 
 const editorPane = document.getElementById('editor-pane') as HTMLElement;
 const editor = createEditorPane(editorPane);
-const preview = createPreviewPane(document.getElementById('preview-pane')!);
 const previewChanges = createPreviewChanges(previewChangesElements());
 const shareButtonEl = document.getElementById('share-btn') as HTMLButtonElement;
-const shareLinkEl = document.getElementById('share-link') as HTMLAnchorElement;
 const compileStatusEl = document.getElementById('compile-status')!;
 const diagnosticsEl = document.getElementById('diagnostics')!;
 const autosaveStatusEl = document.getElementById('autosave-status')!;
+const storageProviderEl = document.getElementById('storage-provider') as HTMLButtonElement;
+const storageProviderNameEl = document.getElementById('storage-provider-name')!;
 const connectionStatusEl = document.getElementById('connection-status')!;
 const diagnosticsHelpEl = document.getElementById('diagnostics-help') as HTMLAnchorElement;
 const editorEmptyEl = document.getElementById('editor-empty') as HTMLElement;
@@ -96,11 +105,62 @@ const activeFileMainEl = document.getElementById('active-file-main') as HTMLElem
 const zipInput = document.getElementById('zip-input') as HTMLInputElement;
 // The person's own settings (themes, layout, keybinds). Kept apart from the session, never sent to peers.
 const settings = createSettingsStore();
-const layout = createLayout({ splitRoot, splitter, editorPane, previewPane, onChange: ({ mode, splitRatio }) => settings.update({ layoutMode: mode, splitRatio }) });
+const phoneMedia = typeof window.matchMedia === 'function' ? window.matchMedia(PHONE_QUERY) : null;
+const isPhone = () => Boolean(phoneMedia?.matches);
+// Phones show one pane at a time and the file tree as a drawer (issue #185). It does nothing at 640px and up.
+const phone = createPhoneLayout({
+  root: document.getElementById('app')!,
+  editorButton: document.getElementById('phone-show-editor') as HTMLButtonElement,
+  previewButton: document.getElementById('phone-show-preview') as HTMLButtonElement,
+  filesButton: document.getElementById('phone-files') as HTMLButtonElement,
+  filePane: document.getElementById('file-pane')!,
+  backdrop: document.getElementById('file-drawer-backdrop')!,
+  content: splitRoot,
+  editorPane,
+  isPhone,
+  onPaneChange: () => editor.getView()?.requestMeasure(),
+});
+phoneMedia?.addEventListener('change', () => phone.viewportChanged());
+// Preview zoom (issue #190): Fit width on phones, 100% elsewhere, until the person picks one.
+let renderZoomControls = () => {};
+const previewZoom = createPreviewZoomState({
+  isPhone,
+  apply: (zoom) => preview.setZoom(zoom),
+  onChange: () => renderZoomControls(),
+});
+const preview = createPreviewPane(document.getElementById('preview-pane')!, 'light', {
+  zoom: previewZoom.zoom,
+  onZoomReport: (scale, fit) => previewZoom.frameReported(scale, fit),
+});
+renderZoomControls = bindPreviewZoomControls(
+  {
+    fitButton: document.getElementById('preview-zoom-fit') as HTMLButtonElement,
+    zoomOutButton: document.getElementById('preview-zoom-out') as HTMLButtonElement,
+    zoomInButton: document.getElementById('preview-zoom-in') as HTMLButtonElement,
+    level: document.getElementById('preview-zoom-level')!,
+  },
+  () => previewZoom,
+);
+renderZoomControls();
+phoneMedia?.addEventListener('change', () => previewZoom.deviceChanged());
+const layout = createLayout({
+  splitRoot,
+  splitter,
+  editorPane,
+  previewPane,
+  onChange: ({ mode, splitRatio }) => {
+    settings.update({ layoutMode: mode, splitRatio });
+    // On a phone, View > Editor only and Preview only pick the pane to show.
+    if (isPhone() && mode !== 'split') phone.showPane(mode === 'editor-only' ? 'editor' : 'preview');
+  },
+});
 const roomId = new URLSearchParams(location.search).get('room');
 const isClient = Boolean(roomId);
 
 const docsBase = documentationBaseUrl(import.meta.env, location.href);
+// Without WebRTC no room can work, so the P2P code never starts in this window (issue #205), unless
+// the desktop app runs WebRTC in its shell instead (Linux, #176).
+const p2pAvailable = hasWebRtc() || desktopNativeRtc();
 
 // Now point every [data-help] link in the page at its docs section.
 wireHelpLinks(document, docsBase);
@@ -110,10 +170,26 @@ const makeBugUrl = (area?: IssueArea, summary?: string) =>
   bugReportUrl({ appVersion: formatVersion(BUILD_INFO), userAgent: navigator.userAgent, hostname: location.hostname, area, summary });
 
 const openExternal = (url: string) => window.open(url, '_blank', 'noreferrer');
+// The desktop app's links and wording (issue #181). Its shell sends window.open's https URLs to
+// the system browser too, so openExternal needs no desktop branch.
+if (isDesktopShell()) {
+  void import('./app/desktopUi')
+    .then((ui) => ui.setUpDesktopUi(document, { webApp: webAppUrl(docsBase), notify: (message) => showNotice(message, true, true), updates: () => updateFlow }))
+    .catch(console.warn);
+}
 
 const localDownload = new LocalDownloadStorage();
 const localAppProvider = new LocalAppStorageProvider();
-const driveProvider = new GoogleDriveProvider();
+// The Drive provider is a lazy chunk (issue #231). A tab that's already signed in needs it now.
+const driveProvider = new LazyGoogleDriveProvider();
+// It's also needed right away when Drive was connected on an earlier visit, for the silent sign-in (#201).
+if (driveProvider.isSignedIn() || driveProvider.wasConnected()) driveProvider.preload();
+// Every place a project can be saved (#200). The Accounts panel, File > Open Project and the status bar read it.
+const storageProviders = createProviderRegistry([
+  localStorageEntry(localAppProvider),
+  // The desktop app signs in through the system browser with its own client (#177).
+  googleDriveEntry(driveProvider, isDesktopShell() ? desktopGoogleClient() : (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)),
+]);
 const blobs = new BlobStore();
 const projectState = new ProjectState(localAppProvider, driveProvider);
 const { conflicts, overwrite } = projectState;
@@ -136,6 +212,8 @@ let lastSavedAt: Date | null = null;
 let transportState: TransportState = 'Not sharing';
 let peerCount = 0;
 let inRoom = isClient;
+/** The Share popover, once the page is set up. The palette's "Copy share link" goes through it. */
+let share: ReturnType<typeof lazyShareButton> | null = null;
 
 /**
  * Show a short message in the header, then clear it after a few seconds unless it's sticky.
@@ -165,7 +243,7 @@ const setStatus = (message: string) => {
 
 /** Update the connection pill, and tell guests where to look when they can't reach the host. */
 function renderConnection() {
-  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount };
+  const info = { isHost: !isClient, inRoom, state: transportState, peers: peerCount, noWebRtc: !p2pAvailable };
   connectionStatusEl.textContent = connectionText(info);
   if (connectionFailed(info)) {
     if (noticeKind === 'connection') return;
@@ -249,6 +327,7 @@ const session: SessionController = new SessionController({
   onRemoteMetadata: ({ storage }) => {
     hostStorageText = storage;
     setStatus(storage);
+    showStorageProvider();
   },
   getLocalMetadata: (): { title: string; storage: string } => ({ title: project.getName() || 'Untitled', storage: projectState.currentStorageLabel() }),
   initialState: restoredDocState(),
@@ -409,7 +488,7 @@ driveProvider.onSessionLost(() => {
   showDriveAccount();
   if (!projectState.isDrive()) return;
   useProvider(localAppProvider, null);
-  showNotice('Google Drive sign-in expired, so edits are saving in this browser. Use File > Connect Google Drive to switch back.', true, true, {
+  showNotice(driveSessionLostNotice(), true, true, {
     topic: 'driveSignIn',
   });
   if (!projectState.savingPaused) void autosave.saveNow();
@@ -418,9 +497,53 @@ driveProvider.onSessionLost(() => {
 /** Point saves at a provider and project. Pass a manifest when the project was just loaded from it. */
 function useProvider(provider: StorageProvider, id: string | null, loaded: SavedManifest | null = null) {
   projectState.use(provider, id, loaded);
+  showStorageProvider();
   persistAppSession();
   session.broadcastMetadata({ title: projectName(), storage: projectState.currentStorageLabel() });
 }
+
+// Compile PDF (#242): the TeX log's diagnostics, shown with the preview's until the next Compile PDF.
+let texLogDiagnostics: ProjectDiagnostic[] = [];
+const compilePdfModule = lazyModule(() => import('./app/compilePdf'));
+let compilePdfRunner: { run(): Promise<void> } | null = null;
+
+/** View > Compile PDF. Off (no VITE_COMPILE_PDF=1), it only says why, without loading anything. */
+async function runCompilePdf() {
+  if (!isCompilePdfEnabled()) {
+    await noticeDialog({ title: NOT_AVAILABLE_TITLE, message: NOT_AVAILABLE_MESSAGE });
+    return;
+  }
+  try {
+    const { createCompilePdf, browserCompilePdfDeps } = await compilePdfModule.get();
+    compilePdfRunner ??= createCompilePdf(
+      browserCompilePdfDeps({
+        getProject: () => project,
+        blobs,
+        notice: (title, message) => noticeDialog({ title, message }),
+        setDiagnostics: (diagnostics) => {
+          texLogDiagnostics = diagnostics;
+          compile.compileNow();
+        },
+        openAt: (path, line) => {
+          const entry = project.findByPath(path);
+          if (!entry) return;
+          openFile(entry.id);
+          editor.reveal(line);
+        },
+        download: (bytes, name) => localDownload.download(name, bytes, 'application/pdf'),
+        setStatus,
+      }),
+    );
+    await compilePdfRunner.run();
+  } catch (error) {
+    if (isLoadFailure(error)) lazyLoadFailed('Compile PDF', error);
+    else showNotice(describeError(error), true);
+  }
+}
+
+// The Compile PDF asset cache (#241), its own chunk. Only Settings and Compile PDF load it.
+const texAssetCacheModule = lazyModule(() => import('./compile/pdf/texAssetCache'));
+const loadTexAssetCache = async () => (await texAssetCacheModule.get()).browserTexAssetCache();
 
 // Loads on first use, or with the other dialogs once the page is idle (see preloadDialogs).
 const conflictDialog = lazyModule(() =>
@@ -495,6 +618,7 @@ const compile = createPreviewCompile({
   onChanges: (changes) => previewChanges.setChanges(changes),
   // With drive.file we can't see files added to the folder from Drive, so point at the fix.
   missingHint: () => (!isClient && projectState.isDrive() ? DRIVE_MISSING_HINT : ''),
+  extraDiagnostics: () => texLogDiagnostics,
   onCompiled: () => {
     if (noticeKind !== 'compile') return;
     notice.clear();
@@ -514,7 +638,10 @@ const compile = createPreviewCompile({
 const { scheduleCompile } = compile;
 
 const fileTree = createFileTree(document.getElementById('file-pane')!, {
-  onOpen: (entry) => openFile(entry.id),
+  onOpen: (entry) => {
+    openFile(entry.id);
+    if (entry.kind !== 'folder') phone.fileOpened();
+  },
   onRename: async (path) => {
     const isFolder = project.folderPaths().includes(path);
     const next = await promptDialog({
@@ -556,9 +683,12 @@ const fileTree = createFileTree(document.getElementById('file-pane')!, {
   onCommand: (commandId) => executeCommand(commandId),
 });
 
-const fileViewer = createFileViewer(document.getElementById('file-viewer')!, {
-  onDownload: (path) => void downloadFile(path),
-});
+// Loads on the first binary file opened, or when the browser is idle (issue #231).
+// A PDF the desktop app compiled with local TeX (#264): shown in the file viewer, not in the project.
+let compiledPdf: { path: string; bytes: Uint8Array } | null = null;
+const fileViewer = lazyFileViewer(document.getElementById('file-viewer')!, {
+  onDownload: (path) => (compiledPdf?.path === path ? localDownload.download(path, compiledPdf.bytes, 'application/pdf') : void downloadFile(path)),
+}, lazyLoadFailed);
 
 /**
  * A rename or delete redraws the file tree, which drops the button the dialog gave focus back to.
@@ -717,6 +847,27 @@ async function fetchMissingFiles() {
   }
 }
 
+// The project as completion, the checks and the outline read it. bindProject makes a new one per doc.
+let currentCompletionProject: CompletionProject | null = null;
+
+/** Opens a place in a text file: the outline's rows and go to definition use it. On a phone, it closes the drawer. */
+function openLocation(location: TextLocation) {
+  const entry = project.entries().find((e) => e.path === location.path && e.kind === 'text');
+  if (!entry) return;
+  if (entry.id !== activeFileId) openFile(entry.id);
+  editor.reveal(location.line, location.column, location.length, !isPhone());
+  phone.fileOpened();
+}
+
+// The Outline section under the file tree (issue #248). Its list is a lazy chunk, loaded once it's open.
+const outline = createOutlineSection({
+  section: document.getElementById('outline')!,
+  toggle: document.getElementById('outline-toggle') as HTMLButtonElement,
+  list: document.getElementById('outline-list')!,
+  load: () => whenOnline(() => import('./ui/outline')),
+  host: { project: () => currentCompletionProject, open: openLocation },
+});
+
 /** Hook the UI up to the current project doc. Guests run this again when the host sends a new doc. */
 function bindProject() {
   unbindDoc?.();
@@ -731,6 +882,21 @@ function bindProject() {
     persistAppSession();
   };
   session.getDoc().on('update', onUpdate);
+  // \ref, \cite and \input complete from the whole project, peers' edits included (issue #193).
+  // The open file's \ref, \label and \cite problems are checked against it too (issue #246).
+  // Go to definition opens files, and rename edits every file as one step in the file history (issue #247).
+  const completionProject = completionProjectFrom(session.getDoc(), project, {
+    activePath: () => (activeFileId && project.get(activeFileId)?.path) || null,
+    open: ({ path }) => {
+      const entry = project.entries().find((e) => e.path === path && e.kind === 'text');
+      if (entry && entry.id !== activeFileId) openFile(entry.id);
+    },
+    record: (op, label, done) => runFileOp(op, label, done),
+    notify: (message) => showNotice(message),
+  });
+  editor.setCompletionProject(completionProject);
+  currentCompletionProject = completionProject;
+  outline.refresh();
   const stopTree = project.onTreeChange(() => {
     ensureActiveFile();
     renderFiles();
@@ -739,6 +905,9 @@ function bindProject() {
   });
   unbindDoc = () => {
     session.getDoc().off('update', onUpdate);
+    completionProject.dispose();
+    editor.setCompletionProject(null);
+    currentCompletionProject = null;
     stopTree();
   };
   activeFileId = activeFileId && project.get(activeFileId) ? activeFileId : null;
@@ -873,7 +1042,7 @@ const exportDialogModule = lazyModule<ExportDialog>(() =>
           driveChoice({
             api: driveProvider,
             isGuest: () => isClient,
-            configured: () => Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID),
+            configured: () => storageProviders.get('googleDrive').configured(),
             signedIn: () => driveProvider.hasUsableToken(),
             // Not ensureDriveConnected: signing in to export doesn't change where autosave goes or what the pill says.
             signIn: async () => {
@@ -909,11 +1078,20 @@ const exportDialog = {
 };
 
 const projectsDialog = lazyProjectsDialog(document.getElementById('projects-dialog') as HTMLDialogElement, {
-  onPick: (summary) => {
-    if (!isClient) void openStoredProject(localAppProvider, summary.id);
+  onPick: (summary, source) => {
+    if (!isClient) void openStoredProject(source === 'googleDrive' ? driveProvider : localAppProvider, summary.id);
   },
   // The host already OK'd Open to get here, so this doesn't ask again.
   onImportZip: () => commands.importZipFromOpenDialog(),
+  registry: storageProviders,
+  onProvider: (id) => void commands.openFromProvider(id),
+}, lazyLoadFailed);
+
+// Edit > Accounts (#200). Connect and Log out run each provider's File menu commands.
+const accountsPanel = lazyAccountsPanel(document.getElementById('accounts-dialog') as HTMLDialogElement, {
+  registry: storageProviders,
+  docsBase,
+  runCommand: (commandId) => executeCommand(commandId),
 }, lazyLoadFailed);
 
 // File > New Project's template picker, Save as Template and the profile (#74). They load on first use.
@@ -1018,10 +1196,32 @@ function showDriveAccount() {
   const account = driveProvider.accountLabel();
   autosaveStatusEl.title = account ? `Google Drive: ${account}` : '';
   if (settingsDialog.isOpen()) settingsDialog.refresh();
+  accountsPanel.refresh();
+  showStorageProvider();
   refreshCommands();
 }
 
+/**
+ * The status bar badge for where the open project is stored, from the registry. A guest sees the
+ * host's storage, from the room's metadata, which only ever carries a name like "Google Drive".
+ */
+function showStorageProvider() {
+  const entry = storageProviders.forProvider(projectState.activeProvider) ?? storageProviders.get('local');
+  const account = entry.account();
+  storageProviderNameEl.textContent = isClient ? `Host: ${hostStorageText.replace(/^Saved on host /, '')}` : entry.name;
+  storageProviderEl.title = isClient ? hostStorageText : `Stored in ${entry.name}${account ? ` as ${account}` : ''}. Click for Accounts.`;
+  // An expired sign-in gets a coloured border (style.css).
+  storageProviderEl.dataset.status = entry.status();
+  storageProviderEl.disabled = isClient;
+  storageProviderEl.querySelector('svg')?.replaceWith(icon(storageIcons[entry.icon]));
+}
+
 const ensureDrivePickerConfig = () => {
+  // The Picker needs a web origin, which the desktop app doesn't have (#177, docs/desktop.md).
+  if (isDesktopShell()) {
+    showNotice("The Google Drive picker doesn't work in the desktop app. Use the web app for this.", true);
+    return false;
+  }
   if (driveApiKey) return true;
   setStatus('Drive: API key missing');
   showNotice('Google Drive picker is not set up on this site (VITE_GOOGLE_API_KEY is missing).', true);
@@ -1049,6 +1249,47 @@ const pickFromDrive = async (kind: 'project' | 'folder') => {
 const switchToDrive = () => {
   if (!projectState.isDrive()) useProvider(driveProvider, null);
 };
+
+// Folders on this computer as projects, in the desktop app only (#178). A lazy chunk the website never loads.
+const folders = isDesktopShell()
+  ? import('./app/desktopFolders')
+      .then(({ setUpFolders }) =>
+        setUpFolders({
+          registry: storageProviders,
+          projectState,
+          getProject: () => project,
+          useProvider,
+          openStoredProject,
+          holdConflict,
+          takeTheirs: (conflict) => (conflicts.set(conflict.id, conflict), resolveConflict(conflict, 'theirs')),
+          confirmDialog,
+          autosave,
+          setStatus,
+          showNotice,
+        }),
+      )
+      .catch((error: unknown) => (console.warn('Folder projects did not load', error), null))
+  : null;
+
+// Compiling with a TeX Live on this computer, in the desktop app only (#264). Loads on first use.
+const localTex = isDesktopShell()
+  ? lazyModule(() =>
+      import('./app/desktopLocalTex').then(({ createLocalTex }) =>
+        createLocalTex({
+          getProject: () => project,
+          getBlob: (hash) => blobs.get(hash),
+          confirmDialog,
+          promptDialog,
+          showNotice,
+          setStatus,
+          showPdf: (path, bytes) => {
+            compiledPdf = { path, bytes };
+            fileViewer.show({ path, bytes, size: bytes.length });
+          },
+        }),
+      ),
+    ).get
+  : null;
 
 // Every shortcut label and key press reads from this one table.
 // Where the browser keeps a key for itself (a normal tab), the built-in fallback is used and shown instead.
@@ -1079,10 +1320,14 @@ const commands = createCommands({
   editor,
   fileTree,
   projectsDialog,
+  storageProviders,
+  folders,
+  localTex,
+  accountsPanel,
   uploadDialog,
   templates,
   zipInput,
-  shareButtonEl,
+  copyShareLink: () => share?.copyOrOpen(),
   get project() {
     return project;
   },
@@ -1112,7 +1357,11 @@ const commands = createCommands({
   loadFailed: (feature, error) => lazyLoadFailed(feature, error),
   persistAppSession,
   runFileOp,
-  openFile,
+  // A new file opens in the editor, so on a phone close the file drawer too.
+  openFile: (id: string | null) => {
+    openFile(id);
+    if (id) phone.fileOpened();
+  },
   downloadFile,
   switchProject,
   openStoredProject,
@@ -1158,6 +1407,7 @@ const commands = createCommands({
   openFeatureForm: () => openExternal(featureRequestUrl()),
   startTour: () => tour.start(),
   openAbout: () => aboutDialog.open(),
+  compilePdf: () => runCompilePdf(),
 });
 const { executeCommand, refreshCommands, getCommandState, buildPaletteCommands, listCommands, handleKeydown, setSavingPaused } = commands;
 
@@ -1184,6 +1434,7 @@ bindSettings({
 const menuBar = createMenuBar(document.getElementById('menu-bar')!, {
   getCommandState,
   shortcutLabel,
+  isCollapsed: isPhone,
   onCommand: (commandId) => executeCommand(commandId),
 });
 
@@ -1219,6 +1470,11 @@ const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettin
   onExportSettings: () => localDownload.download(settingsFileName(), settings.exportJson(), 'application/json'),
   onImportSettings: (file) => importSettingsFile(settings, file),
   onResetSettings: (scope) => resetSettings(settings, scope),
+  // The Compile PDF engine files (#241). The cache code is its own chunk, loaded when Settings opens.
+  texAssets: {
+    usage: async () => (await loadTexAssetCache())?.usage() ?? { bytes: 0, files: 0 },
+    remove: async () => (await loadTexAssetCache())?.remove(),
+  },
 }, document.getElementById('settings-keybinds')!, {
   keymap,
   contextLabel: () => describeKeyContext(keyContext.current()),
@@ -1236,8 +1492,47 @@ const { settingsDialog, keybindSettings, preload: preloadSettings } = lazySettin
 const toolbar = createToolbar(document.getElementById('toolbar')!, {
   getCommandState,
   shortcutLabel,
+  isCollapsed: isPhone,
   onCommand: (commandId) => executeCommand(commandId),
 });
+// On a phone the menus collapse into one Menu button and the toolbar into a few buttons and More (#186).
+phoneMedia?.addEventListener('change', () => {
+  menuBar.closeMenus();
+  toolbar.viewportChanged();
+});
+
+// After a longer rest than the tooltip, menu items and toolbar buttons show what they do (#89).
+// The pictures are a lazy chunk; until they load the card shows the palette description.
+// The card's code is a lazy chunk too (issue #231). It loads when the browser is idle, or as the
+// pointer or focus reaches the menus or toolbar, which is well before the card's delay is up. If it
+// can't load there are no cards, only the tooltips, and the next visit to the menus tries again.
+const menuDescriptions = new Map(menuBar.entries().map((entry) => [entry.commandId, entry.description]));
+const hoverPreview = lazyModule(() =>
+  import('./ui/hoverPreview').then(({ createHoverPreview, replayHover }) => {
+    const preview = createHoverPreview(document.getElementById('hover-preview')!, {
+      description: (commandId) => menuDescriptions.get(commandId),
+      shortcutLabel,
+      loadMocks: () => whenOnline(() => import('./ui/hoverPreviewMocks')).then((module) => module.renderMock),
+    });
+    const targets = [
+      [document.getElementById('menu-bar')!, '.menu-item[data-command]', 'right'],
+      [document.getElementById('toolbar')!, 'button[data-command]', 'bottom'],
+    ] as const;
+    for (const [root, selector, side] of targets) preview.attach(root, selector, side);
+    // The pointer that started the load may already be resting on a button.
+    for (const [root, selector] of targets) replayHover(root, selector);
+    return preview;
+  }),
+);
+const preloadHoverPreview = () => {
+  if (!hoverPreview.current()) hoverPreview.preload();
+};
+for (const id of ['menu-bar', 'toolbar']) {
+  for (const type of ['pointerover', 'focusin'] as const) document.getElementById(id)?.addEventListener(type, preloadHoverPreview, { passive: true });
+}
+whenIdle(preloadHoverPreview);
+// Touch has no hover: holding a finger on a toolbar button or other tooltip shows its name instead (#188).
+attachTouchTooltips(document.body);
 
 const changelogDialog = createChangelogDialog(document.getElementById('changelog-dialog') as HTMLDialogElement, {
   version: BUILD_INFO.version,
@@ -1254,21 +1549,26 @@ const tour = lazyTour(document.getElementById('tour')!, document.getElementById(
   seen: { has: () => settings.get('tourSeen') || !settings.isPersistent(), mark: () => settings.set('tourSeen', true) },
 }, lazyLoadFailed);
 
-// The palette, Settings, About and the Open and Upload dialogs load on first use. Fetch them once the page
+// The palette, Settings, About, the Open and Upload dialogs and Google Drive load on first use. Fetch them once the page
 // is idle, or as soon as the pointer or focus reaches the menus or toolbar, so they open at once.
 const preloadDialogs = () => {
   commandPalette.preload();
   preloadSettings();
   projectsDialog.preload();
+  accountsPanel.preload();
   uploadDialog.preload();
   tour.preload();
   aboutDialog.preload();
   conflictDialog.preload();
   templates.preload();
+  driveProvider.preload();
+  preloadAppDialogs();
+  fileViewer.preload();
 };
 preloadOnIntent(document.getElementById('menu-bar'), preloadDialogs);
 preloadOnIntent(document.getElementById('toolbar'), preloadDialogs);
 whenIdle(preloadDialogs);
+whenIdle(() => void menuBar.loadIcons());
 
 // The empty states have their own buttons for the next step, like New file.
 document.querySelectorAll<HTMLButtonElement>('#editor-empty [data-command], #preview-empty [data-command]').forEach((button) => {
@@ -1295,6 +1595,25 @@ if (!isClient) {
   void localAppProvider
     .connect()
     .then(async () => {
+      // Drive was connected on an earlier visit: sign back in without asking before saving starts (#201).
+      if (projectState.awaitingDrive()) {
+        setStatus('Drive: Signing in...');
+        driveRestoreMessage = projectState.resumeDrive(await driveProvider.restoreSession());
+        showStorageProvider();
+        showDriveAccount();
+      } else if (driveProvider.wasConnected() && !driveProvider.hasUsableToken()) {
+        // The last session saved here, but the Accounts panel can still show Drive as connected.
+        void driveProvider.restoreSession().then((ok) => {
+          if (ok) void driveProvider.loadAccount().then(showDriveAccount);
+          else showDriveAccount();
+        });
+      }
+      // The desktop app's last session saved to a folder (#178): pick it back up if it's still there.
+      const folder = projectState.awaitingFolder();
+      if (folder !== null) {
+        driveRestoreMessage = projectState.resumeFolder((await (await folders)?.reopen(folder)) ?? null);
+        showStorageProvider();
+      }
       if (!projectState.projectId && projectState.activeProvider === localAppProvider && restored && !restored.projectId && project.getName()) {
         const mainId = project.getMainFileId();
         const mainPath = mainId ? project.get(mainId)?.path : undefined;
@@ -1314,11 +1633,40 @@ if (!isClient) {
   setStatus(hostStorageText);
 }
 
-// Guests join the room in the URL, and a reloaded host rejoins the room this tab already shared.
-const hostRoomId = isClient ? null : readHostRoomId();
-if (roomId) session.join(roomId);
-else if (hostRoomId) session.join(hostRoomId);
-inRoom = Boolean(roomId || hostRoomId);
+// Guests join the room in the URL. A host is never in a room on load (issue #224): a reload only
+// offers to resume the room this tab shared, from the Share popover.
+const hostRoomId = isClient || !p2pAvailable ? null : readHostRoomId();
+/** Say why this window can't share or join, and in the desktop app offer the browser instead. */
+function explainP2pUnavailable(action: P2pAction) {
+  const desktop = isDesktopShell();
+  const appUrl = desktop ? webAppUrl(docsBase) : null;
+  const link = appUrl && (action === 'join' && roomId ? webRoomLink(appUrl, roomId) : appUrl);
+  void explainNoWebRtc({
+    action,
+    desktop,
+    link,
+    confirm: confirmDialog,
+    notice: noticeDialog,
+    openExternal: (url) => openInSystemBrowser(url),
+    copyText: (value) => navigator.clipboard.writeText(value),
+    notify: (message) => showNotice(message, true, true),
+  });
+}
+if (!p2pAvailable) {
+  inRoom = false;
+  if (roomId) {
+    // The Files panel would say "Waiting for the host" forever, so say why instead.
+    const waiting = document.getElementById('file-tree-waiting');
+    const heading = waiting?.querySelector('h3');
+    const text = waiting?.querySelector('p');
+    if (heading) heading.textContent = noWebRtcTitle('join');
+    if (text) text.textContent = noWebRtcAdvice('join', isDesktopShell(), Boolean(webAppUrl(docsBase)));
+    explainP2pUnavailable('join');
+  }
+} else {
+  if (roomId) session.join(roomId);
+  inRoom = Boolean(roomId);
+}
 if (inRoom) startPresence();
 // Tell peers we're gone, so our cursor doesn't linger until they time us out.
 window.addEventListener('pagehide', () => presence.stop());
@@ -1326,36 +1674,61 @@ window.addEventListener('pagehide', () => presence.stop());
 window.addEventListener('pageshow', (event) => {
   if (event.persisted && inRoom) startPresence();
 });
+// The storage badge opens Accounts, where the host can connect or log out.
+storageProviderEl.addEventListener('click', () => executeCommand('app.accounts'));
+showStorageProvider();
 renderConnection();
 layout.installSplitter();
 layout.applyLayoutMode();
 hideLoading();
 scheduleCompile();
 
-// The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share.
-preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
-setupShareButton({
+// The P2P code loads on the first join, so fetch it as the pointer or focus reaches Share. This only
+// downloads code: nothing connects to the trackers until Start sharing.
+if (p2pAvailable) preloadOnIntent(shareButtonEl, () => void session.preloadTransport());
+const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+/** The host just joined a room: remember it for Resume sharing, and start presence. */
+const hostJoined = (id: string) => {
+  writeHostRoomId(id);
+  inRoom = true;
+  startPresence();
+  renderConnection();
+  return id;
+};
+share = lazyShareButton({
+  root: byId('share-menu'),
   button: shareButtonEl,
-  linkEl: shareLinkEl,
-  getRoomId: () => {
-    const id = session.ensureRoom();
-    if (!isClient) writeHostRoomId(id);
-    inRoom = true;
-    startPresence();
-    renderConnection();
-    return id;
-  },
+  popover: byId('share-popover'),
+  title: byId('share-popover-title'),
+  startView: byId('share-start'),
+  startButton: byId('share-start-btn'),
+  resumeButton: byId('share-resume-btn'),
+  activeView: byId('share-active'),
+  linkEl: byId('share-link'),
+  copyButton: byId('share-copy-btn'),
+  newLinkButton: byId('new-link-btn'),
+  stopButton: byId('share-stop-btn'),
   getCurrentUrl: () => location.href,
   onStatus: (message) => showNotice(message),
-  initialRoomId: hostRoomId,
-  newLinkButton: isClient ? undefined : (document.getElementById('new-link-btn') as HTMLButtonElement),
-  getNewRoomId: () => {
+  guestRoomId: roomId,
+  resumeRoomId: hostRoomId,
+  startRoom: (resumeId) => {
+    if (resumeId) session.join(resumeId);
+    return hostJoined(resumeId ?? session.ensureRoom());
+  },
+  newRoom: () => {
     const id = session.newRoom();
-    writeHostRoomId(id);
     // Everyone on the old link is gone now.
     peerCount = 0;
+    return hostJoined(id);
+  },
+  stopSharing: () => {
+    presence.stop();
+    session.leave();
+    clearHostRoomId();
+    inRoom = false;
+    peerCount = 0;
     renderConnection();
-    return id;
   },
   confirmNewLink: () =>
     confirmDialog({
@@ -1365,7 +1738,19 @@ setupShareButton({
       cancelLabel: 'Keep current link',
       destructive: true,
     }),
-});
+  // Only ask when someone would be cut off.
+  confirmStop: () =>
+    peerCount === 0 ||
+    confirmDialog({
+      title: 'Stop sharing?',
+      message: `${peerCount === 1 ? '1 person is' : `${peerCount} people are`} connected. They'll be disconnected, and the link stops working.`,
+      confirmLabel: 'Stop sharing',
+      cancelLabel: 'Keep sharing',
+      destructive: true,
+    }),
+  unavailable: p2pAvailable ? undefined : () => explainP2pUnavailable('share'),
+}, lazyLoadFailed);
+preloadOnIntent(shareButtonEl, share.preload);
 
 // Guests can't rename the host's project, so the title is just a label for them.
 if (isClient) {
@@ -1409,7 +1794,8 @@ window.addEventListener('beforeunload', (event) => {
 updateFlow = setupUpdateFlow({
   root: document.getElementById('update-prompt') as HTMLElement,
   current: BUILD_INFO,
-  poll: import.meta.env.PROD,
+  // The desktop app's version.json is the bundled one; its updater checks instead (desktopUpdates.ts, #179).
+  poll: import.meta.env.PROD && !isDesktopShell(),
   baseUrl: document.baseURI,
   room: () => ({ isHost: !isClient, inRoom }),
   openChangelog: () => void changelogDialog.open('update'),

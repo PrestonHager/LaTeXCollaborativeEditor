@@ -21,7 +21,7 @@ A shortcut for a grayed-out command does nothing, for example **Ctrl+S** when yo
 | --- | --- | --- |
 | **New File** | **Ctrl+N**, or ***Alt+N*** | **⌘N**, or ***⌥⌘N*** |
 | **New Project** (after you confirm, host only) | **Ctrl+Shift+N**, or ***Alt+Shift+N*** | **⇧⌘N**, or ***⌥⇧⌘N*** |
-| **Open Local Project** (host only) | **Ctrl+O** | **⌘O** |
+| **Open Project…** (host only) | **Ctrl+O** | **⌘O** |
 | **Open from Google Drive** (host only) | **Ctrl+Shift+O** | **⇧⌘O** |
 | **Download Project .zip** | **Ctrl+Shift+S** | **⇧⌘S** |
 | **Export…** | **Ctrl+Shift+E**, or ***Alt+Shift+E*** | **⇧⌘E** |
@@ -47,6 +47,35 @@ If you had turned **Ctrl+N** off, it stays off, now for **New File**. Keybinds y
 | **Select all** | **Ctrl+A** | **⌘A** |
 | Indent | **Tab** | **Tab** |
 
+## Labels and citations
+
+With the cursor on a `\ref` or `\cite` key, a `\label`, a `.bib` entry's key, or a command.
+See [Labels, citations and commands](editing-and-preview.md#labels-citations-and-commands).
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| **Go to definition** | **F12**, or **Ctrl**+click | **F12** (**fn+F12** on some keyboards), or **⌘**+click |
+| **Find references** | **Shift+F12** | **⇧F12** |
+| **Rename label…** | **F2** | **F2** |
+
+Each is in the command palette too, and you can change the keys in Settings.
+
+## Autocompletion
+
+These work while you type in the editor. See [Autocompletion](editing-and-preview.md#autocompletion).
+
+| Action | Windows / Linux | macOS |
+| --- | --- | --- |
+| Open the completion list | **Ctrl+Space** | **⌃Space**, **⌥`** or **⌥I** |
+| Accept the highlighted completion | **Enter** | **↩** |
+| Move through the list | **↑** / **↓**, **Page Up** / **Page Down** | **↑** / **↓**, **Page Up** / **Page Down** |
+| Close the list, or leave a command's placeholders | **Escape** | **Escape** |
+| Next placeholder (tab stop) | **Tab** | **Tab** |
+| Previous placeholder | **Shift+Tab** | **⇧Tab** |
+
+The list opens by itself after `\` or `\begin{`.
+While a command's placeholders are active, **Tab** moves between them instead of indenting.
+
 Undo and Redo go by where focus is, like VS Code.
 In the editor they undo typing in the open file.
 In the **Files** panel they undo and redo file operations: create, rename, move, delete and upload.
@@ -58,6 +87,7 @@ See [Undoing file operations](editing-and-preview.md#undoing-file-operations).
 | Action | Windows / Linux | macOS |
 | --- | --- | --- |
 | **Compile Now** (refresh the preview) | **Ctrl+Enter** | **⌘↩** |
+| **Compile PDF** (the real PDF, with TeX) | **Ctrl+Shift+Enter** | **⇧⌘↩** |
 
 **Compile Now** used to be **Ctrl+Shift+C**, but Chrome and Edge open the element inspector on that key.
 In the editor, **Ctrl+Enter** compiles instead of inserting a blank line.
@@ -90,7 +120,7 @@ Press **Use it here** or **Give it to ...** to pick, and the other command's key
 
 ### Keys the editor or browser keeps
 
-- While you type in the editor, its own keys come first, like **Ctrl+]** to indent or **Ctrl+Z** to undo.
+- While you type in the editor, its own keys come first, like **Ctrl+]** to indent, **Ctrl+Z** to undo or **Ctrl+Space** to open the completion list.
   If you give one of those to a command, Settings warns you, and the command only runs when the editor doesn't have focus.
 - Some keys belong to the browser or your computer, like **Ctrl+W** (close tab), **Ctrl+T** (new tab) and **Ctrl+N** (new window) in a browser tab, or **⌘H** (hide) on a Mac.
   Settings warns you about those, and says which key is used instead. See [Keys your browser keeps](#keys-your-browser-keeps).

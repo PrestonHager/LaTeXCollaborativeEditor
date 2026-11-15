@@ -10,6 +10,11 @@ type LayoutElements = {
 };
 
 /** Show the editor, the preview, or both with a draggable splitter between them. */
+/** The split's grid columns with the editor at `left` percent: editor, 8px splitter, preview. */
+export function splitColumns(left: number) {
+  return `minmax(0px, ${left}fr) 8px minmax(0px, ${100 - left}fr)`;
+}
+
 export function createLayout({ splitRoot, splitter, editorPane, previewPane, onChange }: LayoutElements) {
   let layoutMode: LayoutMode = 'split';
   let splitRatio = 0.5;
@@ -23,35 +28,51 @@ export function createLayout({ splitRoot, splitter, editorPane, previewPane, onC
     previewPane.style.display = layoutMode === 'editor-only' ? 'none' : '';
     if (layoutMode === 'split') {
       const left = Math.max(20, Math.min(80, Math.round(splitRatio * 100)));
-      splitRoot.style.gridTemplateColumns = `${left}% 8px ${100 - left}%`;
+      // fr, not %, so the 8px splitter comes out of the two panes. `50% 8px 50%` was 8px wider than the
+      // window and cut off the preview's right edge (found by the layout check in #191).
+      splitRoot.style.gridTemplateColumns = splitColumns(left);
       splitter.setAttribute('aria-valuenow', String(left));
     } else {
       splitRoot.style.gridTemplateColumns = '1fr';
     }
   };
 
+  /**
+   * Drag with a mouse, a pen or a finger (#188). Pointer capture keeps the drag going over the editor and
+   * the preview's iframe, `touch-action: none` in style.css stops the browser from scrolling instead, and
+   * on touch screens the splitter has an invisible 44px hit area around its 8px bar.
+   */
   const installSplitter = () => {
-    let dragging = false;
-    const onMove = (event: PointerEvent) => {
-      if (!dragging || layoutMode !== 'split') return;
+    // The one pointer dragging, so a second finger on the screen doesn't move the splitter too.
+    let dragging: number | null = null;
+    const ratioAt = (clientX: number) => {
       const bounds = splitRoot.getBoundingClientRect();
-      const ratio = (event.clientX - bounds.left) / bounds.width;
-      splitRatio = Math.max(0.2, Math.min(0.8, ratio));
+      return bounds.width > 0 ? Math.max(0.2, Math.min(0.8, (clientX - bounds.left) / bounds.width)) : splitRatio;
+    };
+    const onMove = (event: PointerEvent) => {
+      if (dragging === null || event.pointerId !== dragging || layoutMode !== 'split') return;
+      splitRatio = ratioAt(event.clientX);
       applyLayoutMode();
     };
-    const onUp = () => {
-      if (dragging) changed();
-      dragging = false;
+    const end = (event: PointerEvent) => {
+      if (dragging === null || event.pointerId !== dragging) return;
+      dragging = null;
       document.body.classList.remove('is-resizing');
+      // Lifting the finger or button keeps the new size, and so does the browser cancelling the drag.
+      changed();
     };
     splitter.addEventListener('pointerdown', (event) => {
-      if (layoutMode !== 'split') return;
-      dragging = true;
+      // Only the main mouse button. Touch and pen report 0 too.
+      if (layoutMode !== 'split' || dragging !== null || event.button > 0) return;
+      // No text selection, and no compatibility mouse events, while dragging.
+      event.preventDefault();
+      dragging = event.pointerId;
       document.body.classList.add('is-resizing');
-      splitter.setPointerCapture(event.pointerId);
+      splitter.setPointerCapture?.(event.pointerId);
     });
     window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
     // Keyboard users move the splitter with the arrow keys instead of dragging.
     splitter.addEventListener('keydown', (event) => {
       if (layoutMode !== 'split') return;

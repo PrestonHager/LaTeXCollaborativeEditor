@@ -75,8 +75,8 @@ describe('miniDom with LaTeX.js', () => {
     it(`builds the same preview as a real DOM for the ${name}`, () => {
       const real = latexSourceToPreviewHtml(source);
       const mini = withMiniDom(() => latexSourceToPreviewHtml(source));
-      expect(real.errors).toEqual([]);
-      expect(mini.errors).toEqual([]);
+      expect(real.errors.filter((e) => e.severity === 'error')).toEqual([]);
+      expect(mini.errors).toEqual(real.errors);
       expect(canonical(mini.html!)).toBe(canonical(real.html!));
     });
   }

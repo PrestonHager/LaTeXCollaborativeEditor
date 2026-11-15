@@ -5,7 +5,8 @@ const doc = (body: string, preamble = '') => `\\documentclass{article}${preamble
 
 function render(source: string) {
   const result = latexSourceToPreviewHtml(source);
-  expect(result.errors).toEqual([]);
+  // Info notes, like the one for \usepackage{listings}, are fine. Nothing worse is.
+  expect(result.errors.filter((e) => e.severity !== 'info')).toEqual([]);
   return { ...result, dom: new DOMParser().parseFromString(result.html!, 'text/html') };
 }
 
@@ -113,6 +114,7 @@ describe('listings and minted', () => {
     expect(changes).toEqual([
       'Showed code listings as plain text, without syntax highlighting or style options.',
       'Removed listings, minted and fancyvrb setup commands.',
+      "Removed packages the preview can't load: listings.",
     ]);
   });
 
@@ -140,7 +142,9 @@ describe('listings and minted', () => {
       ['code/b.rs', 'fn main() {}\n'],
     ]);
     const result = projectToPreviewHtml({ mainPath: 'paper/main.tex', texts, binaryPaths: [], imageUrls: new Map() });
-    expect(result.errors).toEqual([]);
+    expect(result.errors).toEqual([
+      { path: 'paper/main.tex', line: 1, severity: 'info', message: 'The preview uses a stand-in for the minted package. Code shows in plain code blocks.' },
+    ]);
     expect(result.missing).toEqual(['nope.c']);
     const dom = new DOMParser().parseFromString(result.html!, 'text/html');
     const pres = Array.from(dom.querySelectorAll('pre'));
@@ -201,11 +205,10 @@ describe('helpers', () => {
     ]);
   });
 
-  it('drops \\usepackage lines for the packages it stands in for, keeping the line count', () => {
-    const source = '\\usepackage{listings}\n\\usepackage[newfloat]{minted}\n\\usepackage{fancyvrb, alltt}\n\\usepackage{listings,xcolor}\n\\begin{document}x\\end{document}';
-    const { texts, changes } = extractVerbatim('main.tex', new Map([['main.tex', source]]));
-    expect(texts.get('main.tex')).toBe('\n\n\n\\usepackage{listings,xcolor}\n\\begin{document}x\\end{document}');
-    expect(changes).toEqual([]);
+  it('leaves \\usepackage lines to the adapter, which says what it removed', () => {
+    const source = '\\usepackage{listings}\n\\usepackage[newfloat]{minted}\n\\begin{document}\\verb|x|\\end{document}';
+    const { texts } = extractVerbatim('main.tex', new Map([['main.tex', source]]));
+    expect(texts.get('main.tex')).toMatch(/^\\usepackage\{listings\}\n\\usepackage\[newfloat\]\{minted\}\n/);
   });
 
   it('returns the files unchanged when nothing is verbatim', () => {

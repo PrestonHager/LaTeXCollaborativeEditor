@@ -1,5 +1,6 @@
 import { EditorView } from '@codemirror/view';
-import { createEditorPane, editorKeybinds, editorKeymap } from './editor';
+import { acceptCompletion, completionKeymap, completionStatus, startCompletion } from '@codemirror/autocomplete';
+import { completionOpenKeys, createEditorPane, editorKeybinds, editorKeymap, loadCompletionExtensions } from './editor';
 
 // Scrolling the cursor into view measures text, which jsdom can't do, so give it empty boxes.
 beforeAll(() => {
@@ -149,5 +150,101 @@ describe('createEditorPane', () => {
     editor.setEditable(false);
     expect(editor.insertText('!')).toBe(false);
     expect(editor.getText()).toBe('Hello there');
+  });
+
+  it('reveals a line and column, selecting a range, and clamps past the end', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createEditorPane(container);
+    editor.setText('one\ntwo three\nfour');
+    const view = editor.getView();
+    editor.reveal(2, 4, 5);
+    expect(view.state.sliceDoc(view.state.selection.main.from, view.state.selection.main.to)).toBe('three');
+    expect(view.hasFocus).toBe(true);
+    editor.reveal(99, 99, 1, false);
+    expect(view.state.selection.main.from).toBe(view.state.doc.length);
+    editor.reveal(0);
+    expect(view.state.selection.main.from).toBe(0);
+    container.remove();
+  });
+
+  it('runs go to definition, find references and rename from the completion chunk, and copes when it fails to load', async () => {
+    const nav = {
+      goToDefinition: vi.fn(() => true),
+      findReferences: vi.fn(() => true),
+      renameLabel: vi.fn(async () => true),
+    };
+    const editor = createEditorPane(document.createElement('div'), { loadNavigation: async () => nav });
+    const project = { version: () => 0, files: () => [], mainPath: () => null };
+    editor.setCompletionProject(project);
+    expect(await editor.goToDefinition()).toBe(true);
+    expect(await editor.findReferences()).toBe(true);
+    const ask = vi.fn(async () => 'x');
+    expect(await editor.renameLabel(ask)).toBe(true);
+    const [view, getProject, passedAsk] = nav.renameLabel.mock.calls[0] as unknown as [EditorView, () => unknown, unknown];
+    expect(view).toBe(editor.getView());
+    expect(getProject()).toBe(project);
+    expect(passedAsk).toBe(ask);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const broken = createEditorPane(document.createElement('div'), { loadNavigation: () => Promise.reject(new Error('offline')) });
+    expect(await broken.goToDefinition()).toBe(false);
+    expect(await broken.renameLabel(ask)).toBe(false);
+    expect(warn).toHaveBeenCalledWith('Label navigation failed to load', expect.any(Error));
+    warn.mockRestore();
+  });
+
+  describe('autocompletion', () => {
+    it('loads after the editor and completes \\sec to \\section{title}', async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = createEditorPane(container);
+      await editor.completionReady();
+      const view = editor.getView();
+      editor.setText('');
+      view.dispatch({ changes: { from: 0, insert: '\\sec' }, selection: { anchor: 4 }, userEvent: 'input.type' });
+      startCompletion(view);
+      await vi.waitFor(() => expect(completionStatus(view.state)).toBe('active'));
+      // Accepting waits a moment after the list opens, so a quick Enter isn't taken by accident.
+      await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+      expect(editor.getText()).toBe('\\section{title}');
+      view.destroy();
+      container.remove();
+    });
+
+    it('completes \\ref{ from the project it was given', async () => {
+      const container = document.createElement('div');
+      document.body.appendChild(container);
+      const editor = createEditorPane(container);
+      await editor.completionReady();
+      editor.setCompletionProject({
+        version: () => 1,
+        files: () => [{ path: 'ch.tex', kind: 'text', text: () => '\\label{sec:one}' }],
+        mainPath: () => 'main.tex',
+      });
+      const view = editor.getView();
+      editor.setText('');
+      view.dispatch({ changes: { from: 0, insert: '\\ref{sec' }, selection: { anchor: 8 }, userEvent: 'input.type' });
+      startCompletion(view);
+      await vi.waitFor(() => expect(completionStatus(view.state)).toBe('active'));
+      await vi.waitFor(() => expect(acceptCompletion(view)).toBe(true));
+      expect(editor.getText()).toBe('\\ref{sec:one');
+      view.destroy();
+      container.remove();
+    });
+
+    it('keeps the editor working if it fails to load', async () => {
+      await expect(loadCompletionExtensions(() => Promise.reject(new Error('offline')))).rejects.toThrow('offline');
+      const extension = [] as const;
+      await expect(loadCompletionExtensions(() => Promise.resolve({ latexCompletionExtensions: () => extension }))).resolves.toBe(extension);
+    });
+
+    it('lists the keys that open completions, matching @codemirror/autocomplete', () => {
+      const opening = completionKeymap
+        .filter((binding) => binding.run === startCompletion)
+        .map(({ key, mac }) => ({ key, mac }));
+      expect(completionOpenKeys.map(({ key, mac }) => ({ key, mac }))).toEqual(opening);
+      expect(editorKeybinds('other')).toContain('Mod+Space');
+    });
   });
 });

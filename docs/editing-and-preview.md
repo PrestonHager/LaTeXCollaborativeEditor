@@ -3,14 +3,94 @@
 ## Editor
 
 The editor is made for LaTeX source.
-It has syntax highlighting, line numbers, bracket matching, and auto-closing brackets.
+It has syntax highlighting, line numbers, bracket matching, auto-closing brackets, and autocompletion.
 **Tab** indents the line.
+
+### Autocompletion
+
+Type `\` and the start of a command, and a list of matching commands shows under the cursor, each with its arguments and what it does.
+Type `\begin{` and the start of an environment name, and the list shows environments.
+
+- **Enter** accepts the highlighted one, the arrow keys move through the list, and **Escape** closes it.
+  **Ctrl+Space** opens the list whenever you want it (**⌃Space**, **⌥`** or **⌥I** on a Mac).
+- A command with arguments goes in with a placeholder in each one, like `\section{title}` with "title" selected, so you can type over it.
+  **Tab** goes to the next placeholder and **Shift+Tab** to the one before.
+  Moving the cursor out of them, or pressing **Escape**, leaves the placeholders.
+- An environment goes in with its matching `\end{...}` and the cursor on the line between them, like `\begin{itemize}`, `\item` and `\end{itemize}`.
+  If closing brackets already put a `}` after the cursor, it's used rather than doubled.
+- Accepting a `\begin` completion puts in `\begin{}` and opens the environment list.
+- It doesn't show in `%` comments or after `\\`.
+
+The list always has about 200 of LaTeX's own commands (structure, references and citations, text, math) and about 20 environments.
+It comes with the app and loads just after the editor shows, so nothing you type is sent anywhere to complete it.
+
+#### Packages and your own commands
+
+The list also offers commands and environments from the packages the project loads, and the ones it defines itself.
+Like the rest of the list, they follow the project as you and your collaborators edit it.
+
+- **Packages**: a package's commands only show once a `.tex` or `.sty` file in the project loads it with `\usepackage` or `\RequirePackage`.
+  For example, `\includegraphics` shows after `\usepackage{graphicx}`, and `\begin{align` after `\usepackage{amsmath}`.
+  The app knows amsmath, amssymb and amsfonts, amsthm, mathtools, graphicx, hyperref and url, booktabs, xcolor, siunitx, cleveref, TikZ and pgfplots, natbib, biblatex, csquotes, multirow, tabularx, longtable, listings, minted, subcaption and appendix.
+  A package that loads another brings its commands too, like TikZ with xcolor, and so do the Beamer, amsart and amsbook classes in `\documentclass`.
+  The package lists come with the app, in a file of their own that loads the first time the list needs one.
+  Packages it doesn't know add nothing.
+- **Your own commands**: commands defined with `\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\DeclareMathOperator`, `\def` or `\NewDocumentCommand` in any `.tex` or `.sty` file, and environments defined with `\newenvironment`, `\renewenvironment`, `\newtheorem` or `\NewDocumentEnvironment`.
+  Each goes in with a placeholder for each argument you have to give, and its info box says what defined it and where, and the default of an optional first argument.
+  A command you define takes the place of a built-in one with the same name.
+  Commented-out definitions, and internal names with `@` in them, are left out.
+Undo takes back an accepted completion like any other typing, and collaborators see the text it puts in.
+
+#### Labels, citations and paths
+
+Inside the braces of some commands, the list offers what's in the project rather than commands.
+It opens as you type after the `{`, and after a comma for commands that take a list, like `\cref{sec:a,sec:b}` or `\cite{a,b}`.
+
+- **Labels**: `\ref{`, `\eqref{`, `\autoref{`, `\cref{`, `\Cref{`, `\pageref{`, `\nameref{` and `\vref{` offer every `\label{...}` in the project's `.tex` files, with the file and line it's on.
+  Commented-out labels are left out.
+- **Citations**: `\cite{` and its natbib and biblatex forms (`\citep`, `\citet`, `\parencite`, `\textcite`, `\autocite`, `\footcite`, `\nocite` and the rest) offer the keys in the project's `.bib` files.
+  Each shows its first author and year, and its info box the title, the authors and the entry type.
+  Optional arguments before the braces, like `\parencite[see][12]{`, are fine.
+- **Paths**: `\input{` offers the project's `.tex` files and `\include{` the same without `.tex`, `\includegraphics{` its images and PDFs, `\bibliography{` its `.bib` files without `.bib`, and `\addbibresource{` with it.
+  Paths are relative to the main file's folder, the way the preview reads them.
+
+The list follows the project as it changes: a file you add, a label you write, or a `.bib` entry a collaborator adds shows up the next time the list opens.
+The project is only read when one of these lists opens, and only files that changed since are read again.
+Like the rest of autocompletion, it all happens in your browser and nothing is sent anywhere.
+
+### Hover docs
+
+Rest the mouse on a command, like `\section`, or on an environment name after `\begin{` or `\end{`, and after a moment a card shows its arguments and what it does.
+It knows the same commands as [autocompletion](#autocompletion): LaTeX's own, those of the packages the project loads, and the ones the project defines, which show where they're defined, like `\newcommand in main.tex:3`.
+A command it doesn't know shows nothing. Hover cards are mouse only.
+
+### Labels, citations and commands
+
+With the cursor on a label, a citation key or a command, three commands find your way around the project.
+They're in the command palette, under Edit.
+
+- **Go to definition** (**F12**, or **Ctrl**+click, **⌘**+click on a Mac): from a `\ref{key}` (or `\eqref`, `\cref` and the rest) it jumps to the `\label`, from a `\cite{key}` to the entry in the `.bib` file (or its `\bibitem`), and from a command like `\R` to the `\newcommand` that defines it. If that's in another file, the file opens. On a label defined more than once, pressing it again goes to the next one. If there's no definition in the project, a notice says so: a command may come from LaTeX or a package.
+- **Find references** (**Shift+F12**): lists every place a label or citation key is defined and used, in every file, in a panel under the editor. Definitions are in bold. Click a row (or press Enter on it) to go there; the list stays open until you press Escape or **Close**.
+- **Rename label…** (**F2**): asks for a new name, then changes the `\label` and every reference to it, in every file, including `\cref` lists and a listing's `label=`. It doesn't accept a name another label has, or one with spaces, commas or braces. The rename is one step: the notice that says what changed has **Undo**, and so has **Edit > Undo** right after. Collaborators see it like any edit.
+
+Keys built from macros, and anything in a comment, are left out, as in the [project checks](#project-checks).
+It all happens in your browser.
 
 The **Edit** menu has Undo, Redo, Cut, Copy, Paste, and Select All.
 
 - Undo and redo only undo your own typing, not a collaborator's.
 - Each file has its own undo history, and it starts over when you switch files.
 - File operations have a history of their own. See [Undoing file operations](#undoing-file-operations).
+
+### Phones and tablets
+
+When the on-screen keyboard opens, the page shrinks to the part above it, and the line with the cursor scrolls into view so it isn't hidden behind the keyboard.
+Android browsers do this through `interactive-widget=resizes-content` in the page's viewport tag; on iPhone and iPad the editor follows the browser's `visualViewport` instead.
+
+While the editor has focus on a touch screen, a **key bar** sits just above the keyboard with the LaTeX keys phone keyboards hide: `\` `{` `}` `$` `%` `[` `]` `&`.
+Tapping one puts that character at the cursor (or in place of the selection) without closing the keyboard.
+It's ordinary typing as far as the editor is concerned: collaborators see it, undo takes it back, and `\` opens [autocompletion](#autocompletion) like a typed one.
+The bar doesn't show with a mouse, in a read-only file, or when the editor doesn't have focus.
 
 ### Undoing file operations
 
@@ -71,6 +151,18 @@ Its fonts and styles load from a CDN.
 Your LaTeX stays in your browser.
 
 When the preview updates, it keeps your scroll position instead of jumping back to the top.
+
+### Zoom
+
+The preview's bar has zoom buttons: **Fit width** (↔), **Zoom out** (−), the zoom level, and **Zoom in** (+).
+
+- **Fit width** fills the pane. On a narrow pane, like a phone's, the page's side margins shrink to a small gutter so the text gets the whole width, and the text is scaled up so body text is at least 16 pixels and easy to read. On a wider pane it's the page at 100%. Fit width is the default on phones (under 640px wide), and 100% everywhere else.
+- **Zoom in** and **Zoom out** go a step at a time between 50% and 300%, starting from where you are, Fit width included.
+- **Pinch** the preview on a touch screen to zoom it. Only the preview zooms: the app's bars and the editor stay the same size. On a laptop, a trackpad pinch (or Ctrl + scroll wheel) over the preview does the same.
+
+The page always reflows to the pane, so zooming in makes the text bigger without a sideways scrollbar.
+In a pane under 480px wide the side margins are narrow at every zoom level, so a `\marginpar` note has no room there.
+The zoom isn't saved: a new tab starts at Fit width on a phone and 100% elsewhere. It stays the same as the preview updates.
 
 ### Links in the preview
 
@@ -133,7 +225,7 @@ When nothing needed changing, the button isn't there.
 
 Stripped:
 
-- These packages: `geometry`, `indentfirst`, `gensymb`, `fontspec`, `fancyhdr`, `nomencl`, `authblk`, `textcomp`, `float`.
+- Every package LaTeX.js can't load, from `\usepackage` and `\RequirePackage`. Each one gets a [diagnostic](#diagnostics) on its line. See [Packages](#packages).
 - `\hypersetup{...}`, `\geometry{...}`, and `\setmainfont{...}`.
 - fancyhdr setup: `\pagestyle{fancy}`, `\fancyhf{}`, `\fancyhead[...]{...}`, and `\renewcommand{\headrulewidth}{...}`.
 - nomencl setup: `\makenomenclature`, `\printnomenclature`, and `\renewcommand{\nomname}{...}`.
@@ -149,6 +241,53 @@ Rewritten:
 - authblk's `\author[...]{...}` drops the option, and `\affil{...}` becomes a small line of text.
 - `\textcopyright` becomes ©.
 - `\newpage`, `\clearpage`, `\cleardoublepage` and `\pagebreak` on a line of their own become a page break when you [export a PDF](#pdf-export) or print the HTML export. On screen, in the preview and the HTML export, they show as a dashed line labeled "page break". The line is never printed. One in the middle of a line is ignored.
+
+### Packages
+
+LaTeX.js only has a few packages built in. The preview loads these as they are:
+`color`, `xcolor`, `graphics`, `graphicx`, `hyperref`, `multicol`, `latexsym`, `gensymb`, `textcomp`, `textgreek`, `stix` and `echo`.
+LaTeX.js also accepts `calc`, `keyval`, `picture`, `pspicture`, `pict2e` and `comment`, and needs nothing from them.
+
+Every other package is taken out of the copy sent to the preview, and its `\usepackage` (or `\RequirePackage`) line gets a diagnostic that says what will look different.
+In a list like `\usepackage{xcolor,tikz}`, only `tikz` is taken out, and the note goes on the line with its name.
+`\RequirePackage{xcolor}` becomes `\usepackage{xcolor}`, since LaTeX.js only knows `\usepackage`.
+
+An **info** note means the preview leaves the package out on purpose, or has a stand-in for it, and the document still previews:
+
+| Packages | In the preview |
+| --- | --- |
+| `geometry`, `fullpage`, `a4wide`, `vmargin`, `typearea` | The preview uses its own page size and margins. |
+| `fancyhdr` | Headers and footers don't show. |
+| `setspace`, `parskip`, `indentfirst` | Line spacing and indents use the preview defaults. |
+| `microtype` | No visible difference. |
+| `float` | Figures show where they are in the source. |
+| `titlesec`, `titling`, `sectsty`, `caption` | Headings and captions use the preview style. |
+| `inputenc`, `fontenc` | The preview reads Unicode already. |
+| `fontspec`, `lmodern`, `times`, `mathptmx`, `helvet`, `courier`, `palatino`, `mathpazo`, `newtxtext`, `newtxmath`, `libertine`, `charter`, `kpfonts` | The preview uses its own fonts. |
+| `babel`, `polyglossia` | Hyphenation and names like "Contents" stay in English. |
+| `amssymb`, `amsfonts`, `mathtools`, `bm` | KaTeX draws the math, and has most of their commands. |
+| `amsmath` (stand-in) | KaTeX draws the math. Numbered equations show without their numbers. |
+| `amsthm` (stand-in) | Theorems and proofs show without numbers. |
+| `cleveref` (stand-in) | `\cref` shows as a plain reference. |
+| `csquotes` (stand-in) | `\enquote` shows plain quotation marks. |
+| `siunitx` (stand-in) | Numbers and units show as plain text. |
+| `booktabs` (stand-in) | Tables the preview can't draw show as a note. |
+| `appendix` (stand-in) | The `appendices` environment works like `\appendix`. |
+| `authblk` (stand-in) | Authors and affiliations show as plain text. |
+| `nomencl` (stand-in) | Entries show as plain text, and the list itself is left out. |
+| `natbib`, `biblatex`, `cite` (stand-in) | The preview builds the [bibliography](#bibliography) itself. |
+| `listings`, `minted`, `fancyvrb`, `alltt`, `verbatim` (stand-in) | Code shows in plain code blocks. |
+
+A **warning** means part of the document won't show, and using it stops the preview with an error:
+
+| Packages | In the preview |
+| --- | --- |
+| `tikz`, `pgf`, `pgfplots`, `tikz-cd`, `circuitikz`, `tkz-euclide`, `forest` | No TikZ pictures. The first `tikzpicture` stops the preview. |
+| `pstricks`, `xy`, `chemfig` | No pictures. The first one stops the preview. |
+| `algorithm`, `algorithmic`, `algpseudocode`, `algorithm2e` | No algorithms. The first one stops the preview. |
+| Any other package | What it adds is missing, and a command or environment the preview doesn't know stops it. |
+
+The list lives in `frontend/src/compile/previewPackages.ts`.
 
 Comments, `\verb`, and the `verbatim`, `verbatim*`, `Verbatim`, `lstlisting`, `minted`, and `comment` environments are left alone.
 Anything not listed here goes to LaTeX.js as is, and if it doesn't know a command, the error shows up in the diagnostics.
@@ -193,16 +332,49 @@ A key that isn't in any `.bib` file shows as `[?]`, with a warning on that line.
 When the preview hits a problem, you see it in two places:
 
 - The **footer** says how many problems there are and shows the first one, with its file and line, like `1 diagnostic(s). ... (chapters/intro.tex line 4)`.
-- The **editor** puts a red mark on that line, if that file is open. Warnings, like a cite key that isn't in the bibliography, and notes, like an unsupported bibliography style, get their own colors.
+- The **editor** puts a red mark on that line, if that file is open. Warnings, like a cite key that isn't in the bibliography or a package the preview can't load, and notes, like an unsupported bibliography style or a package the preview leaves out, get their own colors.
+
+The footer leads with the worst one: an error, then a warning, then a note.
+If the only diagnostics are notes and a file is missing, it shows the missing file instead. The notes are still in the editor.
 
 If a file named in `\input`, `\includegraphics`, or `\bibliography` isn't in the project, the footer says **Not found in the project:** and lists it.
 
 If there are no problems, the footer is empty.
 
+### Project checks
+
+The editor also checks references, labels and citations across the whole project, not just what the preview compiles.
+It marks these with a yellow warning in the lint gutter of the open file, under the key itself:
+
+- A `\ref`, `\eqref`, `\autoref`, `\cref` (or `\Cref`, `\pageref`, `\nameref`, `\vref`) to a label no `.tex` file in the project defines.
+- A `\label` defined more than once. Each definition gets a warning that lists the others, with their file and line.
+  A listing's `label=` option, like `\begin{lstlisting}[label=lst:loop]`, counts as a label.
+- A `\cite` key (or `\citep`, `\parencite` and the other natbib and biblatex forms) that isn't in any `.bib` file in the project, or in a `\bibitem`.
+
+Keys built from macros, like `\ref{sec:\thechapter}` or `\label{#1}` in a `\newcommand`, are skipped, and so are `\nocite{*}` and anything in a comment.
+The checks run a moment after you stop typing, and again when a collaborator changes any file in the project, so a label a peer adds in another file clears your warning.
+When the preview already warns about the same missing citation on a line, you only see its warning.
+They load with autocompletion, run in your browser, and nothing is sent anywhere.
+
 ![A preview error in the footer and the editor](assets/screenshots/diagnostics-light.png#only-light)
 ![A preview error in the footer and the editor](assets/screenshots/diagnostics-dark.png#only-dark)
 
 For help fixing errors, see [Preview errors](troubleshooting.md#preview-errors).
+
+## Compile PDF
+
+**View > Compile PDF** (**Ctrl+Shift+Enter**, **⇧⌘↩** on a Mac) makes the real PDF with a TeX engine that runs in your browser, the way Overleaf's Recompile does. The live preview stays as it is; Compile PDF is for when you want the exact pages TeX makes.
+
+!!! note "Not available yet"
+    Compile PDF needs the TeX engine files hosted on this site. Until they are, the command says it isn't available yet. The live preview and the preview-quality PDF export still work.
+
+- It uses the project's [TeX engine](projects.md#tex-engine): pdfLaTeX, XeLaTeX or LuaLaTeX.
+- The first time, it shows how much it will download (the engine and its packages, from this site only) and asks first. The files stay in this browser, so later compiles start right away. **Settings** shows how much they take, with **Remove**.
+- A dialog shows the download and each TeX pass. TeX runs again while references are still settling, up to three passes.
+- The PDF opens in a viewer with every page and **Download PDF**. **File > Export… > PDF (Compile PDF)** saves it too.
+- Errors and warnings from the TeX log show in the editor next to the preview's, on the right file and line. Click one in the dialog or the viewer to go to it.
+- Your document never leaves the browser: the engine works on a copy of the project in memory. Each person in a room compiles on their own.
+- It needs a lot of memory. On a device with less than 2 GB it doesn't start, and if it runs out of memory it says so. Phones often can't run it; use a computer.
 
 ## PDF export
 
@@ -219,7 +391,7 @@ It's a preview-quality PDF, so expect it to look like the preview, not like a Te
 - Anything the preview can't show, like an EPS figure, shows the same way in the PDF.
 
 The PDF is made in a hidden frame that can't run scripts, so nothing in the document runs while it prints.
-A full PDF from a real TeX engine, with bookmarks and metadata, needs an in-browser TeX compiler, which is planned.
+For the PDF a real TeX engine makes, use [Compile PDF](#compile-pdf).
 For a file to send to a journal, export **Flattened .tex** or **Project .zip** and build it with LaTeX.
 
 The same export menu has an **HTML** format: the preview as a standalone web page. See [Export](saving-and-storage.md#export).

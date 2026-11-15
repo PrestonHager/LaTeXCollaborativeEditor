@@ -1,8 +1,20 @@
-import { exportIcons, icon } from './icons';
+import { FileArchive, FileCheck, FileCode, FileDown, FileText, Printer, type IconNode } from 'lucide';
+import { icon } from './icons';
 import { returnFocusOnClose } from './focusReturn';
 import { exporters as defaultExporters, findExporter, runExport, type ExportDestination, type ExportResult } from '../export/registry';
 import { defaultOptions, isAbortError, type ExportOption, type ExportOptionValues, type ExportOutput, type ExportServices, type ExportSource, type Exporter } from '../export/types';
 import { describeError } from '../storage/errors';
+import './exportDialog.css';
+
+/** Icons for the formats, by the name an exporter gives (see src/export/types.ts). */
+const exportIcons: Record<string, IconNode> = {
+  'file-archive': FileArchive,
+  'file-check': FileCheck,
+  'file-code': FileCode,
+  'file-down': FileDown,
+  'file-text': FileText,
+  printer: Printer,
+};
 
 /**
  * Whether a destination can take the picked format right now. `tag` goes after its name in the

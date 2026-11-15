@@ -6,7 +6,7 @@ import { COMPILE_DEBOUNCE_MS, COMPILE_MIN_INTERVAL_MS, createPreviewCompile } fr
 
 const ok = (overrides: Partial<ProjectPreviewResult> = {}): ProjectPreviewResult => ({ html: '<p>ok</p>', errors: [], missing: [], changes: [], ...overrides });
 
-type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onChanges' | 'onCompiled' | 'onCompileError' | 'missingHint' | 'loadPdfRenderer'>;
+type Hooks = Pick<Parameters<typeof createPreviewCompile>[0], 'onDiagnostics' | 'onEmpty' | 'onChanges' | 'onCompiled' | 'onCompileError' | 'missingHint' | 'loadPdfRenderer' | 'extraDiagnostics'>;
 
 function setup(content: ProjectContent = starterProject('Paper'), hooks: Hooks = {}) {
   const project = new ProjectDoc(new Y.Doc());
@@ -125,6 +125,43 @@ describe('preview compile', () => {
     await compile.runCompile();
     expect(diagnosticsEl.textContent).toBe('2 diagnostic(s). Bad (main.tex line 2)');
     expect(editor.setDiagnostics).toHaveBeenCalledWith([expect.objectContaining({ message: 'Worse' })]);
+  });
+
+  it('adds the TeX log diagnostics from Compile PDF for the open file (#242)', async () => {
+    const { compile, editor } = setup(starterProject('Paper'), {
+      extraDiagnostics: () => [
+        { path: 'main.tex', line: 3, severity: 'error', message: 'From TeX' },
+        { path: 'other.tex', line: 1, severity: 'error', message: 'Elsewhere' },
+      ],
+    });
+    await compile.runCompile();
+    expect(editor.setDiagnostics).toHaveBeenCalledWith([{ path: 'main.tex', line: 3, severity: 'error', message: 'From TeX' }]);
+  });
+
+  it('leads with the worst diagnostic, so a warning beats an info note listed first', async () => {
+    const { compile, compiler, diagnosticsEl } = setup();
+    compiler.compile.mockResolvedValue(
+      ok({
+        errors: [
+          { path: 'main.tex', line: 2, severity: 'info', message: 'Left out geometry.' },
+          { path: 'main.tex', line: 3, severity: 'warning', message: 'No tikz.' },
+        ],
+      }),
+    );
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('2 diagnostic(s). No tikz. (main.tex line 3)');
+  });
+
+  it('shows missing files instead of info notes, and the notes when nothing is missing', async () => {
+    const { compile, compiler, diagnosticsEl } = setup();
+    const info = { path: 'main.tex', line: 2, severity: 'info' as const, message: 'Left out geometry.' };
+    compiler.compile.mockResolvedValue(ok({ errors: [info], missing: ['fig.png'] }));
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('Not found in the project: fig.png');
+    compiler.compile.mockResolvedValue(ok({ errors: [info] }));
+    compile.invalidate();
+    await compile.runCompile();
+    expect(diagnosticsEl.textContent).toBe('1 diagnostic(s). Left out geometry. (main.tex line 2)');
   });
 
   it('lists files the document asked for that are not in the project', async () => {

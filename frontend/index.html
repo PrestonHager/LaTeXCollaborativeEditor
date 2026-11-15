@@ -2,12 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget: Android shrinks the page for the on-screen keyboard, so the editor and its key bar stay above it (src/ui/touchKeyBar.ts). -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <!--
       Content Security Policy. GitHub Pages can't send headers, so it's a meta tag, which means
       frame-ancestors, report-to and sandbox can't be set here (see docs/deployment.md).
       The sandboxed preview iframe uses srcdoc, so it inherits this policy too: LaTeX.js's CDN
       css/js/fonts, its <base> tag, and our inline theme styles have to stay allowed.
+      'wasm-unsafe-eval' in script-src lets Compile PDF compile a WebAssembly TeX engine
+      (issue #240, docs/wasm-tex-engine.md). It allows WebAssembly only, not JavaScript eval,
+      and the engine files only come from our own origin ('self').
       The sha256 in script-src is PREVIEW_LINK_SCRIPT (src/ui/preview.ts), the preview's link script.
       The gstatic, googleusercontent, drive and content.googleapis hosts are there for the Google
       Picker and gapi loader, which pull from them at runtime (GOOGLE_RUNTIME_SOURCES in
@@ -15,10 +19,12 @@
       The build adds custom VITE_P2P_RENDEZVOUS trackers to connect-src, and VITE_DISABLE_CSP=1
       drops this tag as a rollback switch (vite.config.ts, docs/deployment.md).
       src/security/cspPolicy.test.ts checks this against the URLs the app uses.
+      "ipc: http://ipc.localhost" in connect-src is the desktop app's IPC, which only reaches the
+      app's own opener plugin (docs/desktop.md, Security). It means nothing on the web.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'sha256-Zpzult2XEA/2OY8gNXdZF7kOuCuNQyWpeGn5nr95yYc=' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style https://www.gstatic.com https://ssl.gstatic.com; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://*.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://www.googleapis.com https://content.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com https://drive.google.com https://content.googleapis.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-DJOJgdhvVJBYqQIC2wEBNNN4el1FrTYKs/ys0ktcKuM=' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/client https://apis.google.com https://www.gstatic.com https://ssl.gstatic.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://accounts.google.com/gsi/style https://www.gstatic.com https://ssl.gstatic.com; font-src 'self' data: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; img-src 'self' data: blob: https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://*.gstatic.com https://*.googleusercontent.com; connect-src 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/ https://www.googleapis.com https://content.googleapis.com https://accounts.google.com/gsi/ wss://tracker.webtorrent.dev wss://tracker.openwebtorrent.com wss://tracker.files.fm:7073 ipc: http://ipc.localhost; frame-src 'self' blob: https://accounts.google.com/gsi/ https://docs.google.com https://drive.google.com https://content.googleapis.com; worker-src 'self'; object-src blob:; base-uri 'self' https://cdn.jsdelivr.net/npm/latex.js@0.12.6/; form-action 'none'"
     />
     <title>Collaborative LaTeX Editor</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
@@ -44,7 +50,7 @@
             <div id="menu-file" class="menu-popover" data-popover aria-hidden="true">
               <div class="menu-list" role="menu" aria-label="File">
                 <button type="button" class="menu-item" role="menuitem" data-command="file.new" data-description="Start a project from a template, or an empty one. The current one stays saved."><span class="menu-item-label">New Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
-                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal" data-description="Open a project saved in this browser."><span class="menu-item-label">Open Local Project</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="file.openLocal" data-description="Choose where the project is saved, this browser or a connected account, then pick it."><span class="menu-item-label">Open Project…</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.openDrive" data-description="Pick a project folder or .tex file from Google Drive."><span class="menu-item-label">Open from Google Drive</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.importZip" data-description="Turn a .zip of files into a new project."><span class="menu-item-label">Upload .zip as New Project</span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="file.saveAsTemplate" data-description="Save this project's files as a template for new projects."><span class="menu-item-label">Save as Template…</span></button>
@@ -84,6 +90,7 @@
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitem" data-command="app.openSettings" data-description="Change themes and how saving works."><span class="menu-item-label">Settings</span><span class="menu-item-shortcut" data-shortcut></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="app.editProfile" data-description="Your name, affiliation and email, which templates fill in. Never sent to your room."><span class="menu-item-label">Profile…</span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="app.accounts" data-description="See which storage accounts are connected, connect one, or log out of them."><span class="menu-item-label">Accounts…</span></button>
               </div>
             </div>
           </div>
@@ -96,6 +103,11 @@
                 <button type="button" class="menu-item" role="menuitem" data-command="view.togglePreviewTheme" data-palette="false" data-description="Cycle the preview theme: dark, light, system."><span class="menu-item-label">Toggle Preview Theme</span></button>
                 <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.togglePauseSaving" data-description="Stop autosave and Save Now until you turn saving back on."><span class="menu-item-label">Pause Saving</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
                 <button type="button" class="menu-item" role="menuitem" data-command="view.compileNow" data-description="Rebuild the preview right away."><span class="menu-item-label">Compile Now</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <button type="button" class="menu-item" role="menuitem" data-command="view.compilePdf" data-description="Make the real PDF with a TeX engine in this browser. The first time, it asks before downloading the engine."><span class="menu-item-label">Compile PDF</span><span class="menu-item-shortcut" data-shortcut></span></button>
+                <hr role="separator" />
+                <button type="button" class="menu-item" role="menuitemradio" aria-checked="false" data-command="view.enginePdflatex" data-description="Compile this project with pdfLaTeX, the default. A % !TEX program comment in the main file wins over this."><span class="menu-item-label">pdfLaTeX Engine</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemradio" aria-checked="false" data-command="view.engineXelatex" data-description="Compile this project with XeLaTeX, for fontspec and system fonts. Peers get the setting too."><span class="menu-item-label">XeLaTeX Engine</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
+                <button type="button" class="menu-item" role="menuitemradio" aria-checked="false" data-command="view.engineLualatex" data-description="Compile this project with LuaLaTeX, for fontspec and Lua code. Peers get the setting too."><span class="menu-item-label">LuaLaTeX Engine</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
                 <hr role="separator" />
                 <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutSplit" data-description="Show the editor and preview side by side."><span class="menu-item-label">Split View</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
                 <button type="button" class="menu-item" role="menuitemcheckbox" aria-checked="false" data-command="view.layoutEditorOnly" data-description="Hide the preview and give the editor the whole width."><span class="menu-item-label">Editor Only</span><span class="menu-item-indicator" data-indicator><i data-lucide="check"></i></span></button>
@@ -121,13 +133,41 @@
               </div>
             </div>
           </div>
+          <div class="menu-root menu-root-collapsed dropdown-menu" data-menu-label="Menu" data-collapsed-menu id="menu-collapsed-root">
+            <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="sm" aria-haspopup="menu" aria-controls="menu-all" aria-expanded="false"><i data-lucide="menu"></i>Menu</button>
+            <div id="menu-all" class="menu-popover" data-popover aria-hidden="true">
+              <div class="menu-list" role="menu" aria-label="Main menu"></div>
+            </div>
+          </div>
         </nav>
 
         <div id="share-area" class="share-area">
           <div id="presence-bar" class="presence-bar" role="group" aria-label="People in this room" hidden></div>
-          <button id="share-btn" class="btn" data-size="sm" type="button"><i data-lucide="share-2"></i>Share</button>
-          <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>New link</button>
-          <a id="share-link" class="muted share-link" href="" target="_blank" rel="noreferrer"></a>
+          <div id="share-menu" class="popover share-menu">
+            <button id="share-btn" class="btn" data-size="sm" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="share-popover"><i data-lucide="share-2"></i>Share</button>
+            <div id="share-popover" class="share-popover" data-popover data-side="bottom" data-align="start" role="dialog" aria-labelledby="share-popover-title" aria-hidden="true">
+              <h2 id="share-popover-title" class="share-popover-title">Share this project</h2>
+              <div id="share-start" class="share-popover-view">
+                <ul class="share-popover-points">
+                  <li>Anyone with the link can see and edit this project.</li>
+                  <li>Edits and files go straight between browsers (peer-to-peer).</li>
+                  <li>It lasts until you stop sharing or close this tab.</li>
+                </ul>
+                <div class="share-popover-actions">
+                  <button id="share-start-btn" class="btn" data-size="sm" type="button">Start sharing</button>
+                  <button id="share-resume-btn" class="btn" data-variant="outline" data-size="sm" type="button" hidden>Resume sharing (same link)</button>
+                </div>
+              </div>
+              <div id="share-active" class="share-popover-view" hidden>
+                <a id="share-link" class="share-link" target="_blank" rel="noreferrer"></a>
+                <div class="share-popover-actions">
+                  <button id="share-copy-btn" class="btn" data-size="sm" type="button"><i data-lucide="copy"></i>Copy</button>
+                  <button id="new-link-btn" class="btn" data-variant="outline" data-size="sm" type="button">New link</button>
+                  <button id="share-stop-btn" class="btn" data-variant="destructive" data-size="sm" type="button">Stop sharing</button>
+                </div>
+              </div>
+            </div>
+          </div>
           <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="share" aria-label="Help with sharing" data-tooltip="Help with sharing" data-side="bottom"><i data-lucide="circle-help"></i></a>
         </div>
         <span id="app-notice" class="app-notice" role="status" aria-live="polite">
@@ -139,6 +179,7 @@
         <div class="status-badges">
           <span class="pill badge" data-variant="outline" title="Who you're editing with"><i data-lucide="users"></i><span id="connection-status" role="status" aria-live="polite">Not shared</span></span>
           <span class="pill badge" data-variant="outline" title="Preview status"><i data-lucide="play"></i><span id="compile-status">Idle</span></span>
+          <button id="storage-provider" type="button" class="pill badge storage-provider" data-variant="outline" title="Where this project is stored"><i data-lucide="monitor"></i><span id="storage-provider-name">This browser</span></button>
           <span class="pill badge" data-variant="outline" title="Where and when the project last saved"><i data-lucide="save"></i><span id="autosave-status">Autosave Off</span></span>
           <a class="btn help-link" data-variant="ghost" data-size="icon-xs" data-help="saving" aria-label="Help with saving and storage" data-tooltip="Help with saving" data-side="bottom" data-align="end"><i data-lucide="circle-help"></i></a>
         </div>
@@ -152,7 +193,7 @@
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.saveNow" aria-label="Save now" data-tooltip="Save now" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.compileNow" aria-label="Compile now" data-tooltip="Compile now" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="file.export" aria-label="Export" data-tooltip="Export" data-side="bottom"></button>
-        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-side="bottom"></button>
+        <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="share.copyLink" aria-label="Share and copy link" data-tooltip="Share and copy link" data-description="Start sharing this project and copy its link. Anyone who opens it joins this room and edits with you." data-side="bottom"></button>
         <span class="toolbar-separator" aria-hidden="true"></span>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutSplit" aria-label="Split view" data-tooltip="Split view" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="view.layoutEditorOnly" aria-label="Editor only" data-tooltip="Editor only" data-side="bottom"></button>
@@ -160,6 +201,12 @@
         <span class="toolbar-separator" aria-hidden="true"></span>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="app.commandPalette" aria-label="Command palette" data-tooltip="Command palette" data-side="bottom"></button>
         <button type="button" class="btn" data-variant="ghost" data-size="icon-sm" data-command="help.documentation" aria-label="Documentation" data-tooltip="Documentation" data-side="bottom"></button>
+        <div class="toolbar-more menu-root dropdown-menu" data-menu-label="More">
+          <button type="button" class="menu-trigger btn" data-variant="ghost" data-size="icon-sm" aria-haspopup="menu" aria-controls="toolbar-more-menu" aria-expanded="false" aria-label="More actions" data-tooltip="More actions" data-side="bottom" data-align="end"><i data-lucide="ellipsis"></i></button>
+          <div id="toolbar-more-menu" class="menu-popover" data-popover data-align="end" aria-hidden="true">
+            <div class="menu-list" role="menu" aria-label="More actions"></div>
+          </div>
+        </div>
       </div>
 
       <div id="app-loading" class="app-loading is-active" role="status" aria-live="polite">
@@ -167,7 +214,17 @@
         <span id="app-loading-label" class="app-loading-label">Loading the editor...</span>
       </div>
 
+      <!-- Phones only (under 640px): one pane at a time, and the file tree as a drawer. See src/app/phoneLayout.ts. -->
+      <nav id="phone-bar" class="phone-bar" aria-label="Panes">
+        <button id="phone-files" type="button" class="btn" data-variant="outline" aria-controls="file-pane" aria-expanded="false"><i data-lucide="folder-open"></i>Files</button>
+        <div class="phone-switch" role="group" aria-label="Show">
+          <button id="phone-show-editor" type="button" class="btn" data-variant="ghost" aria-controls="editor-pane" aria-pressed="true">Editor</button>
+          <button id="phone-show-preview" type="button" class="btn" data-variant="ghost" aria-controls="preview-pane" aria-pressed="false">Preview</button>
+        </div>
+      </nav>
+
       <div class="workspace">
+        <div id="file-drawer-backdrop" class="file-drawer-backdrop" hidden></div>
         <aside id="file-pane" class="file-pane" aria-label="Project files">
           <header class="file-pane-header">
             <span class="file-pane-title">Files</span>
@@ -200,6 +257,10 @@
               <a class="btn" data-variant="link" data-size="sm" data-help="p2pProblems">Connection problems?</a>
             </section>
           </div>
+          <nav id="outline" class="outline" aria-label="Outline">
+            <button id="outline-toggle" type="button" class="outline-toggle" aria-expanded="false" aria-controls="outline-list"><i data-lucide="chevron-right"></i>Outline</button>
+            <ol id="outline-list" class="outline-list" hidden></ol>
+          </nav>
           <div id="file-drop-overlay" class="file-drop-overlay" hidden><i data-lucide="upload"></i><span>Drop to upload</span></div>
         </aside>
 
@@ -239,6 +300,12 @@
             <div class="pane-bar">
               <span>Preview</span>
               <div class="pane-bar-actions">
+                <div id="preview-zoom" class="preview-zoom" role="group" aria-label="Preview zoom">
+                  <button id="preview-zoom-fit" type="button" class="btn preview-zoom-fit" data-variant="ghost" data-size="icon-xs" aria-pressed="false" aria-label="Fit width" data-tooltip="Fit width" data-side="bottom"><i data-lucide="move-horizontal"></i></button>
+                  <button id="preview-zoom-out" type="button" class="btn" data-variant="ghost" data-size="icon-xs" aria-label="Zoom out" data-tooltip="Zoom out" data-side="bottom"><i data-lucide="zoom-out"></i></button>
+                  <output id="preview-zoom-level" class="preview-zoom-level" aria-live="polite" aria-label="Zoom level">100%</output>
+                  <button id="preview-zoom-in" type="button" class="btn" data-variant="ghost" data-size="icon-xs" aria-label="Zoom in" data-tooltip="Zoom in" data-side="bottom"><i data-lucide="zoom-in"></i></button>
+                </div>
                 <div id="preview-changes" class="popover preview-changes" hidden>
                   <button id="preview-changes-btn" type="button" class="btn preview-changes-btn" data-variant="ghost" data-size="xs" aria-haspopup="dialog" aria-expanded="false" aria-controls="preview-changes-popover" aria-label="Preview is approximate" data-tooltip="Preview is approximate" data-side="bottom" data-align="end"><i data-lucide="info"></i><span id="preview-changes-count" class="preview-changes-count" aria-hidden="true"></span></button>
                   <div id="preview-changes-popover" class="preview-changes-popover" data-popover data-side="bottom" data-align="end" role="dialog" aria-labelledby="preview-changes-title" aria-hidden="true">
@@ -326,6 +393,11 @@
           <div class="settings-row">
             <span class="label">Google Drive</span>
             <span id="settings-drive-account" class="muted">Not connected</span>
+          </div>
+          <div class="settings-row" id="settings-tex-assets-row" hidden>
+            <span class="label" id="settings-tex-assets-label">Compile PDF engine</span>
+            <span id="settings-tex-assets" class="muted" aria-live="polite">Not downloaded</span>
+            <button id="settings-tex-assets-remove" type="button" class="btn" data-variant="outline" data-size="sm" aria-describedby="settings-tex-assets-label" hidden>Remove</button>
           </div>
           <div class="settings-row">
             <span class="label" id="settings-profile-label">Profile</span>
@@ -473,9 +545,11 @@
       <div>
         <header>
           <h2 id="projects-dialog-title">Open a project</h2>
-          <p id="projects-dialog-description">Projects saved in this browser. For Google Drive, use File > Open from Google Drive.</p>
+          <p id="projects-dialog-description">Projects saved in this browser.</p>
         </header>
         <section class="projects-dialog-body">
+          <div id="projects-providers" class="item-group projects-list" role="list" aria-label="Where the project is saved" hidden></div>
+          <button id="projects-back" type="button" class="btn projects-back" data-variant="ghost" data-size="sm" hidden>Choose another place</button>
           <div id="projects-list" class="item-group projects-list" role="list"></div>
           <div id="projects-empty" class="empty" hidden>
             <header>
@@ -506,6 +580,8 @@
         </section>
       </button>
     </template>
+
+    <dialog id="accounts-dialog" class="dialog dialog-md accounts-dialog" aria-labelledby="accounts-dialog-title" aria-describedby="accounts-dialog-description"></dialog>
 
     <!-- Save conflict. Shown when a file changed in storage since we last saved it, and it has no close button on purpose. -->
     <dialog id="conflict-dialog" class="dialog dialog-md conflict-dialog" aria-labelledby="conflict-dialog-title" aria-describedby="conflict-dialog-description">
@@ -576,6 +652,8 @@
     </section>
 
     <!-- First-run tour. tour.ts walks through the steps below and puts this card next to each target. -->
+    <!-- Hover preview for menu items and toolbar buttons (src/ui/hoverPreview.ts). -->
+    <div id="hover-preview" class="hover-preview" hidden></div>
     <div id="tour" class="tour" role="dialog" aria-labelledby="tour-title" aria-describedby="tour-body" hidden>
       <p class="tour-count" data-tour-count></p>
       <h2 id="tour-title" class="tour-title" data-tour-title></h2>

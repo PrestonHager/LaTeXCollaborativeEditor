@@ -169,6 +169,12 @@ export class SessionController {
 
   newRoom() {
     // Leave the current room first, so guests on the old link stop getting updates.
+    this.leave();
+    return this.ensureRoom();
+  }
+
+  /** Leave the room and stop retrying, so nothing reaches the trackers until the next join (Stop sharing). */
+  leave() {
     if (this.reconnectTimer) {
       window.clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
@@ -176,7 +182,6 @@ export class SessionController {
     this.reconnectAttempts = 0;
     if (this.roomId) this.session.close();
     this.roomId = null;
-    return this.ensureRoom();
   }
 
   join(roomId: string) {

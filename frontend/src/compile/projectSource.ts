@@ -206,7 +206,7 @@ function replaceBibliography(source: string, lineMap: SourceLine[], texts: Map<s
       for (const key of keys.split(',').map((part) => part.trim()).filter(Boolean)) {
         if (key === '*') for (const entry of entries.values()) cited.set(entry.key, entry);
         else if (entries.has(key)) cited.set(key, entries.get(key)!);
-        else if (allFound) diagnostics.push({ ...at(index), severity: 'warning', message: `Citation "${key}" isn't in the bibliography.` });
+        else if (allFound) diagnostics.push({ ...at(index), severity: 'warning', message: `Citation "${key}" isn't in the bibliography.`, subject: `cite:${key}` });
       }
     }
   });

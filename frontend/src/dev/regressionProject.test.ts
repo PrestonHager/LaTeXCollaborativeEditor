@@ -2,6 +2,9 @@ import { BlobStore } from '../project/blobStore';
 import { REGRESSION_PROJECT_NAME, dataUrlBytes, regressionProject } from './regressionProject';
 import { projectToPreviewHtml } from '../compile/latexJsPreview';
 import { parseEpsBoundingBox } from '../compile/epsBoundingBox';
+import { ProjectIndex } from '../ui/projectCompletion';
+import { projectDiagnostics } from '../ui/projectDiagnostics';
+import { buildOutline } from '../ui/outline';
 
 describe('regressionProject', () => {
   it('loads every file in dev/regression/project with main.tex as the main file', async () => {
@@ -17,12 +20,15 @@ describe('regressionProject', () => {
       'chapters/math.tex',
       'chapters/packages.tex',
       'chapters/text.tex',
+      'checks.tex',
+      'engine-fontspec.tex',
       'figures/chart.pdf',
       'figures/quadrants.png',
       'figures/wave.eps',
       'main.tex',
       'refs.bib',
       ...['abbrv', 'alpha', 'apalike', 'biblatex', 'citations', 'ieeetr', 'natbib', 'unknown', 'unsrt'].map((name) => `styles/${name}.tex`),
+      'unsupported-packages.tex',
     ]);
   });
 
@@ -48,6 +54,33 @@ describe('regressionProject', () => {
         expect(paths.has(name.endsWith('.tex') ? name : `${name}.tex`)).toBe(true);
       }
     }
+  });
+
+  it('has just the project check warnings its % Expect: comments describe', async () => {
+    const content = await regressionProject(new BlobStore());
+    const files = content.files.map((file) => ({ path: file.path, kind: file.kind, text: () => file.text ?? '' }));
+    const index = new ProjectIndex({ version: () => 0, files: () => files, mainPath: () => 'main.tex' });
+    expect(projectDiagnostics(index).map((d) => `${d.path}:${d.line} ${d.message}`).sort()).toEqual([
+      'chapters/text.tex:47 Label “sec:refs” is defined 2 times. Also at checks.tex:6.',
+      'chapters/text.tex:52 Undefined reference: no file in the project has \\label{sec:does-not-exist}.',
+      'checks.tex:10 Undefined reference: no file in the project has \\label{sec:nowhere}.',
+      'checks.tex:12 Missing citation: “ghost” isn\'t in any .bib file in the project.',
+      'checks.tex:6 Label “sec:refs” is defined 2 times. Also at chapters/text.tex:47.',
+      'styles/unknown.tex:9 Missing citation: “nosuchkey” isn\'t in any .bib file in the project.',
+    ]);
+  });
+
+  it('outlines main.tex through its chapters, without checks.tex or verbatim text', async () => {
+    const content = await regressionProject(new BlobStore());
+    const files = content.files.map((file) => ({ path: file.path, kind: file.kind, text: () => file.text ?? '' }));
+    const entries = buildOutline({ version: () => 0, files: () => files, mainPath: () => 'main.tex' });
+    const paths = new Set(entries.map((e) => e.path));
+    expect(paths.has('main.tex')).toBe(true);
+    expect(paths.has('chapters/text.tex')).toBe(true);
+    expect(paths.has('checks.tex')).toBe(false);
+    expect(entries.some((e) => e.kind === 'figure')).toBe(true);
+    expect(entries.some((e) => e.title === 'Not a section')).toBe(false);
+    expect(entries.every((e) => e.title || e.kind === 'figure' || e.kind === 'table')).toBe(true);
   });
 
   it('compiles the code listings chapter with nothing missing', async () => {
@@ -99,8 +132,36 @@ describe('regressionProject', () => {
       const result = projectToPreviewHtml({ mainPath, texts, binaryPaths, imageUrls: new Map() });
       expect(result.html, mainPath).toContain('References');
       expect(result.missing, mainPath).toEqual([]);
-      expect(result.errors.map((error) => error.severity), mainPath).toEqual(mainPath === 'styles/unknown.tex' ? ['warning', 'info'] : []);
+      // natbib and biblatex get a package note too, from the \usepackage that picks the style.
+      const bibliography = result.errors.filter((error) => !error.message.includes(' package.'));
+      expect(bibliography.map((error) => error.severity), mainPath).toEqual(mainPath === 'styles/unknown.tex' ? ['warning', 'info'] : []);
     }
+  });
+
+  it('compiles unsupported-packages.tex with a note on each package line and the tikz warning', async () => {
+    const content = await regressionProject(new BlobStore());
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    const result = projectToPreviewHtml({ mainPath: 'unsupported-packages.tex', texts, binaryPaths: [], imageUrls: new Map() });
+    expect(result.html).toContain('The preview still shows this text');
+    expect(result.errors.map((error) => [error.path, error.line, error.severity])).toEqual([
+      ['unsupported-packages.tex', 5, 'info'],
+      ['unsupported-packages.tex', 7, 'warning'],
+      ['unsupported-packages.tex', 10, 'info'],
+    ]);
+    expect(result.errors[1].message).toContain('tikzpicture');
+  });
+
+  it('compiles engine-fontspec.tex with a fontspec warning only under pdfLaTeX (#199)', async () => {
+    const content = await regressionProject(new BlobStore());
+    const texts = new Map(content.files.filter((file) => file.kind === 'text').map((file) => [file.path, file.text ?? '']));
+    const input = { mainPath: 'engine-fontspec.tex', texts, binaryPaths: [], imageUrls: new Map() };
+    const underPdf = projectToPreviewHtml(input);
+    expect(underPdf.html).toContain('The engine only changes which notes show');
+    expect(underPdf.errors.map((error) => [error.line, error.severity])).toEqual([
+      [7, 'info'],
+      [7, 'warning'],
+    ]);
+    expect(projectToPreviewHtml({ ...input, engine: 'xelatex' }).errors.map((error) => error.severity)).toEqual(['info']);
   });
 });
 

@@ -45,6 +45,9 @@ const GOOGLE_RUNTIME_SOURCES: Record<string, string[]> = {
   'connect-src': ['https://accounts.google.com/gsi/', 'https://content.googleapis.com'],
 };
 
+/** The desktop app's IPC origin on Windows (Tauri), which no URL in src/ names (issue #205). */
+const DESKTOP_IPC_SOURCES = ['http://ipc.localhost'];
+
 function externalUrls(): Map<string, string> {
   const found = new Map<string, string>();
   for (const [file, text] of Object.entries(sources)) {
@@ -77,13 +80,25 @@ describe('Content-Security-Policy in index.html', () => {
   it('never allows eval or inline scripts', () => {
     for (const [directive, list] of Object.entries(csp)) {
       expect(list, directive).not.toContain("'unsafe-eval'");
-      expect(list, directive).not.toContain("'wasm-unsafe-eval'");
       expect(list, directive).not.toContain('*');
+      // WebAssembly compilation is for the TeX engine's scripts only (#240), never another directive.
+      if (directive !== 'script-src') expect(list, directive).not.toContain("'wasm-unsafe-eval'");
     }
     expect(csp['script-src']).not.toContain("'unsafe-inline'");
     expect(csp['script-src']).not.toContain('data:');
     expect(csp['script-src']).not.toContain('blob:');
     expect(csp['script-src']).not.toContain('https:');
+  });
+
+  it('allows WebAssembly compilation for Compile PDF, but not JavaScript eval (#240)', () => {
+    expect(csp['script-src']).toContain("'wasm-unsafe-eval'");
+    expect(csp['script-src']).not.toContain("'unsafe-eval'");
+    // No default-src fallback can stand in for it: script-src is set, so it alone decides.
+    expect(csp['default-src']).toEqual(["'self'"]);
+    // The engine and its package files are fetched from our own origin only (docs/wasm-tex-engine.md).
+    expect(cspAllows(csp, 'connect-src', `${APP_ORIGIN}/tex/abc123/pdftex.wasm`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'worker-src', `${APP_ORIGIN}/assets/texEngine.worker-abc.js`, APP_ORIGIN)).toBe(true);
+    expect(cspAllows(csp, 'worker-src', 'https://texlive.example/engine.js', APP_ORIGIN)).toBe(false);
   });
 
   it('leaves out directives a meta tag ignores', () => {
@@ -138,8 +153,16 @@ describe('Content-Security-Policy in index.html', () => {
   });
 
   it("doesn't allow the e2e tests' local tracker, which only the e2e build adds (issue #167)", () => {
-    expect(csp['connect-src'].filter((source) => /localhost|127\.0\.0\.1|^ws:/.test(source))).toEqual([]);
+    // The desktop app's IPC (ipc: and http://ipc.localhost, issue #205) is the one exception.
+    expect(csp['connect-src'].filter((source) => /localhost|127\.0\.0\.1|^ws:/.test(source))).toEqual(DESKTOP_IPC_SOURCES);
     expect(cspAllows(csp, 'connect-src', 'ws://127.0.0.1:4185/', APP_ORIGIN)).toBe(false);
+  });
+
+  it("allows the desktop app's IPC, which only reaches its opener plugin (issue #205)", () => {
+    expect(csp['connect-src']).toEqual(expect.arrayContaining(['ipc:', 'http://ipc.localhost']));
+    expect(cspAllows(csp, 'connect-src', 'ipc://localhost/plugin%3Aopener%7Copen_url', 'tauri://localhost')).toBe(true);
+    expect(cspAllows(csp, 'connect-src', 'http://ipc.localhost/plugin%3Aopener%7Copen_url', 'https://tauri.localhost')).toBe(true);
+    expect(cspAllows(csp, 'connect-src', 'http://localhost:4185/', APP_ORIGIN)).toBe(false);
   });
 
   it('allows the app itself, including the Vite dev server socket', () => {
@@ -207,6 +230,7 @@ describe('Content-Security-Policy in index.html', () => {
       for (const source of csp[directive] ?? []) {
         if (source.startsWith("'") || /^[a-z]+:$/.test(source)) continue;
         if (GOOGLE_RUNTIME_SOURCES[directive]?.includes(source)) continue;
+        if (directive === 'connect-src' && DESKTOP_IPC_SOURCES.includes(source)) continue;
         if (urls.some((url) => sourceMatchesUrl(source, url))) continue;
         unexplained.push(`${directive} ${source}`);
       }

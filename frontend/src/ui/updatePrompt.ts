@@ -17,10 +17,12 @@ export function createUpdatePrompt(root: HTMLElement, actions: UpdatePromptActio
   const reload = root.querySelector<HTMLButtonElement>('[data-update-reload]')!;
   const whatsNew = root.querySelector<HTMLButtonElement>('[data-update-whats-new]');
 
+  // "Restart to update" in the desktop app (#179).
+  let label = 'Reload to update';
   const setBusy = (busy: boolean) => {
     reload.disabled = busy;
     anyway.disabled = busy;
-    reload.textContent = busy ? 'Saving...' : 'Reload to update';
+    reload.textContent = busy ? 'Saving...' : label;
   };
 
   const show = (message: string, details: string) => {
@@ -62,5 +64,11 @@ export function createUpdatePrompt(root: HTMLElement, actions: UpdatePromptActio
     actions.onLater?.();
   });
 
-  return { show, hide, showSaveError, setBusy, isOpen: () => !root.hidden };
+  /** Rename the update buttons, like "Restart to update" and "Restart anyway" in the desktop app. */
+  const setLabels = (action: string, force: string) => {
+    label = reload.textContent = action;
+    anyway.textContent = force;
+  };
+
+  return { show, hide, showSaveError, setBusy, setLabels, isOpen: () => !root.hidden };
 }

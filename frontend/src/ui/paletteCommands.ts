@@ -12,9 +12,26 @@ export const themeSwitchCommands: (PaletteOnlyCommand & { theme: ThemeMode })[] 
 ];
 
 export const paletteOnlyCommands: PaletteOnlyCommand[] = [
-  { id: 'share.copyLink', section: 'Share', label: 'Copy share link', description: 'Start sharing if needed, and copy the link for others to join.' },
+  { id: 'share.copyLink', section: 'Share', label: 'Copy share link', description: 'Copy the link for others to join, or open Share to start sharing.' },
+  { id: 'edit.goToDefinition', section: 'Edit', label: 'Go to definition', description: 'Jump to the \\label, .bib entry or \\newcommand for the key or command at the cursor.' },
+  { id: 'edit.findReferences', section: 'Edit', label: 'Find references', description: 'List every place the label or citation at the cursor is defined and used.' },
+  { id: 'edit.renameLabel', section: 'Edit', label: 'Rename label…', description: 'Rename the label at the cursor and every reference to it, in every file.' },
   { id: 'view.focusEditor', section: 'View', label: 'Focus editor', description: 'Put the cursor back in the editor.' },
 ];
+
+/**
+ * Desktop app only: folders on this computer (#178) and compiling with a local TeX Live (#264).
+ * Pass whether this is the desktop app.
+ */
+export const desktopPaletteCommands = (desktop: boolean): PaletteOnlyCommand[] =>
+  desktop
+    ? [
+        { id: 'file.openFolder', section: 'File', label: 'Open Folder as Project', description: 'Open a folder on this computer as the project.' },
+        { id: 'file.saveToFolder', section: 'File', label: 'Save to a Folder', description: 'Save the project to a folder on this computer from now on.' },
+        { id: 'file.compileLocalTex', section: 'File', label: 'Compile with Local TeX', description: 'Make a PDF with the TeX Live installed on this computer.' },
+        { id: 'app.localTexSetup', section: 'File', label: 'Set Up Local TeX', description: 'Turn compiling with the TeX Live on this computer on or off, and say where it is.' },
+      ]
+    : [];
 
 // Regression testing helpers, only in npm run dev. See dev/regression/checklist.md.
 export const devPaletteCommands: PaletteOnlyCommand[] = import.meta.env.DEV

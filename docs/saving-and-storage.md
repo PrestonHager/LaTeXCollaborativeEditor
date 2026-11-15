@@ -38,7 +38,7 @@ It doesn't take focus, so you can keep typing.
 - If the save fails, the page doesn't reload. The card says why and offers **Reload anyway**.
 - **What's new** opens the new version's changelog. Sections you don't have yet say "New in the update", and the version you're on still says "You're on this version". If it can't be loaded, you see the changelog for your version and a link to the latest one on GitHub.
 - **Later** hides the card until the next version.
-- If you're sharing, guests are disconnected for a moment and rejoin on their own. A guest who reloads rejoins the room.
+- If you're sharing, sharing pauses after the reload until you open **Share** and pick **Resume sharing (same link)**. Guests then reconnect on their own. A guest who reloads rejoins the room.
 - The card also shows when a collaborator is on a newer version that this one can't fully talk to, or when part of the app can't load because a new version replaced it.
 
 **File > Save Now** (**Ctrl+S**) saves right away.
@@ -48,11 +48,51 @@ The full list is in [Status and error messages](messages.md#autosave-pill).
 
 Guests see the host's storage in the pill instead, like "Saved on host Google Drive".
 
+The status bar also has a badge for where the open project is stored, like **This browser** or **Google Drive**, with the signed-in account in its tooltip. Click it to open [Accounts](#accounts). A guest's badge says **Host: Google Drive** (or **Host: local storage**) and can't be clicked.
+
+![The status bar badges, with the storage badge saying This browser](assets/accounts/status-badge.png)
+
+## Accounts
+
+**Edit > Accounts…** (also in the command palette, or click the storage badge) lists every place a project can be saved, with:
+
+- its status: **Connected**, **Expired** (the sign-in ran out, or this is a new visit and a quiet sign-in didn't work; edits save in this browser until you connect again), **Not connected**, or **Not configured** (this site has no keys for it, see the [deployment guide](deployment.md));
+- the signed-in account, like "Signed in as ada@example.com";
+- what it keeps: folders, images and other files, version history;
+- **Keep me signed in on this browser**, for accounts that can sign in (see [Staying signed in](#staying-signed-in));
+- **Connect** and **Log out** buttons. Connect is the same as **File > Connect Google Drive**, and Log out the same as **Disconnect Google Drive**: saving moves to this browser first, so no edit is lost.
+
+**Log out of everything** signs out of every connected account at once. Browser storage needs no account, so it's always there and has no buttons.
+Sign-ins are never sent to the people in your room.
+
+### Staying signed in
+
+Once you connect an account, this browser remembers that you did, and as whom, until you log out. When you come back, the app tries to sign you in again without asking. Only if that doesn't work does the account show **Expired** with a **Connect** button, and your edits save in this browser until you connect.
+
+- **By default** the sign-in itself (Google's access token) stays in the tab. Reloading the tab keeps you signed in. A new tab or a restarted browser tries a quiet sign-in with Google first, but most browsers block it because it needs a popup, so you'll usually click **Connect** once. Google remembers that you allowed the app, so that's one click with no consent screen.
+- **Keep me signed in on this browser** (a checkbox under the account in Accounts) also keeps the sign-in in this browser's storage, so new tabs and a restarted browser come back signed in. Don't turn it on for a shared or public computer: anyone who opens this browser can use your Google Drive until you log out. Google's sign-ins last about an hour, so after that you'll still be asked to connect again. You can tick it before connecting. Unticking it deletes the kept sign-in right away.
+- **Log out** (or **Disconnect Google Drive**) forgets everything below for that account and asks Google to cancel the sign-in.
+- A sign-in that ran out is deleted on its own and shows as **Expired**, not as an error.
+
+Exactly what's stored, and where:
+
+| What | Where | When |
+| --- | --- | --- |
+| That an account is connected, its email, and the Keep me signed in choice. Never a token. | `localStorage`, key `storage_accounts` | From the first connect until you log out |
+| The Google Drive access token, its expiry time and email | `sessionStorage`, key `drive_session_token` (this tab only) | While the tab is signed in. Gone when the tab closes, the token runs out, or you log out |
+| The same token, expiry time and email | IndexedDB, database `latex-editor-sign-ins` | Only with Keep me signed in. Deleted when it runs out, when you untick it, or when you log out |
+
+None of this is sent to the people in your room, put in a link, or written to the console.
+
+![The Accounts panel with this browser and Google Drive connected](assets/accounts/accounts-connected.png)
+
+On a phone the panel is a full-screen sheet, and the buttons go under each account.
+
 ## Local storage (browser)
 
 By default, projects are saved in this browser's storage (IndexedDB) for this site.
 
-- **File > Open Local Project** (**Ctrl+O**) lists your saved projects, newest first. Click one to open it.
+- **File > Open Project…** (**Ctrl+O**) first asks where the project is saved: **This browser** or a connected account like **Google Drive**. Pick **This browser** to see your saved projects, newest first, and click one to open it. **Choose another place** goes back. On a site with only browser storage set up, it goes straight to the list.
 - **File > Clear Local Projects** deletes every project saved in this browser. It asks first, since this can't be undone. The same button is in Settings. Your [templates](#templates) stay.
 - If browser storage is full or blocked (some private browsing modes), the autosave pill says so. See [Storage full](troubleshooting.md#storage-full).
 - Documents saved by older versions of the app get moved into one-file projects the first time you open the new version.
@@ -147,7 +187,7 @@ The File menu has these Drive commands, all host-only:
 
 - **Connect Google Drive**: sign in to Google, then autosave goes to Drive. If the project has no name yet, the pill says "Drive: Connected (name the project to save)".
 - **Save to Google Drive**: asks for a name if needed, signs in if needed, and saves right away.
-- **Open from Google Drive** (**Ctrl+Shift+O**): pick a project folder, or an old single `.tex` file.
+- **Open from Google Drive** (**Ctrl+Shift+O**): pick a project folder, or an old single `.tex` file. **File > Open Project…** then **Google Drive** does the same.
 - **Move to Drive Folder**: pick a Drive folder to move the project folder into. Only works once the project is saved in Drive.
 - **Add Files from Drive**: pick files that were put in the project folder from Drive itself, so the app can see them. See [Adding files from Drive](#adding-files-from-drive). Only works once the project is saved in Drive.
 - **Rename Project**: renames the project. The next save renames the Drive folder too.
@@ -197,7 +237,7 @@ Sign-in:
 
 - Sign-in opens a Google popup. If your browser blocks it, see [Popups blocked](troubleshooting.md#popups-blocked).
 - Sign-ins last about an hour. The app tries to renew quietly. If that fails, it saves to this browser and shows a notice, so nothing is lost. Use **Connect Google Drive** to switch back.
-- The sign-in only lasts for the current tab. Reloading the tab keeps you signed in, but a new tab or a restarted browser asks you to connect again, and saves go to this browser until you do.
+- Reloading the tab keeps you signed in. A new tab or a restarted browser tries to sign you in quietly, and asks you to connect only if that fails (saves go to this browser until you do). **Keep me signed in on this browser** in Accounts keeps the sign-in for new tabs too. See [Staying signed in](#staying-signed-in).
 - To see who's signed in, open **Settings** or hover over the save status in the header.
 
 When a save fails:
@@ -295,7 +335,7 @@ A placeholder can have a `label`, a `default`, a `hint`, `multiline: true`, `opt
 
 ### Where templates are kept
 
-- **This browser**: in IndexedDB, next to your projects. They don't show in **Open Local Project**, and **Clear Local Projects** keeps them.
+- **This browser**: in IndexedDB, next to your projects. They don't show in **Open Project…**, and **Clear Local Projects** keeps them.
 - **Google Drive**: in a `Templates` folder at the top of My Drive, made by the app. Each template is a subfolder with its files and its `template.json`. The folders are tagged, so they don't show as projects, and opening the `Templates` folder itself as a project is refused.
 - **Edit** opens a template like a project. Changes autosave back into the template, not into a new project.
 - Deleting a Drive template moves its folder to the Drive trash.

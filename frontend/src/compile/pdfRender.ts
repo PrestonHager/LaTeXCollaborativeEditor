@@ -85,3 +85,40 @@ export async function renderPdfFigure(bytes: Uint8Array, page: number, crop: Pdf
     await task.destroy();
   }
 }
+
+/** One page of a compiled PDF, drawn as a PNG for the PDF view (issue #242). */
+export type RenderedPdfPage = { url: string; width: number; height: number };
+
+/**
+ * Draw every page of a compiled PDF, in order, with the same pdf.js worker. `onPage` gets each
+ * page as it's done, so a long document shows its first pages while the rest draw. Stops early
+ * when `isCurrent` turns false (the view closed or a new PDF came).
+ */
+export async function renderPdfPages(
+  bytes: Uint8Array,
+  onPage: (page: RenderedPdfPage, index: number, count: number) => void,
+  isCurrent: () => boolean = () => true,
+  cssWidth = 800,
+): Promise<number> {
+  sharedWorker ??= new PDFWorker();
+  const task = getDocument({ data: bytes.slice(), useWasm: false, worker: sharedWorker });
+  try {
+    const pdf = await task.promise;
+    for (let n = 1; n <= pdf.numPages && isCurrent(); n += 1) {
+      const page = await pdf.getPage(n);
+      const unit = page.getViewport({ scale: 1 });
+      // Twice the width it shows at, so text stays sharp on high-DPI screens.
+      const scale = Math.min((cssWidth * 2) / unit.width, MAX_RENDER_SIDE_PX / Math.max(unit.width, unit.height));
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(viewport.width));
+      canvas.height = Math.max(1, Math.round(viewport.height));
+      await page.render({ canvas, viewport }).promise;
+      onPage({ url: canvas.toDataURL('image/png'), width: unit.width, height: unit.height }, n - 1, pdf.numPages);
+      page.cleanup();
+    }
+    return pdf.numPages;
+  } finally {
+    await task.destroy();
+  }
+}

@@ -16,7 +16,7 @@
 ## Validation commands
 - Root: `npm test`, `npm run test:coverage` (frontend coverage), `npm run test:load-time` (optional, throttled load time; see `docs/qa-runbook.md`)
 - In `desktop/`: `npm run check` (version, CSP and permissions settings); `cargo check` in `desktop/src-tauri/` (on Linux it needs the WebKitGTK 4.1 dev packages, see `docs/desktop.md`)
-- In `frontend/`: `npm run build` (fails if the initial load is over the 225 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches)
+- In `frontend/`: `npm run build` (fails if the initial load is over the 225 kB gzip budget or a lazy chunk is over 5 MB; see `scripts/check-bundle-size.mjs`), `npm run test:run` (vitest), `npm run test:coverage` (see `vitest.config.ts` for global thresholds: 80% lines, statements, functions and branches), `npm run test:corpus` (Overleaf-style corpus against `docs/compatibility-baseline.md`; `npm run corpus:update` rewrites the baseline when a preview change moves a result)
 
 ## Required docs updates
 If P2P protocol, bootstrap/build steps, or storage provider behavior changes, update:
@@ -28,8 +28,8 @@ If P2P protocol, bootstrap/build steps, or storage provider behavior changes, up
 - The version is `frontend/package.json` `version` (SemVer). The root `package.json` follows it.
 - Add a line under `## [Unreleased]` in `CHANGELOG.md` for user-facing changes. Don't bump the version in a normal PR.
 - Bump `PROTOCOL_VERSION` in `frontend/src/collab/messages.ts` only for a P2P change older peers can't handle.
-- Open PRs against the `staging` branch, not `main`. `staging` deploys to the staging site (`staging.yml`, its own origin). `main` only gets `staging` through a release PR (or a hotfix PR), and `sync-staging.yml` merges `main` back into `staging` after every push to `main`. Never delete `staging`. Production only deploys releases.
-- A maintainer cuts a release with the **Prepare release** workflow, run on `staging` (patch, minor, major or an exact version). It bumps the version, dates the changelog and opens a `release/vX.Y.Z` PR. Merging it tags `vX.Y.Z` (`tag-release.yml`), and `release.yml` tests it, deploys it to production and makes the GitHub release. Agents don't run it or tag.
+- Open PRs against the `staging` branch, not `main`. `staging` deploys to the staging site on Coolify (the `Dockerfile`, its own origin). `main` only gets `staging` through a release PR (or a hotfix PR), and `sync-staging.yml` merges `main` back into `staging` after every push to `main`. Never delete `staging`. Production only deploys releases: on Coolify, the same `Dockerfile` built from `main` with auto-deploy off, started by `release.yml` through the Coolify API (GitHub Pages until the Coolify secrets are set).
+- A maintainer cuts a release with the **Prepare release** workflow, run on `staging` (patch, minor, major or an exact version). It bumps the version, dates the changelog and opens a `release/vX.Y.Z` PR. Merging it tags `vX.Y.Z` (`tag-release.yml`), and `release.yml` tests it, deploys it to production (only if `main`'s head is still the tag, then waits for the live `version.json`) and makes the GitHub release. Agents don't run it or tag.
 - Details: `docs/versioning.md`.
 
 ## Regression checklist

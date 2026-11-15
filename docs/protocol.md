@@ -11,9 +11,14 @@ Rendezvous and session bootstrap
   The page's Content Security Policy only lets it open WebSockets to these trackers. The build adds any custom `VITE_P2P_RENDEZVOUS` trackers to `connect-src` (see `docs/deployment.md`).
 - Trackers only see the hashed room topic and WebRTC offers and answers, never document content.
 - No repository-owned signaling server is required.
-- The host's room id is kept in the tab's sessionStorage after Share, so reloading the host tab rejoins the same room and guest links keep working.
+- When a room starts and ends (issue #224):
+  - A host is never in a room on load or reload, and makes no tracker or WebRTC connection. Hovering Share only downloads the P2P code (`preloadTransport`); it doesn't join.
+  - A room starts only when the host clicks **Start sharing** (`ensureRoom()`, a new random room id) or **Resume sharing (same link)** (`join()` with the saved id) in the Share popover.
+  - The host's room id is kept in the tab's sessionStorage while it shares. After a reload it's only offered as Resume sharing, so a reload never re-shares on its own, but the same link can still be reused on purpose.
+  - **Stop sharing** calls `leave()`: it cancels any rejoin timer, disconnects from the room (peers see the host leave), clears the saved room id, and the badge goes back to Not sharing.
+  - **New link** leaves the current room and starts a fresh one, which disconnects anyone on the old link.
+  - A guest joins the room in its `?room=` link on load. Opening the link is its request to join.
 - The room id is stored apart from the saved document, since it's rendezvous metadata and not content.
-- The host can click New link to leave the current room and start a fresh one, which disconnects anyone on the old link.
 
 Transport behavior
 - The app uses a transport layer over a third-party rendezvous infrastructure (WebRTC-like semantics).
@@ -94,6 +99,8 @@ Project sync
   - `files` is a Y.Map from a stable file id to its path and kind (text, binary, or folder). Binary entries carry a SHA-256 content hash and size.
   - Each text file has its own top-level Y.Text named `file:<id>`.
   - `meta` holds the project name and the main file id, and `generation`, a new random id each time a whole project replaces the last one (open, import, new project).
+  - `meta` also holds `engine`, the project's TeX engine (`pdflatex`, `xelatex` or `lualatex`; issue #199). It's missing until someone picks one, which means pdfLaTeX. Any other value from a peer is ignored and reads as missing.
+    It is an ordinary key in an existing map, so it syncs as a normal Yjs update with no new message, and `PROTOCOL_VERSION` stays the same. Older peers keep and pass on the key without reading it; their preview just doesn't show the engine diagnostics.
 - A rename or move writes one key in `files`, so ids (and open editors) survive it.
 - Undoing a file operation (`frontend/src/project/fileHistory.ts`) is a Yjs UndoManager on `files`, plus the text of every file, scoped to the local `project` transaction origin. It sends ordinary Yjs updates, so peers need nothing new and older peers sync as before.
   - It only reverts our own changes. Yjs won't write over a key a peer changed since, so a file a peer renamed or deleted after us stays as they left it.
@@ -130,6 +137,7 @@ Message validation and limits
   - `{ kind: 'y-update', update }`: `update` is an array of bytes (integers 0 to 255), at most 10 MB, and it has to decode as a Yjs update.
   - `{ kind: 'snapshot', state, docId?, metadata? }`: `state` is a byte array of at most 20 MB that decodes as a Yjs update. `docId` is a string of at most 128 characters.
   - `{ kind: 'metadata', metadata }`: `metadata` is `{ title, storage }`. The title is at most 200 characters and the storage label at most 200.
+    The storage label is only the host's provider name, like "Saved on host Google Drive". The provider registry and Accounts panel (#200) don't change the wire format: no account, email or token is ever sent, and a guest's status bar badge is drawn from this label alone. Remembered sign-ins and "Keep me signed in" (#201) are local to the host's browser (`localStorage` and IndexedDB) and don't change it either. In the Linux desktop app, whose webview has no WebRTC, the peer connections run in the app's Rust shell instead (#176, `docs/desktop.md` "WebRTC in the shell"): the same WebRTC data channels (ICE, DTLS, SCTP) and the same messages, so browser peers see no difference and nothing here changes; there's still no server, and host candidates are mDNS names as in browsers. The desktop app's Google sign-in (#177) keeps its refresh token in the OS keychain and its access token in the host's page, like the web; neither is ever sent to peers, and the label is the same "Saved on host Google Drive". Folder projects in the desktop app (#178) send only "Saved on host computer folder": the folder's path, its name on disk and anything the file watcher sees stay on the host's computer. Edits made outside the app reach guests as ordinary Yjs updates once the host's app loads them, like any other edit by the host.
   - `{ kind: 'sync-request' }`: no other fields.
   - `{ kind: 'file-request', hash }`: `hash` is 1 to 128 letters, digits, or dashes.
   - `{ kind: 'hello', protocol, appVersion, commit? }`: `protocol` is a whole number from 1 to 1,000,000. `appVersion` is 1 to 64 letters, digits, dots, pluses, or dashes. `commit` is 7 to 40 lowercase hex characters, or `dev`.
@@ -158,6 +166,7 @@ Message validation and limits
 - File paths in the shared `files` map have to be clean relative paths: no `..`, no leading `/`, no backslashes, no drive letters like `C:`, and at most 512 characters.
   Entries a peer writes with a bad path or an unknown kind are skipped, so they never show up in the file tree, the preview, or a zip.
 - The project name in `meta` is cut to 200 characters when shown.
+- The TeX engine is never read from a peer as anything but one of the three names above. A `% !TEX program` comment in the main file is document content: it is read locally by each peer and wins over the setting.
 
 LaTeX preview channel
 - Preview rendering is performed locally in the browser using LaTeX.js.
@@ -190,7 +199,8 @@ sequenceDiagram
     participant G as Guest tab
 
     Note over H: On load the badge says Not sharing.<br/>The host is not in a room yet.
-    H->>H: Share: ensureRoom() makes a random room id
+    H->>H: Share opens the popover. Nothing connects yet.
+    H->>H: Start sharing: ensureRoom() makes a random room id
     H->>H: Save the room id in sessionStorage
     H->>T: joinRoom(appId, roomId), announce
     Note over H: Badge: Waiting for peers

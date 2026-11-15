@@ -13,6 +13,7 @@ import {
   mimeType,
   normalizePath,
   replacePrefix,
+  resolveRelative,
   uniquePath,
 } from './paths';
 
@@ -84,5 +85,25 @@ describe('project paths', () => {
     expect(uniquePath('a/plot.png', taken)).toBe('a/plot (3).png');
     expect(uniquePath('README', taken)).toBe('README (2)');
     expect(uniquePath('free.tex', taken)).toBe('free.tex');
+  });
+
+  it('resolves relative paths, refusing ones that leave the project', () => {
+    expect(resolveRelative('chapters', '../main.tex')).toBe('main.tex');
+    expect(resolveRelative('a/b', './c\\d.tex')).toBe('a/b/c/d.tex');
+    expect(resolveRelative('', '../x.tex')).toBeNull();
+    expect(resolveRelative('a', '..')).toBeNull();
+  });
+
+  it('follows a % !TEX root comment when guessing the main file (#199)', () => {
+    const files = [
+      { path: 'chapters/one.tex', text: '% !TEX root = ../thesis.tex\n\\chapter{One}' },
+      { path: 'thesis.tex', text: '\\input{chapters/one}' },
+    ];
+    // thesis.tex is shallower, so it's the guess before the comment matters.
+    expect(guessMainFile(files)).toBe('thesis.tex');
+    // A lone top-level file pointing at the real root sends the guess there, with or without .tex.
+    expect(guessMainFile([{ path: 'notes.tex', text: '% !TEX root = sub/paper\n\\documentclass{article}' }, { path: 'sub/paper.tex', text: 'x' }])).toBe('sub/paper.tex');
+    expect(guessMainFile([{ path: 'a.tex', text: '% !TEX root = missing.tex\n' }])).toBe('a.tex');
+    expect(guessMainFile([{ path: 'a.tex', text: '% !TEX root = a.tex\n' }])).toBe('a.tex');
   });
 });
