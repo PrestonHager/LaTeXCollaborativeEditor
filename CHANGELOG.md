@@ -6,6 +6,8 @@ See [docs/versioning.md](docs/versioning.md) for how to bump the version and cut
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-15
+
 ### Added
 
 - **Compile with your own TeX Live (desktop app).** If TeX Live is installed on your computer, the desktop app can use it to make a PDF: turn it on with Set Up Local TeX in the command palette, then choose Compile with Local TeX. It runs on a copy of the project with shell escape off, and the PDF opens in the app. It's off until you turn it on.
@@ -120,6 +122,7 @@ The first numbered release. It covers everything built so far.
 - **Interface.** Basecoat and Tailwind UI with menus, a command palette, in-app help links, and a first-run tour.
 - **Docs and policies.** User docs (MkDocs) published under `/docs/`, Privacy and Terms of Service pages, a security policy, and issue forms.
 
-[Unreleased]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/PrestonHager/LaTeXCollaborativeEditor/releases/tag/v0.1.0
