@@ -134,7 +134,7 @@ PRs target the `staging` branch, and every push to it deploys to the staging sit
    The deploy: with the Coolify secrets set (`docs/deployment.md`, "Production on Coolify"), it checks `main`'s head is still the tagged commit, asks Coolify to deploy (Coolify builds the `Dockerfile` from `main`), and waits until the live `version.json` shows this version and commit, failing after 30 minutes. Without them, it builds with `VITE_DEPLOY_ENV=production` and deploys to GitHub Pages, as before.
 
    A normal PR that bumps the version by hand releases the same way when it merges.
-5. `.github/workflows/sync-staging.yml` merges `main` back into `staging`, so `staging` has the version commit and the next release PR starts clean.
+5. `.github/workflows/sync-staging.yml` merges `main` back into `staging` (or opens a PR from `main` into `staging` when it conflicts or the branch rules refuse the push), so `staging` has the version commit and the next release PR starts clean.
 
 If the release fails after tagging, fix it in a new PR, then Actions > **Release** > Run workflow on `main` with the tag to retry. That's also how to redeploy a release (for example after changing a Production variable): it deploys the tag again and refreshes the GitHub release's notes.
 On Coolify that only works for the tag at `main`'s head, since Coolify builds `main`, not the tag. To go back to an older release, use Coolify's own rollback (`docs/deployment.md`, "Production on Coolify"), or release a fix as the next patch.

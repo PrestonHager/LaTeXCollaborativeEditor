@@ -278,6 +278,9 @@ jobs:
   # files have somewhere to go; the website is already live by then and doesn't wait on this.
   desktop:
     needs: github-release
+    # One of the two deploy jobs is always skipped, and a job whose needs chain has a skipped job
+    # is skipped too unless it has its own condition, so this one needs one (it was skipped on v0.2.0).
+    if: ${{ !cancelled() && needs.github-release.result == 'success' }}
     permissions:
       contents: write
     uses: ./.github/workflows/desktop.yml
