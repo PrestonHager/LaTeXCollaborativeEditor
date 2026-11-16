@@ -41,18 +41,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -q -c staging origin/staging
+          # Leave it to a person as a PR from main into staging (its head is main, which is never
+          # deleted): on a conflict, or when staging's branch rules refuse a direct push.
+          open_pr() {
+            if [ -z "$(gh pr list --base staging --head main --state open --json number --jq '.[].number')" ]; then
+              gh pr create --base staging --head main --title "Merge main into staging" --body "$1"
+            fi
+          }
           if git merge --no-edit -m "Merge main into staging" origin/main; then
-            git push -q origin staging
-            # A push made with GITHUB_TOKEN doesn't start other workflows, so start the tests here.
-            # Coolify's webhook still sees the push and deploys staging.
-            gh workflow run test.yml --ref staging
-            echo "::notice title=Synced::Merged main (${GITHUB_SHA::7}) into staging."
+            if git push -q origin staging; then
+              # A push made with GITHUB_TOKEN doesn't start other workflows, so start the tests here.
+              # Coolify's webhook still sees the push and deploys staging.
+              gh workflow run test.yml --ref staging
+              echo "::notice title=Synced::Merged main (${GITHUB_SHA::7}) into staging."
+              exit 0
+            fi
+            open_pr "Merging \`main\` into \`staging\` after ${GITHUB_SHA::7} merges cleanly, but staging's branch rules refused the push, so it goes through this PR."
+            echo "::warning title=Push refused::staging's branch rules refused the push. Opened a PR from main into staging."
           else
             git merge --abort
-            # Leave the conflict to a person: a PR from main into staging. Its head is main, which is never deleted.
-            if [ -z "$(gh pr list --base staging --head main --state open --json number --jq '.[].number')" ]; then
-              gh pr create --base staging --head main --title "Merge main into staging" \
-                --body "Merging \`main\` into \`staging\` after ${GITHUB_SHA::7} has conflicts, so it needs a person. Resolve them on a branch from \`staging\`, or in this PR."
-            fi
+            open_pr "Merging \`main\` into \`staging\` after ${GITHUB_SHA::7} has conflicts, so it needs a person. Resolve them on a branch from \`staging\`, or in this PR."
             echo "::warning title=Sync conflict::main doesn't merge cleanly into staging. Opened a PR from main into staging."
           fi
