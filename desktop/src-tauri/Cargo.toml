@@ -22,7 +22,7 @@ tauri-build = { version = "2.7", features = [] }
 # PKCE verifier, challenge and state for Google sign-in (src/google_auth.rs).
 base64 = "0.22"
 getrandom = "0.3"
-sha2 = "0.10"
+sha2 = "0.11"
 # Google sign-in through the system browser (issue #177, docs/desktop.md "Google sign-in"):
 # the refresh token lives in the OS keychain (Keychain, Credential Manager, Secret Service).
 keyring = "4"
