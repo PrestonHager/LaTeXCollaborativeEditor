@@ -20,7 +20,7 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 # PKCE verifier, challenge and state for Google sign-in (src/google_auth.rs).
-base64 = "0.22"
+base64 = "0.23"
 getrandom = "0.3"
 sha2 = "0.10"
 # Google sign-in through the system browser (issue #177, docs/desktop.md "Google sign-in"):
