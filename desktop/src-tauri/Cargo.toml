@@ -47,7 +47,7 @@ tokio = { version = "1", features = ["net", "io-util", "time", "sync", "macros",
 # WebRTC data channels for webviews without RTCPeerConnection (issue #176, src/native_rtc.rs):
 # pure Rust ICE, DTLS and SCTP, so Linux needs no extra system library. 0.17 is the stable
 # async API; 0.20+ is a rewrite.
-webrtc = "0.17"
+webrtc = "0.21"
 # Messages for the shell WebRTC (src/native_rtc.rs).
 bytes = "1"
 
